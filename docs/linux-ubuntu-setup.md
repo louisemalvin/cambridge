@@ -11,21 +11,22 @@ It installs the Rust and GStreamer dependencies, configures one persistent
 required GStreamer elements, and builds the receiver. The installer may ask
 for `sudo`. It never unloads a module or changes Secure Boot settings.
 
-Start the receiver with the normal user account:
-
-```bash
-mobile-webcam-receiver
-```
-
-To use the desktop preview application, start:
+Start the desktop receiver with the normal user account:
 
 ```bash
 mobile-webcam-desktop
 ```
 
-The application starts the same control API and virtual-camera output as the
-CLI, then shows the decoded frames in a window. It does not require a second
-receiver process.
+It opens the decoded preview and exposes the same frames through the
+`Mobile Webcam` virtual camera. A headless terminal-only receiver is available
+when needed:
+
+```bash
+mobile-webcam-receiver
+```
+
+Do not run both binaries at the same time. Either one starts the control API and
+virtual-camera output.
 
 The receiver automatically discovers the loopback device. It listens on TCP
 `5001` for control and UDP `5000` for MPEG-TS media. Open those ports in the

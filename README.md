@@ -37,28 +37,26 @@ root:
 
 The installer handles the GStreamer packages, v4l2loopback module setup, and
 release build. It may ask for `sudo` for those operating-system changes. Start
-the receiver each day with:
-
-```bash
-mobile-webcam-receiver
-```
-
-No device path or port arguments are required. The receiver automatically
-selects the first v4l2loopback device and uses control TCP `5001` plus media
-UDP `5000`. Advanced users can still pass `--device`, `--control-port`, or
-`--media-port`. The repository wrapper `./scripts/linux/start-receiver.sh` is
-also available for local development.
-
-For the desktop application with a live preview, use:
+the desktop receiver each day with:
 
 ```bash
 mobile-webcam-desktop
 ```
 
-It starts the same control and media receiver, displays the decoded phone
-video, and writes the same frames to the installed `Mobile Webcam`
-v4l2loopback device for OBS or another V4L2 consumer. The repository wrapper
-`./scripts/linux/start-desktop.sh` is available before installation.
+It opens the receiver window, shows a live preview, and writes the same decoded
+frames to the virtual camera. No device path or port arguments are required.
+The receiver automatically selects the first v4l2loopback device and uses
+control TCP `5001` plus media UDP `5000`.
+
+The headless receiver is also available for servers or terminal-only sessions:
+
+```bash
+mobile-webcam-receiver
+```
+
+Advanced users can pass `--device`, `--control-port`, or `--media-port` to either
+binary. The repository wrappers `./scripts/linux/start-desktop.sh` and
+`./scripts/linux/start-receiver.sh` are available before installation.
 
 The installer supports CachyOS/Arch and Ubuntu/Debian. See the matching
 [Arch Linux guide](docs/linux-arch-setup.md) or

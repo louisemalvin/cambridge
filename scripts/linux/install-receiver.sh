@@ -183,11 +183,11 @@ Virtual camera: ${LOOPBACK_DEVICE}
 Receiver command: ${INSTALLED_BINARY}
 Desktop application: ${INSTALLED_DESKTOP_BINARY}
 
-Start it any time with:
-  mobile-webcam-receiver
-
-Open the preview application with:
+Start the desktop receiver any time with:
   mobile-webcam-desktop
+
+The headless receiver is also available with:
+  mobile-webcam-receiver
 
 The repository wrapper remains available for local development:
   ${REPO_ROOT}/scripts/linux/start-receiver.sh
