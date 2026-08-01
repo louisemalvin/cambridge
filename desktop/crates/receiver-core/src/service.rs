@@ -1,0 +1,196 @@
+use receiver_protocol::{
+    MediaResponse, OutputResponse, PrepareSessionRequest, PrepareSessionResponse,
+    ReceiverCapabilities, ReceiverSessionState, SessionStateResponse, Transport,
+};
+use uuid::Uuid;
+
+use crate::{
+    negotiate_codec, select_output_format, validate_config, LatencyConfig, MediaSessionConfig,
+    ReceiverCapabilityProvider, ReceiverConfig, ReceiverError, ReceiverSession, ReceiverState,
+};
+
+pub trait MediaReceiver: Send {
+    fn prepare(&mut self, config: MediaSessionConfig) -> Result<(), ReceiverError>;
+
+    fn start(&mut self) -> Result<(), ReceiverError>;
+
+    fn stop(&mut self) -> Result<(), ReceiverError>;
+
+    fn state(&self) -> ReceiverState;
+
+    fn decoder_name(&self) -> Option<String> {
+        None
+    }
+
+    fn received_bitrate_bps(&self) -> u32 {
+        0
+    }
+
+    fn timeout_count(&self) -> u64 {
+        0
+    }
+}
+
+pub struct ReceiverService {
+    config: ReceiverConfig,
+    capabilities: ReceiverCapabilities,
+    capability_provider: Box<dyn ReceiverCapabilityProvider>,
+    media_receiver: Box<dyn MediaReceiver>,
+    session: Option<ReceiverSession>,
+    last_session_id: Option<Uuid>,
+}
+
+impl ReceiverService {
+    pub fn new(
+        config: ReceiverConfig,
+        capability_provider: Box<dyn ReceiverCapabilityProvider>,
+        media_receiver: Box<dyn MediaReceiver>,
+    ) -> Result<Self, ReceiverError> {
+        validate_config(&config)?;
+        let capabilities = capability_provider.capabilities();
+        Ok(Self {
+            config,
+            capabilities,
+            capability_provider,
+            media_receiver,
+            session: None,
+            last_session_id: None,
+        })
+    }
+
+    pub fn capabilities(&self) -> ReceiverCapabilities {
+        let mut capabilities = self.capabilities.clone();
+        capabilities.session.active = self.session.is_some();
+        capabilities
+    }
+
+    pub fn prepare_session(
+        &mut self,
+        request: &PrepareSessionRequest,
+    ) -> Result<PrepareSessionResponse, ReceiverError> {
+        if self.session.is_some() {
+            return Err(ReceiverError::SessionConflict);
+        }
+        request
+            .validate()
+            .map_err(|error| ReceiverError::InvalidConfiguration(error.to_string()))?;
+        let codec = negotiate_codec(
+            &request.preferred_codecs,
+            self.capability_provider.as_ref(),
+            &request.profile,
+        )?;
+        let output_format =
+            select_output_format(self.config.output_format, &request.profile, &self.capabilities)?;
+        let session_id = Uuid::new_v4();
+        let media_config = MediaSessionConfig {
+            session_id,
+            codec,
+            profile: request.profile.clone(),
+            bitrate_bps: request.bitrate_by_codec.for_codec(codec),
+            media_port: self.config.media_port,
+            output_format,
+            latency: LatencyConfig {
+                demux_latency_ms: self.config.latency.demux_latency_ms,
+                output_queue_frames: self.config.latency.output_queue_frames,
+            },
+            udp_timeout_ms: self.config.udp_timeout_ms,
+        };
+        self.media_receiver
+            .prepare(media_config.clone())
+            .map_err(|error| ReceiverError::MediaPreparation(error.to_string()))?;
+        if let Err(error) = self.media_receiver.start() {
+            let _ = self.media_receiver.stop();
+            return Err(ReceiverError::MediaStart(error.to_string()));
+        }
+        let mut session = ReceiverSession::new(&media_config);
+        session.state = self.media_receiver.state();
+        self.last_session_id = Some(session_id);
+        self.session = Some(session.clone());
+        Ok(PrepareSessionResponse {
+            session_id: session_id.to_string(),
+            selected_codec: codec,
+            media: MediaResponse { transport: Transport::MpegTsUdp, port: self.config.media_port },
+            profile: receiver_protocol::NegotiatedProfile {
+                width: request.profile.width,
+                height: request.profile.height,
+                fps: request.profile.fps,
+                bitrate_bps: media_config.bitrate_bps,
+            },
+            output: OutputResponse { pixel_format: output_format },
+            warnings: Vec::new(),
+        })
+    }
+
+    pub fn session(&mut self, session_id: &str) -> Result<SessionStateResponse, ReceiverError> {
+        self.refresh_session();
+        let session = self
+            .session
+            .as_ref()
+            .ok_or_else(|| ReceiverError::SessionNotFound(session_id.to_owned()))?;
+        if session.id.to_string() != session_id {
+            return Err(ReceiverError::SessionNotFound(session_id.to_owned()));
+        }
+        Ok(SessionStateResponse {
+            session_id: session.id.to_string(),
+            state: map_state(session.state),
+            selected_codec: session.codec,
+            decoder: session.decoder.clone(),
+            received_bitrate_bps: session.received_bitrate_bps,
+            timeout_count: session.timeout_count,
+        })
+    }
+
+    pub fn stop_session(&mut self, session_id: &str) -> Result<(), ReceiverError> {
+        if self.session.is_none() {
+            if self.last_session_id.is_some_and(|last_id| last_id.to_string() == session_id) {
+                return Ok(());
+            }
+            return Err(ReceiverError::SessionNotFound(session_id.to_owned()));
+        }
+        let current_id = self.session.as_ref().map(|session| session.id);
+        if current_id.map_or(true, |id| id.to_string() != session_id) {
+            return Err(ReceiverError::SessionNotFound(session_id.to_owned()));
+        }
+        if let Some(session) = self.session.as_mut() {
+            session.state = ReceiverState::Stopping;
+        }
+        let stop_result = self.media_receiver.stop();
+        self.session = None;
+        stop_result.map_err(|error| ReceiverError::MediaStop(error.to_string()))
+    }
+
+    pub fn state(&mut self) -> ReceiverState {
+        self.refresh_session();
+        self.session.as_ref().map_or(ReceiverState::Idle, |session| session.state)
+    }
+
+    pub fn config(&self) -> &ReceiverConfig {
+        &self.config
+    }
+
+    fn refresh_session(&mut self) {
+        let Some(session) = self.session.as_mut() else {
+            return;
+        };
+        session.state = self.media_receiver.state();
+        session.decoder = self.media_receiver.decoder_name();
+        session.received_bitrate_bps = self.media_receiver.received_bitrate_bps();
+        session.timeout_count = self.media_receiver.timeout_count();
+    }
+}
+
+fn map_state(state: ReceiverState) -> ReceiverSessionState {
+    match state {
+        ReceiverState::Idle => ReceiverSessionState::Idle,
+        ReceiverState::Prepared => ReceiverSessionState::Prepared,
+        ReceiverState::WaitingForStream => ReceiverSessionState::WaitingForStream,
+        ReceiverState::Receiving => ReceiverSessionState::Receiving,
+        ReceiverState::TimedOut => ReceiverSessionState::TimedOut,
+        ReceiverState::Stopping => ReceiverSessionState::Stopping,
+        ReceiverState::Failed => ReceiverSessionState::Failed,
+    }
+}
+
+#[cfg(test)]
+#[path = "service_tests.rs"]
+mod tests;

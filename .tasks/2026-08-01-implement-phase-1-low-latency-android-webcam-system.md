@@ -62,12 +62,12 @@ Build the Phase 1 Android sender, reusable Rust receiver, Linux virtual-camera o
 
 ## Status
 
-Ready for implementation after project initialization.
+In progress. Milestones 0-2 are committed as `fb156ed`, `314e993`, and the pending receiver-core commit.
 
 ## Handoff Notes
 
-- Next exact step: Scaffold the monorepo and run the first milestone verification.
-- Files changed: `AGENTS.md`, this task artifact.
-- Commands run: `agent-init`, `task-init`, `work-context`, repository/toolchain inspection, upstream RootEncoder source inspection.
+- Next exact step: Add the HTTP control server and map requests to the receiver service.
+- Files changed: `AGENTS.md`, repository scaffold, protocol contract, receiver core, this task artifact.
+- Commands run: `agent-init`, `task-init`, `work-context`, repository/toolchain inspection, upstream RootEncoder source inspection, Rust fmt/test/clippy/build/check, JSON syntax and schema validation.
 - Errors encountered: Initial directory was empty and not a Git repository; Android Java tooling is unavailable.
 - Verification evidence: Upstream RootEncoder README and 2.8.0 sources confirm the selected artifact and API boundary; the local environment reports no Java executable.
