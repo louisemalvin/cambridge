@@ -29,26 +29,44 @@ class SenderViewModel(
     init {
         viewModelScope.launch {
             controller.state.collectLatest { streamState ->
-                mutableState.update { it.copy(streamState = streamState, validationMessage = null) }
+                mutableState.update {
+                    it.copy(
+                        streamState = streamState,
+                        validationMessage = null,
+                        failureDetails = null,
+                    )
+                }
             }
         }
         refreshNetworkInformation()
     }
 
     fun updateReceiverHost(value: String) {
-        mutableState.update { it.copy(receiverHost = value, validationMessage = null) }
+        mutableState.update {
+            it.copy(receiverHost = value, validationMessage = null, failureDetails = null)
+        }
     }
 
     fun updateControlPort(value: String) {
-        mutableState.update { it.copy(controlPort = value.filter(Char::isDigit), validationMessage = null) }
+        mutableState.update {
+            it.copy(
+                controlPort = value.filter(Char::isDigit),
+                validationMessage = null,
+                failureDetails = null,
+            )
+        }
     }
 
     fun updateCodecPreference(value: CodecPreference) {
-        mutableState.update { it.copy(codecPreference = value, validationMessage = null) }
+        mutableState.update {
+            it.copy(codecPreference = value, validationMessage = null, failureDetails = null)
+        }
     }
 
     fun updateProfile(value: VideoProfile) {
-        mutableState.update { it.copy(profile = value, validationMessage = null) }
+        mutableState.update {
+            it.copy(profile = value, validationMessage = null, failureDetails = null)
+        }
     }
 
     fun setCameraPermissionGranted(granted: Boolean) {
@@ -80,7 +98,7 @@ class SenderViewModel(
             ).onFailure { error ->
                 val failure = (error as? StreamFailureException)?.failure
                     ?: StreamFailure.Unexpected(error)
-                showFailure(failure)
+                showFailure(failure, error)
             }
         }
     }
@@ -95,7 +113,12 @@ class SenderViewModel(
         mutableState.update { it.copy(networkInformation = networkInformationProvider.current()) }
     }
 
-    private fun showFailure(failure: StreamFailure) {
-        mutableState.update { it.copy(streamState = StreamState.Failed(failure)) }
+    private fun showFailure(failure: StreamFailure, cause: Throwable? = null) {
+        mutableState.update {
+            it.copy(
+                streamState = StreamState.Failed(failure),
+                failureDetails = buildFailureDiagnostics(it, failure, cause),
+            )
+        }
     }
 }

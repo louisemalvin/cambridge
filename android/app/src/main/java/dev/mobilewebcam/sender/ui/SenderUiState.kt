@@ -16,4 +16,5 @@ data class SenderUiState(
     val cameraPermissionGranted: Boolean = false,
     val networkInformation: List<NetworkInformation> = emptyList(),
     val validationMessage: String? = null,
+    val failureDetails: String? = null,
 )

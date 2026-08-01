@@ -1,7 +1,11 @@
 package dev.mobilewebcam.sender.ui
 
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.pm.PackageManager
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
@@ -82,6 +86,26 @@ fun SenderApp() {
                                 permissionLauncher.launch(Manifest.permission.CAMERA)
                             },
                             onStart = viewModel::start,
+                            onCopyError = {
+                                val failedState = uiState.streamState as? StreamState.Failed
+                                val details = uiState.failureDetails
+                                    ?: failedState?.let { failure ->
+                                        buildFailureDiagnostics(uiState, failure.failure, null)
+                                    }
+                                if (details != null) {
+                                    val clipboard = context.getSystemService(
+                                        Context.CLIPBOARD_SERVICE,
+                                    ) as ClipboardManager
+                                    clipboard.setPrimaryClip(
+                                        ClipData.newPlainText("Mobile Webcam error", details),
+                                    )
+                                    Toast.makeText(
+                                        context,
+                                        "Error details copied",
+                                        Toast.LENGTH_SHORT,
+                                    ).show()
+                                }
+                            },
                         )
                     }
                 }

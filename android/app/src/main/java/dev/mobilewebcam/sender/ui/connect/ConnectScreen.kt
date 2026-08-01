@@ -32,6 +32,7 @@ fun ConnectScreen(
     onProfileChanged: (VideoProfile) -> Unit,
     onRequestCameraPermission: () -> Unit,
     onStart: () -> Unit,
+    onCopyError: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -74,6 +75,15 @@ fun ConnectScreen(
         }
         state.validationMessage?.let { Text(it) }
         ConnectionStatus(state.streamState)
+        if (state.streamState is dev.mobilewebcam.sender.model.StreamState.Failed) {
+            Text("Copy the technical details if you need help troubleshooting.")
+            OutlinedButton(
+                onClick = onCopyError,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Copy error details")
+            }
+        }
         Spacer(Modifier.height(4.dp))
         Button(
             onClick = onStart,
