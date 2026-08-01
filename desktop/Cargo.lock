@@ -1081,6 +1081,12 @@ dependencies = [
 [[package]]
 name = "receiver-platform-linux"
 version = "0.1.0"
+dependencies = [
+ "gstreamer",
+ "receiver-gstreamer",
+ "receiver-protocol",
+ "thiserror",
+]
 
 [[package]]
 name = "receiver-protocol"
