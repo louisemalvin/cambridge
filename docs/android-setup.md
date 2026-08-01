@@ -2,8 +2,9 @@
 
 ## Prerequisites
 
-- Android Studio Panda 3 (2025.3.3 Patch 1) or newer, or JDK 17 with an
-  Android Gradle environment. API 37 requires this newer Android toolchain.
+- A current stable Android Studio release from the official Android Developers
+  download page, or JDK 17+ with an Android Gradle environment. API 37 needs a
+  current Android toolchain.
 - Android SDK Platform 37, Android SDK Build-Tools 36.0.0, and a device running
   Android API 26 or newer.
 - A physical Android phone with a rear camera for streaming validation.
