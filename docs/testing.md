@@ -43,10 +43,10 @@ Run:
 scripts/linux/synthetic-h265-sender.sh 127.0.0.1 5000
 ```
 
-If `x265enc` is unavailable, install the GStreamer plugin package that provides
-it or mark the runtime test skipped. Parser, negotiation, and pipeline
-construction tests still provide useful coverage without a software H.265
-encoder.
+If `x265enc`, `udpsink`, or another required element is unavailable, install
+the GStreamer plugin package that provides it or mark the runtime test
+skipped. Parser, negotiation, and pipeline construction tests still provide
+useful coverage without a complete runtime sender path.
 
 ## Virtual camera
 

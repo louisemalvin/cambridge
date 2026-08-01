@@ -9,8 +9,9 @@
   decoder, virtual camera, browser, or call application.
 - The current local environment has no Java or Android SDK, so Android Gradle
   tests, lint, and APK assembly were not run here.
-- The current local GStreamer installation lacks `udpsrc` and `udpsink`, so
-  live UDP synthetic tests were skipped. Pipeline and parser tests still run.
+- The current local GStreamer installation has the parsers and encoders but
+  lacks `udpsrc`, `udpsink`, and `v4l2sink`, so live UDP and virtual-camera
+  tests were skipped. Pipeline and parser tests still run.
 - v4l2loopback, OBS, browser capture, USB tethering, and privileged module
   setup require a configured Linux host and were not verified here.
 - UDP has no retransmission, encryption, or authentication in Phase 1. Packet
