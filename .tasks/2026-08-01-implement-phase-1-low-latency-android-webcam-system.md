@@ -62,12 +62,13 @@ Build the Phase 1 Android sender, reusable Rust receiver, Linux virtual-camera o
 
 ## Status
 
-In progress. All implementation milestones are committed through `b0369b6`; final verification and handoff reporting remain.
+Complete. Phase 1 implementation, documentation, incremental commits, and all
+available local verification are complete through `88cc823`.
 
 ## Handoff Notes
 
-- Next exact step: Run the complete Rust, shell, CLI, protocol, and available Android checks; record skipped hardware/toolchain checks; then mark the task complete.
+- Next exact step: N/A. Run the documented manual hardware and Linux validation matrix on a configured host.
 - Files changed: `AGENTS.md`, repository scaffold, protocol contract, receiver core, HTTP control server, GStreamer receiver, Linux platform backend, Linux scripts, Android sender, receiver CLI, recovery watchdog, documentation, this task artifact.
-- Commands run: `agent-init`, `task-init`, `task-ready`, `work-context`, repository/toolchain inspection, upstream RootEncoder source inspection, Rust fmt/test/clippy/build/check, CLI help and print modes, JSON syntax and schema validation, HTTP route test, GStreamer H.264/H.265 construction and parser tests, Linux device test, shell syntax checks.
+- Commands run: `agent-init`, `task-init`, `task-ready`, `work-context`, repository/toolchain inspection, upstream RootEncoder source inspection, Rust fmt/test/clippy/build/check, `scripts/development/check-all.sh`, CLI help and print modes, JSON syntax and schema validation, HTTP route tests, GStreamer H.264/H.265 construction and parser tests, Linux device inspection, setup and virtual-camera checks, synthetic H.264/H.265 sender attempts, and shell syntax checks.
 - Errors encountered: Initial directory was empty and not a Git repository; Android Java tooling is unavailable; local GStreamer has parsers and encoders but lacks `udpsrc`, `udpsink`, and `v4l2sink`; `/dev/video10` and v4l2loopback are unavailable; Android Gradle test/lint/assemble commands cannot run because the wrapper is absent.
-- Verification evidence: Upstream RootEncoder README and 2.8.0 sources confirm the selected artifact and API boundary; the local environment reports no Java executable.
+- Verification evidence: Rust workspace checks pass; 17 Rust unit tests and all doc-tests pass; CLI print modes pass; shell syntax checks pass; GStreamer parser and pipeline construction tests pass or skip safely when plugins are absent; RootEncoder README and 2.8.0 sources confirm the selected artifact and API boundary; the local environment has no Java/Android SDK, no `/dev/video10`, no loaded v4l2loopback, and no `udpsrc`, `udpsink`, or `v4l2sink`.
