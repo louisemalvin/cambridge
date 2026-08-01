@@ -8,6 +8,7 @@ import dev.mobilewebcam.sender.model.PrepareSessionRequest
 import dev.mobilewebcam.sender.model.ReceiverCapabilities
 import dev.mobilewebcam.sender.model.ReceiverEndpoint
 import dev.mobilewebcam.sender.model.ReceiverHealth
+import dev.mobilewebcam.sender.model.VideoCodec
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.cio.CIO

@@ -16,6 +16,7 @@ import dev.mobilewebcam.sender.model.ReceiverHealth
 import dev.mobilewebcam.sender.model.StreamConfiguration
 import dev.mobilewebcam.sender.model.VideoCodec
 import dev.mobilewebcam.sender.model.VideoProfile
+import dev.mobilewebcam.sender.logging.AppLogger
 import dev.mobilewebcam.sender.platform.ForegroundStreamingController
 import dev.mobilewebcam.sender.session.CodecNegotiator
 import dev.mobilewebcam.sender.session.StreamSessionControllerImpl
@@ -68,6 +69,7 @@ class StreamSessionControllerTest {
         negotiator = CodecNegotiator(),
         streamEngine = engine,
         foreground = foreground,
+        logger = TestLogger,
         scope = scope,
     )
 
@@ -149,6 +151,16 @@ class StreamSessionControllerTest {
         override fun stop() {
             stopCount += 1
         }
+    }
+
+    private object TestLogger : AppLogger {
+        override fun debug(message: String, fields: Map<String, Any?>) = Unit
+
+        override fun info(message: String, fields: Map<String, Any?>) = Unit
+
+        override fun warn(message: String, cause: Throwable?, fields: Map<String, Any?>) = Unit
+
+        override fun error(message: String, cause: Throwable?, fields: Map<String, Any?>) = Unit
     }
 
     private companion object {
