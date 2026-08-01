@@ -161,6 +161,15 @@ where
     }
 }
 
+impl<F> Drop for GStreamerReceiver<F> {
+    fn drop(&mut self) {
+        if let Some(pipeline) = self.pipeline.take() {
+            let _ = pipeline.set_state(gst::State::Null);
+        }
+        self.observer = None;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

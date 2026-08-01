@@ -159,6 +159,13 @@ impl ReceiverService {
         stop_result.map_err(|error| ReceiverError::MediaStop(error.to_string()))
     }
 
+    pub fn shutdown(&mut self) -> Result<(), ReceiverError> {
+        let Some(session_id) = self.session.as_ref().map(|session| session.id.to_string()) else {
+            return Ok(());
+        };
+        self.stop_session(&session_id)
+    }
+
     pub fn state(&mut self) -> ReceiverState {
         self.refresh_session();
         self.session.as_ref().map_or(ReceiverState::Idle, |session| session.state)
