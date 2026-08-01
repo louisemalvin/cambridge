@@ -1,0 +1,8 @@
+{
+  "sessionId": "d3ebda88-5e25-4a47-99e4-44029adf49ef",
+  "state": "receiving",
+  "selectedCodec": "h265",
+  "decoder": "decodebin0",
+  "receivedBitrateBps": 11850000,
+  "timeoutCount": 0
+}

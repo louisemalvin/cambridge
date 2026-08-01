@@ -27,7 +27,18 @@
         "height": { "type": "integer", "minimum": 1 },
         "fps": { "type": "integer", "minimum": 1 }
       },
-      "additionalProperties": false
+      "additionalProperties": true
+    },
+    "negotiatedProfile": {
+      "type": "object",
+      "required": ["width", "height", "fps", "bitrateBps"],
+      "properties": {
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 },
+        "fps": { "type": "integer", "minimum": 1 },
+        "bitrateBps": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": true
     },
     "healthResponse": {
       "type": "object",
@@ -36,7 +47,7 @@
         "status": { "type": "string", "enum": ["ready"] },
         "protocolVersion": { "$ref": "#/$defs/protocolVersion" }
       },
-      "additionalProperties": false
+      "additionalProperties": true
     },
     "capabilitiesResponse": {
       "type": "object",
@@ -50,7 +61,7 @@
             "transport": { "$ref": "#/$defs/transport" },
             "defaultPort": { "type": "integer", "minimum": 1, "maximum": 65535 }
           },
-          "additionalProperties": false
+          "additionalProperties": true
         },
         "videoCodecs": {
           "type": "array",
@@ -62,7 +73,7 @@
               "supported": { "type": "boolean" },
               "decoderAcceleration": { "$ref": "#/$defs/decoderAcceleration" }
             },
-            "additionalProperties": false
+            "additionalProperties": true
           }
         },
         "output": {
@@ -72,7 +83,7 @@
             "device": { "type": "string", "minLength": 1 },
             "pixelFormats": { "type": "array", "items": { "$ref": "#/$defs/pixelFormat" } }
           },
-          "additionalProperties": false
+          "additionalProperties": true
         },
         "session": {
           "type": "object",
@@ -81,10 +92,10 @@
             "maximumConcurrentSessions": { "type": "integer", "const": 1 },
             "active": { "type": "boolean" }
           },
-          "additionalProperties": false
+          "additionalProperties": true
         }
       },
-      "additionalProperties": false
+      "additionalProperties": true
     },
     "prepareSessionRequest": {
       "type": "object",
@@ -105,10 +116,10 @@
             "h264": { "type": "integer", "minimum": 1 },
             "h265": { "type": "integer", "minimum": 1 }
           },
-          "additionalProperties": false
+          "additionalProperties": true
         }
       },
-      "additionalProperties": false
+      "additionalProperties": true
     },
     "prepareSessionResponse": {
       "type": "object",
@@ -123,26 +134,18 @@
             "transport": { "$ref": "#/$defs/transport" },
             "port": { "type": "integer", "minimum": 1, "maximum": 65535 }
           },
-          "additionalProperties": false
+          "additionalProperties": true
         },
-        "profile": {
-          "allOf": [
-            { "$ref": "#/$defs/profile" },
-            {
-              "required": ["bitrateBps"],
-              "properties": { "bitrateBps": { "type": "integer", "minimum": 1 } }
-            }
-          ]
-        },
+        "profile": { "$ref": "#/$defs/negotiatedProfile" },
         "output": {
           "type": "object",
           "required": ["pixelFormat"],
           "properties": { "pixelFormat": { "$ref": "#/$defs/pixelFormat" } },
-          "additionalProperties": false
+          "additionalProperties": true
         },
         "warnings": { "type": "array", "items": { "type": "string" } }
       },
-      "additionalProperties": false
+      "additionalProperties": true
     },
     "sessionStateResponse": {
       "type": "object",
@@ -158,8 +161,7 @@
         "receivedBitrateBps": { "type": "integer", "minimum": 0 },
         "timeoutCount": { "type": "integer", "minimum": 0 }
       },
-      "additionalProperties": false
+      "additionalProperties": true
     }
   }
 }
-
