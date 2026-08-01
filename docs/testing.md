@@ -14,7 +14,7 @@ cargo build --manifest-path desktop/Cargo.toml --workspace
 When the Android toolchain is installed, run:
 
 ```bash
-gradle -p android test lint assembleDebug
+./android/gradlew -p android test lint assembleDebug
 ```
 
 Rust tests cover JSON schema fixtures, protocol version and codec rejection,
