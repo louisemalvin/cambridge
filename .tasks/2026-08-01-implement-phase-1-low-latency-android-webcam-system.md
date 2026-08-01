@@ -62,12 +62,12 @@ Build the Phase 1 Android sender, reusable Rust receiver, Linux virtual-camera o
 
 ## Status
 
-In progress. Milestones 0-4 are committed as `fb156ed`, `314e993`, `db10a6d`, `a6d6f6b`, and the pending H.264 receiver commit.
+In progress. Milestones 0-5 are committed as `fb156ed`, `314e993`, `db10a6d`, `a6d6f6b`, `f8358dd`, and the pending H.265 receiver commit.
 
 ## Handoff Notes
 
-- Next exact step: Complete the H.265-specific receiver capability and parser coverage, then add Linux output integration.
+- Next exact step: Add Linux v4l2loopback output inspection, sink creation, setup scripts, and virtual-camera test helpers.
 - Files changed: `AGENTS.md`, repository scaffold, protocol contract, receiver core, HTTP control server, GStreamer receiver, this task artifact.
-- Commands run: `agent-init`, `task-init`, `work-context`, repository/toolchain inspection, upstream RootEncoder source inspection, Rust fmt/test/clippy/build/check, JSON syntax and schema validation, HTTP route test, GStreamer construction tests.
+- Commands run: `agent-init`, `task-init`, `work-context`, repository/toolchain inspection, upstream RootEncoder source inspection, Rust fmt/test/clippy/build/check, JSON syntax and schema validation, HTTP route test, GStreamer H.264/H.265 construction and parser tests.
 - Errors encountered: Initial directory was empty and not a Git repository; Android Java tooling is unavailable; local GStreamer installation lacks `udpsrc` and `udpsink`, so live UDP tests are skipped.
 - Verification evidence: Upstream RootEncoder README and 2.8.0 sources confirm the selected artifact and API boundary; the local environment reports no Java executable.

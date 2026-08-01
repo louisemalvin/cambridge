@@ -44,7 +44,6 @@ pub(crate) fn build_pipeline<F: VideoSinkFactory>(
     source.set_property("port", i32::from(config.media_port));
     source.set_property("timeout", config.udp_timeout_ms.saturating_mul(1_000_000));
     demux.set_property("latency", config.latency.demux_latency_ms);
-    parser.set_property("config-interval", -1i32);
     configure_bounded_queue(&demux_queue, config.latency.output_queue_frames);
     configure_bounded_queue(&output_queue, config.latency.output_queue_frames);
     capsfilter.set_property("caps", raw_caps(config));
