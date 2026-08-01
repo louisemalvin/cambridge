@@ -1,0 +1,1 @@
+//! `GStreamer` media receiver implementation.

@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mobile-webcam.dev/protocol/control-v1.schema.json",
+  "title": "Mobile Webcam control protocol v1",
+  "type": "object",
+  "oneOf": [
+    { "$ref": "#/$defs/healthResponse" },
+    { "$ref": "#/$defs/capabilitiesResponse" },
+    { "$ref": "#/$defs/prepareSessionRequest" },
+    { "$ref": "#/$defs/prepareSessionResponse" },
+    { "$ref": "#/$defs/sessionStateResponse" }
+  ],
+  "$defs": {
+    "protocolVersion": { "const": 1 },
+    "codec": { "type": "string", "enum": ["h264", "h265"] },
+    "transport": { "type": "string", "const": "mpegts-udp" },
+    "pixelFormat": { "type": "string", "enum": ["yuy2", "nv12", "i420"] },
+    "decoderAcceleration": {
+      "type": "string",
+      "enum": ["hardware", "software", "unknown"]
+    },
+    "profile": {
+      "type": "object",
+      "required": ["width", "height", "fps"],
+      "properties": {
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 },
+        "fps": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "healthResponse": {
+      "type": "object",
+      "required": ["status", "protocolVersion"],
+      "properties": {
+        "status": { "type": "string", "enum": ["ready"] },
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" }
+      },
+      "additionalProperties": false
+    },
+    "capabilitiesResponse": {
+      "type": "object",
+      "required": ["protocolVersion", "media", "videoCodecs", "output", "session"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "media": {
+          "type": "object",
+          "required": ["transport", "defaultPort"],
+          "properties": {
+            "transport": { "$ref": "#/$defs/transport" },
+            "defaultPort": { "type": "integer", "minimum": 1, "maximum": 65535 }
+          },
+          "additionalProperties": false
+        },
+        "videoCodecs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["codec", "supported", "decoderAcceleration"],
+            "properties": {
+              "codec": { "$ref": "#/$defs/codec" },
+              "supported": { "type": "boolean" },
+              "decoderAcceleration": { "$ref": "#/$defs/decoderAcceleration" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "output": {
+          "type": "object",
+          "required": ["device", "pixelFormats"],
+          "properties": {
+            "device": { "type": "string", "minLength": 1 },
+            "pixelFormats": { "type": "array", "items": { "$ref": "#/$defs/pixelFormat" } }
+          },
+          "additionalProperties": false
+        },
+        "session": {
+          "type": "object",
+          "required": ["maximumConcurrentSessions", "active"],
+          "properties": {
+            "maximumConcurrentSessions": { "type": "integer", "const": 1 },
+            "active": { "type": "boolean" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "prepareSessionRequest": {
+      "type": "object",
+      "required": ["protocolVersion", "preferredCodecs", "profile", "bitrateByCodec"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "preferredCodecs": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/codec" },
+          "uniqueItems": true
+        },
+        "profile": { "$ref": "#/$defs/profile" },
+        "bitrateByCodec": {
+          "type": "object",
+          "required": ["h264", "h265"],
+          "properties": {
+            "h264": { "type": "integer", "minimum": 1 },
+            "h265": { "type": "integer", "minimum": 1 }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "prepareSessionResponse": {
+      "type": "object",
+      "required": ["sessionId", "selectedCodec", "media", "profile", "output", "warnings"],
+      "properties": {
+        "sessionId": { "type": "string", "format": "uuid" },
+        "selectedCodec": { "$ref": "#/$defs/codec" },
+        "media": {
+          "type": "object",
+          "required": ["transport", "port"],
+          "properties": {
+            "transport": { "$ref": "#/$defs/transport" },
+            "port": { "type": "integer", "minimum": 1, "maximum": 65535 }
+          },
+          "additionalProperties": false
+        },
+        "profile": {
+          "allOf": [
+            { "$ref": "#/$defs/profile" },
+            {
+              "required": ["bitrateBps"],
+              "properties": { "bitrateBps": { "type": "integer", "minimum": 1 } }
+            }
+          ]
+        },
+        "output": {
+          "type": "object",
+          "required": ["pixelFormat"],
+          "properties": { "pixelFormat": { "$ref": "#/$defs/pixelFormat" } },
+          "additionalProperties": false
+        },
+        "warnings": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "sessionStateResponse": {
+      "type": "object",
+      "required": ["sessionId", "state", "selectedCodec", "receivedBitrateBps", "timeoutCount"],
+      "properties": {
+        "sessionId": { "type": "string", "format": "uuid" },
+        "state": {
+          "type": "string",
+          "enum": ["idle", "prepared", "waiting_for_stream", "receiving", "timed_out", "stopping", "failed"]
+        },
+        "selectedCodec": { "$ref": "#/$defs/codec" },
+        "decoder": { "type": "string" },
+        "receivedBitrateBps": { "type": "integer", "minimum": 0 },
+        "timeoutCount": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    }
+  }
+}
+

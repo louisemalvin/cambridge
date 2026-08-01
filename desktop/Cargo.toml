@@ -1,0 +1,24 @@
+[workspace]
+resolver = "2"
+members = [
+    "apps/receiver-cli",
+    "crates/receiver-protocol",
+    "crates/receiver-core",
+    "crates/receiver-control-http",
+    "crates/receiver-gstreamer",
+    "crates/receiver-platform-linux",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+authors = ["Mobile Webcam contributors"]
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = "warn"
+pedantic = "warn"
+
