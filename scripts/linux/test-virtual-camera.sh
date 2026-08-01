@@ -1,10 +1,31 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DEVICE="${1:-/dev/video10}"
+find_loopback_device() {
+  shopt -s nullglob
+  local entry
+  local driver
+  for entry in /sys/class/video4linux/video*; do
+    driver="$(readlink -f "${entry}/device/driver" 2>/dev/null || true)"
+    if [[ "${driver}" == */v4l2loopback ]]; then
+      printf '/dev/%s\n' "${entry##*/}"
+      return 0
+    fi
+  done
+  return 1
+}
 
-if [[ ! -e "$DEVICE" ]]; then
-  echo "Virtual-camera device does not exist: $DEVICE" >&2
+DEVICE="${1:-}"
+if [[ -z "${DEVICE}" ]]; then
+  DEVICE="$(find_loopback_device || true)"
+fi
+
+if [[ -z "${DEVICE}" ]]; then
+  echo "No v4l2loopback device found. Run scripts/linux/install-receiver.sh first." >&2
+  exit 1
+fi
+if [[ ! -e "${DEVICE}" ]]; then
+  echo "Virtual-camera device does not exist: ${DEVICE}" >&2
   exit 1
 fi
 if ! command -v gst-launch-1.0 >/dev/null 2>&1; then

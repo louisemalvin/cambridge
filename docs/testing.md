@@ -54,8 +54,11 @@ Validate the device with:
 
 ```bash
 scripts/linux/inspect-video-devices.sh
-scripts/linux/test-virtual-camera.sh /dev/video10
+scripts/linux/test-virtual-camera.sh
 ```
+
+The test script automatically selects the first v4l2loopback device. Pass an
+explicit device path only when testing a non-default loopback configuration.
 
 Open the device in OBS or a browser after the producer attaches. With
 `exclusive_caps=1`, the device is initially producer-facing and becomes

@@ -15,8 +15,10 @@ pub struct Cli {
     #[arg(long, default_value_t = 5000)]
     pub media_port: u16,
 
-    #[arg(long, default_value = "/dev/video10")]
-    pub device: PathBuf,
+    /// Use a specific v4l2loopback device. If omitted, the first loopback
+    /// device is selected automatically.
+    #[arg(long)]
+    pub device: Option<PathBuf>,
 
     #[arg(long, value_enum, default_value_t = OutputFormatArg::Auto)]
     pub output_format: OutputFormatArg,
@@ -57,12 +59,12 @@ impl OutputFormatArg {
 }
 
 impl Cli {
-    pub fn receiver_config(&self) -> ReceiverConfig {
+    pub fn receiver_config(&self, device: PathBuf) -> ReceiverConfig {
         ReceiverConfig {
             listen_addr: self.listen,
             control_port: self.control_port,
             media_port: self.media_port,
-            device: self.device.clone(),
+            device,
             output_format: self.output_format.to_core(),
             latency: LatencyConfig {
                 demux_latency_ms: self.demux_latency_ms,
@@ -71,5 +73,25 @@ impl Cli {
             udp_timeout_ms: 2_000,
             session_timeout_grace_ms: 30_000,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn device_is_automatic_by_default() {
+        let cli = Cli::parse_from(["mobile-webcam-receiver"]);
+
+        assert!(cli.device.is_none());
+    }
+
+    #[test]
+    fn explicit_device_is_preserved() {
+        let cli = Cli::parse_from(["mobile-webcam-receiver", "--device", "/dev/video42"]);
+
+        assert_eq!(cli.device.as_deref(), Some(Path::new("/dev/video42")));
     }
 }

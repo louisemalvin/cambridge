@@ -28,7 +28,15 @@
 
 ## No virtual-camera device
 
-Run:
+Run the one-time installer first:
+
+```bash
+./scripts/linux/install-receiver.sh
+```
+
+The receiver automatically selects the first device whose driver is
+`v4l2loopback`, so daily startup does not require `/dev/video10` or any other
+device path. If setup has already been attempted, inspect the current state:
 
 ```bash
 scripts/linux/inspect-video-devices.sh
@@ -36,8 +44,9 @@ scripts/linux/setup-v4l2loopback.sh 10
 ```
 
 The receiver never runs `sudo`, loads modules, unloads modules, or changes
-Secure Boot. Review the printed `modprobe` command manually. Check that the
-device driver is `v4l2loopback` and that the receiver user can open it.
+Secure Boot. The installer also refuses to overwrite conflicting module
+configuration. Review its error and any printed `modprobe` command manually.
+Check that the receiver user can open the detected device.
 
 ## `v4l2sink` or caps negotiation fails
 
@@ -45,8 +54,7 @@ device driver is `v4l2loopback` and that the receiver user can open it.
 - Start with 1080p30 and output format Auto.
 - Try explicit `--output-format yuy2` for broad consumer compatibility.
 - Use NV12 for high-resolution tests only when the consumer accepts it.
-- Run `scripts/linux/test-virtual-camera.sh /dev/video10` before involving
-  the phone.
+- Run `scripts/linux/test-virtual-camera.sh` before involving the phone.
 
 ## H.265 synthetic test is skipped
 

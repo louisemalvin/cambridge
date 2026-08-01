@@ -1,11 +1,11 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, path::PathBuf};
 
 use anyhow::{Context, Result};
 use clap::Parser;
 use receiver_control_http::{serve, ControlState};
 use receiver_core::{ReceiverService, StaticCapabilityProvider};
 use receiver_gstreamer::{probe_capabilities, GStreamerReceiver};
-use receiver_platform_linux::LinuxVideoSinkFactory;
+use receiver_platform_linux::{resolve_v4l2loopback_device, LinuxVideoSinkFactory};
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
@@ -19,7 +19,20 @@ use cli::Cli;
 async fn main() -> Result<()> {
     let cli = Cli::parse();
     init_logging(&cli.log_level)?;
-    let config = cli.receiver_config();
+    let config = if cli.print_pipeline || cli.print_capabilities {
+        cli.receiver_config(
+            cli.device.clone().unwrap_or_else(|| PathBuf::from("<auto-detected-v4l2loopback>")),
+        )
+    } else {
+        let device = resolve_v4l2loopback_device(cli.device.as_deref()).with_context(|| {
+            if cli.device.is_some() {
+                "validate the configured virtual-camera device"
+            } else {
+                "find a v4l2loopback device; run ./scripts/linux/install-receiver.sh once"
+            }
+        })?;
+        cli.receiver_config(device.path)
+    };
 
     if cli.print_pipeline {
         output::print_pipeline(&config);

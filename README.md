@@ -28,18 +28,30 @@ Phase 1.
 
 ## Quick start
 
-Build the receiver with:
+From a supported Linux desktop, run the one-time installer from the repository
+root:
 
 ```bash
-cargo build --manifest-path desktop/Cargo.toml --workspace
+./scripts/linux/install-receiver.sh
 ```
 
-Then follow [Linux setup](docs/linux-ubuntu-setup.md) or
-[Arch Linux setup](docs/linux-arch-setup.md), and run:
+The installer handles the GStreamer packages, v4l2loopback module setup, and
+release build. It may ask for `sudo` for those operating-system changes. Start
+the receiver each day with:
 
 ```bash
-mobile-webcam-receiver --device /dev/video10
+mobile-webcam-receiver
 ```
+
+No device path or port arguments are required. The receiver automatically
+selects the first v4l2loopback device and uses control TCP `5001` plus media
+UDP `5000`. Advanced users can still pass `--device`, `--control-port`, or
+`--media-port`. The repository wrapper `./scripts/linux/start-receiver.sh` is
+also available for local development.
+
+The installer supports CachyOS/Arch and Ubuntu/Debian. See the matching
+[Arch Linux guide](docs/linux-arch-setup.md) or
+[Ubuntu guide](docs/linux-ubuntu-setup.md) for platform-specific notes.
 
 The Android application requires Android Studio or a JDK 17 Android build
 environment. See [Android setup](docs/android-setup.md).
