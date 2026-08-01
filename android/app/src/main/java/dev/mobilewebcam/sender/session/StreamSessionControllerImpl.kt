@@ -143,10 +143,14 @@ class StreamSessionControllerImpl(
     }
 
     private suspend fun handleEngineEvent(event: StreamEngineEvent) {
-        if (event !is StreamEngineEvent.ConnectionFailed) return
         lifecycleMutex.withLock {
-            if (activeSession == null) return@withLock
-            val failure = StreamFailure.StreamStartFailed(IllegalStateException(event.reason))
+            if (activeSession == null || stateFlow.value !is StreamState.Streaming) return@withLock
+            val failure = when (event) {
+                is StreamEngineEvent.ConnectionFailed ->
+                    StreamFailure.StreamStartFailed(IllegalStateException(event.reason))
+                StreamEngineEvent.Disconnected -> StreamFailure.NetworkDisconnected
+                else -> return@withLock
+            }
             cleanupLocked(activeSession)
             stateFlow.value = StreamState.Failed(failure)
         }
