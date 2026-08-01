@@ -4,6 +4,15 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[dependencies]
+gstreamer = "0.24"
+gstreamer-base = "0.24"
+gstreamer-video = "0.24"
+receiver-core = { path = "../receiver-core" }
+receiver-protocol = { path = "../receiver-protocol" }
+thiserror = "2.0"
+tracing = "0.1"
+uuid = "1.24"
+
 [lints]
 workspace = true
-
