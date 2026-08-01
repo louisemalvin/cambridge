@@ -18,7 +18,9 @@ class MediaCodecCapabilityProbe : EncoderCapabilityProbe {
     private val cache = mutableMapOf<String, List<EncoderCapability>>()
 
     override suspend fun getCapabilities(profiles: List<VideoProfile>): List<EncoderCapability> {
-        val cacheKey = profiles.joinToString(separator = ",") { it.id }
+        val cacheKey = profiles.joinToString(separator = ",") {
+            "${it.id}:${it.width}x${it.height}@${it.fps}"
+        }
         cacheMutex.withLock { cache[cacheKey] }?.let { return it }
         val result = withContext(Dispatchers.Default) {
             probe(profiles)
@@ -71,9 +73,8 @@ class MediaCodecCapabilityProbe : EncoderCapabilityProbe {
             )
         }
         return candidates
-            .sortedWith(compareByDescending<EncoderCapability> {
-                it.acceleration == EncoderAcceleration.HARDWARE
-            }.thenByDescending { it.supported })
+            .sortedWith(compareByDescending<EncoderCapability> { it.supported }
+                .thenByDescending { it.acceleration == EncoderAcceleration.HARDWARE })
             .firstOrNull()
             ?: unsupported(codec, profile, "Encoder capability metadata was unavailable")
     }

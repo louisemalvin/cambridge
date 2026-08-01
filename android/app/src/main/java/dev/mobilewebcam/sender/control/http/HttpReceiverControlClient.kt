@@ -16,7 +16,7 @@ import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
-import io.ktor.http.HttpStatusCode
+import io.ktor.client.statement.HttpResponse
 import io.ktor.serialization.kotlinx.json.json
 
 class HttpReceiverControlClient(
@@ -24,7 +24,7 @@ class HttpReceiverControlClient(
 ) : ReceiverControlClient {
     override suspend fun health(endpoint: ReceiverEndpoint): Result<ReceiverHealth> =
         request(endpoint) {
-            val response = client.get(endpoint.path("health"))
+            val response = client.get(endpoint.path("health")).requireSuccess()
             val dto = response.body<HealthResponseDto>()
             checkVersion(dto.protocolVersion)
             ReceiverHealth(dto.status, dto.protocolVersion)
@@ -32,7 +32,7 @@ class HttpReceiverControlClient(
 
     override suspend fun capabilities(endpoint: ReceiverEndpoint): Result<ReceiverCapabilities> =
         request(endpoint) {
-            val response = client.get(endpoint.path("capabilities"))
+            val response = client.get(endpoint.path("capabilities")).requireSuccess()
             val dto = response.body<CapabilitiesResponseDto>()
             checkVersion(dto.protocolVersion)
             dto.toDomain()
@@ -58,7 +58,7 @@ class HttpReceiverControlClient(
                     ),
                 ),
             )
-        }
+        }.requireSuccess()
         val dto = response.body<PrepareSessionResponseDto>()
         val profile = sessionRequest.profile.copy(
             width = dto.profile.width,
@@ -82,7 +82,7 @@ class HttpReceiverControlClient(
         sessionId: String,
     ): Result<Unit> = request(endpoint) {
         val response = client.delete(endpoint.path("sessions/$sessionId"))
-        if (response.status != HttpStatusCode.NoContent && response.status.value !in 200..299) {
+        if (response.status.value !in 200..299) {
             throw ReceiverControlException(
                 ReceiverControlError.Rejected(response.status.value, response.status.description),
             )
@@ -109,6 +109,15 @@ class HttpReceiverControlClient(
                 ReceiverControlError.Protocol("Unsupported protocol version: $version"),
             )
         }
+    }
+
+    private fun HttpResponse.requireSuccess(): HttpResponse {
+        if (status.value !in 200..299) {
+            throw ReceiverControlException(
+                ReceiverControlError.Rejected(status.value, status.description),
+            )
+        }
+        return this
     }
 
     private fun ReceiverEndpoint.path(path: String): String =

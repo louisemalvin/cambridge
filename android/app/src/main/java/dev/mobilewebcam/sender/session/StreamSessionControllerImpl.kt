@@ -3,6 +3,7 @@ package dev.mobilewebcam.sender.session
 import android.view.Surface
 import dev.mobilewebcam.sender.capabilities.EncoderCapabilityProbe
 import dev.mobilewebcam.sender.control.ReceiverControlClient
+import dev.mobilewebcam.sender.control.ReceiverControlError
 import dev.mobilewebcam.sender.control.ReceiverControlException
 import dev.mobilewebcam.sender.model.CodecPreference
 import dev.mobilewebcam.sender.model.NegotiatedSession
@@ -86,7 +87,7 @@ class StreamSessionControllerImpl(
                 bitrateByCodec = VideoCodec.entries.associateWith(profile::bitrateFor),
             )
             val session = receiver.prepareSession(endpoint, request)
-                .orReceiverFailure("Receiver rejected session preparation")
+                .orPrepareFailure()
             activeSession = session
             checkNegotiatedCodec(codec, session.selectedCodec, preference, profile)
             stateFlow.value = StreamState.Preparing(codec, profile)
@@ -109,7 +110,7 @@ class StreamSessionControllerImpl(
             )
             Result.success(Unit)
         } catch (cancelled: CancellationException) {
-            cleanupLocked(null)
+            cleanupLocked(activeSession)
             stateFlow.value = StreamState.Idle
             throw cancelled
         } catch (failure: StreamFailureException) {
@@ -188,11 +189,23 @@ class StreamSessionControllerImpl(
     }
 
     private fun <T> Result<T>.orReceiverFailure(operation: String): T = getOrElse { error ->
-        val reason = when (error) {
-            is ReceiverControlException -> error.error.toString()
-            else -> error.message ?: "unknown receiver error"
-        }
+        val reason = receiverErrorReason(error)
         throw StreamFailureException(StreamFailure.ReceiverUnavailable("$operation: $reason"), error)
+    }
+
+    private fun <T> Result<T>.orPrepareFailure(): T = getOrElse { error ->
+        val failure = when (val controlError = (error as? ReceiverControlException)?.error) {
+            is ReceiverControlError.Rejected -> StreamFailure.ReceiverRejectedProfile(controlError.reason)
+            else -> StreamFailure.ReceiverUnavailable(
+                "Receiver session preparation failed: ${receiverErrorReason(error)}",
+            )
+        }
+        throw StreamFailureException(failure, error)
+    }
+
+    private fun receiverErrorReason(error: Throwable): String = when (error) {
+        is ReceiverControlException -> error.error.toString()
+        else -> error.message ?: "unknown receiver error"
     }
 
     private fun failure(failure: StreamFailure): Result<Unit> =

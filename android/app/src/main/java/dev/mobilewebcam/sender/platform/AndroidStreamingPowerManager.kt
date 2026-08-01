@@ -11,6 +11,11 @@ class AndroidStreamingPowerManager(context: Context) : StreamingPowerManager {
 
     @Synchronized
     override fun acquire() {
+        runCatching { acquireWakeLock() }
+        runCatching { acquireWifiLock() }
+    }
+
+    private fun acquireWakeLock() {
         if (wakeLock == null) {
             val powerManager = applicationContext.getSystemService(PowerManager::class.java)
             wakeLock = powerManager.newWakeLock(
@@ -21,7 +26,6 @@ class AndroidStreamingPowerManager(context: Context) : StreamingPowerManager {
             }
         }
         if (wakeLock?.isHeld != true) wakeLock?.acquire()
-        acquireWifiLock()
     }
 
     @Synchronized
@@ -31,16 +35,16 @@ class AndroidStreamingPowerManager(context: Context) : StreamingPowerManager {
     }
 
     private fun acquireWifiLock() {
-        if (wifiLock == null) {
-            val wifiManager = applicationContext.getSystemService(WifiManager::class.java)
-            wifiLock = wifiManager.createWifiLock(
-                WifiManager.WIFI_MODE_FULL_HIGH_PERF,
-                "MobileWebcam::Streaming",
-            ).apply {
-                setReferenceCounted(false)
-            }
-        }
         runCatching {
+            if (wifiLock == null) {
+                val wifiManager = applicationContext.getSystemService(WifiManager::class.java)
+                wifiLock = wifiManager.createWifiLock(
+                    WifiManager.WIFI_MODE_FULL_HIGH_PERF,
+                    "MobileWebcam::Streaming",
+                ).apply {
+                    setReferenceCounted(false)
+                }
+            }
             if (wifiLock?.isHeld != true) wifiLock?.acquire()
         }
     }
