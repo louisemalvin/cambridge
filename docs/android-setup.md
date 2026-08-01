@@ -2,8 +2,10 @@
 
 ## Prerequisites
 
-- Android Studio or JDK 17 with an Android Gradle environment.
-- Android SDK Platform 35 and a device running Android API 26 or newer.
+- Android Studio Panda 3 (2025.3.3 Patch 1) or newer, or JDK 17 with an
+  Android Gradle environment. API 37 requires this newer Android toolchain.
+- Android SDK Platform 37, Android SDK Build-Tools 36.0.0, and a device running
+  Android API 26 or newer.
 - A physical Android phone with a rear camera for streaming validation.
 - The phone and Linux receiver reachable on the same Wi-Fi or USB-tethered network.
 
@@ -14,17 +16,16 @@ app uses the project-owned `StreamEngine` interface.
 
 ## Build and install
 
-From the repository root, use the Gradle wrapper when one is present. The
-current Phase 1 repository relies on the CI and Android Studio Gradle
-installation, so a local checkout without a wrapper can use:
+From the repository root, use the checked-in Gradle wrapper:
 
 ```bash
-gradle -p android test lint assembleDebug
+android/gradlew -p android test lint assembleDebug
 adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-The first build downloads Gradle, AndroidX, Compose, Ktor, and RootEncoder
-dependencies. No microphone permission is requested.
+The project uses AGP 9.1.1, Gradle 9.3.1, compile SDK 37, and JDK 17. The first
+build downloads Gradle, AndroidX, Compose, Ktor, and RootEncoder dependencies.
+No microphone permission is requested.
 
 ## Connect
 
