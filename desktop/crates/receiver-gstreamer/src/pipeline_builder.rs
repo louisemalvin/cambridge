@@ -16,6 +16,8 @@ use crate::{
     PipelineError,
 };
 
+const UDP_RECEIVE_BUFFER_SIZE_BYTES: i32 = 1_000_000;
+
 pub(crate) fn build_pipeline<F: VideoSinkFactory>(
     config: &MediaSessionConfig,
     sink_factory: &F,
@@ -42,6 +44,8 @@ pub(crate) fn build_pipeline<F: VideoSinkFactory>(
 
     source.set_property("address", "0.0.0.0");
     source.set_property("port", i32::from(config.media_port));
+    source.set_property("caps", mpeg_ts_caps());
+    source.set_property("buffer-size", UDP_RECEIVE_BUFFER_SIZE_BYTES);
     source.set_property("timeout", config.udp_timeout_ms.saturating_mul(1_000_000));
     let demux_latency_ms = i32::try_from(config.latency.demux_latency_ms).unwrap_or(i32::MAX);
     demux.set_property("latency", demux_latency_ms);
@@ -112,7 +116,7 @@ fn connect_decoder_pad(
 ) {
     let convert = convert.clone();
     decoder.connect_pad_added(move |_decoder, pad| {
-        let Some(caps) = pad.current_caps() else {
+        let Some(caps) = pad_caps(pad) else {
             return;
         };
         let Some(structure) = caps.structure(0) else {
@@ -184,13 +188,29 @@ fn add_output_probe(
 }
 
 fn pad_codec(pad: &gst::Pad) -> Option<VideoCodec> {
-    let caps = pad.current_caps()?;
+    let caps = pad_caps(pad)?;
     let structure = caps.structure(0)?;
     match structure.name().as_str() {
         "video/x-h264" => Some(VideoCodec::H264),
         "video/x-h265" => Some(VideoCodec::H265),
         _ => None,
     }
+}
+
+fn pad_caps(pad: &gst::Pad) -> Option<gst::Caps> {
+    let caps = pad.current_caps().unwrap_or_else(|| pad.query_caps(None));
+    if caps.is_any() || caps.is_empty() {
+        None
+    } else {
+        Some(caps)
+    }
+}
+
+fn mpeg_ts_caps() -> gst::Caps {
+    gst::Caps::builder("video/mpegts")
+        .field("systemstream", true)
+        .field("packetsize", 188i32)
+        .build()
 }
 
 fn raw_caps(config: &MediaSessionConfig) -> gst::Caps {
@@ -210,5 +230,21 @@ fn pixel_format_name(format: PixelFormat) -> &'static str {
         PixelFormat::Yuy2 => "YUY2",
         PixelFormat::Nv12 => "NV12",
         PixelFormat::I420 => "I420",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn source_caps_describe_standard_mpeg_ts_packets() {
+        gst::init().unwrap();
+        let caps = mpeg_ts_caps();
+        let structure = caps.structure(0).unwrap();
+
+        assert_eq!(structure.name(), "video/mpegts");
+        assert_eq!(structure.get::<bool>("systemstream"), Ok(true));
+        assert_eq!(structure.get::<i32>("packetsize"), Ok(188));
     }
 }

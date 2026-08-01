@@ -18,6 +18,37 @@
   receiver path.
 - Check `timeoutCount` and the receiver log for a wrong codec.
 
+## MPEG-TS continuity warnings or `not-negotiated`
+
+Continuity warnings identify missing or reordered UDP datagrams. A small number
+can recover at the next keyframe, but a sustained burst can prevent GStreamer
+from negotiating or decoding the stream. PID `0x0020` is the normal first video
+PID used by the current RootEncoder MPEG-TS sender; it is not an error by
+itself.
+
+- Prefer a stable Wi-Fi connection or USB tethering and avoid competing high-
+  bandwidth traffic.
+- Restart the sender after the receiver has returned to `Idle` or
+  `TimedOut`.
+- Check the Linux UDP receive limits:
+
+  ```bash
+  sysctl net.core.rmem_default net.core.rmem_max
+  ```
+
+- If the maximum is unusually small, increase it temporarily before starting
+  the receiver, for example:
+
+  ```bash
+  sudo sysctl -w net.core.rmem_max=4194304
+  sudo sysctl -w net.core.rmem_default=4194304
+  ```
+
+The receiver declares the input as 188-byte MPEG-TS and requests a bounded
+receive buffer. Linux may clamp that request to its configured maximum. UDP
+has no retransmission, so persistent packet loss still requires improving the
+network path.
+
 ## Codec negotiation fails
 
 - Use Auto with `1080p30` first.
