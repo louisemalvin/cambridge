@@ -18,6 +18,8 @@ import io.ktor.client.request.get
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
+import io.ktor.http.ContentType
+import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 
 class HttpReceiverControlClient(
@@ -44,6 +46,7 @@ class HttpReceiverControlClient(
         sessionRequest: PrepareSessionRequest,
     ): Result<NegotiatedSession> = request(endpoint) {
         val response = client.post(endpoint.path("sessions/prepare")) {
+            contentType(ContentType.Application.Json)
             setBody(
                 PrepareSessionRequestDto(
                     protocolVersion = CONTROL_PROTOCOL_VERSION,
