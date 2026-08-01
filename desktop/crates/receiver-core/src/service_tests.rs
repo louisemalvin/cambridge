@@ -4,7 +4,12 @@ use receiver_protocol::{
     DecoderAcceleration, MediaCapabilities, OutputCapabilities, ReceiverSessionState,
     SessionCapabilities, VideoCodec, VideoCodecCapability, VideoProfile,
 };
-use std::path::PathBuf;
+use std::{
+    path::PathBuf,
+    sync::{Arc, Mutex},
+    thread,
+    time::Duration,
+};
 
 #[derive(Default)]
 struct FakeReceiver {
@@ -129,4 +134,51 @@ fn receiver_state_starts_waiting_for_stream() {
         receiver.prepare_session(&request(vec![VideoCodec::H265, VideoCodec::H264])).unwrap();
     let state = receiver.session(&prepared.session_id).unwrap();
     assert_eq!(state.state, ReceiverSessionState::WaitingForStream);
+}
+
+#[test]
+fn prolonged_timeout_releases_the_session_without_stopping_the_service() {
+    let state = Arc::new(Mutex::new(ReceiverState::Idle));
+    let receiver = SharedStateReceiver { state: state.clone() };
+    let provider = StaticCapabilityProvider::new(capabilities(true, true));
+    let config = ReceiverConfig {
+        device: PathBuf::from("/dev/video10"),
+        udp_timeout_ms: 1,
+        session_timeout_grace_ms: 1,
+        ..ReceiverConfig::default()
+    };
+    let mut service = ReceiverService::new(config, Box::new(provider), Box::new(receiver)).unwrap();
+    let prepared = service.prepare_session(&request(vec![VideoCodec::H264])).unwrap();
+    *state.lock().unwrap() = ReceiverState::TimedOut;
+
+    let _ = service.session(&prepared.session_id);
+    thread::sleep(Duration::from_millis(3));
+
+    assert_eq!(service.state(), ReceiverState::Idle);
+    assert!(!service.capabilities().session.active);
+}
+
+struct SharedStateReceiver {
+    state: Arc<Mutex<ReceiverState>>,
+}
+
+impl MediaReceiver for SharedStateReceiver {
+    fn prepare(&mut self, _config: MediaSessionConfig) -> Result<(), ReceiverError> {
+        *self.state.lock().unwrap() = ReceiverState::Prepared;
+        Ok(())
+    }
+
+    fn start(&mut self) -> Result<(), ReceiverError> {
+        *self.state.lock().unwrap() = ReceiverState::WaitingForStream;
+        Ok(())
+    }
+
+    fn stop(&mut self) -> Result<(), ReceiverError> {
+        *self.state.lock().unwrap() = ReceiverState::Idle;
+        Ok(())
+    }
+
+    fn state(&self) -> ReceiverState {
+        *self.state.lock().unwrap()
+    }
 }

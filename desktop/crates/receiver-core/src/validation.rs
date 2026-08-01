@@ -21,6 +21,11 @@ pub fn validate_config(config: &ReceiverConfig) -> Result<(), ReceiverError> {
     if config.udp_timeout_ms == 0 {
         return Err(ReceiverError::InvalidConfiguration("UDP timeout must be non-zero".to_owned()));
     }
+    if config.session_timeout_grace_ms < config.udp_timeout_ms {
+        return Err(ReceiverError::InvalidConfiguration(
+            "session timeout grace must be at least the UDP timeout".to_owned(),
+        ));
+    }
     Ok(())
 }
 

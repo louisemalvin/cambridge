@@ -41,6 +41,7 @@ pub struct ReceiverConfig {
     pub output_format: OutputFormat,
     pub latency: LatencyConfig,
     pub udp_timeout_ms: u64,
+    pub session_timeout_grace_ms: u64,
 }
 
 impl Default for ReceiverConfig {
@@ -53,6 +54,7 @@ impl Default for ReceiverConfig {
             output_format: OutputFormat::Auto,
             latency: LatencyConfig::default(),
             udp_timeout_ms: 2_000,
+            session_timeout_grace_ms: 30_000,
         }
     }
 }

@@ -69,6 +69,7 @@ impl Cli {
                 output_queue_frames: self.queue_frames,
             },
             udp_timeout_ms: 2_000,
+            session_timeout_grace_ms: 30_000,
         }
     }
 }

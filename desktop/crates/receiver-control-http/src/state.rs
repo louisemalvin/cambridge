@@ -24,4 +24,10 @@ impl ControlState {
             .map_err(|_| ReceiverError::MediaStop("receiver service lock poisoned".to_owned()))?;
         service.shutdown()
     }
+
+    pub fn refresh(&self) {
+        if let Ok(mut service) = self.service.lock() {
+            let _ = service.state();
+        }
+    }
 }

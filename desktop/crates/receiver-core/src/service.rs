@@ -1,3 +1,5 @@
+use std::time::{Duration, Instant};
+
 use receiver_protocol::{
     MediaResponse, OutputResponse, PrepareSessionRequest, PrepareSessionResponse,
     ReceiverCapabilities, ReceiverSessionState, SessionStateResponse, Transport,
@@ -38,6 +40,7 @@ pub struct ReceiverService {
     media_receiver: Box<dyn MediaReceiver>,
     session: Option<ReceiverSession>,
     last_session_id: Option<Uuid>,
+    timed_out_at: Option<Instant>,
 }
 
 impl ReceiverService {
@@ -55,10 +58,12 @@ impl ReceiverService {
             media_receiver,
             session: None,
             last_session_id: None,
+            timed_out_at: None,
         })
     }
 
-    pub fn capabilities(&self) -> ReceiverCapabilities {
+    pub fn capabilities(&mut self) -> ReceiverCapabilities {
+        self.refresh_session();
         let mut capabilities = self.capabilities.clone();
         capabilities.session.active = self.session.is_some();
         capabilities
@@ -105,6 +110,7 @@ impl ReceiverService {
         let mut session = ReceiverSession::new(&media_config);
         session.state = self.media_receiver.state();
         self.last_session_id = Some(session_id);
+        self.timed_out_at = None;
         self.session = Some(session.clone());
         Ok(PrepareSessionResponse {
             session_id: session_id.to_string(),
@@ -156,6 +162,7 @@ impl ReceiverService {
         }
         let stop_result = self.media_receiver.stop();
         self.session = None;
+        self.timed_out_at = None;
         stop_result.map_err(|error| ReceiverError::MediaStop(error.to_string()))
     }
 
@@ -176,10 +183,27 @@ impl ReceiverService {
     }
 
     fn refresh_session(&mut self) {
+        if self.session.is_none() {
+            return;
+        }
+        let media_state = self.media_receiver.state();
+        if media_state == ReceiverState::TimedOut {
+            let timed_out_at = self.timed_out_at.get_or_insert_with(Instant::now);
+            if timed_out_at.elapsed() >= Duration::from_millis(self.config.session_timeout_grace_ms)
+            {
+                let session_id = self.session.as_ref().map(|session| session.id.to_string());
+                if let Some(session_id) = session_id {
+                    let _ = self.stop_session(&session_id);
+                }
+                return;
+            }
+        } else {
+            self.timed_out_at = None;
+        }
         let Some(session) = self.session.as_mut() else {
             return;
         };
-        session.state = self.media_receiver.state();
+        session.state = media_state;
         session.decoder = self.media_receiver.decoder_name();
         session.received_bitrate_bps = self.media_receiver.received_bitrate_bps();
         session.timeout_count = self.media_receiver.timeout_count();

@@ -1,4 +1,4 @@
-use std::{future::Future, net::SocketAddr};
+use std::{future::Future, net::SocketAddr, time::Duration};
 
 use axum::serve as axum_serve;
 use thiserror::Error;
@@ -23,10 +23,20 @@ where
     F: Future<Output = ()> + Send + 'static,
 {
     let listener = TcpListener::bind(listen_addr).await.map_err(HttpServerError::Listener)?;
-    axum_serve(listener, router(state))
+    let watchdog_state = state.clone();
+    let watchdog = tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_millis(250));
+        loop {
+            interval.tick().await;
+            watchdog_state.refresh();
+        }
+    });
+    let result = axum_serve(listener, router(state))
         .with_graceful_shutdown(shutdown)
         .await
-        .map_err(HttpServerError::Serve)
+        .map_err(HttpServerError::Serve);
+    watchdog.abort();
+    result
 }
 
 #[cfg(test)]
@@ -103,5 +113,68 @@ mod tests {
         let body = response.into_body().collect().await.unwrap().to_bytes();
         let health: receiver_protocol::HealthResponse = serde_json::from_slice(&body).unwrap();
         assert_eq!(health.protocol_version, 1);
+    }
+
+    #[tokio::test]
+    async fn session_endpoints_prepare_report_and_stop_a_session() {
+        let app = router(ControlState::new(service()));
+        let capabilities = app
+            .clone()
+            .oneshot(
+                axum::http::Request::builder().uri("/v1/capabilities").body(Body::empty()).unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(capabilities.status(), StatusCode::OK);
+
+        let request = receiver_protocol::PrepareSessionRequest {
+            protocol_version: 1,
+            preferred_codecs: vec![VideoCodec::H264],
+            profile: receiver_protocol::VideoProfile { width: 1920, height: 1080, fps: 30 },
+            bitrate_by_codec: receiver_protocol::BitrateByCodec {
+                h264: 10_000_000,
+                h265: 7_000_000,
+            },
+        };
+        let response = app
+            .clone()
+            .oneshot(
+                axum::http::Request::builder()
+                    .method("POST")
+                    .uri("/v1/sessions/prepare")
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_vec(&request).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let prepared: receiver_protocol::PrepareSessionResponse =
+            serde_json::from_slice(&body).unwrap();
+
+        let state = app
+            .clone()
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri(format!("/v1/sessions/{}", prepared.session_id))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(state.status(), StatusCode::OK);
+
+        let stopped = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .method("DELETE")
+                    .uri(format!("/v1/sessions/{}", prepared.session_id))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(stopped.status(), StatusCode::NO_CONTENT);
     }
 }
