@@ -23,7 +23,7 @@ android/gradlew -p android test lint assembleDebug
 adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-The project uses AGP 9.1.1, Gradle 9.3.1, compile SDK 37, and JDK 17. The first
+The project uses AGP 9.1.1, Gradle 9.5.0, compile SDK 37, and JDK 17. The first
 build downloads Gradle, AndroidX, Compose, Ktor, and RootEncoder dependencies.
 No microphone permission is requested.
 
