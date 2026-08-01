@@ -43,7 +43,8 @@ pub(crate) fn build_pipeline<F: VideoSinkFactory>(
     source.set_property("address", "0.0.0.0");
     source.set_property("port", i32::from(config.media_port));
     source.set_property("timeout", config.udp_timeout_ms.saturating_mul(1_000_000));
-    demux.set_property("latency", config.latency.demux_latency_ms);
+    let demux_latency_ms = i32::try_from(config.latency.demux_latency_ms).unwrap_or(i32::MAX);
+    demux.set_property("latency", demux_latency_ms);
     configure_bounded_queue(&demux_queue, config.latency.output_queue_frames);
     configure_bounded_queue(&output_queue, config.latency.output_queue_frames);
     capsfilter.set_property("caps", raw_caps(config));

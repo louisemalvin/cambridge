@@ -4,6 +4,16 @@ set -euo pipefail
 VIDEO_NUMBER="${1:-10}"
 DEVICE="/dev/video${VIDEO_NUMBER}"
 
+is_loopback_device() {
+  local entry="/sys/class/video4linux/video${VIDEO_NUMBER}"
+  local driver
+  local sysfs_target
+  driver="$(readlink -f "${entry}/device/driver" 2>/dev/null || true)"
+  sysfs_target="$(readlink -f "${entry}" 2>/dev/null || true)"
+  [[ "${driver}" == */v4l2loopback ]] || \
+    { [[ "${sysfs_target}" == /sys/devices/virtual/video4linux/video* ]] && [[ -e /sys/module/v4l2loopback ]]; }
+}
+
 if [[ "$(id -u)" -eq 0 ]]; then
   echo "Run this validation as your normal user so permission guidance remains visible."
 fi
@@ -26,11 +36,11 @@ fi
 
 if [[ -e /sys/module/v4l2loopback ]]; then
   if [[ -e "$DEVICE" ]]; then
-    DRIVER="$(readlink -f "/sys/class/video4linux/video${VIDEO_NUMBER}/device/driver" 2>/dev/null || true)"
-    if [[ "$DRIVER" == */v4l2loopback ]]; then
+    if is_loopback_device; then
       echo "v4l2loopback is loaded and ${DEVICE} is attached."
       exit 0
     fi
+    DRIVER="$(readlink -f "/sys/class/video4linux/video${VIDEO_NUMBER}/device/driver" 2>/dev/null || true)"
     echo "${DEVICE} exists but is owned by another driver: ${DRIVER:-unknown}" >&2
     exit 1
   fi
@@ -60,4 +70,3 @@ signed module or enroll the required signing key. The receiver will not load
 kernel modules or change Secure Boot settings automatically.
 EOF
 exit 1
-

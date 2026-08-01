@@ -65,6 +65,7 @@ mod tests {
             path: Path::new(path).to_path_buf(),
             name: None,
             driver: driver.map(str::to_owned),
+            is_virtual_sysfs: false,
         }
     }
 

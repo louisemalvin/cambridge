@@ -105,9 +105,12 @@ find_loopback_device() {
   shopt -s nullglob
   local entry
   local driver
+  local sysfs_target
   for entry in /sys/class/video4linux/video*; do
     driver="$(readlink -f "${entry}/device/driver" 2>/dev/null || true)"
-    if [[ "${driver}" == */v4l2loopback ]]; then
+    sysfs_target="$(readlink -f "${entry}" 2>/dev/null || true)"
+    if [[ "${driver}" == */v4l2loopback ]] || \
+      { [[ "${sysfs_target}" == /sys/devices/virtual/video4linux/video* ]] && [[ -e "/sys/module/${MODULE_NAME}" ]]; }; then
       printf '/dev/%s\n' "${entry##*/}"
       return 0
     fi
