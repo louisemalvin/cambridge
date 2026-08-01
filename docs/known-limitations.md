@@ -7,8 +7,9 @@
   receiver parser, decoder, and output consumer.
 - 1440p30 is optional. 4K30 is experimental and may be rejected by the phone,
   decoder, virtual camera, browser, or call application.
-- The current local environment has no Java or Android SDK, so Android Gradle
-  tests, lint, and APK assembly were not run here.
+- Android Gradle tests, lint, and debug APK assembly are build-verified in the
+  current environment, but a physical phone is still required for camera and
+  hardware-encoder validation.
 - A desktop preview requires GTK 4 development/runtime libraries and the
   GStreamer App plugin. Hosts without those packages can still use the CLI
   receiver, but cannot build or launch the preview application.
