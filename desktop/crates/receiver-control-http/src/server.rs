@@ -23,6 +23,17 @@ where
     F: Future<Output = ()> + Send + 'static,
 {
     let listener = TcpListener::bind(listen_addr).await.map_err(HttpServerError::Listener)?;
+    serve_listener(listener, state, shutdown).await
+}
+
+pub async fn serve_listener<F>(
+    listener: TcpListener,
+    state: ControlState,
+    shutdown: F,
+) -> Result<(), HttpServerError>
+where
+    F: Future<Output = ()> + Send + 'static,
+{
     let watchdog_state = state.clone();
     let watchdog = tokio::spawn(async move {
         let mut interval = tokio::time::interval(Duration::from_millis(250));

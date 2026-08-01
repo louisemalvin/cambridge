@@ -7,5 +7,5 @@ mod state;
 
 pub use error::HttpControlError;
 pub use routes::router;
-pub use server::{serve, HttpServerError};
+pub use server::{serve, serve_listener, HttpServerError};
 pub use state::ControlState;

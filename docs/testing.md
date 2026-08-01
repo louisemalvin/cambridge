@@ -60,9 +60,20 @@ scripts/linux/test-virtual-camera.sh
 The test script automatically selects the first v4l2loopback device. Pass an
 explicit device path only when testing a non-default loopback configuration.
 
-Open the device in OBS or a browser after the producer attaches. With
+Open the device in OBS or a browser after the producer attaches. In OBS, add
+`Video Capture Device (V4L2)` and select `Mobile Webcam`. With
 `exclusive_caps=1`, the device is initially producer-facing and becomes
 capture-facing after `v4l2sink` connects.
+
+The desktop application can be used instead of the CLI:
+
+```bash
+mobile-webcam-desktop
+```
+
+It is the single receiver process for the control API, UDP media, decoded
+preview, and v4l2loopback output. Do not start both receiver binaries on the
+same ports and virtual-camera device.
 
 ## End-to-end matrix
 

@@ -11,8 +11,9 @@ Android camera
   -> GStreamer udpsrc, tsparse, tsdemux
   -> codec parser, decodebin, videoconvert, videoscale
   -> bounded leaky queue
-  -> Linux v4l2sink
-  -> v4l2loopback -> OBS, browser, or video-call application
+  -> tee
+       -> Linux v4l2sink -> v4l2loopback -> OBS, browser, or video-call app
+       -> RGBA appsink -> desktop preview window
 ```
 
 The control plane is HTTP/JSON over TCP port `5001`. The media plane is
@@ -55,11 +56,14 @@ session controller remains the single owner of the stream.
 | `receiver-gstreamer` | GStreamer initialization, pipeline construction, bus and pad handling |
 | `receiver-platform-linux` | v4l2loopback validation and `v4l2sink` creation |
 | `receiver-cli` | Arguments, logging, composition, shutdown, status output |
+| `receiver-desktop` | GTK desktop composition, preview window, and Linux runtime |
 
 The core crate has no GStreamer, Axum, CLI, or Linux-device dependency. The
-GStreamer crate has no HTTP routing. The Linux crate owns the final output
-backend so a future Windows or macOS backend can replace it without changing
-negotiation or media reception.
+GStreamer crate has no HTTP routing. Its `VideoSinkFactory` supports one
+required output and one optional bounded preview output. The Linux crate owns
+the final virtual-camera backend, while the desktop app owns only the GTK
+window and RGBA frame store. A future Windows or macOS backend can replace the
+virtual-camera factory without changing negotiation or media reception.
 
 ## Latency and recovery policy
 

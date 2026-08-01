@@ -9,6 +9,8 @@ MODULE_LOAD_FILE="/etc/modules-load.d/mobile-webcam.conf"
 MODULE_OPTIONS_FILE="/etc/modprobe.d/mobile-webcam.conf"
 MODULE_OPTIONS="options ${MODULE_NAME} devices=1 video_nr=${VIDEO_NUMBER} card_label=\"Mobile Webcam\" exclusive_caps=1"
 INSTALLED_BINARY="/usr/local/bin/mobile-webcam-receiver"
+INSTALLED_DESKTOP_BINARY="/usr/local/bin/mobile-webcam-desktop"
+DESKTOP_ENTRY_TARGET="/usr/local/share/applications/mobile-webcam.desktop"
 
 declare -a PRIVILEGE=()
 
@@ -39,6 +41,7 @@ install_packages() {
       command -v pacman >/dev/null 2>&1 || fail "pacman is not available on this Arch-compatible system."
       "${PRIVILEGE[@]}" pacman -S --needed \
         base-devel pkgconf rust \
+        gtk4 \
         gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad \
         gst-plugins-ugly gst-libav v4l-utils v4l2loopback-dkms
       ;;
@@ -47,6 +50,7 @@ install_packages() {
       "${PRIVILEGE[@]}" apt-get update
       local apt_packages=(
         build-essential pkg-config cargo rustc
+        libgtk-4-dev
         libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
         gstreamer1.0-tools gstreamer1.0-plugins-base
         gstreamer1.0-plugins-good gstreamer1.0-plugins-bad
@@ -123,7 +127,7 @@ verify_gstreamer() {
 
   local missing=()
   local element
-  for element in udpsrc tsparse tsdemux h264parse h265parse decodebin v4l2sink; do
+  for element in udpsrc tsparse tsdemux h264parse h265parse decodebin v4l2sink appsink; do
     if ! gst-inspect-1.0 "${element}" >/dev/null 2>&1; then
       missing+=("${element}")
     fi
@@ -162,9 +166,14 @@ verify_gstreamer
 command -v cargo >/dev/null 2>&1 || fail "cargo is unavailable after package installation."
 
 echo "Building the receiver..."
-cargo build --manifest-path "${REPO_ROOT}/desktop/Cargo.toml" --release -p receiver-cli
+cargo build --manifest-path "${REPO_ROOT}/desktop/Cargo.toml" --release \
+  -p receiver-cli -p receiver-desktop
 "${PRIVILEGE[@]}" install -o root -g root -m 0755 \
   "${REPO_ROOT}/desktop/target/release/mobile-webcam-receiver" "${INSTALLED_BINARY}"
+"${PRIVILEGE[@]}" install -o root -g root -m 0755 \
+  "${REPO_ROOT}/desktop/target/release/mobile-webcam-desktop" "${INSTALLED_DESKTOP_BINARY}"
+"${PRIVILEGE[@]}" install -d -o root -g root -m 0755 /usr/local/share/applications
+write_managed_file "${DESKTOP_ENTRY_TARGET}" "$(<"${REPO_ROOT}/desktop/mobile-webcam.desktop")"
 
 cat <<EOF
 
@@ -172,9 +181,13 @@ Mobile Webcam receiver setup is complete.
 
 Virtual camera: ${LOOPBACK_DEVICE}
 Receiver command: ${INSTALLED_BINARY}
+Desktop application: ${INSTALLED_DESKTOP_BINARY}
 
 Start it any time with:
   mobile-webcam-receiver
+
+Open the preview application with:
+  mobile-webcam-desktop
 
 The repository wrapper remains available for local development:
   ${REPO_ROOT}/scripts/linux/start-receiver.sh

@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "apps/receiver-cli",
+    "apps/receiver-desktop",
     "crates/receiver-protocol",
     "crates/receiver-core",
     "crates/receiver-control-http",

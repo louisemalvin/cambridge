@@ -9,11 +9,11 @@
   decoder, virtual camera, browser, or call application.
 - The current local environment has no Java or Android SDK, so Android Gradle
   tests, lint, and APK assembly were not run here.
-- The current local GStreamer installation has the parsers and encoders but
-  lacks `udpsrc`, `udpsink`, and `v4l2sink`, so live UDP and virtual-camera
-  tests were skipped. Pipeline and parser tests still run.
-- v4l2loopback, OBS, browser capture, USB tethering, and privileged module
-  setup require a configured Linux host and were not verified here.
+- A desktop preview requires GTK 4 development/runtime libraries and the
+  GStreamer App plugin. Hosts without those packages can still use the CLI
+  receiver, but cannot build or launch the preview application.
+- Physical Android hardware, USB tethering, and long-duration thermal tests
+  remain unverified in the current environment.
 - UDP has no retransmission, encryption, or authentication in Phase 1. Packet
   loss can produce visible artifacts or a timeout.
 - Decoder hardware/software classification is best effort. `decodebin` is

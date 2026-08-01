@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Mobile Webcam Receiver
+Comment=Receive an Android phone camera and expose it as a Linux webcam
+Exec=mobile-webcam-desktop
+Terminal=false
+Categories=AudioVideo;Video;Network;
+StartupNotify=true

@@ -49,6 +49,17 @@ UDP `5000`. Advanced users can still pass `--device`, `--control-port`, or
 `--media-port`. The repository wrapper `./scripts/linux/start-receiver.sh` is
 also available for local development.
 
+For the desktop application with a live preview, use:
+
+```bash
+mobile-webcam-desktop
+```
+
+It starts the same control and media receiver, displays the decoded phone
+video, and writes the same frames to the installed `Mobile Webcam`
+v4l2loopback device for OBS or another V4L2 consumer. The repository wrapper
+`./scripts/linux/start-desktop.sh` is available before installation.
+
 The installer supports CachyOS/Arch and Ubuntu/Debian. See the matching
 [Arch Linux guide](docs/linux-arch-setup.md) or
 [Ubuntu guide](docs/linux-ubuntu-setup.md) for platform-specific notes.
