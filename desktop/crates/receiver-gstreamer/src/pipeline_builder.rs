@@ -111,19 +111,27 @@ fn build_output_branches(
     let tee = make("tee", "raw-video-tee")?;
     let preview_queue = make("queue", "preview-queue")?;
     let preview_convert = make("videoconvert", "preview-video-convert")?;
+    let preview_scale = make("videoscale", "preview-video-scale")?;
     let preview_capsfilter = make("capsfilter", "preview-video-caps")?;
     configure_bounded_queue(&preview_queue, config.latency.output_queue_frames);
     preview_capsfilter.set_property("caps", preview_caps(config));
     preview_sink.set_property("sync", false);
     pipeline
-        .add_many([&tee, &preview_queue, &preview_convert, &preview_capsfilter, &preview_sink])
+        .add_many([
+            &tee,
+            &preview_queue,
+            &preview_convert,
+            &preview_scale,
+            &preview_capsfilter,
+            &preview_sink,
+        ])
         .map_err(|error| PipelineError::Pipeline(error.to_string()))?;
 
     link(&[output.convert, &tee])?;
     link_tee_branch(&tee, output.scale)?;
     link_tee_branch(&tee, &preview_queue)?;
     link(&[output.scale, output.capsfilter, output.output_queue, output.sink])?;
-    link(&[&preview_queue, &preview_convert, &preview_capsfilter, &preview_sink])
+    link(&[&preview_queue, &preview_convert, &preview_scale, &preview_capsfilter, &preview_sink])
 }
 
 struct OutputElements<'a> {
