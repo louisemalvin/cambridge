@@ -8,10 +8,10 @@ import org.junit.Test
 class ReceiverEndpointValidatorTest {
     @Test
     fun acceptsIpv4AndNormalizesWhitespace() {
-        val endpoint = ReceiverEndpointValidator.validate(" 192.168.1.20 ", 5001).getOrThrow()
+        val endpoint = ReceiverEndpointValidator.validate(" 192.0.2.1 ", 5001).getOrThrow()
 
-        assertEquals("192.168.1.20", endpoint.host)
-        assertEquals("http://192.168.1.20:5001", endpoint.controlBaseUrl)
+        assertEquals("192.0.2.1", endpoint.host)
+        assertEquals("http://192.0.2.1:5001", endpoint.controlBaseUrl)
     }
 
     @Test
@@ -24,6 +24,6 @@ class ReceiverEndpointValidatorTest {
     @Test
     fun rejectsInvalidPortAndHost() {
         assertTrue(ReceiverEndpointValidator.validate("not-an-ip", 5001).isFailure)
-        assertTrue(ReceiverEndpointValidator.validate("192.168.1.20", 0).isFailure)
+        assertTrue(ReceiverEndpointValidator.validate("192.0.2.1", 0).isFailure)
     }
 }
