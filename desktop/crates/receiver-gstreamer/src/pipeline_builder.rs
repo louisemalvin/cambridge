@@ -41,6 +41,7 @@ pub(crate) fn build_pipeline<F: VideoSinkFactory>(
     let capsfilter = make("capsfilter", "raw-video-caps")?;
     let output_queue = make("queue", "output-queue")?;
     let sink = sink_factory.create_sink(config.output_format)?;
+    let preview_sink = sink_factory.create_preview_sink()?;
 
     source.set_property("address", "0.0.0.0");
     source.set_property("port", i32::from(config.media_port));
@@ -71,13 +72,76 @@ pub(crate) fn build_pipeline<F: VideoSinkFactory>(
         .map_err(|error| PipelineError::Pipeline(error.to_string()))?;
     link(&[&source, &tsparse, &demux])?;
     link(&[&demux_queue, &parser, &decoder])?;
-    link(&[&convert, &scale, &capsfilter, &output_queue, &sink])?;
+    build_output_branches(
+        &pipeline,
+        &OutputElements {
+            convert: &convert,
+            scale: &scale,
+            capsfilter: &capsfilter,
+            output_queue: &output_queue,
+            sink: &sink,
+        },
+        preview_sink,
+        config,
+    )?;
 
     connect_demux_pad(&demux, &demux_queue, config.codec, observer.clone());
     connect_decoder_pad(&decoder, &convert, config.codec, metrics.clone());
     add_source_probe(&source, metrics.clone())?;
     add_output_probe(&output_queue, observer, metrics)?;
     Ok(pipeline)
+}
+
+fn build_output_branches(
+    pipeline: &gst::Pipeline,
+    output: &OutputElements<'_>,
+    preview_sink: Option<gst::Element>,
+    config: &MediaSessionConfig,
+) -> Result<(), PipelineError> {
+    let Some(preview_sink) = preview_sink else {
+        return link(&[
+            output.convert,
+            output.scale,
+            output.capsfilter,
+            output.output_queue,
+            output.sink,
+        ]);
+    };
+
+    let tee = make("tee", "raw-video-tee")?;
+    let preview_queue = make("queue", "preview-queue")?;
+    let preview_convert = make("videoconvert", "preview-video-convert")?;
+    let preview_capsfilter = make("capsfilter", "preview-video-caps")?;
+    configure_bounded_queue(&preview_queue, config.latency.output_queue_frames);
+    preview_capsfilter.set_property("caps", preview_caps(config));
+    preview_sink.set_property("sync", false);
+    pipeline
+        .add_many([&tee, &preview_queue, &preview_convert, &preview_capsfilter, &preview_sink])
+        .map_err(|error| PipelineError::Pipeline(error.to_string()))?;
+
+    link(&[output.convert, &tee])?;
+    link_tee_branch(&tee, output.scale)?;
+    link_tee_branch(&tee, &preview_queue)?;
+    link(&[output.scale, output.capsfilter, output.output_queue, output.sink])?;
+    link(&[&preview_queue, &preview_convert, &preview_capsfilter, &preview_sink])
+}
+
+struct OutputElements<'a> {
+    convert: &'a gst::Element,
+    scale: &'a gst::Element,
+    capsfilter: &'a gst::Element,
+    output_queue: &'a gst::Element,
+    sink: &'a gst::Element,
+}
+
+fn link_tee_branch(tee: &gst::Element, branch: &gst::Element) -> Result<(), PipelineError> {
+    let Some(source_pad) = tee.request_pad_simple("src_%u") else {
+        return Err(PipelineError::MissingElement(format!("{} request src pad", tee.name())));
+    };
+    let Some(sink_pad) = branch.static_pad("sink") else {
+        return Err(PipelineError::MissingElement(format!("{} sink pad", branch.name())));
+    };
+    source_pad.link(&sink_pad).map(|_| ()).map_err(|error| PipelineError::Link(error.to_string()))
 }
 
 fn connect_demux_pad(
@@ -219,6 +283,18 @@ fn raw_caps(config: &MediaSessionConfig) -> gst::Caps {
     let fps = i32::try_from(config.profile.fps).unwrap_or(i32::MAX);
     gst::Caps::builder("video/x-raw")
         .field("format", pixel_format_name(config.output_format))
+        .field("width", width)
+        .field("height", height)
+        .field("framerate", gst::Fraction::new(fps, 1))
+        .build()
+}
+
+fn preview_caps(config: &MediaSessionConfig) -> gst::Caps {
+    let width = i32::try_from(config.profile.width).unwrap_or(i32::MAX);
+    let height = i32::try_from(config.profile.height).unwrap_or(i32::MAX);
+    let fps = i32::try_from(config.profile.fps).unwrap_or(i32::MAX);
+    gst::Caps::builder("video/x-raw")
+        .field("format", "RGBA")
         .field("width", width)
         .field("height", height)
         .field("framerate", gst::Fraction::new(fps, 1))

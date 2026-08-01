@@ -13,6 +13,10 @@ use crate::{
 pub trait VideoSinkFactory: Send + Sync {
     fn create_sink(&self, format: PixelFormat) -> Result<gst::Element, PipelineError>;
 
+    fn create_preview_sink(&self) -> Result<Option<gst::Element>, PipelineError> {
+        Ok(None)
+    }
+
     fn device(&self) -> String;
 
     fn supported_formats(&self) -> Vec<PixelFormat>;
