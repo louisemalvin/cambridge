@@ -86,8 +86,23 @@ where
             return;
         };
         if let Ok(mut metrics) = self.metrics.lock() {
-            poll(&bus, observer, &mut metrics);
+            let was_timed_out = observer.state() == ReceiverState::TimedOut;
+            let result = poll(&bus, observer, &mut metrics);
+            if result.timed_out && !was_timed_out {
+                recover_pipeline_after_timeout(pipeline);
+            }
         }
+    }
+}
+
+fn recover_pipeline_after_timeout(pipeline: &gst::Pipeline) {
+    tracing::info!("resetting GStreamer pipeline after UDP timeout");
+    if let Err(error) = pipeline.set_state(gst::State::Ready) {
+        tracing::warn!(%error, "failed to reset GStreamer pipeline to Ready after UDP timeout");
+        return;
+    }
+    if let Err(error) = pipeline.set_state(gst::State::Playing) {
+        tracing::warn!(%error, "failed to resume GStreamer pipeline after UDP timeout");
     }
 }
 
