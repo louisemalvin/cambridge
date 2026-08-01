@@ -7,10 +7,11 @@ inventory, not a final commercial distribution review.
 | --- | --- | --- | --- |
 | RootEncoder 2.8.0 | Android hardware encode and MPEG-TS/UDP transport adapter | Apache-2.0 | https://github.com/pedroSG94/RootEncoder |
 | GStreamer | Desktop demux, parse, decode, convert, and sink pipeline | LGPL-2.1-or-later | https://gstreamer.freedesktop.org/ |
-| Rust crates | Receiver implementation dependencies | See Cargo metadata and each crate license | https://crates.io/ |
+| Ktor | Android HTTP control client | Apache-2.0 | https://ktor.io/ |
+| Axum, Tokio, Clap, Serde, tracing | Rust control server, CLI, serialization, and logging | MIT or Apache-2.0, see each crate | https://crates.io/ |
+| Rust crates | Other receiver implementation dependencies | See Cargo metadata and each crate license | https://crates.io/ |
 | AndroidX and Jetpack Compose | Android UI and lifecycle | Apache-2.0 | https://developer.android.com/ |
 
 Before distributing binaries commercially, generate a complete dependency
 notice report for both Gradle and Cargo artifacts and review codec licensing
 and system-plugin licensing separately.
-

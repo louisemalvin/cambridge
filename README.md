@@ -53,3 +53,11 @@ browser, Wi-Fi, and USB-tethering validation must be run on a configured host.
 
 See [known limitations](docs/known-limitations.md) and [testing](docs/testing.md).
 
+Key references:
+
+- [Architecture](docs/architecture.md)
+- [Control protocol](docs/protocol.md)
+- [Codec behavior](docs/codecs.md)
+- [Latency testing](docs/latency-testing.md)
+- [Troubleshooting](docs/troubleshooting.md)
+- [USB tethering](docs/usb-tethering.md)

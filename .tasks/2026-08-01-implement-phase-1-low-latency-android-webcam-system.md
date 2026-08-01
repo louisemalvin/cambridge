@@ -62,12 +62,12 @@ Build the Phase 1 Android sender, reusable Rust receiver, Linux virtual-camera o
 
 ## Status
 
-In progress. Milestones 0-6 are committed as `fb156ed`, `314e993`, `db10a6d`, `a6d6f6b`, `f8358dd`, `35a6a4b`, and the pending Linux output commit.
+In progress. All implementation milestones are committed through `b0369b6`; final verification and handoff reporting remain.
 
 ## Handoff Notes
 
-- Next exact step: Implement the Android sender domain/session architecture, capability probe, HTTP adapter mapping, and Compose connection/streaming surfaces.
-- Files changed: `AGENTS.md`, repository scaffold, protocol contract, receiver core, HTTP control server, GStreamer receiver, Linux platform backend, Linux scripts, this task artifact.
-- Commands run: `agent-init`, `task-init`, `work-context`, repository/toolchain inspection, upstream RootEncoder source inspection, Rust fmt/test/clippy/build/check, JSON syntax and schema validation, HTTP route test, GStreamer H.264/H.265 construction and parser tests, Linux device test, shell syntax checks.
-- Errors encountered: Initial directory was empty and not a Git repository; Android Java tooling is unavailable; local GStreamer installation lacks `udpsrc` and `udpsink`, so live UDP tests are skipped.
+- Next exact step: Run the complete Rust, shell, CLI, protocol, and available Android checks; record skipped hardware/toolchain checks; then mark the task complete.
+- Files changed: `AGENTS.md`, repository scaffold, protocol contract, receiver core, HTTP control server, GStreamer receiver, Linux platform backend, Linux scripts, Android sender, receiver CLI, recovery watchdog, documentation, this task artifact.
+- Commands run: `agent-init`, `task-init`, `task-ready`, `work-context`, repository/toolchain inspection, upstream RootEncoder source inspection, Rust fmt/test/clippy/build/check, CLI help and print modes, JSON syntax and schema validation, HTTP route test, GStreamer H.264/H.265 construction and parser tests, Linux device test, shell syntax checks.
+- Errors encountered: Initial directory was empty and not a Git repository; Android Java tooling is unavailable; local GStreamer installation lacks `udpsrc` and `udpsink`, so live UDP tests are skipped; Android Gradle test/lint/assemble commands cannot run because the wrapper is absent.
 - Verification evidence: Upstream RootEncoder README and 2.8.0 sources confirm the selected artifact and API boundary; the local environment reports no Java executable.
