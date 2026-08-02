@@ -3,7 +3,7 @@ package dev.mobilewebcam.sender
 import dev.mobilewebcam.sender.model.StreamConfiguration
 import dev.mobilewebcam.sender.model.VideoCodec
 import dev.mobilewebcam.sender.model.VideoProfile
-import dev.mobilewebcam.sender.streaming.rootencoder.toRootEncoderVideo
+import dev.mobilewebcam.sender.media.streaming.rootencoder.toRootEncoderVideo
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

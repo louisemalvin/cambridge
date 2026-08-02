@@ -4,8 +4,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
-import dev.mobilewebcam.sender.ui.components.CameraStabilizationControls
-import dev.mobilewebcam.sender.ui.model.StabilizationUiState
+import dev.mobilewebcam.sender.feature.webcam.components.CameraStabilizationControls
+import dev.mobilewebcam.sender.app.model.StabilizationUiState
 import org.junit.Rule
 import org.junit.Test
 

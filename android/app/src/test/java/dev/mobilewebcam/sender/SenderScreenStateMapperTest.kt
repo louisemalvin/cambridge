@@ -77,7 +77,7 @@ class SenderScreenStateMapperTest {
 
     @Test
     fun connectingStateMapsToConnectingUiState() {
-        val state = mapSnapshot(streamState = StreamState.NegotiatingCodec)
+        val state = mapSnapshot(streamState = StreamState.Negotiating)
         assertTrue(state.connection is ConnectionUiState.Connecting)
         assertFalse(state.preview.isLive)
     }

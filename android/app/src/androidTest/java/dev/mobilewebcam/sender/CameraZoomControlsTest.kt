@@ -5,8 +5,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
-import dev.mobilewebcam.sender.ui.components.CameraZoomControls
-import dev.mobilewebcam.sender.ui.model.ZoomUiState
+import dev.mobilewebcam.sender.feature.webcam.components.CameraZoomControls
+import dev.mobilewebcam.sender.app.model.ZoomUiState
 import org.junit.Rule
 import org.junit.Test
 

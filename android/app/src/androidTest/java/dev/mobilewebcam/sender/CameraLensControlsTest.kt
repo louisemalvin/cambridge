@@ -5,9 +5,9 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import dev.mobilewebcam.sender.ui.components.CameraLensControls
-import dev.mobilewebcam.sender.ui.model.LensOptionUi
-import dev.mobilewebcam.sender.ui.model.UiText
+import dev.mobilewebcam.sender.feature.webcam.components.CameraLensControls
+import dev.mobilewebcam.sender.app.model.LensOptionUi
+import dev.mobilewebcam.sender.app.model.UiText
 import org.junit.Rule
 import org.junit.Test
 

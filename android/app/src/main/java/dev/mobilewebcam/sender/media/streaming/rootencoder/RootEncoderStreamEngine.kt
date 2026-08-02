@@ -1,21 +1,14 @@
 package dev.mobilewebcam.sender.media.streaming.rootencoder
 
 import android.content.Context
-import android.hardware.camera2.CameraCharacteristics
-import android.hardware.camera2.CameraManager
-import android.hardware.camera2.CaptureRequest
-import android.os.Build
 import com.pedro.encoder.input.sources.audio.NoAudioSource
 import com.pedro.extrasources.CameraXSource
 import com.pedro.library.udp.UdpStream
 import dev.mobilewebcam.sender.media.camera.CameraController
 import dev.mobilewebcam.sender.media.camera.CameraInteractionState
 import dev.mobilewebcam.sender.media.camera.CameraPreviewSurface
-import dev.mobilewebcam.sender.media.camera.CameraStabilizationMode
-import dev.mobilewebcam.sender.media.camera.CameraStabilizationSupport
 import dev.mobilewebcam.sender.media.camera.PhysicalLensOption
-import dev.mobilewebcam.sender.media.camera.physicalLensOptionsFor
-import dev.mobilewebcam.sender.media.camera.preferredStabilizationMode
+import dev.mobilewebcam.sender.media.camera.RootEncoderCameraSourceFactory
 import dev.mobilewebcam.sender.config.CameraZoom
 import dev.mobilewebcam.sender.logging.AndroidAppLogger
 import dev.mobilewebcam.sender.logging.AppLogger
@@ -37,8 +30,6 @@ class RootEncoderStreamEngine(
     private val logger: AppLogger = AndroidAppLogger,
 ) : StreamEngine, CameraController {
     private val applicationContext = context.applicationContext
-    private val cameraManager = applicationContext
-        .getSystemService(Context.CAMERA_SERVICE) as CameraManager
     private val eventFlow = MutableSharedFlow<StreamEngineEvent>(
         extraBufferCapacity = EVENT_BUFFER_CAPACITY,
     )
@@ -47,8 +38,6 @@ class RootEncoderStreamEngine(
     private var stream: UdpStream? = null
     private var cameraSource: CameraXSource? = null
     private var previewSurface: CameraPreviewSurface? = null
-    private var physicalLensOptions = emptyList<PhysicalLensOption>()
-    private var stabilizationSupport = unsupportedStabilization()
     private var diagnosticRunId: String? = null
     private var diagnosticSessionId: String? = null
 
@@ -71,8 +60,6 @@ class RootEncoderStreamEngine(
                 )
                 encoder = createdEncoder
                 cameraSource = source
-                physicalLensOptions = discoverPhysicalLensOptions(source)
-                stabilizationSupport = discoverStabilizationSupport(source)
                 stream = createdEncoder
                 val video = configuration.toRootEncoderVideo()
                 createdEncoder.setVideoCodec(configuration.codec.toRootEncoder())
@@ -95,11 +82,9 @@ class RootEncoderStreamEngine(
                 diagnosticEvent(
                     "camera_configuration",
                     mapOf(
-                        "lensOptions" to physicalLensOptions.joinToString(",") { it.label },
+                        "lensOptions" to emptyList<String>(),
                         "selectedLens" to cameraState.value.selectedPhysicalLens?.label,
-                        "opticalStabilizationSupported" to stabilizationSupport.opticalSupported,
-                        "electronicStabilizationSupported" to stabilizationSupport.electronicSupported,
-                        "stabilizationSupported" to stabilizationSupport.isSupported,
+                        "stabilizationSupported" to false,
                     ),
                 )
                 diagnosticEvent(
@@ -121,8 +106,6 @@ class RootEncoderStreamEngine(
                 runCatching { encoder?.release() }
                 stream = null
                 cameraSource = null
-                physicalLensOptions = emptyList()
-                stabilizationSupport = unsupportedStabilization()
                 cameraState.value = CameraInteractionState.inactive()
                 Result.failure(
                     StreamFailureException(
@@ -169,8 +152,6 @@ class RootEncoderStreamEngine(
         diagnosticEvent("root_encoder_released")
         stream = null
         cameraSource = null
-        physicalLensOptions = emptyList()
-        stabilizationSupport = unsupportedStabilization()
         cameraState.value = CameraInteractionState.inactive()
         diagnosticRunId = null
         diagnosticSessionId = null
@@ -211,60 +192,21 @@ class RootEncoderStreamEngine(
     }
 
     override suspend fun setStabilizationEnabled(enabled: Boolean) = cameraMutex.withLock {
-        val source = cameraSource?.takeIf { it.isRunning() } ?: return@withLock
-        if (enabled && !stabilizationSupport.isSupported) {
-            diagnosticEvent(
-                "camera_stabilization_changed",
-                mapOf("requested" to enabled, "applied" to false, "reason" to "unsupported"),
-            )
-            return@withLock
-        }
-        val applied = runCatching {
-            applyStabilization(source, enabled)
-        }.getOrDefault(false)
-        if (applied) {
-            cameraState.value = cameraState.value.withStabilizationEnabled(enabled)
-        }
         diagnosticEvent(
             "camera_stabilization_changed",
             mapOf(
                 "requested" to enabled,
-                "applied" to applied,
-                "opticalSupported" to stabilizationSupport.opticalSupported,
-                "electronicSupported" to stabilizationSupport.electronicSupported,
+                "applied" to false,
+                "reason" to "unsupported_by_rootencoder_camerax_source",
             ),
         )
     }
 
     override suspend fun selectPhysicalLens(lens: PhysicalLensOption) = cameraMutex.withLock {
-        if (lens !in physicalLensOptions) {
-            diagnosticEvent(
-                "camera_lens_selection_failed",
-                mapOf("lens" to lens.label, "reason" to "unavailable"),
-            )
-            return@withLock
-        }
-        val nextState = cameraState.value.withSelectedPhysicalLens(lens)
-        cameraState.value = nextState
-        val source = cameraSource?.takeIf { it.isRunning() } ?: return@withLock
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
-            diagnosticEvent(
-                "camera_lens_selection_failed",
-                mapOf("lens" to lens.label, "reason" to "android_api_unsupported"),
-            )
-            return@withLock
-        }
-        runCatching { source.openPhysicalCamera(lens.cameraId) }
-            .onSuccess {
-                diagnosticEvent("camera_lens_selected", mapOf("lens" to lens.label))
-                updateCameraStateLocked()
-            }
-            .onFailure { cause ->
-                diagnosticEvent(
-                    "camera_lens_selection_failed",
-                    mapOf("lens" to lens.label, "reason" to cause.message),
-                )
-            }
+        diagnosticEvent(
+            "camera_lens_selection_failed",
+            mapOf("lens" to lens.label, "reason" to "unsupported_by_rootencoder_camerax_source"),
+        )
     }
 
     private fun attachPreviewLocked(
@@ -272,9 +214,7 @@ class RootEncoderStreamEngine(
         target: CameraPreviewSurface,
     ) {
         val glInterface = encoder.getGlInterface()
-        // Camera2Source uses the sensor/display orientation supplied to the
-        // RootEncoder GL renderer. Keep stream dimensions landscape so the
-        // negotiated receiver profile remains authoritative.
+        // Keep stream dimensions landscape so the negotiated receiver profile remains authoritative.
         glInterface.setCameraOrientation(target.orientation.cameraRotationDegrees)
         glInterface.setPreviewIsPortrait(target.orientation.isPortrait)
         glInterface.setPreviewResolution(target.width, target.height)
@@ -312,57 +252,8 @@ class RootEncoderStreamEngine(
             minimum = range.lower,
             maximum = range.upper,
             current = currentZoom,
-        ).withPhysicalLensOptions(physicalLensOptions)
-            .withStabilizationSupport(stabilizationSupport.isSupported)
-    }
-
-    private fun discoverPhysicalLensOptions(source: Camera2Source): List<PhysicalLensOption> {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return emptyList()
-        return runCatching { physicalLensOptionsFor(source.physicalCamerasAvailable()) }
-            .getOrDefault(emptyList())
-    }
-
-    private fun discoverStabilizationSupport(source: Camera2Source): CameraStabilizationSupport {
-        return runCatching {
-            val characteristics = cameraManager.getCameraCharacteristics(source.getCurrentCameraId())
-            CameraStabilizationSupport(
-                opticalSupported = characteristics
-                    .get(CameraCharacteristics.LENS_INFO_AVAILABLE_OPTICAL_STABILIZATION)
-                    ?.contains(CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE_ON) == true,
-                electronicSupported = characteristics
-                    .get(CameraCharacteristics.CONTROL_AVAILABLE_VIDEO_STABILIZATION_MODES)
-                    ?.contains(CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_ON) == true,
-            )
-        }.getOrDefault(unsupportedStabilization())
-    }
-
-    private fun applyStabilization(
-        source: Camera2Source,
-        enabled: Boolean,
-    ): Boolean {
-        if (!enabled) {
-            source.disableOpticalVideoStabilization()
-            source.disableVideoStabilization()
-            return true
-        }
-
-        return when (preferredStabilizationMode(stabilizationSupport)) {
-            CameraStabilizationMode.OPTICAL -> {
-                source.disableVideoStabilization()
-                if (source.enableOpticalVideoStabilization()) {
-                    true
-                } else {
-                    applyElectronicStabilization(source)
-                }
-            }
-            CameraStabilizationMode.ELECTRONIC -> applyElectronicStabilization(source)
-            null -> false
-        }
-    }
-
-    private fun applyElectronicStabilization(source: Camera2Source): Boolean {
-        source.disableOpticalVideoStabilization()
-        return source.enableVideoStabilization()
+        ).withPhysicalLensOptions(emptyList())
+            .withStabilizationSupport(supported = false)
     }
 
     private fun diagnosticEvent(name: String, fields: Map<String, Any?> = emptyMap()) {
@@ -380,9 +271,5 @@ class RootEncoderStreamEngine(
         const val MINIMUM_BITRATE_BPS = 0
         const val NO_ZOOM_REPORTED = 0.0f
 
-        fun unsupportedStabilization() = CameraStabilizationSupport(
-            opticalSupported = false,
-            electronicSupported = false,
-        )
     }
 }

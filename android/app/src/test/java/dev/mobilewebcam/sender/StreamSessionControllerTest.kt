@@ -1,7 +1,7 @@
 package dev.mobilewebcam.sender
 
 import dev.mobilewebcam.sender.config.VideoProfiles
-import dev.mobilewebcam.sender.control.ReceiverControlClient
+import dev.mobilewebcam.sender.connection.control.ReceiverControlClient
 import dev.mobilewebcam.sender.model.CodecPreference
 import dev.mobilewebcam.sender.model.DecoderAcceleration
 import dev.mobilewebcam.sender.model.EncoderAcceleration
@@ -17,11 +17,11 @@ import dev.mobilewebcam.sender.model.StreamConfiguration
 import dev.mobilewebcam.sender.model.VideoCodec
 import dev.mobilewebcam.sender.model.VideoProfile
 import dev.mobilewebcam.sender.logging.AppLogger
-import dev.mobilewebcam.sender.platform.ForegroundStreamingController
-import dev.mobilewebcam.sender.session.CodecNegotiator
-import dev.mobilewebcam.sender.session.StreamSessionControllerImpl
-import dev.mobilewebcam.sender.streaming.StreamEngine
-import dev.mobilewebcam.sender.streaming.StreamEngineEvent
+import dev.mobilewebcam.sender.platform.service.ForegroundStreamingController
+import dev.mobilewebcam.sender.media.streaming.session.CodecNegotiator
+import dev.mobilewebcam.sender.media.streaming.session.StreamSessionControllerImpl
+import dev.mobilewebcam.sender.media.streaming.StreamEngine
+import dev.mobilewebcam.sender.media.streaming.StreamEngineEvent
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.runTest
@@ -73,7 +73,7 @@ class StreamSessionControllerTest {
         scope = scope,
     )
 
-    private class FakeProbe : dev.mobilewebcam.sender.capabilities.EncoderCapabilityProbe {
+    private class FakeProbe : dev.mobilewebcam.sender.media.capabilities.EncoderCapabilityProbe {
         override suspend fun getCapabilities(profiles: List<VideoProfile>): List<EncoderCapability> =
             profiles.flatMap { profile ->
                 VideoCodec.entries.map { codec ->

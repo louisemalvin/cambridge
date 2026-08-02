@@ -13,9 +13,9 @@ import dev.mobilewebcam.sender.app.model.StabilizationUiState
 import dev.mobilewebcam.sender.app.model.UiText
 import dev.mobilewebcam.sender.app.model.ZoomUiState
 import dev.mobilewebcam.sender.config.VideoProfiles
+import dev.mobilewebcam.sender.connection.discovery.PendingApproval
 import dev.mobilewebcam.sender.media.camera.CameraInteractionState
 import dev.mobilewebcam.sender.model.CodecPreference
-import dev.mobilewebcam.sender.model.PendingApproval
 import dev.mobilewebcam.sender.model.StreamFailure
 import dev.mobilewebcam.sender.model.StreamState
 import dev.mobilewebcam.sender.model.VideoCodec
@@ -42,22 +42,24 @@ object SenderScreenStateMapper {
 
         return SenderScreenState(
             preview = PreviewUiState(
-                landscapeAspectRatio = snapshot.profile.aspectRatio,
+                landscapeAspectRatio = snapshot.profile.width.toFloat() / snapshot.profile.height,
+                isLive = snapshot.streamState is StreamState.Starting ||
+                    snapshot.streamState is StreamState.Streaming ||
+                    snapshot.streamState == StreamState.Stopping,
             ),
             connection = connectionState,
             camera = CameraControlsUiState(
                 zoom = ZoomUiState(
-                    isSupported = snapshot.cameraInteraction.zoom.isSupported,
-                    ratio = snapshot.cameraInteraction.zoom.ratio,
-                    minimumRatio = snapshot.cameraInteraction.zoom.minimumRatio,
-                    maximumRatio = snapshot.cameraInteraction.zoom.maximumRatio,
-                    isCameraActive = snapshot.streamState !is StreamState.Idle,
+                    ratio = snapshot.cameraInteraction.zoomRatio,
+                    minimumRatio = snapshot.cameraInteraction.minZoomRatio,
+                    maximumRatio = snapshot.cameraInteraction.maxZoomRatio,
+                    isCameraActive = snapshot.cameraInteraction.isCameraActive,
                 ),
                 lensOptions = snapshot.cameraInteraction.physicalLensOptions.map { lens ->
                     LensOptionUi(
                         key = lens.label,
-                        label = lens.label,
-                        isSelected = lens == snapshot.cameraInteraction.selectedLens,
+                        label = UiText.Plain(lens.label),
+                        isSelected = lens == snapshot.cameraInteraction.selectedPhysicalLens,
                     )
                 },
                 stabilization = StabilizationUiState(
@@ -87,7 +89,15 @@ object SenderScreenStateMapper {
             isZoomTrayOpen = snapshot.isZoomTrayOpen,
             dialog = dialogState,
             validationMessage = snapshot.validationMessage?.let(UiText::Plain),
-            failureDiagnostics = (snapshot.streamState as? StreamState.Failed)?.failure?.details,
+            failureDiagnostics = (snapshot.streamState as? StreamState.Failed)?.let { failed ->
+                buildFailureDiagnostics(
+                    receiverName = snapshot.activeReceiverName,
+                    profile = snapshot.profile,
+                    codecPreference = snapshot.codecPreference,
+                    failure = failed.failure,
+                    cause = failed.failure.causeOrNull(),
+                )
+            },
             cameraPermissionGranted = snapshot.cameraPermissionGranted,
         )
     }
@@ -100,7 +110,7 @@ object SenderScreenStateMapper {
         StreamState.CheckingReceiver -> ConnectionUiState.Connecting(
             UiText.Resource(R.string.checking_receiver),
         )
-        StreamState.NegotiatingCodec -> ConnectionUiState.Connecting(
+        StreamState.Negotiating -> ConnectionUiState.Connecting(
             UiText.Resource(R.string.negotiating_codec),
         )
         is StreamState.Preparing -> ConnectionUiState.Connecting(
@@ -110,11 +120,12 @@ object SenderScreenStateMapper {
             UiText.Resource(R.string.starting_stream),
         )
         is StreamState.Streaming -> ConnectionUiState.Streaming(
-            codecLabel = UiText.Resource(
+            codec = UiText.Resource(
                 R.string.streaming_codec,
-                listOf(mapCodecName(streamState.codec)),
+                listOf(mapCodecName(streamState.session.selectedCodec)),
             ),
             receiverName = activeReceiverName?.let(UiText::Plain),
+            profile = mapVideoProfileLabel(streamState.session.profile),
         )
         StreamState.Stopping -> ConnectionUiState.Stopping
         is StreamState.Failed -> ConnectionUiState.Failed(
@@ -149,7 +160,7 @@ object SenderScreenStateMapper {
     private fun mapConnectionStatusText(streamState: StreamState): UiText? = when (streamState) {
         StreamState.Idle -> UiText.Resource(R.string.not_connected)
         StreamState.CheckingReceiver -> UiText.Resource(R.string.checking_receiver)
-        StreamState.NegotiatingCodec -> UiText.Resource(R.string.negotiating_codec)
+        StreamState.Negotiating -> UiText.Resource(R.string.negotiating_codec)
         is StreamState.Preparing -> UiText.Resource(
             R.string.preparing_stream,
             listOf(mapCodecName(streamState.codec)),
@@ -157,7 +168,7 @@ object SenderScreenStateMapper {
         is StreamState.Starting -> UiText.Resource(R.string.starting_stream)
         is StreamState.Streaming -> UiText.Resource(
             R.string.streaming_codec,
-            listOf(mapCodecName(streamState.codec)),
+            listOf(mapCodecName(streamState.session.selectedCodec)),
         )
         StreamState.Stopping -> UiText.Resource(R.string.stopping_stream)
         is StreamState.Failed -> UiText.Plain(failureMessage(streamState.failure))
@@ -169,13 +180,25 @@ object SenderScreenStateMapper {
     }
 
     fun failureMessage(failure: StreamFailure): String = when (failure) {
-        is StreamFailure.CapabilitiesNegotiationFailed -> failure.reason
-        is StreamFailure.CodecUnsupported -> "Codec ${failure.codec} is unsupported"
-        is StreamFailure.ConfigurationInvalid -> failure.reason
-        is StreamFailure.NetworkError -> failure.reason
-        is StreamFailure.PermissionDenied -> failure.permission
-        is StreamFailure.PipelineError -> failure.reason
-        is StreamFailure.ReceiverRejected -> failure.reason
-        is StreamFailure.SessionNegotiationFailed -> failure.reason
+        StreamFailure.CameraPermissionDenied -> "Camera permission was denied"
+        StreamFailure.CameraUnavailable -> "The camera is unavailable"
+        is StreamFailure.ReceiverUnavailable -> failure.reason
+        is StreamFailure.NoCompatibleCodec -> "No compatible codec for ${failure.requestedProfile.id}"
+        is StreamFailure.ForcedCodecUnsupported ->
+            "Codec ${failure.codec.protocolId} is unsupported for ${failure.requestedProfile.id}"
+        is StreamFailure.ReceiverRejectedProfile -> failure.reason
+        is StreamFailure.EncoderPreparationFailed ->
+            failure.cause?.message ?: "The encoder could not be prepared"
+        is StreamFailure.StreamStartFailed ->
+            failure.cause?.message ?: "The media stream could not be started"
+        StreamFailure.NetworkDisconnected -> "The receiver connection was lost"
+        is StreamFailure.Unexpected -> failure.cause.message ?: "An unexpected streaming error occurred"
+    }
+
+    private fun StreamFailure.causeOrNull(): Throwable? = when (this) {
+        is StreamFailure.EncoderPreparationFailed -> cause
+        is StreamFailure.StreamStartFailed -> cause
+        is StreamFailure.Unexpected -> cause
+        else -> null
     }
 }

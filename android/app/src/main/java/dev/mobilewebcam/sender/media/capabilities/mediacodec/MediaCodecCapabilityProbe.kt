@@ -3,7 +3,7 @@ package dev.mobilewebcam.sender.media.capabilities.mediacodec
 import android.media.MediaCodecInfo
 import android.media.MediaCodecList
 import android.os.Build
-import dev.mobilewebcam.sender.capabilities.EncoderCapabilityProbe
+import dev.mobilewebcam.sender.media.capabilities.EncoderCapabilityProbe
 import dev.mobilewebcam.sender.model.EncoderAcceleration
 import dev.mobilewebcam.sender.model.EncoderCapability
 import dev.mobilewebcam.sender.model.VideoCodec

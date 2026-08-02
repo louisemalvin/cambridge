@@ -1,4 +1,4 @@
-package dev.mobilewebcam.sender.ui
+package dev.mobilewebcam.sender.feature.webcam
 
 import dev.mobilewebcam.sender.model.CodecPreference
 import dev.mobilewebcam.sender.model.StreamFailure

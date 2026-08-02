@@ -10,7 +10,7 @@ import dev.mobilewebcam.sender.model.ReceiverCapabilities
 import dev.mobilewebcam.sender.model.ReceiverCodecCapability
 import dev.mobilewebcam.sender.model.SenderCapabilities
 import dev.mobilewebcam.sender.model.VideoCodec
-import dev.mobilewebcam.sender.session.CodecNegotiator
+import dev.mobilewebcam.sender.media.streaming.session.CodecNegotiator
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

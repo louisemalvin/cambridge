@@ -1,6 +1,6 @@
 package dev.mobilewebcam.sender
 
-import dev.mobilewebcam.sender.ui.model.PreviewViewportCalculator
+import dev.mobilewebcam.sender.app.model.PreviewViewportCalculator
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

@@ -5,12 +5,12 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
-import dev.mobilewebcam.sender.ui.SenderScreen
-import dev.mobilewebcam.sender.ui.model.CameraControlsUiState
-import dev.mobilewebcam.sender.ui.model.SelectOptionUi
-import dev.mobilewebcam.sender.ui.model.SenderScreenState
-import dev.mobilewebcam.sender.ui.model.SettingsUiState
-import dev.mobilewebcam.sender.ui.model.UiText
+import dev.mobilewebcam.sender.app.model.CameraControlsUiState
+import dev.mobilewebcam.sender.app.model.SelectOptionUi
+import dev.mobilewebcam.sender.app.model.SenderScreenState
+import dev.mobilewebcam.sender.app.model.SettingsUiState
+import dev.mobilewebcam.sender.app.model.UiText
+import dev.mobilewebcam.sender.feature.webcam.WebcamScreen
 import org.junit.Rule
 import org.junit.Test
 
@@ -22,7 +22,7 @@ class SenderScreenTest {
     fun waitingScreenKeepsPreviewActionsMinimal() {
         composeRule.setContent {
             MaterialTheme {
-                SenderScreen(
+                WebcamScreen(
                     state = SenderScreenState(),
                     onAction = {},
                     onSurfaceChanged = {},
@@ -40,7 +40,7 @@ class SenderScreenTest {
     fun dimmedScreenExposesBrightenAction() {
         composeRule.setContent {
             MaterialTheme {
-                SenderScreen(
+                WebcamScreen(
                     state = SenderScreenState(isScreenDimmed = true),
                     onAction = {},
                     onSurfaceChanged = {},
@@ -55,7 +55,7 @@ class SenderScreenTest {
     fun settingsArePresentedAsAStandardSettingsScreen() {
         composeRule.setContent {
             MaterialTheme {
-                SenderScreen(
+                WebcamScreen(
                     state = SenderScreenState(
                         cameraPermissionGranted = true,
                         isSettingsOpen = true,

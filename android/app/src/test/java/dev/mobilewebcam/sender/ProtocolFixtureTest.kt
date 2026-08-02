@@ -1,16 +1,16 @@
 package dev.mobilewebcam.sender
 
-import dev.mobilewebcam.sender.control.http.CapabilitiesResponseDto
-import dev.mobilewebcam.sender.control.http.HealthResponseDto
-import dev.mobilewebcam.sender.control.http.PrepareSessionRequestDto
-import dev.mobilewebcam.sender.control.http.PrepareSessionResponseDto
-import dev.mobilewebcam.sender.control.http.ProtocolJson
-import dev.mobilewebcam.sender.control.http.SessionStateResponseDto
-import dev.mobilewebcam.sender.discovery.StartStreamRequestDto
-import dev.mobilewebcam.sender.discovery.StartStreamResponseDto
-import dev.mobilewebcam.sender.discovery.StartStreamStatusDto
-import dev.mobilewebcam.sender.discovery.DescribeSenderRequestDto
-import dev.mobilewebcam.sender.discovery.SenderAdvertisementDto
+import dev.mobilewebcam.sender.connection.control.http.CapabilitiesResponseDto
+import dev.mobilewebcam.sender.connection.control.http.HealthResponseDto
+import dev.mobilewebcam.sender.connection.control.http.PrepareSessionRequestDto
+import dev.mobilewebcam.sender.connection.control.http.PrepareSessionResponseDto
+import dev.mobilewebcam.sender.connection.control.http.ProtocolJson
+import dev.mobilewebcam.sender.connection.control.http.SessionStateResponseDto
+import dev.mobilewebcam.sender.connection.discovery.StartStreamRequestDto
+import dev.mobilewebcam.sender.connection.discovery.StartStreamResponseDto
+import dev.mobilewebcam.sender.connection.discovery.StartStreamStatusDto
+import dev.mobilewebcam.sender.connection.discovery.DescribeSenderRequestDto
+import dev.mobilewebcam.sender.connection.discovery.SenderAdvertisementDto
 import java.io.File
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString

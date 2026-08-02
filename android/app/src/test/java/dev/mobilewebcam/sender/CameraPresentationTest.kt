@@ -1,8 +1,8 @@
 package dev.mobilewebcam.sender
 
 import android.view.Surface
-import dev.mobilewebcam.sender.camera.DisplayOrientation
-import dev.mobilewebcam.sender.camera.VideoPreviewLayout
+import dev.mobilewebcam.sender.media.camera.DisplayOrientation
+import dev.mobilewebcam.sender.media.camera.VideoPreviewLayout
 import dev.mobilewebcam.sender.model.VideoProfile
 import org.junit.Assert.assertEquals
 import org.junit.Test

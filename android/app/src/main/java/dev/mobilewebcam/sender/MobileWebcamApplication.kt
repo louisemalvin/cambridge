@@ -1,6 +1,7 @@
 package dev.mobilewebcam.sender
 
 import android.app.Application
+import android.os.Build
 import dev.mobilewebcam.sender.connection.control.http.HttpReceiverControlClient
 import dev.mobilewebcam.sender.connection.discovery.PairingStore
 import dev.mobilewebcam.sender.connection.discovery.SenderConnectionCoordinator
@@ -39,23 +40,25 @@ class MobileWebcamApplication : Application() {
         powerManager = AndroidStreamingPowerManager(this)
         val engine = RootEncoderStreamEngine(this)
         cameraController = engine
-        val codecProbe = MediaCodecCapabilityProbe(this)
-        val controlClient = HttpReceiverControlClient(this)
-        val foregroundController = AndroidForegroundStreamingController(this)
+        val codecProbe = MediaCodecCapabilityProbe()
+        val controlClient = HttpReceiverControlClient()
+        val foregroundController = AndroidForegroundStreamingController(this, powerManager)
         sessionController = StreamSessionControllerImpl(
-            engine = engine,
+            receiver = controlClient,
             capabilityProbe = codecProbe,
-            controlClient = controlClient,
-            foregroundController = foregroundController,
-            powerManager = powerManager,
+            negotiator = dev.mobilewebcam.sender.media.streaming.session.CodecNegotiator(),
+            streamEngine = engine,
+            foreground = foregroundController,
         )
         connectionCoordinator = SenderConnectionCoordinator(
+            context = this,
+            controller = sessionController,
             pairings = pairings,
-            sessionController = sessionController,
         )
         senderControlServer = SenderControlServer(
-            context = this,
             coordinator = connectionCoordinator,
+            senderId = pairings.senderId,
+            displayName = Build.MODEL.takeIf { it.isNotBlank() } ?: "Android phone",
         )
         senderControlServer.start()
     }

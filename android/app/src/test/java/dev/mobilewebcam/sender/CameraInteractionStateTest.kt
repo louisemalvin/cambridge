@@ -1,10 +1,10 @@
 package dev.mobilewebcam.sender
 
-import dev.mobilewebcam.sender.camera.CameraInteractionState
-import dev.mobilewebcam.sender.camera.CameraStabilizationMode
-import dev.mobilewebcam.sender.camera.CameraStabilizationSupport
-import dev.mobilewebcam.sender.camera.physicalLensOptionsFor
-import dev.mobilewebcam.sender.camera.preferredStabilizationMode
+import dev.mobilewebcam.sender.media.camera.CameraInteractionState
+import dev.mobilewebcam.sender.media.camera.CameraStabilizationMode
+import dev.mobilewebcam.sender.media.camera.CameraStabilizationSupport
+import dev.mobilewebcam.sender.media.camera.physicalLensOptionsFor
+import dev.mobilewebcam.sender.media.camera.preferredStabilizationMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

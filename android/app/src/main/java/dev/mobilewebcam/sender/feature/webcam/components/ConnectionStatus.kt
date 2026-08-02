@@ -1,10 +1,10 @@
-package dev.mobilewebcam.sender.ui.components
+package dev.mobilewebcam.sender.feature.webcam.components
 
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import dev.mobilewebcam.sender.R
-import dev.mobilewebcam.sender.ui.model.ConnectionUiState
-import dev.mobilewebcam.sender.ui.model.value
+import dev.mobilewebcam.sender.app.model.ConnectionUiState
+import dev.mobilewebcam.sender.app.model.value
 
 @Composable
 fun ConnectionStatus(state: ConnectionUiState) {

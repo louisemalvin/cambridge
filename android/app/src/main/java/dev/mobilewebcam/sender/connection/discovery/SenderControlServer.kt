@@ -1,6 +1,6 @@
 package dev.mobilewebcam.sender.connection.discovery
 
-import dev.mobilewebcam.sender.control.http.ProtocolJson
+import dev.mobilewebcam.sender.connection.control.http.ProtocolJson
 import dev.mobilewebcam.sender.logging.AndroidAppLogger
 import dev.mobilewebcam.sender.logging.AppLogger
 import java.io.ByteArrayOutputStream

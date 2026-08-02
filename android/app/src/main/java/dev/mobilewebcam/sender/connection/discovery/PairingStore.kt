@@ -1,7 +1,7 @@
 package dev.mobilewebcam.sender.connection.discovery
 
 import android.content.Context
-import dev.mobilewebcam.sender.control.http.ProtocolJson
+import dev.mobilewebcam.sender.connection.control.http.ProtocolJson
 import java.util.UUID
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString

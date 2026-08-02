@@ -1,4 +1,4 @@
-package dev.mobilewebcam.sender.discovery
+package dev.mobilewebcam.sender.connection.discovery
 
 import android.Manifest
 import android.content.Context

@@ -1,6 +1,6 @@
 package dev.mobilewebcam.sender
 
-import dev.mobilewebcam.sender.control.http.HttpReceiverControlClient
+import dev.mobilewebcam.sender.connection.control.http.HttpReceiverControlClient
 import dev.mobilewebcam.sender.model.PrepareSessionRequest
 import dev.mobilewebcam.sender.model.ReceiverEndpoint
 import dev.mobilewebcam.sender.model.VideoCodec
