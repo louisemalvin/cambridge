@@ -19,16 +19,22 @@ When the Android toolchain is installed, run:
 
 Rust tests cover JSON schema fixtures, protocol version and codec rejection,
 codec negotiation, output policy, HTTP routes, session conflicts, timeout
-cleanup, bounded pipeline construction, H.265 parser selection, and Linux
-device inspection. Kotlin tests cover shared fixture decoding, negotiation,
-endpoint validation, and session cleanup behavior.
+cleanup, bounded pipeline construction, H.265 parser selection, discovery
+state, and Linux device inspection. Kotlin tests cover shared fixture decoding,
+negotiation, and session cleanup behavior.
 
 ## Synthetic H.264
 
-With a receiver using a test sink or a configured virtual camera, run:
+With a receiver using a test sink or a configured virtual camera, prepare a
+session and send to the assigned UDP port:
 
 ```bash
-scripts/linux/synthetic-h264-sender.sh 127.0.0.1 5000
+PREPARED_SESSION=$(curl -fsS \
+  -H 'content-type: application/json' \
+  --data-binary @protocol/examples/prepare-h264-request.json \
+  http://127.0.0.1:5001/v1/sessions/prepare)
+MEDIA_PORT=$(jq -r '.media.port' <<<"$PREPARED_SESSION")
+scripts/linux/synthetic-h264-sender.sh 127.0.0.1 "$MEDIA_PORT"
 ```
 
 The sender creates a live 1080p30 test pattern, uses `x264enc` with a one-second
@@ -37,10 +43,15 @@ receiver should report `receiving`, a decoder name, and a first-frame event.
 
 ## Synthetic H.265
 
-Run:
+Prepare an H.265 session and run:
 
 ```bash
-scripts/linux/synthetic-h265-sender.sh 127.0.0.1 5000
+PREPARED_SESSION=$(curl -fsS \
+  -H 'content-type: application/json' \
+  --data-binary @protocol/examples/prepare-h265-request.json \
+  http://127.0.0.1:5001/v1/sessions/prepare)
+MEDIA_PORT=$(jq -r '.media.port' <<<"$PREPARED_SESSION")
+scripts/linux/synthetic-h265-sender.sh 127.0.0.1 "$MEDIA_PORT"
 ```
 
 If `x265enc`, `udpsink`, or another required element is unavailable, install

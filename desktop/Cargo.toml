@@ -8,6 +8,7 @@ members = [
     "crates/receiver-control-http",
     "crates/receiver-gstreamer",
     "crates/receiver-platform-linux",
+    "crates/sender-control-protocol",
 ]
 
 [workspace.package]

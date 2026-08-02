@@ -34,11 +34,14 @@ ktor-client-content-negotiation = { module = "io.ktor:ktor-client-content-negoti
 ktor-client-mock = { module = "io.ktor:ktor-client-mock", version.ref = "ktor" }
 ktor-serialization-kotlinx-json = { module = "io.ktor:ktor-serialization-kotlinx-json", version.ref = "ktor" }
 rootencoder-library = { module = "com.github.pedroSG94.RootEncoder:library", version.ref = "rootencoder" }
+rootencoder-common = { module = "com.github.pedroSG94.RootEncoder:common", version.ref = "rootencoder" }
+rootencoder-srt = { module = "com.github.pedroSG94.RootEncoder:srt", version.ref = "rootencoder" }
 junit = { module = "junit:junit", version.ref = "junit" }
 androidx-junit = { module = "androidx.test.ext:junit", version.ref = "androidx-junit" }
 androidx-espresso-core = { module = "androidx.test.espresso:espresso-core", version.ref = "espresso" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
+android-library = { id = "com.android.library", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }

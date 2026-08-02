@@ -3,6 +3,7 @@ use clap::Parser;
 use tracing_subscriber::EnvFilter;
 
 mod cli;
+mod discovery;
 mod output;
 mod preview;
 mod runtime;

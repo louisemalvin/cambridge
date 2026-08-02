@@ -8,7 +8,7 @@ use tracing::{debug, warn};
 
 use crate::{
     codec_branch::CodecPipelineFactory,
-    decoder::log_decoder_pad,
+    decoder::{connect_decoder_diagnostics, log_decoded_pad},
     elements::{configure_bounded_queue, link, make},
     metrics::Metrics,
     pipeline::VideoSinkFactory,
@@ -17,6 +17,8 @@ use crate::{
 };
 
 const UDP_RECEIVE_BUFFER_SIZE_BYTES: i32 = 1_000_000;
+const MPEG_TS_PACKET_SIZE_BYTES: i32 = 188;
+const NANOSECONDS_PER_MILLISECOND: u64 = 1_000_000;
 
 pub(crate) fn build_pipeline<F: VideoSinkFactory>(
     config: &MediaSessionConfig,
@@ -33,11 +35,11 @@ pub(crate) fn build_pipeline<F: VideoSinkFactory>(
     let source = make("udpsrc", "udp-source")?;
     let tsparse = make("tsparse", "mpegts-parse")?;
     let demux = make("tsdemux", "mpegts-demux")?;
-    let demux_queue = make("queue", "demux-queue")?;
     let parser = codec_factory.create_parser(config.codec)?;
     let decoder = make("decodebin", "video-decoder")?;
     let convert = make("videoconvert", "video-convert")?;
     let scale = make("videoscale", "video-scale")?;
+    let rate = make("videorate", "video-rate")?;
     let capsfilter = make("capsfilter", "raw-video-caps")?;
     let output_queue = make("queue", "output-queue")?;
     let sink = sink_factory.create_sink(config.output_format)?;
@@ -47,10 +49,10 @@ pub(crate) fn build_pipeline<F: VideoSinkFactory>(
     source.set_property("port", i32::from(config.media_port));
     source.set_property("caps", mpeg_ts_caps());
     source.set_property("buffer-size", UDP_RECEIVE_BUFFER_SIZE_BYTES);
-    source.set_property("timeout", config.udp_timeout_ms.saturating_mul(1_000_000));
+    source
+        .set_property("timeout", config.udp_timeout_ms.saturating_mul(NANOSECONDS_PER_MILLISECOND));
     let demux_latency_ms = i32::try_from(config.latency.demux_latency_ms).unwrap_or(i32::MAX);
     demux.set_property("latency", demux_latency_ms);
-    configure_bounded_queue(&demux_queue, config.latency.output_queue_frames);
     configure_bounded_queue(&output_queue, config.latency.output_queue_frames);
     capsfilter.set_property("caps", raw_caps(config));
     sink.set_property("sync", false);
@@ -60,23 +62,24 @@ pub(crate) fn build_pipeline<F: VideoSinkFactory>(
             &source,
             &tsparse,
             &demux,
-            &demux_queue,
             &parser,
             &decoder,
             &convert,
             &scale,
+            &rate,
             &capsfilter,
             &output_queue,
             &sink,
         ])
         .map_err(|error| PipelineError::Pipeline(error.to_string()))?;
     link(&[&source, &tsparse, &demux])?;
-    link(&[&demux_queue, &parser, &decoder])?;
+    link(&[&parser, &decoder])?;
     build_output_branches(
         &pipeline,
         &OutputElements {
             convert: &convert,
             scale: &scale,
+            rate: &rate,
             capsfilter: &capsfilter,
             output_queue: &output_queue,
             sink: &sink,
@@ -85,8 +88,9 @@ pub(crate) fn build_pipeline<F: VideoSinkFactory>(
         config,
     )?;
 
-    connect_demux_pad(&demux, &demux_queue, config.codec, observer.clone());
-    connect_decoder_pad(&decoder, &convert, config.codec, metrics.clone());
+    connect_demux_pad(&demux, &parser, config.codec, observer.clone());
+    connect_decoder_diagnostics(&decoder, config.codec, metrics.clone());
+    connect_decoder_pad(&decoder, &convert, config.codec);
     add_source_probe(&source, metrics.clone())?;
     add_output_probe(&output_queue, observer, metrics)?;
     Ok(pipeline)
@@ -102,6 +106,7 @@ fn build_output_branches(
         return link(&[
             output.convert,
             output.scale,
+            output.rate,
             output.capsfilter,
             output.output_queue,
             output.sink,
@@ -111,32 +116,25 @@ fn build_output_branches(
     let tee = make("tee", "raw-video-tee")?;
     let preview_queue = make("queue", "preview-queue")?;
     let preview_convert = make("videoconvert", "preview-video-convert")?;
-    let preview_scale = make("videoscale", "preview-video-scale")?;
     let preview_capsfilter = make("capsfilter", "preview-video-caps")?;
     configure_bounded_queue(&preview_queue, config.latency.output_queue_frames);
-    preview_capsfilter.set_property("caps", preview_caps(config));
+    preview_capsfilter.set_property("caps", preview_caps());
     preview_sink.set_property("sync", false);
     pipeline
-        .add_many([
-            &tee,
-            &preview_queue,
-            &preview_convert,
-            &preview_scale,
-            &preview_capsfilter,
-            &preview_sink,
-        ])
+        .add_many([&tee, &preview_queue, &preview_convert, &preview_capsfilter, &preview_sink])
         .map_err(|error| PipelineError::Pipeline(error.to_string()))?;
 
     link(&[output.convert, &tee])?;
     link_tee_branch(&tee, output.scale)?;
     link_tee_branch(&tee, &preview_queue)?;
-    link(&[output.scale, output.capsfilter, output.output_queue, output.sink])?;
-    link(&[&preview_queue, &preview_convert, &preview_scale, &preview_capsfilter, &preview_sink])
+    link(&[output.scale, output.rate, output.capsfilter, output.output_queue, output.sink])?;
+    link(&[&preview_queue, &preview_convert, &preview_capsfilter, &preview_sink])
 }
 
 struct OutputElements<'a> {
     convert: &'a gst::Element,
     scale: &'a gst::Element,
+    rate: &'a gst::Element,
     capsfilter: &'a gst::Element,
     output_queue: &'a gst::Element,
     sink: &'a gst::Element,
@@ -154,11 +152,11 @@ fn link_tee_branch(tee: &gst::Element, branch: &gst::Element) -> Result<(), Pipe
 
 fn connect_demux_pad(
     demux: &gst::Element,
-    queue: &gst::Element,
+    parser: &gst::Element,
     expected_codec: VideoCodec,
     observer: Arc<PipelineObserver>,
 ) {
-    let queue = queue.clone();
+    let parser = parser.clone();
     demux.connect_pad_added(move |_demux, pad| {
         let Some(codec) = pad_codec(pad) else {
             return;
@@ -168,7 +166,7 @@ fn connect_demux_pad(
             observer.on_wrong_codec(codec);
             return;
         }
-        let Some(sink_pad) = queue.static_pad("sink") else {
+        let Some(sink_pad) = parser.static_pad("sink") else {
             return;
         };
         if sink_pad.is_linked() {
@@ -180,12 +178,7 @@ fn connect_demux_pad(
     });
 }
 
-fn connect_decoder_pad(
-    decoder: &gst::Element,
-    convert: &gst::Element,
-    codec: VideoCodec,
-    metrics: Arc<Mutex<Metrics>>,
-) {
+fn connect_decoder_pad(decoder: &gst::Element, convert: &gst::Element, codec: VideoCodec) {
     let convert = convert.clone();
     decoder.connect_pad_added(move |_decoder, pad| {
         let Some(caps) = pad_caps(pad) else {
@@ -207,11 +200,7 @@ fn connect_decoder_pad(
             warn!(error = %error, "failed to link decoded video pad");
             return;
         }
-        if let Some(decoder_name) = log_decoder_pad(codec, pad) {
-            if let Ok(mut metrics) = metrics.lock() {
-                metrics.set_decoder(decoder_name);
-            }
-        }
+        log_decoded_pad(codec, &caps);
     });
 }
 
@@ -281,7 +270,7 @@ fn pad_caps(pad: &gst::Pad) -> Option<gst::Caps> {
 fn mpeg_ts_caps() -> gst::Caps {
     gst::Caps::builder("video/mpegts")
         .field("systemstream", true)
-        .field("packetsize", 188i32)
+        .field("packetsize", MPEG_TS_PACKET_SIZE_BYTES)
         .build()
 }
 
@@ -297,16 +286,8 @@ fn raw_caps(config: &MediaSessionConfig) -> gst::Caps {
         .build()
 }
 
-fn preview_caps(config: &MediaSessionConfig) -> gst::Caps {
-    let width = i32::try_from(config.profile.width).unwrap_or(i32::MAX);
-    let height = i32::try_from(config.profile.height).unwrap_or(i32::MAX);
-    let fps = i32::try_from(config.profile.fps).unwrap_or(i32::MAX);
-    gst::Caps::builder("video/x-raw")
-        .field("format", "RGBA")
-        .field("width", width)
-        .field("height", height)
-        .field("framerate", gst::Fraction::new(fps, 1))
-        .build()
+fn preview_caps() -> gst::Caps {
+    gst::Caps::builder("video/x-raw").field("format", "RGBA").build()
 }
 
 fn pixel_format_name(format: PixelFormat) -> &'static str {
@@ -320,6 +301,23 @@ fn pixel_format_name(format: PixelFormat) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{DefaultCodecPipelineFactory, FakesinkFactory};
+    use receiver_core::LatencyConfig;
+    use receiver_protocol::{VideoCodec, VideoProfile};
+    use uuid::Uuid;
+
+    fn config() -> MediaSessionConfig {
+        MediaSessionConfig {
+            session_id: Uuid::new_v4(),
+            codec: VideoCodec::H264,
+            profile: VideoProfile { width: 1_920, height: 1_080, fps: 30 },
+            bitrate_bps: 8_000_000,
+            media_port: 55_011,
+            output_format: PixelFormat::Yuy2,
+            latency: LatencyConfig::default(),
+            udp_timeout_ms: 2_000,
+        }
+    }
 
     #[test]
     fn source_caps_describe_standard_mpeg_ts_packets() {
@@ -329,6 +327,60 @@ mod tests {
 
         assert_eq!(structure.name(), "video/mpegts");
         assert_eq!(structure.get::<bool>("systemstream"), Ok(true));
-        assert_eq!(structure.get::<i32>("packetsize"), Ok(188));
+        assert_eq!(structure.get::<i32>("packetsize"), Ok(MPEG_TS_PACKET_SIZE_BYTES),);
+    }
+
+    #[test]
+    fn output_chain_converts_frame_rate_before_fixed_output_caps() {
+        gst::init().unwrap();
+        let config = config();
+        let observer = PipelineObserver::new(config.session_id, config.codec);
+        let metrics = Arc::new(Mutex::new(Metrics::default()));
+        let pipeline = build_pipeline(
+            &config,
+            &FakesinkFactory,
+            &DefaultCodecPipelineFactory,
+            observer,
+            metrics,
+        )
+        .unwrap();
+
+        let rate = pipeline.by_name("video-rate").expect("videorate must be present");
+        let capsfilter = pipeline.by_name("raw-video-caps").unwrap();
+        let rate_source = rate.static_pad("src").unwrap();
+        let caps_sink = capsfilter.static_pad("sink").unwrap();
+
+        assert_eq!(rate_source.peer().as_ref(), Some(&caps_sink));
+    }
+
+    #[test]
+    fn compressed_video_is_not_routed_through_a_leaky_queue() {
+        gst::init().unwrap();
+        let config = config();
+        let observer = PipelineObserver::new(config.session_id, config.codec);
+        let metrics = Arc::new(Mutex::new(Metrics::default()));
+        let pipeline = build_pipeline(
+            &config,
+            &FakesinkFactory,
+            &DefaultCodecPipelineFactory,
+            observer,
+            metrics,
+        )
+        .unwrap();
+
+        assert!(pipeline.by_name("demux-queue").is_none());
+        assert!(pipeline.by_name("output-queue").is_some());
+    }
+
+    #[test]
+    fn preview_caps_only_require_the_display_pixel_format() {
+        gst::init().unwrap();
+        let caps = preview_caps();
+        let structure = caps.structure(0).unwrap();
+
+        assert_eq!(structure.get::<&str>("format"), Ok("RGBA"));
+        assert!(!structure.has_field("width"));
+        assert!(!structure.has_field("height"));
+        assert!(!structure.has_field("framerate"));
     }
 }

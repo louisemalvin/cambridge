@@ -8,18 +8,21 @@ Android camera
   -> MediaCodec hardware H.264 or H.265 encoder through RootEncoder
   -> MPEG-TS muxing
   -> UDP unicast
-  -> GStreamer udpsrc, tsparse, tsdemux
-  -> codec parser, decodebin, videoconvert, videoscale
-  -> bounded leaky queue
-  -> tee
-       -> Linux v4l2sink -> v4l2loopback -> OBS, browser, or video-call app
-       -> RGBA appsink -> desktop preview window
+  -> GStreamer udpsrc, tsparse, tsdemux, codec parser, decodebin
+  -> videoconvert -> tee
+       -> videoscale -> videorate -> fixed output caps -> bounded queue
+          -> Linux v4l2sink -> v4l2loopback -> OBS, browser, or video-call app
+       -> bounded queue -> RGBA conversion -> desktop preview window
 ```
 
-The control plane is HTTP/JSON over TCP port `5001`. The media plane is
-MPEG-TS over UDP port `5000`. The control plane negotiates a session and never
-carries video. The media plane carries video packets and never carries
-application commands.
+The phone exposes a versioned control service on TCP port `53555`. The desktop
+probes bounded local IPv4 subnets with a side-effect-free describe request,
+then uses the selected phone for paired reverse control. The phone infers the
+desktop address from the TCP peer and calls the receiver's HTTP/JSON API on TCP
+port `5001`. Session preparation allocates a new UDP media port from the
+application-owned range `50000-50099`. Only the selected phone receives that
+port, which keeps host firewall policy narrow without returning to a shared
+fixed media socket.
 
 ## Android boundaries
 
@@ -28,6 +31,8 @@ The app is one Gradle module with these dependency directions:
 ```text
 Compose UI
   -> SenderViewModel
+  -> SenderConnectionCoordinator
+       -> pairing store and reverse-control service
   -> StreamSessionController
        -> ReceiverControlClient
        -> EncoderCapabilityProbe
@@ -55,6 +60,7 @@ session controller remains the single owner of the stream.
 | `receiver-control-http` | Axum routes, request mapping, JSON errors, watchdog |
 | `receiver-gstreamer` | GStreamer initialization, pipeline construction, bus and pad handling |
 | `receiver-platform-linux` | v4l2loopback validation and `v4l2sink` creation |
+| `sender-control-protocol` | Phone discovery and paired reverse-control DTOs |
 | `receiver-cli` | Arguments, logging, composition, shutdown, status output |
 | `receiver-desktop` | GTK desktop composition, preview window, and Linux runtime |
 
@@ -67,8 +73,9 @@ virtual-camera factory without changing negotiation or media reception.
 
 ## Latency and recovery policy
 
-`tsdemux` latency starts at zero. The final raw-video queue is bounded to two
-buffers with downstream leaky behavior. When output is slower than the
+`tsdemux` latency starts at zero. Compressed video remains lossless through
+parse and decode. The final raw-video queue is bounded to two buffers with
+downstream leaky behavior. When output is slower than the
 incoming stream, older frames are discarded and the newest frames remain
 available. No application channel is unbounded.
 
@@ -81,7 +88,7 @@ apply this policy without requiring a status request.
 
 ## Security and deferred work
 
-Phase 1 is for a trusted local network. HTTP control and UDP media are
-unencrypted and unauthenticated. Audio, pairing, discovery, cloud relays,
-WebRTC, SRT, Tauri, and non-Linux virtual-camera backends are intentionally
-deferred.
+Phase 1 is for a trusted local network. First use requires approval on Android,
+and the sender stores a token scoped to stable phone and desktop IDs. HTTP
+receiver control and UDP media remain unencrypted. Audio, cloud relays, WebRTC,
+SRT, Tauri, and non-Linux virtual-camera backends are deferred.

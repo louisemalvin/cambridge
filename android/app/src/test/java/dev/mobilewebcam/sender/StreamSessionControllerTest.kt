@@ -37,8 +37,8 @@ class StreamSessionControllerTest {
         val foreground = FakeForeground()
         val controller = controller(receiver, engine, foreground, backgroundScope)
 
-        assertTrue(controller.start("127.0.0.1", 5001, CodecPreference.AUTO_PREFER_H265, profile, null).isSuccess)
-        assertTrue(controller.start("127.0.0.1", 5001, CodecPreference.AUTO_PREFER_H265, profile, null).isFailure)
+        assertTrue(controller.start(endpoint, CodecPreference.AUTO_PREFER_H265, profile, null).isSuccess)
+        assertTrue(controller.start(endpoint, CodecPreference.AUTO_PREFER_H265, profile, null).isFailure)
         assertEquals(1, engine.prepareCount)
 
         assertTrue(controller.stop().isSuccess)
@@ -54,7 +54,7 @@ class StreamSessionControllerTest {
         val engine = FakeEngine(prepareFailure = IllegalStateException("test"))
         val controller = controller(receiver, engine, FakeForeground(), backgroundScope)
 
-        assertTrue(controller.start("127.0.0.1", 5001, CodecPreference.FORCE_H264, profile, null).isFailure)
+        assertTrue(controller.start(endpoint, CodecPreference.FORCE_H264, profile, null).isFailure)
         assertEquals(1, receiver.stopCount)
     }
 
@@ -165,10 +165,10 @@ class StreamSessionControllerTest {
 
     private companion object {
         val profile = VideoProfiles.default
+        val endpoint = ReceiverEndpoint("127.0.0.1", 5001)
 
         fun receiverCapabilities() = ReceiverCapabilities(
             protocolVersion = 1,
-            mediaPort = 5000,
             codecs = listOf(
                 ReceiverCodecCapability(VideoCodec.H264, true, DecoderAcceleration.UNKNOWN),
                 ReceiverCodecCapability(VideoCodec.H265, true, DecoderAcceleration.UNKNOWN),

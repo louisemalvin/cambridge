@@ -15,7 +15,7 @@ class NotificationFactory(private val context: Context) {
             .setAction(ForegroundStreamingService.ACTION_STOP)
         val stopPendingIntent = PendingIntent.getService(
             context,
-            1,
+            STOP_ACTION_REQUEST_CODE,
             stopIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
@@ -43,5 +43,6 @@ class NotificationFactory(private val context: Context) {
 
     private companion object {
         const val CHANNEL_ID = "mobile-webcam-streaming"
+        const val STOP_ACTION_REQUEST_CODE = 1
     }
 }

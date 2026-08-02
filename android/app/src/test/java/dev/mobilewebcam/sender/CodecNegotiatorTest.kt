@@ -88,7 +88,6 @@ class CodecNegotiatorTest {
     private fun receiver(h264: Boolean, h265: Boolean) =
         ReceiverCapabilities(
             protocolVersion = 1,
-            mediaPort = 5000,
             codecs = listOf(
                 ReceiverCodecCapability(VideoCodec.H264, h264, DecoderAcceleration.UNKNOWN),
                 ReceiverCodecCapability(VideoCodec.H265, h265, DecoderAcceleration.UNKNOWN),

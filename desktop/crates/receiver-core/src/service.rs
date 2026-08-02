@@ -12,7 +12,7 @@ use crate::{
 };
 
 pub trait MediaReceiver: Send {
-    fn prepare(&mut self, config: MediaSessionConfig) -> Result<(), ReceiverError>;
+    fn prepare(&mut self, config: MediaSessionConfig) -> Result<u16, ReceiverError>;
 
     fn start(&mut self) -> Result<(), ReceiverError>;
 
@@ -100,7 +100,8 @@ impl ReceiverService {
             },
             udp_timeout_ms: self.config.udp_timeout_ms,
         };
-        self.media_receiver
+        let media_port = self
+            .media_receiver
             .prepare(media_config.clone())
             .map_err(|error| ReceiverError::MediaPreparation(error.to_string()))?;
         if let Err(error) = self.media_receiver.start() {
@@ -115,7 +116,7 @@ impl ReceiverService {
         Ok(PrepareSessionResponse {
             session_id: session_id.to_string(),
             selected_codec: codec,
-            media: MediaResponse { transport: Transport::MpegTsUdp, port: self.config.media_port },
+            media: MediaResponse { transport: Transport::MpegTsUdp, port: media_port },
             profile: receiver_protocol::NegotiatedProfile {
                 width: request.profile.width,
                 height: request.profile.height,

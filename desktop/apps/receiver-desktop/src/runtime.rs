@@ -14,16 +14,24 @@ use tokio::net::TcpListener;
 use tokio::sync::oneshot;
 use tracing::error;
 
-use crate::{cli::Cli, output::DesktopSinkFactory, preview::PreviewStore};
+use crate::{
+    cli::Cli,
+    discovery::{DiscoveryHandle, DiscoveryService},
+    output::DesktopSinkFactory,
+    preview::PreviewStore,
+};
+
+const READY_CHANNEL_CAPACITY: usize = 1;
 
 pub struct ReceiverRuntime {
     state: ControlState,
     shutdown: Option<oneshot::Sender<()>>,
     thread: Option<JoinHandle<()>>,
+    discovery: Option<DiscoveryService>,
 }
 
 impl ReceiverRuntime {
-    pub fn start(cli: &Cli) -> Result<(Self, PreviewStore)> {
+    pub fn start(cli: &Cli) -> Result<(Self, PreviewStore, DiscoveryHandle)> {
         let device = resolve_v4l2loopback_device(cli.device.as_deref()).with_context(|| {
             if cli.device.is_some() {
                 "validate the configured virtual-camera device"
@@ -33,7 +41,6 @@ impl ReceiverRuntime {
         })?;
         let config = cli.receiver_config(device.path);
         let capabilities = probe_capabilities(
-            config.media_port,
             config.device.to_string_lossy().into_owned(),
             vec![
                 receiver_protocol::PixelFormat::Yuy2,
@@ -55,7 +62,7 @@ impl ReceiverRuntime {
         let state = ControlState::new(service);
         let control_addr = SocketAddr::new(config.listen_addr, config.control_port);
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
-        let (ready_tx, ready_rx) = sync_channel(1);
+        let (ready_tx, ready_rx) = sync_channel(READY_CHANNEL_CAPACITY);
         let server_state = state.clone();
         let thread = thread::Builder::new()
             .name("mobile-webcam-control".to_owned())
@@ -93,10 +100,19 @@ impl ReceiverRuntime {
                 return Err(anyhow!("control server could not listen on {control_addr}: {error}"));
             }
         }
-        Ok((Self { state, shutdown: Some(shutdown_tx), thread: Some(thread) }, preview_store))
+        let mut receiver =
+            Self { state, shutdown: Some(shutdown_tx), thread: Some(thread), discovery: None };
+        let pairing_path =
+            gtk4::glib::user_config_dir().join("mobile-webcam").join("pairings.json");
+        let (discovery, discovery_handle) =
+            DiscoveryService::start(config.control_port, pairing_path)
+                .context("start automatic phone discovery")?;
+        receiver.discovery = Some(discovery);
+        Ok((receiver, preview_store, discovery_handle))
     }
 
     fn stop(&mut self) {
+        self.discovery.take();
         let _ = self.state.shutdown();
         if let Some(shutdown) = self.shutdown.take() {
             let _ = shutdown.send(());

@@ -9,10 +9,10 @@ would complicate recovery and versioning.
 ## Decision
 
 Use versioned HTTP/JSON over TCP `5001` for health, capabilities, preparation,
-state, and stop. Use MPEG-TS over UDP `5000` for video only.
+state, and stop. Use MPEG-TS over a session-specific UDP port for video only.
 
 ## Consequences
 
 Negotiation and errors are inspectable without touching video bytes. Wi-Fi and
-USB tethering share the same implementation and differ only in the reachable
-receiver IP address.
+USB tethering share the same implementation. Desktop subnet discovery and
+reverse control supply the receiver address without user entry.

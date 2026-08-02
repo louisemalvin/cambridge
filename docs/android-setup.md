@@ -30,21 +30,25 @@ No microphone permission is requested.
 
 ## Connect
 
-1. Start the Linux receiver and note its reachable IP address.
-2. Grant the app camera permission when prompted.
-3. Enter the receiver IPv4 or IPv6 address and control port `5001`.
-4. Leave Codec mode at Auto - prefer H.265 for normal negotiation.
-5. Start with `1080p30`.
-6. Confirm the selected codec in the streaming screen and receiver session API.
+1. Open Mobile Webcam on the phone and grant camera permission.
+2. Start `mobile-webcam-desktop` on Linux.
+3. If this is the only available phone, the desktop selects it automatically.
+   If several phones are available, select one in the desktop window.
+4. Approve the desktop on the phone the first time.
+5. Leave Codec mode at Auto - prefer H.265 and start with `1080p30`.
+6. Confirm the selected codec in the streaming screen.
 
-The media stream is sent to the receiver's negotiated UDP port, normally
-`5000`. The Android foreground notification has a Stop action. Camera,
+The media stream is sent to the receiver's session-specific UDP port in
+`50000-50099`. The Android foreground notification has a Stop action. Camera,
 encoder, preview, notification, wake-lock, and Wi-Fi-lock resources are
 released when the session stops or fails.
 
 ## Permissions and background behavior
 
-The app requests camera permission only. It uses the camera foreground-service
+The app requests camera permission only. It exposes a local sender-control
+service while the activity is open and uses a remembered pairing token to
+prevent automatic activation by an unapproved desktop. It keeps the setup
+screen awake so the process remains available. It uses the camera foreground-service
 type while streaming and keeps an ongoing notification. Activity recreation
 uses the application-scoped session controller and does not start a second
 encoder. A process kill cannot preserve an active hardware encoder session;

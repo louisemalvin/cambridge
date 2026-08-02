@@ -10,8 +10,7 @@ class FailureDiagnosticsTest {
     @Test
     fun diagnosticsIncludeConnectionContextAndExceptionStack() {
         val state = SenderUiState(
-            receiverHost = "192.0.2.1",
-            controlPort = "5001",
+            activeReceiverName = "Test desktop",
         )
         val cause = NoSuchMethodError("No static method ByteChannel")
 
@@ -21,7 +20,7 @@ class FailureDiagnosticsTest {
             cause = cause,
         )
 
-        assertTrue(details.contains("192.0.2.1:5001"))
+        assertTrue(details.contains("Test desktop"))
         assertTrue(details.contains("No static method ByteChannel"))
         assertTrue(details.contains("NoSuchMethodError"))
     }

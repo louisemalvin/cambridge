@@ -2,7 +2,7 @@
 
 The receiver control plane is HTTP/JSON over TCP. All paths are versioned
 under `/v1/`. The control plane negotiates a session and reports the UDP media
-port. It never carries video bytes.
+port allocated for that session. It never carries video bytes.
 
 Media uses MPEG-TS over UDP unicast. The stable protocol identifiers are:
 
@@ -24,3 +24,15 @@ fixtures and are shared by Rust and Kotlin tests without code generation.
 Unknown optional fields must be ignored. Unknown protocol versions and unknown
 required enum values must be rejected with a typed error.
 
+## Sender discovery and reverse control
+
+Android senders listen on TCP port `53555`. The desktop probes bounded local
+IPv4 subnets with the side-effect-free `describe` request and receives a
+versioned `senderAdvertisement`. The same service accepts one newline-delimited
+start request and returns one response using `sender-control-v1.schema.json`.
+The sender infers the receiver address from the TCP peer, so users never enter
+an IP address.
+
+The first request requires approval on Android. Approval creates a token scoped
+to the stable sender and receiver IDs. Later requests with that token reconnect
+automatically.

@@ -8,8 +8,8 @@ mod session;
 mod version;
 
 pub use capabilities::{
-    MediaCapabilities, OutputCapabilities, ReceiverCapabilities, SessionCapabilities,
-    VideoCodecCapability,
+    MediaCapabilities, MediaPortAssignment, OutputCapabilities, ReceiverCapabilities,
+    SessionCapabilities, VideoCodecCapability, MAXIMUM_CONCURRENT_SESSIONS,
 };
 pub use codec::{DecoderAcceleration, PixelFormat, Transport, VideoCodec};
 pub use error::ProtocolError;

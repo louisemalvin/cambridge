@@ -14,7 +14,6 @@ enum class OutputPixelFormat {
 
 data class ReceiverCapabilities(
     val protocolVersion: Int,
-    val mediaPort: Int,
     val codecs: List<ReceiverCodecCapability>,
     val outputDevice: String,
     val pixelFormats: List<OutputPixelFormat>,

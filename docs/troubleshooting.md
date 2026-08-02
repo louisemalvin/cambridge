@@ -1,17 +1,21 @@
 # Troubleshooting
 
-## The phone cannot reach the receiver
+## The desktop does not find the phone
 
-- Confirm the receiver is running and the address is on the same network.
-- Test the control port with `curl http://RECEIVER_IP:5001/v1/health`.
-- Check the Linux address with `ip -br address` and routes with `ip route`.
-- Allow TCP `5001` and UDP `5000` on the correct Wi-Fi or tethered interface.
-- For IPv6, enter a literal address in brackets when a UI or URL requires it.
+- Keep both apps open and confirm both devices are on the same local network.
+- Allow TCP `53555` to the phone on the trusted interface.
+- Check for access-point client isolation, which prevents local devices from
+  reaching each other.
+- Confirm the Linux interface has an IPv4 subnet no larger than 4096 addresses.
+- Restart either app to refresh discovery state.
+- The product has no manual IP fallback. A discovery failure should be fixed at
+  the network or advertisement boundary.
 
 ## Control works but no video arrives
 
-- Confirm the media port is `5000` or use the port returned by preparation.
-- Check that the phone is sending to the receiver address, not the phone's own address.
+- Allow UDP `50000:50099` to the receiver from the trusted subnet.
+- Read the session preparation response and confirm the phone uses its returned
+  UDP port in that range.
 - Inspect `udpsrc`, `tsparse`, `tsdemux`, and the selected parser with
   `gst-inspect-1.0`.
 - Run the H.264 synthetic sender to separate Android camera issues from the
@@ -20,34 +24,22 @@
 
 ## MPEG-TS continuity warnings or `not-negotiated`
 
-Continuity warnings identify missing or reordered UDP datagrams. A small number
-can recover at the next keyframe, but a sustained burst can prevent GStreamer
-from negotiating or decoding the stream. PID `0x0020` is the normal first video
-PID used by the current RootEncoder MPEG-TS sender; it is not an error by
-itself.
+Continuity warnings identify missing, reordered, or mixed MPEG-TS packets. They
+are separate from raw-output caps negotiation. The receiver gives each session
+its own UDP port, so an old or unselected phone does not normally share the
+active media socket. PID `0x0020` is the normal first video PID used by the
+current sender.
 
 - Prefer a stable Wi-Fi connection or USB tethering and avoid competing high-
   bandwidth traffic.
 - Restart the sender after the receiver has returned to `Idle` or
   `TimedOut`.
-- Check the Linux UDP receive limits:
+- Compare sender and receiver logs around the first discontinuity before
+  changing socket or latency settings.
 
-  ```bash
-  sysctl net.core.rmem_default net.core.rmem_max
-  ```
-
-- If the maximum is unusually small, increase it temporarily before starting
-  the receiver, for example:
-
-  ```bash
-  sudo sysctl -w net.core.rmem_max=4194304
-  sudo sysctl -w net.core.rmem_default=4194304
-  ```
-
-The receiver declares the input as 188-byte MPEG-TS and requests a bounded
-receive buffer. Linux may clamp that request to its configured maximum. UDP
-has no retransmission, so persistent packet loss still requires improving the
-network path.
+The receiver normalizes decoded frame rate with `videorate` before fixed
+virtual-camera caps. A decoded 25 FPS stream no longer fails merely because the
+selected output profile is 30 FPS.
 
 ## Codec negotiation fails
 

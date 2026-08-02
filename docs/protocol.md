@@ -26,8 +26,9 @@ enum names never become part of the protocol contract.
 `GET /v1/health` returns the service status and `protocolVersion`.
 
 `GET /v1/capabilities` returns supported codecs, decoder acceleration when it
-can be identified, the media port, output device, output pixel formats, and
-the one-session limit.
+can be identified, per-session media-port assignment, output device, output
+pixel formats, and the one-session limit. The Linux receiver allocates media
+ports from `50000-50099` so its firewall exposure stays bounded.
 
 `POST /v1/sessions/prepare` accepts an ordered codec preference, a profile, and
 bitrate values for both codecs. The receiver selects the first compatible
@@ -52,7 +53,7 @@ Sender -> GET capabilities
 Sender -> POST sessions/prepare
 Receiver -> selected codec, profile, UDP port, output format
 Sender -> prepare local encoder
-Sender -> start MPEG-TS/UDP to receiver:5000
+Sender -> start MPEG-TS/UDP to the returned session port
 Sender -> DELETE session on stop
 ```
 
@@ -60,11 +61,22 @@ The receiver may keep its input pipeline waiting for packets while the phone
 prepares its encoder. A temporary packet interruption is a recoverable state,
 not an instruction to terminate the receiver process.
 
+## Discovery and reverse control
+
+Android listens on TCP port `53555`. The desktop probes local IPv4 hosts with a
+side-effect-free `describe` request, then sends one newline-delimited JSON start
+request to the selected phone. The phone infers the receiver address from the
+TCP peer. The shared contract is
+[`protocol/sender-control-v1.schema.json`](../protocol/sender-control-v1.schema.json).
+
+The first request returns `approval_required`. Android approval creates a
+pairing token. A later request with that token starts automatically while still
+showing the camera foreground notification.
+
 ## Network modes
 
-Wi-Fi and USB tethering use the same control and media routes. The phone must
-send both connections to the Linux host address reachable on the selected
-network. See [USB tethering](usb-tethering.md) for interface discovery.
+Wi-Fi and USB tethering use the same discovery, control, and media contracts.
+See [USB tethering](usb-tethering.md) for interface details.
 
-Phase 1 deliberately provides no authentication or encryption. Do not expose
-the control port or media port to an untrusted network.
+Pairing authenticates automatic sender activation, but Phase 1 does not encrypt
+control or media. Do not expose the services to an untrusted network.

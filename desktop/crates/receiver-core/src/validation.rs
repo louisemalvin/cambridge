@@ -3,12 +3,12 @@ use receiver_protocol::{PixelFormat, VideoProfile};
 use crate::{OutputFormat, ReceiverCapabilities, ReceiverConfig, ReceiverError};
 
 pub fn validate_config(config: &ReceiverConfig) -> Result<(), ReceiverError> {
-    if config.control_port == 0 || config.media_port == 0 {
+    if config.control_port == 0 {
         return Err(ReceiverError::InvalidConfiguration(
-            "control and media ports must be non-zero".to_owned(),
+            "control port must be non-zero".to_owned(),
         ));
     }
-    if config.control_port == config.media_port {
+    if config.media_port != 0 && config.control_port == config.media_port {
         return Err(ReceiverError::InvalidConfiguration(
             "control and media ports must be different".to_owned(),
         ));

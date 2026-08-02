@@ -1,8 +1,15 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    net::{Ipv4Addr, UdpSocket},
+    os::fd::OwnedFd,
+    sync::{Arc, Mutex},
+};
 
 use gst::prelude::*;
 use gstreamer as gst;
-use receiver_core::{MediaReceiver, MediaSessionConfig, ReceiverError, ReceiverState};
+use receiver_core::{
+    MediaReceiver, MediaSessionConfig, ReceiverError, ReceiverState, MEDIA_PORT_RANGE_END,
+    MEDIA_PORT_RANGE_SIZE, MEDIA_PORT_RANGE_START, PORT_UNASSIGNED,
+};
 use receiver_protocol::PixelFormat;
 
 use crate::{
@@ -110,7 +117,7 @@ impl<F> MediaReceiver for GStreamerReceiver<F>
 where
     F: VideoSinkFactory + 'static,
 {
-    fn prepare(&mut self, config: MediaSessionConfig) -> Result<(), ReceiverError> {
+    fn prepare(&mut self, config: MediaSessionConfig) -> Result<u16, ReceiverError> {
         if self.pipeline.is_some() {
             return Err(ReceiverError::MediaPreparation(
                 "a GStreamer pipeline is already prepared".to_owned(),
@@ -120,6 +127,11 @@ where
         if let Ok(mut metrics) = self.metrics.lock() {
             metrics.reset();
         }
+        let media_socket = if config.media_port == PORT_UNASSIGNED {
+            Some(bind_session_socket(config.session_id)?)
+        } else {
+            None
+        };
         let pipeline = build_pipeline(
             &config,
             &self.sink_factory,
@@ -128,12 +140,34 @@ where
             self.metrics.clone(),
         )
         .map_err(|error| ReceiverError::MediaPreparation(error.to_string()))?;
+        if let Some((socket, _port)) = media_socket.as_ref() {
+            let source = pipeline.by_name("udp-source").ok_or_else(|| {
+                ReceiverError::MediaPreparation("GStreamer UDP source is missing".to_owned())
+            })?;
+            source.set_property("socket", socket);
+            source.set_property("close-socket", true);
+        }
         pipeline
             .set_state(gst::State::Ready)
             .map_err(|error| ReceiverError::MediaPreparation(error.to_string()))?;
+        let media_port = media_socket.map_or_else(
+            || {
+                pipeline
+                    .by_name("udp-source")
+                    .map(|source| source.property::<i32>("port"))
+                    .and_then(|port| u16::try_from(port).ok())
+                    .filter(|port| *port != PORT_UNASSIGNED)
+                    .ok_or_else(|| {
+                        ReceiverError::MediaPreparation(
+                            "GStreamer did not bind the configured UDP media port".to_owned(),
+                        )
+                    })
+            },
+            |(_socket, port)| Ok(port),
+        )?;
         self.observer = Some(observer);
         self.pipeline = Some(pipeline);
-        Ok(())
+        Ok(media_port)
     }
 
     fn start(&mut self) -> Result<(), ReceiverError> {
@@ -178,6 +212,34 @@ where
     fn timeout_count(&self) -> u64 {
         self.metrics.lock().map_or(0, |metrics| metrics.timeout_count())
     }
+}
+
+fn bind_session_socket(session_id: uuid::Uuid) -> Result<(gio::Socket, u16), ReceiverError> {
+    let port_count = MEDIA_PORT_RANGE_SIZE;
+    let id = session_id.as_bytes();
+    let first_offset = u16::from_be_bytes([id[0], id[1]]) % port_count;
+    for offset in 0..port_count {
+        let port = MEDIA_PORT_RANGE_START + (first_offset + offset) % port_count;
+        let socket = match UdpSocket::bind((Ipv4Addr::UNSPECIFIED, port)) {
+            Ok(socket) => socket,
+            Err(error) if error.kind() == std::io::ErrorKind::AddrInUse => continue,
+            Err(error) => {
+                return Err(ReceiverError::MediaPreparation(format!(
+                    "could not bind UDP media port {port}: {error}"
+                )));
+            }
+        };
+        let owned_fd: OwnedFd = socket.into();
+        let socket = gio::Socket::from_fd(owned_fd).map_err(|error| {
+            ReceiverError::MediaPreparation(format!(
+                "could not hand UDP media port {port} to GStreamer: {error}"
+            ))
+        })?;
+        return Ok((socket, port));
+    }
+    Err(ReceiverError::MediaPreparation(format!(
+        "no UDP media port is available in {MEDIA_PORT_RANGE_START}-{MEDIA_PORT_RANGE_END}"
+    )))
 }
 
 impl<F> Drop for GStreamerReceiver<F> {
@@ -237,5 +299,20 @@ mod tests {
         let mut receiver = GStreamerReceiver::new(FakesinkFactory).unwrap();
         receiver.prepare(config(VideoCodec::H265)).unwrap();
         receiver.stop().unwrap();
+    }
+
+    #[test]
+    fn zero_media_port_allocates_a_session_specific_udp_port() {
+        gst::init().unwrap();
+        let mut receiver = GStreamerReceiver::new(FakesinkFactory).unwrap();
+        let mut config = config(VideoCodec::H264);
+        config.media_port = 0;
+
+        let allocated = receiver.prepare(config).unwrap();
+
+        assert!((MEDIA_PORT_RANGE_START..=MEDIA_PORT_RANGE_END).contains(&allocated));
+        assert!(UdpSocket::bind((Ipv4Addr::UNSPECIFIED, allocated)).is_err());
+        receiver.stop().unwrap();
+        assert!(UdpSocket::bind((Ipv4Addr::UNSPECIFIED, allocated)).is_ok());
     }
 }

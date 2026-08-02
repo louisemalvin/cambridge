@@ -19,6 +19,12 @@ import dev.mobilewebcam.sender.ui.SenderUiState
 import dev.mobilewebcam.sender.ui.components.ConnectionStatus
 import kotlinx.coroutines.delay
 
+private const val STREAMING_CONTENT_PADDING_DP = 16
+private const val STREAMING_ITEM_SPACING_DP = 10
+private const val DURATION_UPDATE_INTERVAL_MILLIS = 1_000L
+private const val MILLIS_PER_SECOND = 1_000L
+private const val BITS_PER_MEGABIT = 1_000_000.0
+
 @Composable
 fun StreamingScreen(
     state: SenderUiState,
@@ -29,12 +35,12 @@ fun StreamingScreen(
     LaunchedEffect(streaming?.startedAtMillis) {
         while (true) {
             now = System.currentTimeMillis()
-            delay(1_000)
+            delay(DURATION_UPDATE_INTERVAL_MILLIS)
         }
     }
     Column(
-        modifier = Modifier.padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier.padding(STREAMING_CONTENT_PADDING_DP.dp),
+        verticalArrangement = Arrangement.spacedBy(STREAMING_ITEM_SPACING_DP.dp),
     ) {
         ConnectionStatus(state.streamState)
         streaming?.let { session ->
@@ -43,9 +49,11 @@ fun StreamingScreen(
                 "Profile: ${session.session.profile.width} x " +
                     "${session.session.profile.height} @ ${session.session.profile.fps} FPS",
             )
-            Text("Bitrate: ${session.session.bitrateBps / 1_000_000.0} Mbps")
-            Text("Receiver: ${session.session.endpoint.host}:${session.session.mediaPort}")
-            Text("Duration: ${(now - session.startedAtMillis).coerceAtLeast(0) / 1_000} seconds")
+            Text("Bitrate: ${session.session.bitrateBps / BITS_PER_MEGABIT} Mbps")
+            Text("Receiver: ${state.activeReceiverName ?: session.session.endpoint.host}")
+            Text(
+                "Duration: ${(now - session.startedAtMillis).coerceAtLeast(0) / MILLIS_PER_SECOND} seconds",
+            )
         }
         Button(onClick = onStop, modifier = Modifier.fillMaxWidth()) {
             Text("Stop")

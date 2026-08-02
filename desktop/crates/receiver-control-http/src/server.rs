@@ -6,6 +6,8 @@ use tokio::net::TcpListener;
 
 use crate::{router, ControlState};
 
+const WATCHDOG_INTERVAL: Duration = Duration::from_millis(250);
+
 #[derive(Debug, Error)]
 pub enum HttpServerError {
     #[error("control listener failed: {0}")]
@@ -36,7 +38,7 @@ where
 {
     let watchdog_state = state.clone();
     let watchdog = tokio::spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_millis(250));
+        let mut interval = tokio::time::interval(WATCHDOG_INTERVAL);
         loop {
             interval.tick().await;
             watchdog_state.refresh();
@@ -61,16 +63,16 @@ mod tests {
         ReceiverState, StaticCapabilityProvider,
     };
     use receiver_protocol::{
-        DecoderAcceleration, MediaCapabilities, OutputCapabilities, ReceiverCapabilities,
-        SessionCapabilities, VideoCodec, VideoCodecCapability,
+        DecoderAcceleration, MediaCapabilities, MediaPortAssignment, OutputCapabilities,
+        ReceiverCapabilities, SessionCapabilities, VideoCodec, VideoCodecCapability,
     };
     use tower::ServiceExt;
 
     struct FakeReceiver;
 
     impl MediaReceiver for FakeReceiver {
-        fn prepare(&mut self, _config: MediaSessionConfig) -> Result<(), ReceiverError> {
-            Ok(())
+        fn prepare(&mut self, config: MediaSessionConfig) -> Result<u16, ReceiverError> {
+            Ok(if config.media_port == 0 { 55_125 } else { config.media_port })
         }
         fn start(&mut self) -> Result<(), ReceiverError> {
             Ok(())
@@ -88,7 +90,7 @@ mod tests {
             protocol_version: 1,
             media: MediaCapabilities {
                 transport: receiver_protocol::Transport::MpegTsUdp,
-                default_port: 5000,
+                port_assignment: MediaPortAssignment::PerSession,
             },
             video_codecs: vec![
                 VideoCodecCapability {

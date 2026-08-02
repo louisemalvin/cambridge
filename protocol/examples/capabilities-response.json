@@ -2,7 +2,7 @@
   "protocolVersion": 1,
   "media": {
     "transport": "mpegts-udp",
-    "defaultPort": 5000
+    "portAssignment": "per_session"
   },
   "videoCodecs": [
     {

@@ -8,10 +8,11 @@ Android camera -> hardware H.264/H.265 encoder -> MPEG-TS over UDP
     -> Rust/GStreamer receiver -> v4l2loopback -> OBS or browser
 ```
 
-Phase 1 uses two local-network connections:
+The local-network flow has three explicit boundaries:
 
-- HTTP/JSON control on TCP port `5001`.
-- MPEG-TS media over UDP port `5000`.
+- Desktop-side discovery of the Android sender's TCP control service.
+- HTTP/JSON receiver control on TCP port `5001`.
+- MPEG-TS media on a UDP port allocated from `50000-50099` for each session.
 
 H.264 is the compatibility codec. Auto mode prefers H.265 when both endpoints
 support the selected profile. The project is video-only and designed for a
@@ -45,8 +46,10 @@ mobile-webcam-desktop
 
 It opens the receiver window, shows a live preview, and writes the same decoded
 frames to the virtual camera. No device path or port arguments are required.
-The receiver automatically selects the first v4l2loopback device and uses
-control TCP `5001` plus media UDP `5000`.
+The receiver automatically selects the first v4l2loopback device, discovers
+available phones, and connects to the only phone automatically. The first
+connection requires approval on the phone. Approved pairs reconnect without
+entering an address.
 
 The headless receiver is also available for servers or terminal-only sessions:
 
@@ -54,8 +57,9 @@ The headless receiver is also available for servers or terminal-only sessions:
 mobile-webcam-receiver
 ```
 
-Advanced users can pass `--device`, `--control-port`, or `--media-port` to either
-binary. The repository wrappers `./scripts/linux/start-desktop.sh` and
+Advanced users can pass `--device` or `--control-port` to the desktop app. Both
+receiver applications allocate a fresh UDP media port from `50000-50099` for
+each prepared session. The repository wrappers `./scripts/linux/start-desktop.sh` and
 `./scripts/linux/start-receiver.sh` are available before installation.
 
 The installer supports CachyOS/Arch and Ubuntu/Debian. See the matching

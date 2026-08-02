@@ -17,4 +17,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "mobile-webcam-android"
 include(":app")
-
+include(":rootencoder-udp")

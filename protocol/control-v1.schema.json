@@ -56,10 +56,10 @@
         "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
         "media": {
           "type": "object",
-          "required": ["transport", "defaultPort"],
+          "required": ["transport", "portAssignment"],
           "properties": {
             "transport": { "$ref": "#/$defs/transport" },
-            "defaultPort": { "type": "integer", "minimum": 1, "maximum": 65535 }
+            "portAssignment": { "type": "string", "const": "per_session" }
           },
           "additionalProperties": true
         },

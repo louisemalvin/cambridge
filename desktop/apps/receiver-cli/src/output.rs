@@ -1,6 +1,8 @@
 use receiver_core::ReceiverConfig;
 use receiver_protocol::ReceiverCapabilities;
 
+const NANOSECONDS_PER_MILLISECOND: u64 = 1_000_000;
+
 pub fn print_banner(config: &ReceiverConfig, capabilities: &ReceiverCapabilities) {
     println!("Mobile Webcam Receiver");
     println!();
@@ -9,7 +11,7 @@ pub fn print_banner(config: &ReceiverConfig, capabilities: &ReceiverCapabilities
         format_host(config.listen_addr),
         config.control_port
     );
-    println!("Media input:      udp://{}:{}", format_host(config.listen_addr), config.media_port);
+    println!("Media input:      per-session UDP port");
     println!("Virtual camera:   {}", config.device.display());
     println!("Codecs:           {}", supported_codecs(capabilities));
     println!("State:            Idle");
@@ -21,14 +23,14 @@ pub fn print_capabilities(capabilities: &ReceiverCapabilities) -> anyhow::Result
 }
 
 pub fn print_pipeline(config: &ReceiverConfig) {
-    println!(
-        "udpsrc address=0.0.0.0 port={} timeout={}000000",
-        config.media_port, config.udp_timeout_ms
-    );
+    let timeout_nanos = config.udp_timeout_ms.saturating_mul(NANOSECONDS_PER_MILLISECOND);
+    println!("udpsrc address=0.0.0.0 port=<assigned-per-session> timeout={timeout_nanos}");
     println!("  -> tsparse -> tsdemux latency={}", config.latency.demux_latency_ms);
-    println!("  -> queue max-size-buffers={}", config.latency.output_queue_frames);
     println!("  -> h264parse or h265parse -> decodebin");
-    println!("  -> videoconvert -> videoscale -> raw caps -> leaky queue");
+    println!(
+        "  -> videoconvert -> videoscale -> raw caps -> leaky queue max-size-buffers={}",
+        config.latency.output_queue_frames
+    );
     println!("  -> v4l2sink device={} sync=false", config.device.display());
 }
 

@@ -48,6 +48,7 @@ impl CodecPipelineFactory for DefaultCodecPipelineFactory {
             "decodebin",
             "videoconvert",
             "videoscale",
+            "videorate",
             "queue",
             "capsfilter",
         ];

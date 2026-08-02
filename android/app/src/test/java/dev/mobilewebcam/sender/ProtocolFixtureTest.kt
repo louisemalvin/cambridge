@@ -6,8 +6,17 @@ import dev.mobilewebcam.sender.control.http.PrepareSessionRequestDto
 import dev.mobilewebcam.sender.control.http.PrepareSessionResponseDto
 import dev.mobilewebcam.sender.control.http.ProtocolJson
 import dev.mobilewebcam.sender.control.http.SessionStateResponseDto
+import dev.mobilewebcam.sender.discovery.StartStreamRequestDto
+import dev.mobilewebcam.sender.discovery.StartStreamResponseDto
+import dev.mobilewebcam.sender.discovery.StartStreamStatusDto
+import dev.mobilewebcam.sender.discovery.DescribeSenderRequestDto
+import dev.mobilewebcam.sender.discovery.SenderAdvertisementDto
 import java.io.File
 import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -21,6 +30,9 @@ class ProtocolFixtureTest {
         val h264Response = decode<PrepareSessionResponseDto>("prepare-h264-response.json")
         val h265Response = decode<PrepareSessionResponseDto>("prepare-h265-response.json")
         val state = decode<SessionStateResponseDto>("session-state-response.json")
+        val describeSender = decode<DescribeSenderRequestDto>("sender-describe-request.json")
+        val senderRequest = decode<StartStreamRequestDto>("sender-start-request.json")
+        val senderResponse = decode<StartStreamResponseDto>("sender-start-response.json")
 
         assertEquals(1, health.protocolVersion)
         assertEquals(2, capabilities.videoCodecs.size)
@@ -29,6 +41,27 @@ class ProtocolFixtureTest {
         assertEquals("d3ebda88-5e25-4a47-99e4-44029adf49ef", h264Response.sessionId)
         assertEquals("h265", h265Response.selectedCodec.name.lowercase())
         assertEquals("receiving", state.state.name.lowercase())
+        assertEquals("describe", describeSender.action.name.lowercase())
+        assertEquals(5001, senderRequest.receiverControlPort)
+        assertEquals("accepted", senderResponse.status.name.lowercase())
+    }
+
+    @Test
+    fun senderResponsesAlwaysEncodeTheRequiredProtocolVersion() {
+        val advertisement = SenderAdvertisementDto(
+            protocolVersion = 1,
+            senderId = "phone-1",
+            displayName = "Android phone",
+            controlPort = 53_555,
+        )
+        val response = StartStreamResponseDto(
+            protocolVersion = 1,
+            senderId = "phone-1",
+            status = StartStreamStatusDto.APPROVAL_REQUIRED,
+        )
+
+        assertEquals(1, encodedProtocolVersion(advertisement))
+        assertEquals(1, encodedProtocolVersion(response))
     }
 
     private inline fun <reified T> decode(name: String): T {
@@ -41,4 +74,8 @@ class ProtocolFixtureTest {
             ?: error("Shared protocol fixture not found: $name")
         return ProtocolJson.instance.decodeFromString(file.readText())
     }
+
+    private inline fun <reified T> encodedProtocolVersion(value: T): Int =
+        ProtocolJson.instance.parseToJsonElement(ProtocolJson.instance.encodeToString(value))
+            .jsonObject.getValue("protocolVersion").jsonPrimitive.int
 }

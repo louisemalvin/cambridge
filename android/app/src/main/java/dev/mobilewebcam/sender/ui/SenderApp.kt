@@ -33,6 +33,8 @@ import dev.mobilewebcam.sender.ui.connect.ConnectScreen
 import dev.mobilewebcam.sender.ui.streaming.StreamingScreen
 import dev.mobilewebcam.sender.ui.components.CameraPreview
 
+private const val CAMERA_PREVIEW_HEIGHT_DP = 220
+
 @Composable
 fun SenderApp() {
     val context = LocalContext.current
@@ -65,7 +67,7 @@ fun SenderApp() {
                     onSurfaceChanged = viewModel::setPreviewSurface,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(220.dp),
+                        .height(CAMERA_PREVIEW_HEIGHT_DP.dp),
                 )
                 Box(modifier = Modifier.weight(1f)) {
                     when (uiState.streamState) {
@@ -78,14 +80,13 @@ fun SenderApp() {
                         )
                         else -> ConnectScreen(
                             state = uiState,
-                            onReceiverHostChanged = viewModel::updateReceiverHost,
-                            onControlPortChanged = viewModel::updateControlPort,
                             onCodecPreferenceChanged = viewModel::updateCodecPreference,
                             onProfileChanged = viewModel::updateProfile,
                             onRequestCameraPermission = {
                                 permissionLauncher.launch(Manifest.permission.CAMERA)
                             },
-                            onStart = viewModel::start,
+                            onApprove = viewModel::approvePending,
+                            onReject = viewModel::rejectPending,
                             onCopyError = {
                                 val failedState = uiState.streamState as? StreamState.Failed
                                 val details = uiState.failureDetails
@@ -121,8 +122,7 @@ private class SenderViewModelFactory(
     override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
         check(modelClass.isAssignableFrom(SenderViewModel::class.java))
         return SenderViewModel(
-            controller = application.sessionController,
-            networkInformationProvider = application.networkInformationProvider,
+            coordinator = application.connectionCoordinator,
         ) as T
     }
 }

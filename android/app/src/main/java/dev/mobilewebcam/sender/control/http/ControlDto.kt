@@ -53,7 +53,7 @@ data class HealthResponseDto(
 @Serializable
 data class MediaCapabilitiesDto(
     val transport: ControlTransport,
-    @SerialName("defaultPort") val defaultPort: Int,
+    @SerialName("portAssignment") val portAssignment: String,
 )
 
 @Serializable

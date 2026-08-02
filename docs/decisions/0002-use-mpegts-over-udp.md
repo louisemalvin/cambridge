@@ -9,7 +9,8 @@ without a custom packetizer.
 ## Decision
 
 Use MPEG-TS over UDP unicast. RootEncoder owns sender-side packaging and the
-GStreamer receiver owns demuxing. The default media port is `5000`.
+GStreamer receiver owns demuxing. The receiver allocates a new media port for
+each prepared session.
 
 ## Consequences
 

@@ -6,6 +6,7 @@
 /android/.gradle/
 /android/build/
 /android/app/build/
+/android/*/build/
 /android/local.properties
 *.iml
 .idea/
@@ -18,4 +19,3 @@
 # Android signing material
 *.jks
 *.keystore
-

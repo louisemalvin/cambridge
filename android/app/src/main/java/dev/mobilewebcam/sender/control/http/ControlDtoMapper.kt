@@ -31,7 +31,6 @@ internal fun ControlPixelFormat.toDomain(): OutputPixelFormat = when (this) {
 internal fun CapabilitiesResponseDto.toDomain(): ReceiverCapabilities =
     ReceiverCapabilities(
         protocolVersion = protocolVersion,
-        mediaPort = media.defaultPort,
         codecs = videoCodecs.map {
             ReceiverCodecCapability(
                 codec = it.codec.toDomain(),

@@ -10,6 +10,8 @@ use gstreamer_video as gst_video;
 use receiver_gstreamer::PipelineError;
 use tracing::info;
 
+const PREVIEW_MAX_BUFFERS: u32 = 1;
+
 #[derive(Clone)]
 pub struct PreviewStore {
     frame: Arc<Mutex<Option<PreviewFrame>>>,
@@ -68,7 +70,7 @@ impl PreviewStore {
             }
         })?;
         appsink.set_property("emit-signals", false);
-        appsink.set_property("max-buffers", 1u32);
+        appsink.set_property("max-buffers", PREVIEW_MAX_BUFFERS);
         appsink.set_property("drop", true);
         appsink.set_property("sync", false);
 

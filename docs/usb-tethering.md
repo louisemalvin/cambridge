@@ -1,16 +1,18 @@
 # USB tethering
 
-USB tethering uses the same two application connections as Wi-Fi. The phone
+USB tethering uses the same application contracts as Wi-Fi. The phone
 does not send a custom USB protocol:
 
 ```text
+local subnet probe -> Android sender:53555/TCP
+reverse control -> Android sender:53555/TCP
 HTTP control -> Linux receiver address:5001/TCP
-MPEG-TS media -> Linux receiver address:5000/UDP
+MPEG-TS media -> Linux receiver UDP 50000-50099
 ```
 
 ## Procedure
 
-1. Start the receiver on the Linux host or stop it until the address is known.
+1. Open the Android app.
 2. Connect the Android phone with a USB cable.
 3. Enable USB tethering in Android network settings.
 4. On Linux, inspect all interfaces and routes:
@@ -20,18 +22,17 @@ MPEG-TS media -> Linux receiver address:5000/UDP
    ip route
    ```
 
-5. Identify the address assigned to the USB-tethered Linux interface. Do not
-   assume it is `usb0`, `rndis0`, or a particular `enp*` name.
-6. Start the receiver bound to `0.0.0.0` or the selected host address.
-7. Enter the Linux tethered address in the Android app and keep control port
-   `5001`.
+5. Start the desktop receiver bound to `0.0.0.0`.
+6. Select the phone if more than one sender is discovered.
+7. Approve the desktop on the phone the first time.
 8. Confirm the session state and selected codec before measuring latency.
 
 The exact address range and interface name are controlled by Android and the
 Linux network manager. A route can exist while the firewall still blocks the
-ports, so test both TCP control and UDP media. For a temporary trusted setup,
-allow inbound TCP `5001` and UDP `5000` on the tethered interface only.
+services, so test sender TCP control, receiver TCP control, and the negotiated
+UDP media port in `50000-50099`. Limit firewall access to the tethered
+interface.
 
 If USB tethering is not available, use Wi-Fi without changing the app or
-receiver media implementation. Switching networks requires a new reachable
-receiver address, not a different protocol.
+receiver media implementation. The apps rediscover each other after switching
+networks.

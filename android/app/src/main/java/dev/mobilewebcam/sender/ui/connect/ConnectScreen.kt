@@ -11,7 +11,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -23,50 +22,42 @@ import dev.mobilewebcam.sender.ui.components.CodecSelector
 import dev.mobilewebcam.sender.ui.components.ConnectionStatus
 import dev.mobilewebcam.sender.ui.components.VideoProfileSelector
 
+private const val CONNECT_CONTENT_PADDING_DP = 20
+private const val CONNECT_ITEM_SPACING_DP = 12
+private const val CONNECT_SECTION_SPACER_DP = 4
+
 @Composable
 fun ConnectScreen(
     state: SenderUiState,
-    onReceiverHostChanged: (String) -> Unit,
-    onControlPortChanged: (String) -> Unit,
     onCodecPreferenceChanged: (CodecPreference) -> Unit,
     onProfileChanged: (VideoProfile) -> Unit,
     onRequestCameraPermission: () -> Unit,
-    onStart: () -> Unit,
+    onApprove: () -> Unit,
+    onReject: () -> Unit,
     onCopyError: () -> Unit,
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(CONNECT_CONTENT_PADDING_DP.dp),
+        verticalArrangement = Arrangement.spacedBy(CONNECT_ITEM_SPACING_DP.dp),
     ) {
         Text("Mobile Webcam")
-        Text("Connect to a receiver on the local network")
-        OutlinedTextField(
-            value = state.receiverHost,
-            onValueChange = onReceiverHostChanged,
-            label = { Text("Receiver IP address") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        OutlinedTextField(
-            value = state.controlPort,
-            onValueChange = onControlPortChanged,
-            label = { Text("Control port") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
+        Text("Available to desktop receivers on this local network")
+        state.pendingApproval?.let { approval ->
+            Text("${approval.receiverName} wants to use this phone as a webcam.")
+            Button(onClick = onApprove, modifier = Modifier.fillMaxWidth()) {
+                Text("Approve this computer")
+            }
+            OutlinedButton(onClick = onReject, modifier = Modifier.fillMaxWidth()) {
+                Text("Reject")
+            }
+        }
         CodecSelector(state.codecPreference, onCodecPreferenceChanged)
         VideoProfileSelector(state.profile, onProfileChanged)
         if (state.profile.id == "4k30") {
             Text("4K UHD is experimental and depends on both devices and the virtual camera consumer.")
-        }
-        if (state.networkInformation.isNotEmpty()) {
-            Text("Local addresses")
-            state.networkInformation.forEach { information ->
-                Text("${information.transport}: ${information.addresses.joinToString()}")
-            }
         }
         if (!state.cameraPermissionGranted) {
             OutlinedButton(onClick = onRequestCameraPermission) {
@@ -84,13 +75,9 @@ fun ConnectScreen(
                 Text("Copy error details")
             }
         }
-        Spacer(Modifier.height(4.dp))
-        Button(
-            onClick = onStart,
-            enabled = state.cameraPermissionGranted && state.receiverHost.isNotBlank(),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text("Connect")
+        Spacer(Modifier.height(CONNECT_SECTION_SPACER_DP.dp))
+        if (state.pendingApproval == null) {
+            Text("Waiting for the desktop app")
         }
     }
 }

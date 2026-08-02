@@ -15,7 +15,9 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 
 class RootEncoderStreamEngine(context: Context) : StreamEngine {
     private val applicationContext = context.applicationContext
-    private val eventFlow = MutableSharedFlow<StreamEngineEvent>(extraBufferCapacity = 32)
+    private val eventFlow = MutableSharedFlow<StreamEngineEvent>(
+        extraBufferCapacity = EVENT_BUFFER_CAPACITY,
+    )
     private var stream: UdpStream? = null
 
     override val events: Flow<StreamEngineEvent> = eventFlow
@@ -44,7 +46,7 @@ class RootEncoderStreamEngine(context: Context) : StreamEngine {
                 video.fps,
                 video.keyframeIntervalSeconds,
             )) { "RootEncoder video preparation failed" }
-            check(createdEncoder.prepareAudio(44_100, false, 64_000)) {
+            check(createdEncoder.prepareAudio(AUDIO_SAMPLE_RATE_HZ, false, AUDIO_BITRATE_BPS)) {
                 "RootEncoder audio preparation failed"
             }
             if (previewSurface != null) {
@@ -88,5 +90,11 @@ class RootEncoderStreamEngine(context: Context) : StreamEngine {
     override suspend fun release() {
         stream?.release()
         stream = null
+    }
+
+    private companion object {
+        const val EVENT_BUFFER_CAPACITY = 32
+        const val AUDIO_SAMPLE_RATE_HZ = 44_100
+        const val AUDIO_BITRATE_BPS = 64_000
     }
 }

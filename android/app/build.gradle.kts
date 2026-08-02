@@ -52,7 +52,10 @@ dependencies {
     implementation(libs.ktor.client.cio)
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
-    implementation(libs.rootencoder.library)
+    implementation(libs.rootencoder.library) {
+        exclude(group = "com.github.pedroSG94.RootEncoder", module = "udp")
+    }
+    implementation(project(":rootencoder-udp"))
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)

@@ -10,7 +10,7 @@ internal fun buildFailureDiagnostics(
 ): String = buildString {
     appendLine("Mobile Webcam Android diagnostic")
     appendLine("User message: ${failureMessage(failure)}")
-    appendLine("Receiver: ${state.receiverHost}:${state.controlPort}")
+    appendLine("Receiver: ${state.activeReceiverName ?: "not connected"}")
     appendLine(
         "Profile: ${state.profile.width}x${state.profile.height}@${state.profile.fps}",
     )

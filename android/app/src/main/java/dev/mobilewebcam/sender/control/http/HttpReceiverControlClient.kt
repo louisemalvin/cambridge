@@ -85,12 +85,7 @@ class HttpReceiverControlClient(
         endpoint: ReceiverEndpoint,
         sessionId: String,
     ): Result<Unit> = request(endpoint) {
-        val response = client.delete(endpoint.path("sessions/$sessionId"))
-        if (response.status.value !in 200..299) {
-            throw ReceiverControlException(
-                ReceiverControlError.Rejected(response.status.value, response.status.description),
-            )
-        }
+        client.delete(endpoint.path("sessions/$sessionId")).requireSuccess()
         Unit
     }
 
@@ -116,7 +111,7 @@ class HttpReceiverControlClient(
     }
 
     private fun HttpResponse.requireSuccess(): HttpResponse {
-        if (status.value !in 200..299) {
+        if (status.value !in HTTP_SUCCESS_STATUS_MIN..HTTP_SUCCESS_STATUS_MAX) {
             throw ReceiverControlException(
                 ReceiverControlError.Rejected(status.value, status.description),
             )
@@ -128,6 +123,9 @@ class HttpReceiverControlClient(
         "$controlBaseUrl/v1/$path"
 
     private companion object {
+        const val HTTP_SUCCESS_STATUS_MIN = 200
+        const val HTTP_SUCCESS_STATUS_MAX = 299
+
         fun defaultClient(): HttpClient = HttpClient(CIO) {
             install(ContentNegotiation) {
                 json(ProtocolJson.instance)

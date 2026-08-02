@@ -2,11 +2,26 @@ use std::{cell::RefCell, rc::Rc, time::Duration};
 
 use gtk::prelude::*;
 use gtk::{
-    gdk, glib, Application, ApplicationWindow, Box as GtkBox, Button, Label, Orientation, Picture,
+    gdk, glib, Application, ApplicationWindow, Box as GtkBox, Button, ComboBoxText, Label,
+    Orientation, Picture,
 };
 use gtk4 as gtk;
 
-use crate::{cli::Cli, preview::PreviewStore, runtime::ReceiverRuntime};
+use crate::{
+    cli::Cli,
+    discovery::{ConnectionState, DiscoveryHandle, DiscoverySnapshot},
+    preview::PreviewStore,
+    runtime::ReceiverRuntime,
+};
+
+const MAIN_WINDOW_WIDTH: i32 = 1_100;
+const MAIN_WINDOW_HEIGHT: i32 = 760;
+const STARTUP_WINDOW_WIDTH: i32 = 720;
+const STARTUP_WINDOW_HEIGHT: i32 = 240;
+const WINDOW_CONTENT_SPACING: i32 = 12;
+const MAIN_WINDOW_MARGIN: i32 = 16;
+const STARTUP_WINDOW_MARGIN: i32 = 20;
+const UI_REFRESH_INTERVAL_MILLIS: u64 = 33;
 
 pub fn run(cli: Cli) {
     let application = Application::builder().application_id("dev.mobilewebcam.receiver").build();
@@ -15,54 +30,58 @@ pub fn run(cli: Cli) {
 }
 
 fn activate(application: &Application, cli: &Cli) {
-    let (runtime, preview_store) = match ReceiverRuntime::start(cli) {
+    let (runtime, preview_store, discovery) = match ReceiverRuntime::start(cli) {
         Ok(result) => result,
         Err(error) => {
             show_startup_error(application, &error.to_string());
             return;
         }
     };
-    build_window(application, cli, runtime, preview_store);
+    build_window(application, runtime, preview_store, discovery);
 }
 
 fn build_window(
     application: &Application,
-    cli: &Cli,
     runtime: ReceiverRuntime,
     store: PreviewStore,
+    discovery: DiscoveryHandle,
 ) {
     let window = ApplicationWindow::builder()
         .application(application)
         .title("Mobile Webcam Receiver")
-        .default_width(1100)
-        .default_height(760)
+        .default_width(MAIN_WINDOW_WIDTH)
+        .default_height(MAIN_WINDOW_HEIGHT)
         .build();
-    let root = GtkBox::new(Orientation::Vertical, 12);
-    root.set_margin_top(16);
-    root.set_margin_bottom(16);
-    root.set_margin_start(16);
-    root.set_margin_end(16);
+    let root = GtkBox::new(Orientation::Vertical, WINDOW_CONTENT_SPACING);
+    root.set_margin_top(MAIN_WINDOW_MARGIN);
+    root.set_margin_bottom(MAIN_WINDOW_MARGIN);
+    root.set_margin_start(MAIN_WINDOW_MARGIN);
+    root.set_margin_end(MAIN_WINDOW_MARGIN);
 
     let heading = Label::new(Some("Mobile Webcam Receiver"));
     heading.set_xalign(0.0);
     heading.add_css_class("title-1");
     root.append(&heading);
 
-    let instructions = Label::new(Some(&format!(
-        "On the phone, enter this computer's LAN IP and control port {}. OBS can use the installed v4l2loopback camera after a stream starts.",
-        cli.control_port
-    )));
+    let instructions = Label::new(Some(
+        "Open Mobile Webcam on your phone. This receiver finds it automatically on the local network. Approve this computer on the phone the first time.",
+    ));
     instructions.set_wrap(true);
     instructions.set_xalign(0.0);
     root.append(&instructions);
 
-    let status = Label::new(Some(&format!(
-        "Ready. Control API: http://{}:{} - waiting for phone video",
-        display_listen_address(cli),
-        cli.control_port
-    )));
+    let status = Label::new(Some("Searching for phones on the local network"));
     status.set_xalign(0.0);
     root.append(&status);
+
+    let phone_selector = ComboBoxText::new();
+    phone_selector.set_visible(false);
+    root.append(&phone_selector);
+
+    let attach_button = Button::with_label("Use selected phone");
+    attach_button.set_halign(gtk::Align::Start);
+    attach_button.set_visible(false);
+    root.append(&attach_button);
 
     let picture = Picture::new();
     picture.set_hexpand(true);
@@ -77,6 +96,15 @@ fn build_window(
     window.set_child(Some(&root));
 
     let runtime = Rc::new(RefCell::new(Some(runtime)));
+    {
+        let discovery = discovery.clone();
+        let phone_selector = phone_selector.clone();
+        attach_button.connect_clicked(move |_| {
+            if let Some(sender_id) = phone_selector.active_id() {
+                discovery.attach(sender_id.as_str());
+            }
+        });
+    }
     {
         let runtime = runtime.clone();
         let window = window.clone();
@@ -93,7 +121,10 @@ fn build_window(
         });
     }
 
-    glib::timeout_add_local(Duration::from_millis(33), move || {
+    glib::timeout_add_local(Duration::from_millis(UI_REFRESH_INTERVAL_MILLIS), move || {
+        for snapshot in discovery.drain() {
+            apply_discovery_snapshot(&snapshot, &phone_selector, &attach_button, &status);
+        }
         if let Some(frame) = store.take_latest() {
             let bytes = glib::Bytes::from_owned(frame.pixels);
             let texture = gdk::MemoryTexture::new(
@@ -114,18 +145,56 @@ fn build_window(
     window.present();
 }
 
+fn apply_discovery_snapshot(
+    snapshot: &DiscoverySnapshot,
+    phone_selector: &ComboBoxText,
+    attach_button: &Button,
+    status: &Label,
+) {
+    phone_selector.remove_all();
+    for phone in &snapshot.phones {
+        phone_selector.append(Some(&phone.sender_id), &phone.display_name);
+    }
+    if let Some(selected) = snapshot.selected_sender_id.as_deref() {
+        phone_selector.set_active_id(Some(selected));
+    } else if !snapshot.phones.is_empty() {
+        phone_selector.set_active(Some(0));
+    }
+    let needs_selection = snapshot.phones.len() > 1;
+    phone_selector.set_visible(needs_selection);
+    attach_button.set_visible(needs_selection);
+
+    status.set_text(match &snapshot.connection {
+        ConnectionState::Searching => "Searching for phones on the local network",
+        ConnectionState::WaitingForSelection => "Choose which phone to use",
+        ConnectionState::Connecting(name) => {
+            return status.set_text(&format!("Connecting to {name}"));
+        }
+        ConnectionState::WaitingForApproval(name) => {
+            return status.set_text(&format!("Approve this computer on {name}"));
+        }
+        ConnectionState::CameraPermissionRequired(name) => {
+            return status.set_text(&format!("Allow camera access on {name}"));
+        }
+        ConnectionState::Connected(name) => {
+            return status.set_text(&format!("Connected to {name} - waiting for video"));
+        }
+        ConnectionState::Error(message) => return status.set_text(message),
+    });
+}
+
 fn show_startup_error(application: &Application, error: &str) {
     let window = ApplicationWindow::builder()
         .application(application)
         .title("Mobile Webcam Receiver")
-        .default_width(720)
-        .default_height(240)
+        .default_width(STARTUP_WINDOW_WIDTH)
+        .default_height(STARTUP_WINDOW_HEIGHT)
         .build();
-    let root = GtkBox::new(Orientation::Vertical, 12);
-    root.set_margin_top(20);
-    root.set_margin_bottom(20);
-    root.set_margin_start(20);
-    root.set_margin_end(20);
+    let root = GtkBox::new(Orientation::Vertical, WINDOW_CONTENT_SPACING);
+    root.set_margin_top(STARTUP_WINDOW_MARGIN);
+    root.set_margin_bottom(STARTUP_WINDOW_MARGIN);
+    root.set_margin_start(STARTUP_WINDOW_MARGIN);
+    root.set_margin_end(STARTUP_WINDOW_MARGIN);
     let label = Label::new(Some(&format!("Receiver could not start:\n\n{error}")));
     label.set_wrap(true);
     label.set_xalign(0.0);
@@ -137,14 +206,4 @@ fn show_startup_error(application: &Application, error: &str) {
     root.append(&close);
     window.set_child(Some(&root));
     window.present();
-}
-
-fn display_listen_address(cli: &Cli) -> String {
-    match cli.listen {
-        std::net::IpAddr::V4(address) if address.is_unspecified() => "<computer LAN IP>".to_owned(),
-        std::net::IpAddr::V6(address) if address.is_unspecified() => {
-            "<computer LAN IPv6>".to_owned()
-        }
-        address => address.to_string(),
-    }
 }

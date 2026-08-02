@@ -11,6 +11,7 @@ MODULE_OPTIONS="options ${MODULE_NAME} devices=1 video_nr=${VIDEO_NUMBER} card_l
 INSTALLED_BINARY="/usr/local/bin/mobile-webcam-receiver"
 INSTALLED_DESKTOP_BINARY="/usr/local/bin/mobile-webcam-desktop"
 DESKTOP_ENTRY_TARGET="/usr/local/share/applications/mobile-webcam.desktop"
+MEDIA_PORT_RANGE="50000:50099"
 
 declare -a PRIVILEGE=()
 
@@ -127,7 +128,7 @@ verify_gstreamer() {
 
   local missing=()
   local element
-  for element in udpsrc tsparse tsdemux h264parse h265parse decodebin v4l2sink appsink; do
+  for element in udpsrc tsparse tsdemux h264parse h265parse decodebin videorate v4l2sink appsink; do
     if ! gst-inspect-1.0 "${element}" >/dev/null 2>&1; then
       missing+=("${element}")
     fi
@@ -135,6 +136,21 @@ verify_gstreamer() {
   if ((${#missing[@]} > 0)); then
     fail "GStreamer is missing receiver elements: ${missing[*]}"
   fi
+}
+
+configure_firewall() {
+  command -v ufw >/dev/null 2>&1 || return
+  "${PRIVILEGE[@]}" ufw status | grep -q '^Status: active' || return
+
+  local default_interface
+  local trusted_subnet
+  default_interface="$(ip -4 route show default | awk '{ for (field = 1; field <= NF; field++) if ($field == "dev") { print $(field + 1); exit } }')"
+  [[ -n "${default_interface}" ]] || fail "UFW is active but the default network interface could not be identified."
+  trusted_subnet="$(ip -4 route show dev "${default_interface}" scope link | awk '$1 ~ /^[0-9]+\./ && $1 ~ /\// { print $1; exit }')"
+  [[ -n "${trusted_subnet}" ]] || fail "UFW is active but the trusted local subnet could not be identified."
+
+  "${PRIVILEGE[@]}" ufw allow from "${trusted_subnet}" to any port 5001 proto tcp comment 'Mobile Webcam control'
+  "${PRIVILEGE[@]}" ufw allow from "${trusted_subnet}" to any port "${MEDIA_PORT_RANGE}" proto udp comment 'Mobile Webcam media'
 }
 
 install_packages
@@ -163,6 +179,7 @@ LOOPBACK_DEVICE="$(find_loopback_device || true)"
 [[ -c "${LOOPBACK_DEVICE}" ]] || fail "v4l2loopback reported ${LOOPBACK_DEVICE}, but the device node is unavailable."
 
 verify_gstreamer
+configure_firewall
 command -v cargo >/dev/null 2>&1 || fail "cargo is unavailable after package installation."
 
 echo "Building the receiver..."
@@ -192,6 +209,7 @@ The headless receiver is also available with:
 The repository wrapper remains available for local development:
   ${REPO_ROOT}/scripts/linux/start-receiver.sh
 
-The receiver automatically selects the first v4l2loopback device. It listens
-on TCP 5001 for control and UDP 5000 for MPEG-TS video by default.
+The receiver automatically selects the first v4l2loopback device and discovers
+Android phones through their local control service. It listens on TCP 5001 for
+control and allocates a new UDP media port in 50000-50099 for each session.
 EOF

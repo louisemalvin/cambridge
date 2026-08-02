@@ -21,7 +21,6 @@ import dev.mobilewebcam.sender.logging.AppLogger
 import dev.mobilewebcam.sender.platform.ForegroundStreamingController
 import dev.mobilewebcam.sender.streaming.StreamEngine
 import dev.mobilewebcam.sender.streaming.StreamEngineEvent
-import dev.mobilewebcam.sender.validation.ReceiverEndpointValidator
 import dev.mobilewebcam.sender.validation.StreamConfigurationValidator
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -57,8 +56,7 @@ class StreamSessionControllerImpl(
     }
 
     override suspend fun start(
-        host: String,
-        controlPort: Int,
+        endpoint: ReceiverEndpoint,
         preference: CodecPreference,
         profile: VideoProfile,
         previewSurface: Surface?,
@@ -66,11 +64,12 @@ class StreamSessionControllerImpl(
         if (activeSession != null) {
             return@withLock failure(StreamFailure.ReceiverRejectedProfile("A stream is already active"))
         }
-        logger.info("stream start requested", mapOf("host" to host, "controlPort" to controlPort))
+        logger.info(
+            "stream start requested",
+            mapOf("host" to endpoint.host, "controlPort" to endpoint.controlPort),
+        )
         stateFlow.value = StreamState.CheckingReceiver
         try {
-            val endpoint = ReceiverEndpointValidator.validate(host, controlPort)
-                .getOrElse { throw StreamFailureException(StreamFailure.ReceiverUnavailable(it.message.orEmpty()), it) }
             receiver.health(endpoint).orReceiverFailure("Health check failed")
             val receiverCapabilities = receiver.capabilities(endpoint)
                 .orReceiverFailure("Capability request failed")

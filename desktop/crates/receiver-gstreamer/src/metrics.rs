@@ -1,5 +1,9 @@
 use std::time::Instant;
 
+const MIN_ELAPSED_NANOSECONDS: u128 = 1;
+const BITS_PER_BYTE: u128 = 8;
+const NANOSECONDS_PER_SECOND: u128 = 1_000_000_000;
+
 #[derive(Debug, Default)]
 pub struct Metrics {
     started_at: Option<Instant>,
@@ -42,10 +46,10 @@ impl Metrics {
         let Some(started_at) = self.started_at else {
             return 0;
         };
-        let elapsed_nanos = started_at.elapsed().as_nanos().max(1);
+        let elapsed_nanos = started_at.elapsed().as_nanos().max(MIN_ELAPSED_NANOSECONDS);
         let bits_per_second = u128::from(self.received_bytes)
-            .saturating_mul(8)
-            .saturating_mul(1_000_000_000)
+            .saturating_mul(BITS_PER_BYTE)
+            .saturating_mul(NANOSECONDS_PER_SECOND)
             .checked_div(elapsed_nanos)
             .unwrap_or(0)
             .min(u128::from(u32::MAX));

@@ -40,7 +40,6 @@ async fn main() -> Result<()> {
     }
 
     let capabilities = probe_capabilities(
-        config.media_port,
         config.device.to_string_lossy().into_owned(),
         vec![
             receiver_protocol::PixelFormat::Yuy2,
@@ -66,7 +65,7 @@ async fn main() -> Result<()> {
     output::print_banner(&config, &capabilities);
     info!(
         control_port = config.control_port,
-        media_port = config.media_port,
+        media_port_assignment = "per_session",
         device = %config.device.display(),
         "receiver ready"
     );

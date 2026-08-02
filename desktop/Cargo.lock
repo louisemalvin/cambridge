@@ -459,7 +459,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "25f420376dbee041b2db374ce4573892a36222bb3f6c0c43e24f0d67eae9b646"
 dependencies = [
  "gdk-pixbuf-sys",
- "gio",
+ "gio 0.22.8",
  "glib 0.22.8",
  "libc",
 ]
@@ -486,7 +486,7 @@ dependencies = [
  "cairo-rs",
  "gdk-pixbuf",
  "gdk4-sys",
- "gio",
+ "gio 0.22.8",
  "glib 0.22.8",
  "libc",
  "pango",
@@ -530,6 +530,23 @@ dependencies = [
  "cfg-if",
  "libc",
  "r-efi 6.0.0",
+]
+
+[[package]]
+name = "gio"
+version = "0.21.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c5ff48bf600c68b476e61dc6b7c762f2f4eb91deef66583ba8bb815c30b5811a"
+dependencies = [
+ "futures-channel",
+ "futures-core",
+ "futures-io",
+ "futures-util",
+ "gio-sys 0.21.5",
+ "glib 0.21.5",
+ "libc",
+ "pin-project-lite",
+ "smallvec",
 ]
 
 [[package]]
@@ -870,7 +887,7 @@ dependencies = [
  "futures-channel",
  "gdk-pixbuf",
  "gdk4",
- "gio",
+ "gio 0.22.8",
  "glib 0.22.8",
  "graphene-rs",
  "gsk4",
@@ -1113,6 +1130,16 @@ checksum = "cb68373c0d6620ef8105e855e7745e18b0d00d3bdb07fb532e434244cdb9a714"
 dependencies = [
  "icu_normalizer",
  "icu_properties",
+]
+
+[[package]]
+name = "if-addrs"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c0a05c691e1fae256cf7013d99dad472dc52d5543322761f83ec8d47eab40d2b"
+dependencies = [
+ "libc",
+ "windows-sys",
 ]
 
 [[package]]
@@ -1403,7 +1430,7 @@ version = "0.22.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d800d8d0de2ad5d0fb046f5344dbaba14a003cf3dd27cc21d85893d35ea316c"
 dependencies = [
- "gio",
+ "gio 0.22.8",
  "glib 0.22.8",
  "pango-sys",
 ]
@@ -1567,20 +1594,26 @@ dependencies = [
  "gstreamer-app",
  "gstreamer-video",
  "gtk4",
+ "if-addrs",
  "receiver-control-http",
  "receiver-core",
  "receiver-gstreamer",
  "receiver-platform-linux",
  "receiver-protocol",
+ "sender-control-protocol",
+ "serde",
+ "serde_json",
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]
 name = "receiver-gstreamer"
 version = "0.1.0"
 dependencies = [
+ "gio 0.21.5",
  "gstreamer",
  "gstreamer-base",
  "gstreamer-video",
@@ -1737,6 +1770,15 @@ name = "semver"
 version = "1.0.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a7852d02fc848982e0c167ef163aaff9cd91dc640ba85e263cb1ce46fae51cd"
+
+[[package]]
+name = "sender-control-protocol"
+version = "0.1.0"
+dependencies = [
+ "jsonschema",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "serde"

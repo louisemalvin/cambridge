@@ -3,7 +3,7 @@
   "selectedCodec": "h264",
   "media": {
     "transport": "mpegts-udp",
-    "port": 5000
+    "port": 50042
   },
   "profile": {
     "width": 1920,

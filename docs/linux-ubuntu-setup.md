@@ -28,9 +28,12 @@ mobile-webcam-receiver
 Do not run both binaries at the same time. Either one starts the control API and
 virtual-camera output.
 
-The receiver automatically discovers the loopback device. It listens on TCP
-`5001` for control and UDP `5000` for MPEG-TS media. Open those ports in the
-firewall only on the trusted local interface.
+The receiver automatically discovers the loopback device and available phones.
+It listens on TCP `5001` for control and allocates a UDP media port from
+`50000-50099` for each session. Phone discovery probes TCP `53555` on bounded
+local IPv4 subnets. The installer adds trusted-subnet UFW rules when UFW is
+active.
+Permit these only on the trusted local interface.
 
 For troubleshooting, inspect the devices and GStreamer elements directly:
 

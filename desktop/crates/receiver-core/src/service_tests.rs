@@ -1,8 +1,8 @@
 use super::*;
 use crate::StaticCapabilityProvider;
 use receiver_protocol::{
-    DecoderAcceleration, MediaCapabilities, OutputCapabilities, ReceiverSessionState,
-    SessionCapabilities, VideoCodec, VideoCodecCapability, VideoProfile,
+    DecoderAcceleration, MediaCapabilities, MediaPortAssignment, OutputCapabilities,
+    ReceiverSessionState, SessionCapabilities, VideoCodec, VideoCodecCapability, VideoProfile,
 };
 use std::{
     path::PathBuf,
@@ -17,9 +17,9 @@ struct FakeReceiver {
 }
 
 impl MediaReceiver for FakeReceiver {
-    fn prepare(&mut self, _config: MediaSessionConfig) -> Result<(), ReceiverError> {
+    fn prepare(&mut self, config: MediaSessionConfig) -> Result<u16, ReceiverError> {
         self.state = ReceiverState::Prepared;
-        Ok(())
+        Ok(if config.media_port == 0 { 55_123 } else { config.media_port })
     }
 
     fn start(&mut self) -> Result<(), ReceiverError> {
@@ -42,7 +42,7 @@ fn capabilities(h264: bool, h265: bool) -> ReceiverCapabilities {
         protocol_version: 1,
         media: MediaCapabilities {
             transport: receiver_protocol::Transport::MpegTsUdp,
-            default_port: 5000,
+            port_assignment: MediaPortAssignment::PerSession,
         },
         video_codecs: vec![
             VideoCodecCapability {
@@ -163,9 +163,9 @@ struct SharedStateReceiver {
 }
 
 impl MediaReceiver for SharedStateReceiver {
-    fn prepare(&mut self, _config: MediaSessionConfig) -> Result<(), ReceiverError> {
+    fn prepare(&mut self, config: MediaSessionConfig) -> Result<u16, ReceiverError> {
         *self.state.lock().unwrap() = ReceiverState::Prepared;
-        Ok(())
+        Ok(if config.media_port == 0 { 55_124 } else { config.media_port })
     }
 
     fn start(&mut self) -> Result<(), ReceiverError> {

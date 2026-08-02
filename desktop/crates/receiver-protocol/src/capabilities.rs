@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{DecoderAcceleration, PixelFormat, ProtocolVersion, Transport, VideoCodec};
 
+pub const MAXIMUM_CONCURRENT_SESSIONS: u8 = 1;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReceiverCapabilities {
@@ -16,7 +18,13 @@ pub struct ReceiverCapabilities {
 #[serde(rename_all = "camelCase")]
 pub struct MediaCapabilities {
     pub transport: Transport,
-    pub default_port: u16,
+    pub port_assignment: MediaPortAssignment,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MediaPortAssignment {
+    PerSession,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
