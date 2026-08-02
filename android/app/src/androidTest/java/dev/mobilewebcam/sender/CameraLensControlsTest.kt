@@ -4,6 +4,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import dev.mobilewebcam.sender.ui.components.CameraLensControls
 import dev.mobilewebcam.sender.ui.model.LensOptionUi
 import dev.mobilewebcam.sender.ui.model.UiText
@@ -29,6 +30,7 @@ class CameraLensControlsTest {
             }
         }
 
+        composeRule.onNodeWithText("Physical lens").performClick()
         composeRule.onNodeWithText("Auto").assertIsDisplayed()
         composeRule.onNodeWithText("Lens 2").assertIsDisplayed()
         composeRule.onNodeWithText("Lens 4").assertIsDisplayed()

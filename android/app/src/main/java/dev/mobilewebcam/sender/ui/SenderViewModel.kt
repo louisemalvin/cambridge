@@ -50,7 +50,7 @@ class SenderViewModel(
                 activeReceiverName = receiverName,
                 validationMessage = local.validationMessage,
                 isScreenDimmed = local.isScreenDimmed,
-                isSettingsSheetOpen = local.isSettingsSheetOpen,
+                isSettingsOpen = local.isSettingsOpen,
                 isZoomTrayOpen = local.isZoomTrayOpen,
                 isPermissionDialogOpen = local.isPermissionDialogOpen,
             ),
@@ -69,13 +69,13 @@ class SenderViewModel(
                 it.copy(isScreenDimmed = !it.isScreenDimmed)
             }
             SenderScreenAction.OpenSettings -> localState.update {
-                it.copy(isSettingsSheetOpen = true, isZoomTrayOpen = false)
+                it.copy(isSettingsOpen = true, isZoomTrayOpen = false)
             }
             SenderScreenAction.CloseSettings -> localState.update {
-                it.copy(isSettingsSheetOpen = false)
+                it.copy(isSettingsOpen = false)
             }
             SenderScreenAction.ToggleZoomTray -> localState.update {
-                it.copy(isZoomTrayOpen = !it.isZoomTrayOpen, isSettingsSheetOpen = false)
+                it.copy(isZoomTrayOpen = !it.isZoomTrayOpen, isSettingsOpen = false)
             }
             SenderScreenAction.CloseZoomTray -> localState.update {
                 it.copy(isZoomTrayOpen = false)
@@ -188,7 +188,7 @@ class SenderViewModel(
         val cameraPermissionGranted: Boolean = false,
         val validationMessage: String? = null,
         val isScreenDimmed: Boolean = false,
-        val isSettingsSheetOpen: Boolean = false,
+        val isSettingsOpen: Boolean = false,
         val isZoomTrayOpen: Boolean = false,
         val isPermissionDialogOpen: Boolean = false,
     )

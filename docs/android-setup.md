@@ -55,12 +55,13 @@ The Android screen is preview-first. Before a receiver starts a negotiated
 session, it shows a waiting state. During a session, the preview is fitted into
 the available portrait or landscape window with black letterbox space instead
 of stretching or creating a screen-level scroll container. Settings open in a
-Material 3 bottom sheet, so codec/profile defaults, physical lens selection,
-stabilization, full zoom, connection details, and diagnostics are not
-permanently visible.
+Material 3 settings screen with a top app bar and list rows, so codec/profile
+defaults, physical lens selection, stabilization, full zoom, connection
+details, and diagnostics are not permanently visible or constrained by
+landscape bottom-sheet geometry.
 
 While streaming, pinch gestures and a compact zoom tray use a slider bounded by
-the active camera's reported zoom range. The settings sheet also exposes the
+the active camera's reported zoom range. The settings screen also exposes the
 full slider and a reset action that returns to 1x. Zoom changes update the
 existing RootEncoder `Camera2Source` capture request and do not renegotiate or
 restart the stream. The screen dim action applies a reversible UI scrim and

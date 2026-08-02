@@ -1,10 +1,12 @@
 package dev.mobilewebcam.sender.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Card
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -27,17 +29,23 @@ fun CameraZoomControls(
     val zoomContentDescription = androidx.compose.ui.res.stringResource(
         R.string.camera_zoom_level,
     )
-    Card(modifier = modifier.fillMaxWidth()) {
+    val zoomSummary = if (state.isSupported) {
+        androidx.compose.ui.res.stringResource(R.string.zoom_level, state.ratio)
+    } else {
+        androidx.compose.ui.res.stringResource(R.string.zoom_unavailable)
+    }
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        ListItem(
+            headlineContent = { Text(androidx.compose.ui.res.stringResource(R.string.zoom)) },
+            supportingContent = { Text(zoomSummary) },
+        )
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(CAMERA_ZOOM_CONTENT_PADDING.dp),
+                .padding(horizontal = CAMERA_ZOOM_HORIZONTAL_PADDING.dp),
             horizontalArrangement = Arrangement.spacedBy(CAMERA_ZOOM_ITEM_SPACING.dp),
         ) {
-            Text(
-                text = androidx.compose.ui.res.stringResource(R.string.zoom_level, state.ratio),
-                modifier = Modifier.weight(ZOOM_LABEL_WEIGHT),
-            )
             if (state.isSupported) {
                 Slider(
                     value = state.ratio,
@@ -52,7 +60,7 @@ fun CameraZoomControls(
                 )
             } else {
                 Text(
-                    text = androidx.compose.ui.res.stringResource(R.string.zoom_unavailable),
+                    text = zoomSummary,
                     modifier = Modifier.weight(ZOOM_SLIDER_WEIGHT),
                 )
             }
@@ -64,11 +72,11 @@ fun CameraZoomControls(
                 Text(androidx.compose.ui.res.stringResource(R.string.reset))
             }
         }
+        HorizontalDivider()
     }
 }
 
-private const val CAMERA_ZOOM_CONTENT_PADDING = 12
+private const val CAMERA_ZOOM_HORIZONTAL_PADDING = 16
 private const val CAMERA_ZOOM_ITEM_SPACING = 8
 private const val CONTINUOUS_SLIDER_STEPS = 0
-private const val ZOOM_LABEL_WEIGHT = 0.25f
 private const val ZOOM_SLIDER_WEIGHT = 1.0f

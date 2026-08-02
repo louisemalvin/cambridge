@@ -52,13 +52,13 @@ class SenderScreenTest {
     }
 
     @Test
-    fun settingsArePresentedAsMaterialBottomSheetState() {
+    fun settingsArePresentedAsAStandardSettingsScreen() {
         composeRule.setContent {
             MaterialTheme {
                 SenderScreen(
                     state = SenderScreenState(
                         cameraPermissionGranted = true,
-                        isSettingsSheetOpen = true,
+                        isSettingsOpen = true,
                         camera = CameraControlsUiState(),
                         settings = SettingsUiState(
                             codecOptions = listOf(
@@ -84,6 +84,7 @@ class SenderScreenTest {
         }
 
         composeRule.onNodeWithText("Settings").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Back").assertIsDisplayed()
         composeRule.onNodeWithText("Stream defaults").assertIsDisplayed()
         composeRule.onNodeWithText("Codec mode").assertIsDisplayed()
         composeRule.onNodeWithText("Video profile").assertIsDisplayed()

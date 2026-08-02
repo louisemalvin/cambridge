@@ -12,7 +12,7 @@ data class SenderScreenState(
     val validationMessage: UiText? = null,
     val failureDiagnostics: String? = null,
     val isScreenDimmed: Boolean = false,
-    val isSettingsSheetOpen: Boolean = false,
+    val isSettingsOpen: Boolean = false,
     val isZoomTrayOpen: Boolean = false,
 )
 

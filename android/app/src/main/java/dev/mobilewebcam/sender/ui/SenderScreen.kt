@@ -1,22 +1,23 @@
 package dev.mobilewebcam.sender.ui
 
 import android.content.res.Configuration
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Brightness6
 import androidx.compose.material.icons.outlined.Brightness7
 import androidx.compose.material.icons.outlined.Settings
@@ -26,30 +27,27 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.mobilewebcam.sender.R
 import dev.mobilewebcam.sender.camera.CameraPreviewSurface
@@ -74,31 +72,26 @@ fun SenderScreen(
     onAction: (SenderScreenAction) -> Unit,
     onSurfaceChanged: (CameraPreviewSurface?) -> Unit,
 ) {
-    val snackbarHostState = remember { SnackbarHostState() }
     val orientation = when (LocalConfiguration.current.orientation) {
         Configuration.ORIENTATION_PORTRAIT -> PreviewOrientation.PORTRAIT
         else -> PreviewOrientation.LANDSCAPE
     }
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        containerColor = Color.Black,
-    ) { contentPadding ->
-        PreviewStage(
+    BackHandler(enabled = state.isSettingsOpen && state.dialog == null) {
+        onAction(SenderScreenAction.CloseSettings)
+    }
+
+    if (state.isSettingsOpen) {
+        SettingsScreen(
+            state = state,
+            onAction = onAction,
+        )
+    } else {
+        PreviewScreen(
             state = state,
             orientation = orientation,
             onAction = onAction,
             onSurfaceChanged = onSurfaceChanged,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(contentPadding),
-        )
-    }
-
-    if (state.isSettingsSheetOpen) {
-        SettingsSheet(
-            state = state,
-            onAction = onAction,
         )
     }
 
@@ -108,6 +101,24 @@ fun SenderScreen(
             onAction = onAction,
         )
     }
+}
+
+@Composable
+private fun PreviewScreen(
+    state: SenderScreenState,
+    orientation: PreviewOrientation,
+    onAction: (SenderScreenAction) -> Unit,
+    onSurfaceChanged: (CameraPreviewSurface?) -> Unit,
+) {
+    PreviewStage(
+        state = state,
+        orientation = orientation,
+        onAction = onAction,
+        onSurfaceChanged = onSurfaceChanged,
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black),
+    )
 }
 
 @Composable
@@ -125,8 +136,9 @@ private fun PreviewStage(
     }
 
     BoxWithConstraints(
-        modifier = modifier.background(Color.Black),
+        modifier = modifier,
     ) {
+        val isLandscape = maxWidth > maxHeight
         val viewport = PreviewViewportCalculator.fit(
             containerWidth = maxWidth.value,
             containerHeight = maxHeight.value,
@@ -169,16 +181,44 @@ private fun PreviewStage(
                     onAction = onAction,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = BOTTOM_ACTIONS_PADDING.dp),
+                        .then(
+                            if (isLandscape) {
+                                Modifier.systemBarsPadding()
+                            } else {
+                                Modifier.navigationBarsPadding()
+                            },
+                        )
+                        .padding(bottom = ZOOM_TRAY_BOTTOM_PADDING.dp),
                 )
             }
 
             PreviewActions(
                 state = state,
+                isLandscape = isLandscape,
                 onAction = onAction,
                 modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(BOTTOM_ACTIONS_PADDING.dp),
+                    .align(
+                        if (isLandscape) Alignment.CenterEnd else Alignment.BottomCenter,
+                    )
+                    .then(
+                        if (isLandscape) {
+                            Modifier.systemBarsPadding()
+                        } else {
+                            Modifier.navigationBarsPadding()
+                        },
+                    )
+                    .padding(
+                        end = if (isLandscape) {
+                            ACTION_TOOLBAR_END_PADDING.dp
+                        } else {
+                            NO_PADDING_DP.dp
+                        },
+                        bottom = if (isLandscape) {
+                            NO_PADDING_DP.dp
+                        } else {
+                            ACTION_TOOLBAR_BOTTOM_PADDING.dp
+                        },
+                    ),
             )
         }
     }
@@ -237,7 +277,9 @@ private fun ConnectionChip(
     }
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(STATUS_CHIP_CORNER_RADIUS.dp),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(
+            STATUS_CHIP_CORNER_RADIUS.dp,
+        ),
         color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = STATUS_CHIP_ALPHA),
     ) {
         Text(
@@ -288,7 +330,7 @@ private fun StatusCard(
 ) {
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(STATUS_CARD_CORNER_RADIUS.dp),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(STATUS_CARD_CORNER_RADIUS.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = STATUS_CARD_ALPHA),
     ) {
         Text(
@@ -321,6 +363,7 @@ private fun FailureCard(
 @Composable
 private fun PreviewActions(
     state: SenderScreenState,
+    isLandscape: Boolean,
     onAction: (SenderScreenAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -332,54 +375,100 @@ private fun PreviewActions(
     val settingsContentDescription = stringResource(R.string.settings)
     val zoomContentDescription = stringResource(R.string.zoom)
     val stopContentDescription = stringResource(R.string.stop_stream)
-    Row(
+
+    Surface(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(ACTION_SPACING.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(
+            ACTION_TOOLBAR_CORNER_RADIUS.dp,
+        ),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = ACTION_TOOLBAR_ALPHA),
+        tonalElevation = ACTION_TOOLBAR_TONAL_ELEVATION.dp,
     ) {
-        FilledTonalIconButton(
-            onClick = { onAction(SenderScreenAction.ToggleScreenDimmed) },
-            modifier = Modifier.semantics {
-                contentDescription = dimContentDescription
-            },
-        ) {
-            Icon(
-                imageVector = if (state.isScreenDimmed) {
-                    Icons.Outlined.Brightness7
-                } else {
-                    Icons.Outlined.Brightness6
-                },
-                contentDescription = null,
-            )
-        }
-        FilledTonalIconButton(
-            onClick = { onAction(SenderScreenAction.ToggleZoomTray) },
-            modifier = Modifier.semantics {
-                contentDescription = zoomContentDescription
-            },
-        ) {
-            Icon(Icons.Outlined.ZoomIn, contentDescription = null)
-        }
-        FilledTonalIconButton(
-            onClick = { onAction(SenderScreenAction.OpenSettings) },
-            modifier = Modifier.semantics {
-                contentDescription = settingsContentDescription
-            },
-        ) {
-            Icon(Icons.Outlined.Settings, contentDescription = null)
-        }
-        if (state.connection is ConnectionUiState.Streaming ||
-            state.connection is ConnectionUiState.Connecting
-        ) {
-            FilledTonalIconButton(
-                onClick = { onAction(SenderScreenAction.StopStream) },
-                modifier = Modifier.semantics {
-                    contentDescription = stopContentDescription
-                },
+        val contentModifier = Modifier.padding(ACTION_TOOLBAR_PADDING.dp)
+        if (isLandscape) {
+            Column(
+                modifier = contentModifier,
+                verticalArrangement = Arrangement.spacedBy(ACTION_SPACING.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Icon(Icons.Outlined.StopCircle, contentDescription = null)
+                PreviewActionButtons(
+                    state = state,
+                    dimContentDescription = dimContentDescription,
+                    zoomContentDescription = zoomContentDescription,
+                    settingsContentDescription = settingsContentDescription,
+                    stopContentDescription = stopContentDescription,
+                    onAction = onAction,
+                )
+            }
+        } else {
+            Row(
+                modifier = contentModifier,
+                horizontalArrangement = Arrangement.spacedBy(ACTION_SPACING.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                PreviewActionButtons(
+                    state = state,
+                    dimContentDescription = dimContentDescription,
+                    zoomContentDescription = zoomContentDescription,
+                    settingsContentDescription = settingsContentDescription,
+                    stopContentDescription = stopContentDescription,
+                    onAction = onAction,
+                )
             }
         }
+    }
+}
+
+@Composable
+private fun PreviewActionButtons(
+    state: SenderScreenState,
+    dimContentDescription: String,
+    zoomContentDescription: String,
+    settingsContentDescription: String,
+    stopContentDescription: String,
+    onAction: (SenderScreenAction) -> Unit,
+) {
+    PreviewActionButton(
+        icon = if (state.isScreenDimmed) {
+            Icons.Outlined.Brightness7
+        } else {
+            Icons.Outlined.Brightness6
+        },
+        contentDescription = dimContentDescription,
+        onClick = { onAction(SenderScreenAction.ToggleScreenDimmed) },
+    )
+    PreviewActionButton(
+        icon = Icons.Outlined.ZoomIn,
+        contentDescription = zoomContentDescription,
+        onClick = { onAction(SenderScreenAction.ToggleZoomTray) },
+    )
+    PreviewActionButton(
+        icon = Icons.Outlined.Settings,
+        contentDescription = settingsContentDescription,
+        onClick = { onAction(SenderScreenAction.OpenSettings) },
+    )
+    if (state.connection is ConnectionUiState.Streaming ||
+        state.connection is ConnectionUiState.Connecting
+    ) {
+        PreviewActionButton(
+            icon = Icons.Outlined.StopCircle,
+            contentDescription = stopContentDescription,
+            onClick = { onAction(SenderScreenAction.StopStream) },
+        )
+    }
+}
+
+@Composable
+private fun PreviewActionButton(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+) {
+    FilledTonalIconButton(onClick = onClick) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+        )
     }
 }
 
@@ -393,7 +482,7 @@ private fun ZoomTray(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = ZOOM_TRAY_HORIZONTAL_PADDING.dp),
-        shape = RoundedCornerShape(ZOOM_TRAY_CORNER_RADIUS.dp),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(ZOOM_TRAY_CORNER_RADIUS.dp),
         tonalElevation = ZOOM_TRAY_TONAL_ELEVATION.dp,
     ) {
         CameraZoomControls(
@@ -407,99 +496,168 @@ private fun ZoomTray(
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
-private fun SettingsSheet(
+private fun SettingsScreen(
     state: SenderScreenState,
     onAction: (SenderScreenAction) -> Unit,
 ) {
-    ModalBottomSheet(
-        onDismissRequest = { onAction(SenderScreenAction.CloseSettings) },
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(SETTINGS_CONTENT_PADDING.dp),
-            verticalArrangement = Arrangement.spacedBy(SETTINGS_ITEM_SPACING.dp),
-        ) {
-            Text(
-                text = stringResource(R.string.settings),
-                style = MaterialTheme.typography.headlineSmall,
-            )
-            Text(stringResource(R.string.camera), style = MaterialTheme.typography.titleMedium)
-            CameraLensControls(
-                options = state.camera.lensOptions,
-                onLensSelected = { key -> onAction(SenderScreenAction.LensSelected(key)) },
-            )
-            CameraStabilizationControls(
-                state = state.camera.stabilization,
-                onStabilizationEnabledChanged = { enabled ->
-                    onAction(SenderScreenAction.StabilizationChanged(enabled))
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.settings)) },
+                navigationIcon = {
+                    IconButton(
+                        onClick = { onAction(SenderScreenAction.CloseSettings) },
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                            contentDescription = stringResource(R.string.navigate_back),
+                        )
+                    }
                 },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                ),
             )
-            CameraZoomControls(
-                state = state.camera.zoom,
-                onZoomRatioChanged = { ratio -> onAction(SenderScreenAction.ZoomChanged(ratio)) },
-                onResetZoom = { onAction(SenderScreenAction.ResetZoom) },
-            )
-            HorizontalDivider()
-            Text(
-                text = stringResource(R.string.stream_defaults),
-                style = MaterialTheme.typography.titleMedium,
-            )
-            CodecSelector(
-                options = state.settings.codecOptions,
-                onSelected = { key -> onAction(SenderScreenAction.CodecSelected(key)) },
-            )
-            VideoProfileSelector(
-                options = state.settings.profileOptions,
-                onSelected = { key -> onAction(SenderScreenAction.ProfileSelected(key)) },
-            )
-            HorizontalDivider()
-            Text(
-                text = stringResource(R.string.connection),
-                style = MaterialTheme.typography.titleMedium,
-            )
-            SettingsConnectionDetails(state)
+        },
+    ) { contentPadding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(contentPadding),
+            contentPadding = PaddingValues(
+                start = SETTINGS_HORIZONTAL_PADDING.dp,
+                top = SETTINGS_TOP_PADDING.dp,
+                end = SETTINGS_HORIZONTAL_PADDING.dp,
+                bottom = SETTINGS_BOTTOM_PADDING.dp,
+            ),
+        ) {
+            item {
+                SettingsSectionHeader(R.string.camera)
+            }
+            item {
+                CameraLensControls(
+                    options = state.camera.lensOptions,
+                    onLensSelected = { key -> onAction(SenderScreenAction.LensSelected(key)) },
+                )
+            }
+            item {
+                CameraStabilizationControls(
+                    state = state.camera.stabilization,
+                    onStabilizationEnabledChanged = { enabled ->
+                        onAction(SenderScreenAction.StabilizationChanged(enabled))
+                    },
+                )
+            }
+            item {
+                CameraZoomControls(
+                    state = state.camera.zoom,
+                    onZoomRatioChanged = { ratio ->
+                        onAction(SenderScreenAction.ZoomChanged(ratio))
+                    },
+                    onResetZoom = { onAction(SenderScreenAction.ResetZoom) },
+                )
+            }
+            item {
+                HorizontalDivider()
+            }
+            item {
+                SettingsSectionHeader(R.string.stream_defaults)
+            }
+            item {
+                CodecSelector(
+                    options = state.settings.codecOptions,
+                    onSelected = { key -> onAction(SenderScreenAction.CodecSelected(key)) },
+                )
+            }
+            item {
+                VideoProfileSelector(
+                    options = state.settings.profileOptions,
+                    onSelected = { key -> onAction(SenderScreenAction.ProfileSelected(key)) },
+                )
+            }
+            item {
+                HorizontalDivider()
+            }
+            item {
+                SettingsSectionHeader(R.string.connection)
+            }
+            item {
+                SettingsConnectionDetails(state)
+            }
             state.validationMessage?.let { validationMessage ->
-                Text(validationMessage.value(), color = MaterialTheme.colorScheme.error)
+                item {
+                    Text(
+                        text = validationMessage.value(),
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
             }
             state.failureDiagnostics?.let {
-                HorizontalDivider()
-                Text(
-                    text = stringResource(R.string.diagnostics),
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                OutlinedButton(onClick = { onAction(SenderScreenAction.CopyDiagnostics) }) {
-                    Text(stringResource(R.string.copy_error_details))
+                item {
+                    HorizontalDivider()
+                }
+                item {
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.diagnostics)) },
+                        supportingContent = {
+                            Text(stringResource(R.string.copy_error_details))
+                        },
+                        trailingContent = {
+                            TextButton(onClick = {
+                                onAction(SenderScreenAction.CopyDiagnostics)
+                            }) {
+                                Text(stringResource(R.string.copy))
+                            }
+                        },
+                    )
                 }
             }
             if (state.connection is ConnectionUiState.Streaming ||
                 state.connection is ConnectionUiState.Connecting
             ) {
-                Button(
-                    onClick = { onAction(SenderScreenAction.StopStream) },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(stringResource(R.string.stop_stream))
+                item {
+                    Button(
+                        onClick = { onAction(SenderScreenAction.StopStream) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = SETTINGS_STOP_TOP_PADDING.dp),
+                    ) {
+                        Text(stringResource(R.string.stop_stream))
+                    }
                 }
             }
-            Spacer(Modifier.height(SETTINGS_BOTTOM_SPACER.dp))
         }
     }
+}
+
+@Composable
+private fun SettingsSectionHeader(resourceId: Int) {
+    Text(
+        text = stringResource(resourceId),
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(
+            top = SETTINGS_SECTION_TOP_PADDING.dp,
+            bottom = SETTINGS_SECTION_BOTTOM_PADDING.dp,
+        ),
+    )
 }
 
 @Composable
 private fun SettingsConnectionDetails(state: SenderScreenState) {
     val receiver = state.settings.receiverName ?: UiText.Resource(R.string.not_connected)
     val status = state.settings.connectionStatus ?: UiText.Resource(R.string.not_connected)
-    ListItem(
-        headlineContent = { Text(stringResource(R.string.receiver)) },
-        supportingContent = { Text(receiver.value()) },
-    )
-    ListItem(
-        headlineContent = { Text(stringResource(R.string.stream_status)) },
-        supportingContent = { Text(status.value()) },
-    )
+    Column(modifier = Modifier.fillMaxWidth()) {
+        ListItem(
+            headlineContent = { Text(stringResource(R.string.receiver)) },
+            supportingContent = { Text(receiver.value()) },
+        )
+        ListItem(
+            headlineContent = { Text(stringResource(R.string.stream_status)) },
+            supportingContent = { Text(status.value()) },
+        )
+    }
 }
 
 @Composable
@@ -556,17 +714,27 @@ private const val TOP_STATUS_PADDING = 16
 private const val STATUS_CHIP_CORNER_RADIUS = 20
 private const val STATUS_CHIP_ALPHA = 0.92f
 private const val STATUS_CHIP_PADDING = 10
-private const val BOTTOM_ACTIONS_PADDING = 16
-private const val ACTION_SPACING = 12
+private const val ACTION_TOOLBAR_END_PADDING = 16
+private const val ACTION_TOOLBAR_BOTTOM_PADDING = 16
+private const val ACTION_TOOLBAR_PADDING = 8
+private const val ACTION_TOOLBAR_CORNER_RADIUS = 28
+private const val ACTION_TOOLBAR_ALPHA = 0.92f
+private const val ACTION_TOOLBAR_TONAL_ELEVATION = 3
+private const val ACTION_SPACING = 8
+private const val NO_PADDING_DP = 0
+private const val ZOOM_TRAY_BOTTOM_PADDING = 96
+private const val ZOOM_TRAY_HORIZONTAL_PADDING = 16
+private const val ZOOM_TRAY_CORNER_RADIUS = 20
+private const val ZOOM_TRAY_TONAL_ELEVATION = 3
 private const val WAITING_CARD_PADDING = 16
 private const val WAITING_CARD_CONTENT_PADDING = 20
 private const val WAITING_CARD_ITEM_SPACING = 8
 private const val STATUS_CARD_CORNER_RADIUS = 16
 private const val STATUS_CARD_ALPHA = 0.92f
 private const val STATUS_CARD_PADDING = 16
-private const val ZOOM_TRAY_HORIZONTAL_PADDING = 16
-private const val ZOOM_TRAY_CORNER_RADIUS = 20
-private const val ZOOM_TRAY_TONAL_ELEVATION = 3
-private const val SETTINGS_CONTENT_PADDING = 20
-private const val SETTINGS_ITEM_SPACING = 12
-private const val SETTINGS_BOTTOM_SPACER = 16
+private const val SETTINGS_HORIZONTAL_PADDING = 16
+private const val SETTINGS_TOP_PADDING = 8
+private const val SETTINGS_BOTTOM_PADDING = 32
+private const val SETTINGS_SECTION_TOP_PADDING = 16
+private const val SETTINGS_SECTION_BOTTOM_PADDING = 8
+private const val SETTINGS_STOP_TOP_PADDING = 16

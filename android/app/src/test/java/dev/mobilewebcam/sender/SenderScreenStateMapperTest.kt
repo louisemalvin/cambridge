@@ -90,7 +90,7 @@ class SenderScreenStateMapperTest {
             activeReceiverName = activeReceiverName,
             validationMessage = null,
             isScreenDimmed = false,
-            isSettingsSheetOpen = false,
+            isSettingsOpen = false,
             isZoomTrayOpen = false,
             isPermissionDialogOpen = false,
         ),
