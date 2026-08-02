@@ -1,4 +1,4 @@
-package dev.mobilewebcam.sender.media.camera
+package dev.mobilewebcam.sender.media.streaming.rootencoder
 
 import android.content.Context
 import com.pedro.extrasources.CameraXSource

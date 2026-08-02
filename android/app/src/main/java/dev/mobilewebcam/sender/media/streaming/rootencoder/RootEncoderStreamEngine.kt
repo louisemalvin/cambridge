@@ -8,7 +8,6 @@ import dev.mobilewebcam.sender.media.camera.CameraController
 import dev.mobilewebcam.sender.media.camera.CameraInteractionState
 import dev.mobilewebcam.sender.media.camera.CameraPreviewSurface
 import dev.mobilewebcam.sender.media.camera.PhysicalLensOption
-import dev.mobilewebcam.sender.media.camera.RootEncoderCameraSourceFactory
 import dev.mobilewebcam.sender.config.CameraZoom
 import dev.mobilewebcam.sender.logging.AndroidAppLogger
 import dev.mobilewebcam.sender.logging.AppLogger
@@ -107,7 +106,7 @@ class RootEncoderStreamEngine(
                     "root_encoder_prepare_failed",
                     mapOf("reason" to cause.message, "failureType" to cause::class.simpleName),
                 )
-                runCatching { releaseEncoderOnMain(encoder) }
+                runCatching { stopEncoderOnMain(encoder) }
                 stream = null
                 cameraSource = null
                 cameraState.value = CameraInteractionState.inactive()
@@ -144,25 +143,12 @@ class RootEncoderStreamEngine(
 
     override suspend fun stop(): Result<Unit> = cameraMutex.withLock {
         runCatching {
-            stream?.let { encoder ->
-                withContext(Dispatchers.Main.immediate) {
-                    if (encoder.isStreaming) encoder.stopStream()
-                    if (encoder.isOnPreview) encoder.stopPreview()
-                }
-            }
-            diagnosticEvent("root_encoder_stopped")
-            cameraState.value = CameraInteractionState.inactive()
+            releaseLocked("root_encoder_stopped")
         }
     }
 
     override suspend fun release() = cameraMutex.withLock {
-        releaseEncoderOnMain(stream)
-        diagnosticEvent("root_encoder_released")
-        stream = null
-        cameraSource = null
-        cameraState.value = CameraInteractionState.inactive()
-        diagnosticRunId = null
-        diagnosticSessionId = null
+        releaseLocked("root_encoder_released")
     }
 
     override suspend fun setPreviewSurface(surface: CameraPreviewSurface?) = cameraMutex.withLock {
@@ -253,10 +239,39 @@ class RootEncoderStreamEngine(
         }
     }
 
-    private suspend fun releaseEncoderOnMain(encoder: UdpStream?) {
+    private suspend fun stopEncoderOnMain(encoder: UdpStream?) {
         withContext(Dispatchers.Main.immediate) {
-            encoder?.release()
+            encoder ?: return@withContext
+            when {
+                encoder.isStreaming -> {
+                    encoder.stopStream()
+                    if (encoder.isOnPreview) {
+                        encoder.stopPreview()
+                    }
+                    encoder.videoSource.release()
+                    encoder.audioSource.release()
+                }
+                encoder.isOnPreview -> {
+                    encoder.stopPreview()
+                    encoder.audioSource.stop()
+                    encoder.videoSource.release()
+                    encoder.audioSource.release()
+                }
+                else -> encoder.release()
+            }
         }
+    }
+
+    private suspend fun releaseLocked(eventName: String) {
+        if (stream != null) {
+            stopEncoderOnMain(stream)
+            diagnosticEvent(eventName)
+        }
+        stream = null
+        cameraSource = null
+        cameraState.value = CameraInteractionState.inactive()
+        diagnosticRunId = null
+        diagnosticSessionId = null
     }
 
     private fun updateCameraStateLocked() {
