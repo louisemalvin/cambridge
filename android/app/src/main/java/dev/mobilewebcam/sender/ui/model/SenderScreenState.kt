@@ -12,7 +12,6 @@ data class SenderScreenState(
     val validationMessage: UiText? = null,
     val failureDiagnostics: String? = null,
     val isScreenDimmed: Boolean = false,
-    val isSettingsOpen: Boolean = false,
     val isZoomTrayOpen: Boolean = false,
 )
 
@@ -94,6 +93,10 @@ data class SettingsUiState(
     val profileOptions: List<SelectOptionUi> = emptyList(),
     val receiverName: UiText? = null,
     val connectionStatus: UiText? = null,
+    val camera: CameraControlsUiState = CameraControlsUiState(),
+    val validationMessage: UiText? = null,
+    val failureDiagnostics: String? = null,
+    val isStreaming: Boolean = false,
 )
 
 data class SelectOptionUi(

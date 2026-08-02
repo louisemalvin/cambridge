@@ -28,23 +28,12 @@ fun SenderScreen(
         else -> PreviewOrientation.LANDSCAPE
     }
 
-    BackHandler(enabled = state.isSettingsOpen && state.dialog == null) {
-        onAction(SenderScreenAction.CloseSettings)
-    }
-
-    if (state.isSettingsOpen) {
-        SettingsScreen(
-            state = state,
-            onAction = onAction,
-        )
-    } else {
-        PreviewScreen(
-            state = state,
-            orientation = orientation,
-            onAction = onAction,
-            onSurfaceChanged = onSurfaceChanged,
-        )
-    }
+    PreviewScreen(
+        state = state,
+        orientation = orientation,
+        onAction = onAction,
+        onSurfaceChanged = onSurfaceChanged,
+    )
 
     state.dialog?.let { dialog ->
         SenderDialog(

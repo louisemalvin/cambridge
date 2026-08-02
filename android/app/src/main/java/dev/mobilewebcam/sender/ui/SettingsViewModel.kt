@@ -3,110 +3,84 @@ package dev.mobilewebcam.sender.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.mobilewebcam.sender.camera.CameraController
-import dev.mobilewebcam.sender.camera.CameraPreviewSurface
 import dev.mobilewebcam.sender.config.VideoProfiles
 import dev.mobilewebcam.sender.discovery.SenderConnectionCoordinator
 import dev.mobilewebcam.sender.model.CodecPreference
+import dev.mobilewebcam.sender.model.StreamState
 import dev.mobilewebcam.sender.model.VideoProfile
 import dev.mobilewebcam.sender.ui.model.SenderScreenAction
-import dev.mobilewebcam.sender.ui.model.SenderScreenState
 import dev.mobilewebcam.sender.ui.model.SenderUiEffect
+import dev.mobilewebcam.sender.ui.model.SettingsUiState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-class SenderViewModel(
+class SettingsViewModel(
     private val coordinator: SenderConnectionCoordinator,
     private val cameraController: CameraController,
 ) : ViewModel() {
-    private val localState = MutableStateFlow(LocalSenderState())
+    private val localState = MutableStateFlow(LocalSettingsState())
     private val effectFlow = MutableSharedFlow<SenderUiEffect>(
         extraBufferCapacity = EFFECT_BUFFER_CAPACITY,
     )
 
-    val uiState: StateFlow<SenderScreenState> = combine(
+    val uiState: StateFlow<SettingsUiState> = combine(
         coordinator.streamState,
-        coordinator.pendingApproval,
         coordinator.activeReceiverName,
         cameraController.state,
         localState,
-    ) { streamState, pendingApproval, receiverName, cameraInteraction, local ->
-        SenderScreenStateMapper.map(
+    ) { streamState, receiverName, cameraInteraction, local ->
+        val fullState = SenderScreenStateMapper.map(
             SenderDomainSnapshot(
                 codecPreference = local.codecPreference,
                 profile = local.profile,
                 cameraInteraction = cameraInteraction,
                 streamState = streamState,
-                cameraPermissionGranted = local.cameraPermissionGranted,
-                pendingApproval = pendingApproval,
+                cameraPermissionGranted = true,
+                pendingApproval = null,
                 activeReceiverName = receiverName,
                 validationMessage = local.validationMessage,
-                isScreenDimmed = local.isScreenDimmed,
-                isZoomTrayOpen = local.isZoomTrayOpen,
-                isPermissionDialogOpen = local.isPermissionDialogOpen,
+                isScreenDimmed = false,
+                isZoomTrayOpen = false,
+                isPermissionDialogOpen = false,
             ),
+        )
+        SettingsUiState(
+            codecOptions = fullState.settings.codecOptions,
+            profileOptions = fullState.settings.profileOptions,
+            receiverName = fullState.settings.receiverName,
+            connectionStatus = fullState.settings.connectionStatus,
+            camera = fullState.camera,
+            validationMessage = fullState.validationMessage,
+            failureDiagnostics = fullState.failureDiagnostics,
+            isStreaming = streamState is StreamState.Streaming || streamState is StreamState.Preparing || streamState is StreamState.Starting,
         )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.Eagerly,
-        initialValue = SenderScreenState(),
+        initialValue = SettingsUiState(),
     )
 
     val effects = effectFlow.asSharedFlow()
 
     fun onAction(action: SenderScreenAction) {
         when (action) {
-            SenderScreenAction.ToggleScreenDimmed -> localState.update {
-                it.copy(isScreenDimmed = !it.isScreenDimmed)
-            }
-            SenderScreenAction.OpenSettings -> Unit
-            SenderScreenAction.CloseSettings -> Unit
-            SenderScreenAction.ToggleZoomTray -> localState.update {
-                it.copy(isZoomTrayOpen = !it.isZoomTrayOpen)
-            }
-            SenderScreenAction.CloseZoomTray -> localState.update {
-                it.copy(isZoomTrayOpen = false)
-            }
+            is SenderScreenAction.CodecSelected -> updateCodecPreference(action.key)
+            is SenderScreenAction.ProfileSelected -> updateProfile(action.key)
             is SenderScreenAction.ZoomChanged -> setZoomRatio(action.ratio)
             SenderScreenAction.ResetZoom -> resetZoom()
             is SenderScreenAction.LensSelected -> selectPhysicalLens(action.key)
             is SenderScreenAction.StabilizationChanged -> setStabilizationEnabled(action.enabled)
-            is SenderScreenAction.CodecSelected -> updateCodecPreference(action.key)
-            is SenderScreenAction.ProfileSelected -> updateProfile(action.key)
-            SenderScreenAction.OpenPermissionDialog -> localState.update {
-                it.copy(isPermissionDialogOpen = true)
-            }
-            SenderScreenAction.DismissPermissionDialog -> localState.update {
-                it.copy(isPermissionDialogOpen = false)
-            }
-            SenderScreenAction.RequestCameraPermission -> requestCameraPermission()
-            SenderScreenAction.ApprovePending -> approvePending()
-            SenderScreenAction.RejectPending -> rejectPending()
             SenderScreenAction.StopStream -> stop()
             SenderScreenAction.CopyDiagnostics -> copyDiagnostics()
-        }
-    }
-
-    fun setCameraPermissionGranted(granted: Boolean) {
-        localState.update {
-            it.copy(
-                cameraPermissionGranted = granted,
-                isPermissionDialogOpen = false,
-            )
-        }
-    }
-
-    fun setPreviewSurface(surface: CameraPreviewSurface?) {
-        viewModelScope.launch(Dispatchers.Default) {
-            cameraController.setPreviewSurface(surface)
+            else -> Unit
         }
     }
 
@@ -155,19 +129,6 @@ class SenderViewModel(
         }
     }
 
-    private fun requestCameraPermission() {
-        localState.update { it.copy(isPermissionDialogOpen = false) }
-        effectFlow.tryEmit(SenderUiEffect.RequestCameraPermission)
-    }
-
-    private fun approvePending() {
-        viewModelScope.launch { coordinator.approvePending() }
-    }
-
-    private fun rejectPending() {
-        viewModelScope.launch { coordinator.rejectPending() }
-    }
-
     private fun stop() {
         viewModelScope.launch { coordinator.stop() }
     }
@@ -177,14 +138,10 @@ class SenderViewModel(
         effectFlow.tryEmit(SenderUiEffect.CopyDiagnostics(details))
     }
 
-    private data class LocalSenderState(
+    private data class LocalSettingsState(
         val codecPreference: CodecPreference = CodecPreference.AUTO_PREFER_H265,
         val profile: VideoProfile = VideoProfiles.default,
-        val cameraPermissionGranted: Boolean = false,
         val validationMessage: String? = null,
-        val isScreenDimmed: Boolean = false,
-        val isZoomTrayOpen: Boolean = false,
-        val isPermissionDialogOpen: Boolean = false,
     )
 
     private companion object {

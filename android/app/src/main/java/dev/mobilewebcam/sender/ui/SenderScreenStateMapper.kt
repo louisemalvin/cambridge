@@ -30,7 +30,6 @@ internal data class SenderDomainSnapshot(
     val activeReceiverName: String?,
     val validationMessage: String?,
     val isScreenDimmed: Boolean,
-    val isSettingsOpen: Boolean,
     val isZoomTrayOpen: Boolean,
     val isPermissionDialogOpen: Boolean,
 )
@@ -78,7 +77,6 @@ internal object SenderScreenStateMapper {
             validationMessage = snapshot.validationMessage?.let(UiText::Plain),
             failureDiagnostics = failureDiagnostics,
             isScreenDimmed = snapshot.isScreenDimmed,
-            isSettingsOpen = snapshot.isSettingsOpen,
             isZoomTrayOpen = snapshot.isZoomTrayOpen,
         )
     }
