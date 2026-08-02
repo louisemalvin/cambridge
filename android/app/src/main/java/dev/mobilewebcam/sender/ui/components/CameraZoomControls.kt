@@ -13,17 +13,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import dev.mobilewebcam.sender.camera.CameraInteractionState
+import dev.mobilewebcam.sender.R
 import dev.mobilewebcam.sender.config.CameraZoom
-import java.util.Locale
+import dev.mobilewebcam.sender.ui.model.ZoomUiState
 
 @Composable
 fun CameraZoomControls(
-    state: CameraInteractionState,
+    state: ZoomUiState,
     onZoomRatioChanged: (Float) -> Unit,
     onResetZoom: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val zoomContentDescription = androidx.compose.ui.res.stringResource(
+        R.string.camera_zoom_level,
+    )
     Card(modifier = modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
@@ -32,31 +35,33 @@ fun CameraZoomControls(
             horizontalArrangement = Arrangement.spacedBy(CAMERA_ZOOM_ITEM_SPACING.dp),
         ) {
             Text(
-                text = String.format(Locale.US, ZOOM_LABEL_FORMAT, state.zoomRatio),
+                text = androidx.compose.ui.res.stringResource(R.string.zoom_level, state.ratio),
                 modifier = Modifier.weight(ZOOM_LABEL_WEIGHT),
             )
-            if (state.isZoomSupported) {
+            if (state.isSupported) {
                 Slider(
-                    value = state.zoomRatio,
+                    value = state.ratio,
                     onValueChange = onZoomRatioChanged,
-                    valueRange = state.minZoomRatio..state.maxZoomRatio,
+                    valueRange = state.minimumRatio..state.maximumRatio,
                     steps = CONTINUOUS_SLIDER_STEPS,
                     modifier = Modifier
                         .weight(ZOOM_SLIDER_WEIGHT)
-                        .semantics { contentDescription = ZOOM_CONTROL_DESCRIPTION },
+                        .semantics {
+                            contentDescription = zoomContentDescription
+                        },
                 )
             } else {
                 Text(
-                    text = ZOOM_UNAVAILABLE_LABEL,
+                    text = androidx.compose.ui.res.stringResource(R.string.zoom_unavailable),
                     modifier = Modifier.weight(ZOOM_SLIDER_WEIGHT),
                 )
             }
             TextButton(
                 onClick = onResetZoom,
                 enabled = state.isCameraActive &&
-                    state.zoomRatio != CameraZoom.DEFAULT_ZOOM_RATIO,
+                    state.ratio != CameraZoom.DEFAULT_ZOOM_RATIO,
             ) {
-                Text(RESET_ZOOM_LABEL)
+                Text(androidx.compose.ui.res.stringResource(R.string.reset))
             }
         }
     }
@@ -67,7 +72,3 @@ private const val CAMERA_ZOOM_ITEM_SPACING = 8
 private const val CONTINUOUS_SLIDER_STEPS = 0
 private const val ZOOM_LABEL_WEIGHT = 0.25f
 private const val ZOOM_SLIDER_WEIGHT = 1.0f
-private const val ZOOM_LABEL_FORMAT = "%.1fx"
-private const val ZOOM_CONTROL_DESCRIPTION = "Camera zoom level"
-private const val ZOOM_UNAVAILABLE_LABEL = "1x only"
-private const val RESET_ZOOM_LABEL = "Reset"

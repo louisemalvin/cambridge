@@ -12,15 +12,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import dev.mobilewebcam.sender.camera.CameraInteractionState
+import dev.mobilewebcam.sender.R
+import dev.mobilewebcam.sender.ui.model.StabilizationUiState
 
 @Composable
 fun CameraStabilizationControls(
-    state: CameraInteractionState,
+    state: StabilizationUiState,
     onStabilizationEnabledChanged: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    if (!state.isStabilizationSupported) return
+    if (!state.isSupported) return
 
     Card(modifier = modifier.fillMaxWidth()) {
         Row(
@@ -31,11 +32,15 @@ fun CameraStabilizationControls(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(STABILIZATION_LABEL_SPACING_DP.dp)) {
-                Text(STABILIZATION_TITLE)
-                Text(if (state.isStabilizationEnabled) STABILIZATION_ON_LABEL else STABILIZATION_OFF_LABEL)
+                Text(androidx.compose.ui.res.stringResource(R.string.stabilization))
+                Text(
+                    androidx.compose.ui.res.stringResource(
+                        if (state.isEnabled) R.string.on else R.string.off,
+                    ),
+                )
             }
             Switch(
-                checked = state.isStabilizationEnabled,
+                checked = state.isEnabled,
                 onCheckedChange = onStabilizationEnabledChanged,
             )
         }
@@ -44,6 +49,3 @@ fun CameraStabilizationControls(
 
 private const val STABILIZATION_CONTENT_PADDING_DP = 12
 private const val STABILIZATION_LABEL_SPACING_DP = 4
-private const val STABILIZATION_TITLE = "Stabilization"
-private const val STABILIZATION_ON_LABEL = "On"
-private const val STABILIZATION_OFF_LABEL = "Off"

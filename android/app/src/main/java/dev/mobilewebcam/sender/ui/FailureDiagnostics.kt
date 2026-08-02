@@ -1,20 +1,23 @@
 package dev.mobilewebcam.sender.ui
 
+import dev.mobilewebcam.sender.model.CodecPreference
 import dev.mobilewebcam.sender.model.StreamFailure
-import dev.mobilewebcam.sender.ui.components.failureMessage
+import dev.mobilewebcam.sender.model.VideoProfile
 
 internal fun buildFailureDiagnostics(
-    state: SenderUiState,
+    receiverName: String?,
+    profile: VideoProfile,
+    codecPreference: CodecPreference,
     failure: StreamFailure,
     cause: Throwable?,
 ): String = buildString {
     appendLine("Mobile Webcam Android diagnostic")
-    appendLine("User message: ${failureMessage(failure)}")
-    appendLine("Receiver: ${state.activeReceiverName ?: "not connected"}")
+    appendLine("User message: ${SenderScreenStateMapper.failureMessage(failure)}")
+    appendLine("Receiver: ${receiverName ?: "not connected"}")
     appendLine(
-        "Profile: ${state.profile.width}x${state.profile.height}@${state.profile.fps}",
+        "Profile: ${profile.width}x${profile.height}@${profile.fps}",
     )
-    appendLine("Codec preference: ${state.codecPreference}")
+    appendLine("Codec preference: $codecPreference")
     appendLine("Failure type: ${failure::class.qualifiedName}")
     cause?.let {
         appendLine("Exception details:")

@@ -5,8 +5,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
-import dev.mobilewebcam.sender.camera.CameraInteractionState
 import dev.mobilewebcam.sender.ui.components.CameraZoomControls
+import dev.mobilewebcam.sender.ui.model.ZoomUiState
 import org.junit.Rule
 import org.junit.Test
 
@@ -19,8 +19,12 @@ class CameraZoomControlsTest {
         composeRule.setContent {
             MaterialTheme {
                 CameraZoomControls(
-                    state = CameraInteractionState()
-                        .withCameraBounds(minimum = 1.0f, maximum = 4.0f, current = 2.0f),
+                    state = ZoomUiState(
+                        ratio = 2.0f,
+                        minimumRatio = 1.0f,
+                        maximumRatio = 4.0f,
+                        isCameraActive = true,
+                    ),
                     onZoomRatioChanged = {},
                     onResetZoom = {},
                 )
