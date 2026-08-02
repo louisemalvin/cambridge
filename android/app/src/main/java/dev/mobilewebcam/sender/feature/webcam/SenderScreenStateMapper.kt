@@ -68,6 +68,7 @@ object SenderScreenStateMapper {
                 ),
             ),
             settings = SettingsUiState(
+                connection = connectionState,
                 codecOptions = CodecPreference.entries.map { pref ->
                     SelectOptionUi(
                         key = pref.name,

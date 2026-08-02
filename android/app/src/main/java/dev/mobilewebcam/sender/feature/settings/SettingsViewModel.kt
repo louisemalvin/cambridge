@@ -58,6 +58,7 @@ class SettingsViewModel @Inject constructor(
             ),
         )
         SettingsUiState(
+            connection = fullState.connection,
             codecOptions = fullState.settings.codecOptions,
             profileOptions = fullState.settings.profileOptions,
             receiverName = fullState.settings.receiverName,

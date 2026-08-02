@@ -89,6 +89,7 @@ data class StabilizationUiState(
 )
 
 data class SettingsUiState(
+    val connection: ConnectionUiState = ConnectionUiState.Waiting,
     val codecOptions: List<SelectOptionUi> = emptyList(),
     val profileOptions: List<SelectOptionUi> = emptyList(),
     val receiverName: UiText? = null,

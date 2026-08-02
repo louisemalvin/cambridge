@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.mobilewebcam.sender.app.model.SenderScreenAction
+import dev.mobilewebcam.sender.app.model.SenderScreenState
 import dev.mobilewebcam.sender.app.model.SenderUiEffect
 import dev.mobilewebcam.sender.config.VideoProfiles
 import dev.mobilewebcam.sender.connection.discovery.SenderConnectionCoordinator
@@ -33,7 +34,7 @@ class WebcamViewModel @Inject constructor(
         extraBufferCapacity = EFFECT_BUFFER_CAPACITY,
     )
 
-    val uiState: StateFlow<WebcamUiState> = combine(
+    val uiState: StateFlow<SenderScreenState> = combine(
         coordinator.streamState,
         coordinator.pendingApproval,
         coordinator.activeReceiverName,
@@ -55,20 +56,11 @@ class WebcamViewModel @Inject constructor(
                 isPermissionDialogOpen = local.isPermissionDialogOpen,
             ),
         )
-        WebcamUiState(
-            preview = fullState.preview,
-            connection = fullState.connection,
-            camera = fullState.camera,
-            isScreenDimmed = fullState.isScreenDimmed,
-            isZoomTrayOpen = fullState.isZoomTrayOpen,
-            cameraPermissionGranted = fullState.cameraPermissionGranted,
-            isPermissionDialogOpen = local.isPermissionDialogOpen,
-            failureDiagnostics = fullState.failureDiagnostics,
-        )
+        fullState
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.Eagerly,
-        initialValue = WebcamUiState(),
+        initialValue = SenderScreenState(),
     )
 
     val effects = effectFlow.asSharedFlow()

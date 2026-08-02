@@ -10,6 +10,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import dev.mobilewebcam.sender.R
@@ -24,6 +26,7 @@ fun CameraZoomControls(
     modifier: Modifier = Modifier,
 ) {
     if (!state.isSupported) return
+    val zoomContentDescription = stringResource(R.string.camera_zoom_level)
 
     Row(
         modifier = modifier.padding(ZOOM_CONTROLS_PADDING.dp),
@@ -39,7 +42,9 @@ fun CameraZoomControls(
             onValueChange = onZoomRatioChanged,
             valueRange = state.minimumRatio..state.maximumRatio,
             enabled = state.isCameraActive,
-            modifier = Modifier.weight(SLIDER_WEIGHT),
+            modifier = Modifier
+                .weight(SLIDER_WEIGHT)
+                .semantics { contentDescription = zoomContentDescription },
         )
         TextButton(
             onClick = onResetZoom,

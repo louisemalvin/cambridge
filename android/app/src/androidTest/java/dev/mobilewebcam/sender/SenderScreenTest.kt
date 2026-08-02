@@ -4,6 +4,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import dev.mobilewebcam.sender.app.model.CameraControlsUiState
 import dev.mobilewebcam.sender.app.model.SelectOptionUi
@@ -11,6 +12,7 @@ import dev.mobilewebcam.sender.app.model.SenderScreenState
 import dev.mobilewebcam.sender.app.model.SettingsUiState
 import dev.mobilewebcam.sender.app.model.UiText
 import dev.mobilewebcam.sender.feature.webcam.WebcamScreen
+import dev.mobilewebcam.sender.feature.settings.SettingsScreen
 import org.junit.Rule
 import org.junit.Test
 
@@ -30,7 +32,7 @@ class SenderScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("Waiting for connection").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Waiting for connection").get(0).assertIsDisplayed()
         composeRule.onNodeWithText("Allow camera access").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Dim screen").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Settings").assertIsDisplayed()
@@ -55,30 +57,25 @@ class SenderScreenTest {
     fun settingsArePresentedAsAStandardSettingsScreen() {
         composeRule.setContent {
             MaterialTheme {
-                WebcamScreen(
-                    state = SenderScreenState(
-                        cameraPermissionGranted = true,
-                        isSettingsOpen = true,
+                SettingsScreen(
+                    state = SettingsUiState(
                         camera = CameraControlsUiState(),
-                        settings = SettingsUiState(
-                            codecOptions = listOf(
-                                SelectOptionUi(
-                                    key = "auto",
-                                    label = UiText.Plain("Auto"),
-                                    isSelected = true,
-                                ),
+                        codecOptions = listOf(
+                            SelectOptionUi(
+                                key = "auto",
+                                label = UiText.Plain("Auto"),
+                                isSelected = true,
                             ),
-                            profileOptions = listOf(
-                                SelectOptionUi(
-                                    key = "1080p30",
-                                    label = UiText.Plain("1080p30"),
-                                    isSelected = true,
-                                ),
+                        ),
+                        profileOptions = listOf(
+                            SelectOptionUi(
+                                key = "1080p30",
+                                label = UiText.Plain("1080p30"),
+                                isSelected = true,
                             ),
                         ),
                     ),
                     onAction = {},
-                    onSurfaceChanged = {},
                 )
             }
         }

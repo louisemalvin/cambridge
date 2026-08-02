@@ -21,14 +21,19 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import dev.mobilewebcam.sender.R
 import dev.mobilewebcam.sender.app.model.ConnectionUiState
 import dev.mobilewebcam.sender.app.model.SenderScreenAction
-import dev.mobilewebcam.sender.app.model.SenderScreenState
+import dev.mobilewebcam.sender.app.model.SettingsUiState
 import dev.mobilewebcam.sender.app.model.UiText
+import dev.mobilewebcam.sender.app.model.SenderUiEffect
 import dev.mobilewebcam.sender.app.model.value
 import dev.mobilewebcam.sender.feature.settings.components.CodecSelector
 import dev.mobilewebcam.sender.feature.settings.components.VideoProfileSelector
@@ -37,9 +42,38 @@ import dev.mobilewebcam.sender.feature.webcam.components.CameraStabilizationCont
 import dev.mobilewebcam.sender.feature.webcam.components.CameraZoomControls
 
 @Composable
+fun SettingsRoute(
+    onNavigateBack: () -> Unit,
+    onCopyDiagnostics: (String) -> Unit,
+) {
+    val viewModel: SettingsViewModel = hiltViewModel()
+    val state by viewModel.uiState.collectAsState()
+
+    LaunchedEffect(viewModel) {
+        viewModel.effects.collect { effect ->
+            when (effect) {
+                is SenderUiEffect.CopyDiagnostics -> onCopyDiagnostics(effect.details)
+                SenderUiEffect.RequestCameraPermission -> Unit
+            }
+        }
+    }
+
+    SettingsScreen(
+        state = state,
+        onAction = { action ->
+            if (action == SenderScreenAction.CloseSettings) {
+                onNavigateBack()
+            } else {
+                viewModel.onAction(action)
+            }
+        },
+    )
+}
+
+@Composable
 @OptIn(ExperimentalMaterial3Api::class)
 fun SettingsScreen(
-    state: SenderScreenState,
+    state: SettingsUiState,
     onAction: (SenderScreenAction) -> Unit,
 ) {
     Scaffold(
@@ -107,13 +141,13 @@ fun SettingsScreen(
             }
             item {
                 CodecSelector(
-                    options = state.settings.codecOptions,
+                    options = state.codecOptions,
                     onSelected = { key -> onAction(SenderScreenAction.CodecSelected(key)) },
                 )
             }
             item {
                 VideoProfileSelector(
-                    options = state.settings.profileOptions,
+                    options = state.profileOptions,
                     onSelected = { key -> onAction(SenderScreenAction.ProfileSelected(key)) },
                 )
             }
@@ -187,9 +221,9 @@ private fun SettingsSectionHeader(resourceId: Int) {
 }
 
 @Composable
-private fun SettingsConnectionDetails(state: SenderScreenState) {
-    val receiver = state.settings.receiverName ?: UiText.Resource(R.string.not_connected)
-    val status = state.settings.connectionStatus ?: UiText.Resource(R.string.not_connected)
+private fun SettingsConnectionDetails(state: SettingsUiState) {
+    val receiver = state.receiverName ?: UiText.Resource(R.string.not_connected)
+    val status = state.connectionStatus ?: UiText.Resource(R.string.not_connected)
     Column(modifier = Modifier.fillMaxWidth()) {
         ListItem(
             headlineContent = { Text(stringResource(R.string.receiver)) },

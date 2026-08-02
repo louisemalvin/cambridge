@@ -10,6 +10,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -19,6 +23,35 @@ import dev.mobilewebcam.sender.app.model.SenderDialogUiState
 import dev.mobilewebcam.sender.app.model.SenderScreenAction
 import dev.mobilewebcam.sender.app.model.value
 import dev.mobilewebcam.sender.feature.pairing.components.ReceiverApprovalDialog
+
+@Composable
+fun PairingRoute(
+    onNavigateToWebcam: () -> Unit,
+) {
+    val viewModel: PairingViewModel = hiltViewModel()
+    val state by viewModel.uiState.collectAsState()
+    val dialog = (state as? PairingUiState.AwaitingApproval)?.let { awaiting ->
+        SenderDialogUiState.PendingApproval(awaiting.receiverName)
+    }
+
+    LaunchedEffect(state) {
+        if (state is PairingUiState.Connected) {
+            onNavigateToWebcam()
+        }
+    }
+
+    PairingScreen(
+        state = state,
+        dialog = dialog,
+        onAction = { action ->
+            when (action) {
+                SenderScreenAction.ApprovePending -> viewModel.approvePending()
+                SenderScreenAction.RejectPending -> viewModel.rejectPending()
+                else -> Unit
+            }
+        },
+    )
+}
 
 @Composable
 fun PairingScreen(
