@@ -45,9 +45,10 @@ destination ViewModels (PairingViewModel, WebcamViewModel, SettingsViewModel)
        -> connection/control/http/ (HttpReceiverControlClient)
        -> media/capabilities/ (MediaCodecCapabilityProbe)
        -> media/streaming/ (StreamEngine, CodecNegotiator)
-            -> media/streaming/rootencoder/ (RootEncoderStreamEngine)
-                 -> media/camera/ (CameraXSource via RootEncoderCameraSourceFactory)
+            -> media/streaming/rootencoder/ (RootEncoderStreamEngine,
+                 RootEncoderCameraSourceFactory -> one CameraXSource)
   -> platform/ (service, notification, power)
+  -> platform/preferences/ (SenderSettingsStore)
 ```
 
 `app/di/` defines Hilt modules (`ApplicationModule`, `MediaModule`, `ConnectionModule`) for dependency injection. `connection/control/http/` owns Ktor and JSON DTOs. `media/capabilities/mediacodec/` owns Android codec discovery. Only `media/streaming/rootencoder/` imports RootEncoder types. The session controller owns validation, negotiation, preparation, lifecycle serialization, cleanup, and typed failures.
@@ -67,6 +68,12 @@ diagnostics is exposed as `SenderUiEffect`; composables do not access the
 coordinator, RootEncoder, or camera controller directly. Navigation 3 entry
 decorators scope each destination ViewModel to its back-stack entry while the
 application-scoped session and stream owner remains shared.
+
+`SenderSettingsRepository` is the single source for codec and profile defaults.
+The Android preferences adapter persists those values while the coordinator
+reads one settings snapshot when a receiver session starts. Receiver approval
+is owned by the pairing presentation model; the application routes a pending
+approval to that destination without duplicating the back-stack entry.
 
 ## iOS development boundary
 

@@ -3,6 +3,10 @@
 - Physical Android hardware validation is required for camera permission,
   MediaCodec support, RootEncoder preparation, background streaming, thermal
   behavior, and actual H.264/H.265 output.
+- The available API 35 emulator now covers installation, launch, paired
+  reverse-control, H.264 receiver decoding, stop/restart teardown, and
+  v4l2loopback output. It is not evidence for physical-camera behavior,
+  hardware codec support, sustained latency, or thermal performance.
 - H.265 support depends on the phone encoder, requested profile, installed
   receiver parser, decoder, and output consumer.
 - 1440p30 is optional. 4K30 is experimental and may be rejected by the phone,

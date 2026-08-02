@@ -49,6 +49,18 @@ The media stream is sent to the receiver's session-specific UDP port in
 encoder, preview, notification, wake-lock, and Wi-Fi-lock resources are
 released when the session stops or fails.
 
+Codec and profile defaults are owned by the application-scoped
+`SenderSettingsRepository` and persisted in the sender settings store, so a
+settings change survives activity recreation and is used by the next
+negotiated session. Pending receiver approval is presented on the Pairing
+destination, including when a request arrives while the preview destination is
+visible.
+
+The RootEncoder adapter serializes camera, preview, and stream teardown through
+the single session owner. Its stop path uses one ordered RootEncoder stop
+sequence before releasing the CameraX source; this avoids repeating the
+upstream library's GL teardown sequence on the Android emulator.
+
 The preview uses the selected profile's aspect ratio. In portrait display
 orientation the preview layout uses the profile dimensions transposed for the
 surface, while the encoded stream keeps the negotiated profile width and
@@ -92,3 +104,15 @@ Minimizing or locking the app has the same behavior because preview surface
 visibility is independent from foreground media ownership. A process kill
 cannot preserve an active hardware encoder session;
 restart the stream after reopening the app.
+
+## Emulator validation
+
+The API 35 `codex-phone-webcam-api35` emulator has been used to install and
+launch the exact debug APK, exercise paired reverse control, stream H.264
+through the Rust receiver, stop and restart the stream, and read the Linux
+`v4l2loopback` output. A representative run decoded 944 frames with a 7.0
+second first-frame delay and zero receiver pipeline errors; ten 1920x1080 YUY2
+frames produced 41,472,000 bytes. The emulator run also showed queue-pressure
+and continuity warnings, so it is a functional smoke check rather than a
+latency or throughput baseline. Physical-device and latency comparison remain
+unverified.

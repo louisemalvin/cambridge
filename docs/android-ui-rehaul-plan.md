@@ -1,6 +1,6 @@
 # Android preview-first UI rehaul
 
-Status: complete. The feature-oriented presentation architecture, Navigation 3, destination ViewModels, Hilt DI, grouped infrastructure packages, and RootEncoder CameraXSource migration are fully implemented and verified.
+Status: complete. The feature-oriented presentation architecture, Navigation 3, destination ViewModels, Hilt DI, grouped infrastructure packages, persisted sender settings, Pairing-owned approval presentation, and RootEncoder CameraXSource migration are implemented and verified.
 
 ## Direction
 
@@ -83,7 +83,8 @@ contain only values the screen can render, for example:
 - `camera`: zoom display/range, lens options with display labels, and
   stabilization availability/state;
 - `settings`: codec/profile option lists and selected display values;
-- `dialog`: permission or approval dialog state when one is active;
+- `dialog`: camera-permission dialog state when one is active; receiver
+  approval is owned by the Pairing destination;
 - `isScreenDimmed`: the screen preference for this activity/session;
 - `isSettingsOpen` and `isZoomTrayOpen`: main-surface presentation state.
 
