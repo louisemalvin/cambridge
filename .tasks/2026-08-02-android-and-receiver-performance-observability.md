@@ -61,12 +61,13 @@ Create a trustworthy performance baseline and a repeatable inspector for sender-
 
 ## Status
 
-Ready for implementation in a new session. No observability implementation has started.
+Implementation complete for the baseline tooling. Physical Android runs and
+the 60-second Wi-Fi/USB measurements remain pending.
 
 ## Handoff Notes
 
-- Next exact step: read this artifact, define the diagnostic vocabulary/report schema, then instrument the receiver metrics before changing pipeline behavior.
-- Files changed: this task artifact only after the implementation commit.
-- Commands run: `task-init`; repository logging/metrics/latency-path inspection; prior Android and Rust verification gates are recorded in the preceding implementation task artifacts.
-- Errors encountered: none.
-- Verification evidence: implementation snapshot committed as `cc70897`; worktree was clean before this handoff artifact was created.
+- Next exact step: install/use the Android JDK, run the sender and receiver over Wi-Fi and USB tethering, then capture repeatable 60-second reports with `mobile-webcam-receiver --inspect-session ... --output ...` before tuning media behavior.
+- Files changed: `docs/diagnostics.md`, `docs/latency-testing.md`, Android structured logger/session/RootEncoder observability, receiver-core diagnostics models, receiver-gstreamer metrics/events, additive HTTP diagnostics route, receiver CLI inspector/report, fixtures, and `desktop/Cargo.lock`.
+- Commands run: `work-context <task-file>`, `task-ready <task-file>`, `cargo fmt --manifest-path desktop/Cargo.toml --all`, `cargo check --manifest-path desktop/Cargo.toml --workspace`, `cargo test --manifest-path desktop/Cargo.toml --workspace`, `cargo clippy --manifest-path desktop/Cargo.toml --workspace --all-targets -- -D warnings`, `cargo build --manifest-path desktop/Cargo.toml --workspace`, `cargo run --manifest-path desktop/Cargo.toml -p receiver-cli -- --help`, and `git diff --check`.
+- Errors encountered: `./android/gradlew -p android test` could not start because `JAVA_HOME` is unset and no `java` executable is installed.
+- Verification evidence: Rust workspace tests, clippy, build, inspector help, diagnostics endpoint route test, receiver metric tests, and fixture-driven report tests pass. Media/control behavior was not tuned or changed.

@@ -32,29 +32,25 @@ Android or iOS.
 
 ## Android boundaries
 
-The app is one Gradle module with these dependency directions:
+The app is organized into feature presentation packages and grouped infrastructure modules:
 
 ```text
-Compose UI
-  <- SenderScreenState / SenderUiEffect
+feature/ (pairing, webcam, settings)
+  <- UiState / SenderUiEffect
   -> SenderScreenAction
-SenderViewModel
-  -> pure SenderScreenState mapper
-  -> SenderConnectionCoordinator
-       -> pairing store and reverse-control service
-  -> StreamSessionController
-       -> ReceiverControlClient
-       -> EncoderCapabilityProbe
-       -> CodecNegotiator
-       -> StreamEngine
-            -> RootEncoder adapter
+destination ViewModels (PairingViewModel, WebcamViewModel, SettingsViewModel)
+  -> pure state mappers
+  -> connection/discovery/ (SenderConnectionCoordinator, PairingStore, SenderControlServer)
+  -> media/streaming/session/ (StreamSessionController)
+       -> connection/control/http/ (HttpReceiverControlClient)
+       -> media/capabilities/ (MediaCodecCapabilityProbe)
+       -> media/streaming/ (StreamEngine, CodecNegotiator)
+            -> media/streaming/rootencoder/ (RootEncoderStreamEngine)
+                 -> media/camera/ (CameraXSource via RootEncoderCameraSourceFactory)
+  -> platform/ (service, notification, power)
 ```
 
-`model/` contains project-owned enums and typed state. `control/http/` owns
-Ktor and JSON DTOs. `capabilities/mediacodec/` owns Android codec discovery.
-Only `streaming/rootencoder/` imports RootEncoder types. The session
-controller owns validation, negotiation, preparation, lifecycle serialization,
-cleanup, and typed failures.
+`app/di/` defines Hilt modules (`ApplicationModule`, `MediaModule`, `ConnectionModule`) for dependency injection. `connection/control/http/` owns Ktor and JSON DTOs. `media/capabilities/mediacodec/` owns Android codec discovery. Only `media/streaming/rootencoder/` imports RootEncoder types. The session controller owns validation, negotiation, preparation, lifecycle serialization, cleanup, and typed failures.
 
 The current Android session and preview contracts remain inside the Android
 application. Android framework types such as `Context`, `Surface`, and
