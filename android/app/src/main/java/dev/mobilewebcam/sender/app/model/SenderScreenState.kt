@@ -111,10 +111,6 @@ sealed interface SenderDialogUiState {
         val title: UiText,
         val message: UiText,
     ) : SenderDialogUiState
-
-    data class PendingApproval(
-        val receiverName: UiText,
-    ) : SenderDialogUiState
 }
 
 sealed interface SenderScreenAction {

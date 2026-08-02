@@ -6,12 +6,10 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.mobilewebcam.sender.app.model.SenderScreenAction
 import dev.mobilewebcam.sender.app.model.SenderScreenState
 import dev.mobilewebcam.sender.app.model.SenderUiEffect
-import dev.mobilewebcam.sender.config.VideoProfiles
 import dev.mobilewebcam.sender.connection.discovery.SenderConnectionCoordinator
 import dev.mobilewebcam.sender.media.camera.CameraController
 import dev.mobilewebcam.sender.media.camera.CameraPreviewSurface
-import dev.mobilewebcam.sender.model.CodecPreference
-import dev.mobilewebcam.sender.model.VideoProfile
+import dev.mobilewebcam.sender.model.SenderSettingsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,6 +26,7 @@ import javax.inject.Inject
 class WebcamViewModel @Inject constructor(
     private val coordinator: SenderConnectionCoordinator,
     private val cameraController: CameraController,
+    private val settings: SenderSettingsRepository,
 ) : ViewModel() {
     private val localState = MutableStateFlow(LocalWebcamState())
     private val effectFlow = MutableSharedFlow<SenderUiEffect>(
@@ -36,19 +35,18 @@ class WebcamViewModel @Inject constructor(
 
     val uiState: StateFlow<SenderScreenState> = combine(
         coordinator.streamState,
-        coordinator.pendingApproval,
         coordinator.activeReceiverName,
         cameraController.state,
+        settings.state,
         localState,
-    ) { streamState, pendingApproval, receiverName, cameraInteraction, local ->
-        val fullState = SenderScreenStateMapper.map(
+    ) { streamState, receiverName, cameraInteraction, configuredSettings, local ->
+        SenderScreenStateMapper.map(
             SenderDomainSnapshot(
-                codecPreference = local.codecPreference,
-                profile = local.profile,
+                codecPreference = configuredSettings.codecPreference,
+                profile = configuredSettings.profile,
                 cameraInteraction = cameraInteraction,
                 streamState = streamState,
                 cameraPermissionGranted = local.cameraPermissionGranted,
-                pendingApproval = pendingApproval,
                 activeReceiverName = receiverName,
                 validationMessage = null,
                 isScreenDimmed = local.isScreenDimmed,
@@ -56,7 +54,6 @@ class WebcamViewModel @Inject constructor(
                 isPermissionDialogOpen = local.isPermissionDialogOpen,
             ),
         )
-        fullState
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.Eagerly,
@@ -150,8 +147,6 @@ class WebcamViewModel @Inject constructor(
     }
 
     private data class LocalWebcamState(
-        val codecPreference: CodecPreference = CodecPreference.AUTO_PREFER_H265,
-        val profile: VideoProfile = VideoProfiles.default,
         val cameraPermissionGranted: Boolean = false,
         val isScreenDimmed: Boolean = false,
         val isZoomTrayOpen: Boolean = false,

@@ -19,7 +19,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import dev.mobilewebcam.sender.R
-import dev.mobilewebcam.sender.app.model.SenderDialogUiState
 import dev.mobilewebcam.sender.app.model.SenderScreenAction
 import dev.mobilewebcam.sender.app.model.value
 import dev.mobilewebcam.sender.feature.pairing.components.ReceiverApprovalDialog
@@ -31,7 +30,7 @@ fun PairingRoute(
     val viewModel: PairingViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsState()
     val dialog = (state as? PairingUiState.AwaitingApproval)?.let { awaiting ->
-        SenderDialogUiState.PendingApproval(awaiting.receiverName)
+        ReceiverApprovalUiState(awaiting.receiverName)
     }
 
     LaunchedEffect(state) {
@@ -56,7 +55,7 @@ fun PairingRoute(
 @Composable
 fun PairingScreen(
     state: PairingUiState,
-    dialog: SenderDialogUiState.PendingApproval?,
+    dialog: ReceiverApprovalUiState?,
     onAction: (SenderScreenAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {

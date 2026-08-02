@@ -10,8 +10,10 @@ import dev.mobilewebcam.sender.connection.discovery.PairingStore
 import dev.mobilewebcam.sender.logging.AndroidAppLogger
 import dev.mobilewebcam.sender.logging.AppLogger
 import dev.mobilewebcam.sender.platform.notification.NotificationFactory
+import dev.mobilewebcam.sender.platform.preferences.SenderSettingsStore
 import dev.mobilewebcam.sender.platform.power.AndroidStreamingPowerManager
 import dev.mobilewebcam.sender.platform.power.StreamingPowerManager
+import dev.mobilewebcam.sender.model.SenderSettingsRepository
 import javax.inject.Singleton
 
 @Module
@@ -22,6 +24,12 @@ object ApplicationModule {
     fun providePairingStore(
         @ApplicationContext context: Context,
     ): PairingStore = PairingStore(context)
+
+    @Provides
+    @Singleton
+    fun provideSenderSettingsRepository(
+        @ApplicationContext context: Context,
+    ): SenderSettingsRepository = SenderSettingsStore(context)
 
     @Provides
     @Singleton

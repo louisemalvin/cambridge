@@ -7,13 +7,13 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import dev.mobilewebcam.sender.R
-import dev.mobilewebcam.sender.app.model.SenderDialogUiState
 import dev.mobilewebcam.sender.app.model.SenderScreenAction
 import dev.mobilewebcam.sender.app.model.value
+import dev.mobilewebcam.sender.feature.pairing.ReceiverApprovalUiState
 
 @Composable
 fun ReceiverApprovalDialog(
-    dialog: SenderDialogUiState.PendingApproval,
+    dialog: ReceiverApprovalUiState,
     onAction: (SenderScreenAction) -> Unit,
 ) {
     AlertDialog(

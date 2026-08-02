@@ -13,7 +13,6 @@ import dev.mobilewebcam.sender.app.model.StabilizationUiState
 import dev.mobilewebcam.sender.app.model.UiText
 import dev.mobilewebcam.sender.app.model.ZoomUiState
 import dev.mobilewebcam.sender.config.VideoProfiles
-import dev.mobilewebcam.sender.connection.discovery.PendingApproval
 import dev.mobilewebcam.sender.media.camera.CameraInteractionState
 import dev.mobilewebcam.sender.model.CodecPreference
 import dev.mobilewebcam.sender.model.StreamFailure
@@ -27,7 +26,6 @@ data class SenderDomainSnapshot(
     val cameraInteraction: CameraInteractionState,
     val streamState: StreamState,
     val cameraPermissionGranted: Boolean,
-    val pendingApproval: PendingApproval?,
     val activeReceiverName: String?,
     val validationMessage: String?,
     val isScreenDimmed: Boolean,
@@ -38,8 +36,6 @@ data class SenderDomainSnapshot(
 object SenderScreenStateMapper {
     fun map(snapshot: SenderDomainSnapshot): SenderScreenState {
         val connectionState = mapConnection(snapshot.streamState, snapshot.activeReceiverName)
-        val dialogState = mapDialog(snapshot)
-
         return SenderScreenState(
             preview = PreviewUiState(
                 landscapeAspectRatio = snapshot.profile.width.toFloat() / snapshot.profile.height,
@@ -88,7 +84,7 @@ object SenderScreenStateMapper {
             ),
             isScreenDimmed = snapshot.isScreenDimmed,
             isZoomTrayOpen = snapshot.isZoomTrayOpen,
-            dialog = dialogState,
+            dialog = mapDialog(snapshot),
             validationMessage = snapshot.validationMessage?.let(UiText::Plain),
             failureDiagnostics = (snapshot.streamState as? StreamState.Failed)?.let { failed ->
                 buildFailureDiagnostics(
@@ -135,9 +131,6 @@ object SenderScreenStateMapper {
     }
 
     private fun mapDialog(snapshot: SenderDomainSnapshot): SenderDialogUiState? = when {
-        snapshot.pendingApproval != null -> SenderDialogUiState.PendingApproval(
-            UiText.Plain(snapshot.pendingApproval.receiverName),
-        )
         snapshot.isPermissionDialogOpen -> SenderDialogUiState.CameraPermission(
             title = UiText.Resource(R.string.camera_permission_title),
             message = UiText.Resource(R.string.camera_permission_message),

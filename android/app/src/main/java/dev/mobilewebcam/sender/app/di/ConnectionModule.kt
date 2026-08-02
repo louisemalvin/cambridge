@@ -15,6 +15,7 @@ import dev.mobilewebcam.sender.connection.discovery.SenderConnectionCoordinator
 import dev.mobilewebcam.sender.connection.discovery.SenderControlServer
 import dev.mobilewebcam.sender.logging.AppLogger
 import dev.mobilewebcam.sender.media.streaming.session.StreamSessionController
+import dev.mobilewebcam.sender.model.SenderSettingsRepository
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -44,10 +45,12 @@ object ConnectionModule {
         @ApplicationContext context: Context,
         sessionController: StreamSessionController,
         pairings: PairingStore,
+        settings: SenderSettingsRepository,
     ): SenderConnectionCoordinator = SenderConnectionCoordinator(
         context = context,
         controller = sessionController,
         pairings = pairings,
+        settings = settings,
     )
 
     @Provides

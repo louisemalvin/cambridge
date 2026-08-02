@@ -45,6 +45,17 @@ class AppBackStackTest {
     }
 
     @Test
+    fun pendingApprovalRoutesToPairingWithoutDuplicatingIt() {
+        val backStack = AppBackStack(AppDestination.Webcam)
+
+        backStack.showPairingForApproval()
+        backStack.showPairingForApproval()
+
+        assertEquals(AppDestination.Pairing, backStack.current)
+        assertEquals(2, backStack.elements.size)
+    }
+
+    @Test
     fun replaceWithWebcamResetsToWebcam() {
         val backStack = AppBackStack(AppDestination.Pairing)
         backStack.replaceWithWebcam()

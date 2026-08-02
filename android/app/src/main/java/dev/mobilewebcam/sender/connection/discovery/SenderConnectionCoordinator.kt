@@ -4,12 +4,10 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
-import dev.mobilewebcam.sender.config.VideoProfiles
 import dev.mobilewebcam.sender.media.streaming.session.StreamSessionController
-import dev.mobilewebcam.sender.model.CodecPreference
 import dev.mobilewebcam.sender.model.ReceiverEndpoint
+import dev.mobilewebcam.sender.model.SenderSettingsRepository
 import dev.mobilewebcam.sender.model.StreamState
-import dev.mobilewebcam.sender.model.VideoProfile
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -30,6 +28,7 @@ class SenderConnectionCoordinator(
     private val context: Context,
     private val controller: StreamSessionController,
     private val pairings: PairingStore,
+    private val settings: SenderSettingsRepository,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
 ) {
     private val mutex = Mutex()
@@ -38,12 +37,6 @@ class SenderConnectionCoordinator(
     private var pendingConnection: PendingConnection? = null
     private val rejectedReceivers = mutableSetOf<String>()
     private var activeReceiverId: String? = null
-
-    @Volatile
-    private var codecPreference: CodecPreference = CodecPreference.AUTO_PREFER_H265
-
-    @Volatile
-    private var profile: VideoProfile = VideoProfiles.default
 
     val streamState: StateFlow<StreamState> = controller.state
     val pendingApproval: StateFlow<PendingApproval?> = pendingFlow.asStateFlow()
@@ -60,11 +53,6 @@ class SenderConnectionCoordinator(
                 }
             }
         }
-    }
-
-    fun updateConfiguration(preference: CodecPreference, profile: VideoProfile) {
-        codecPreference = preference
-        this.profile = profile
     }
 
     suspend fun handleStartRequest(
@@ -112,10 +100,11 @@ class SenderConnectionCoordinator(
         }
 
         val endpoint = ReceiverEndpoint(peerAddress, request.receiverControlPort)
+        val configuredSettings = settings.state.value
         val started = controller.start(
             endpoint = endpoint,
-            preference = codecPreference,
-            profile = profile,
+            preference = configuredSettings.codecPreference,
+            profile = configuredSettings.profile,
         )
         if (started.isFailure) {
             return@withLock response(

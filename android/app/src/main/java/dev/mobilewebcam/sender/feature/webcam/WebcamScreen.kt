@@ -132,6 +132,5 @@ private fun SenderDialog(
             dialog = dialog,
             onAction = onAction,
         )
-        is SenderDialogUiState.PendingApproval -> Unit
     }
 }

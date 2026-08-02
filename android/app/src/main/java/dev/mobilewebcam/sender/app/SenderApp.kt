@@ -7,6 +7,9 @@ import android.widget.Toast
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -17,16 +20,27 @@ import dev.mobilewebcam.sender.app.navigation.AppNavigation
 import dev.mobilewebcam.sender.app.navigation.rememberAppBackStack
 import dev.mobilewebcam.sender.app.startup.StartupStateResolver
 import dev.mobilewebcam.sender.connection.discovery.PairingStore
+import dev.mobilewebcam.sender.connection.discovery.SenderConnectionCoordinator
 
 @Composable
-fun SenderApp(pairings: PairingStore) {
+fun SenderApp(
+    pairings: PairingStore,
+    coordinator: SenderConnectionCoordinator,
+) {
     val context = LocalContext.current
     val initialDestination = remember(pairings) {
         StartupStateResolver(pairings).resolveInitialDestination()
     }
     val backStack = rememberAppBackStack(initialDestination)
+    val pendingApproval by coordinator.pendingApproval.collectAsState()
     val diagnosticsClipboardLabel = stringResource(R.string.diagnostics_clipboard_label)
     val errorDetailsCopiedMessage = stringResource(R.string.error_details_copied)
+
+    LaunchedEffect(pendingApproval) {
+        if (pendingApproval != null && backStack.current != AppDestination.Pairing) {
+            backStack.showPairingForApproval()
+        }
+    }
 
     dev.mobilewebcam.sender.app.theme.MobileWebcamTheme {
         Surface(modifier = Modifier.fillMaxSize()) {

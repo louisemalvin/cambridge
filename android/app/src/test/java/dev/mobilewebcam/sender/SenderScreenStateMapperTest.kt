@@ -4,7 +4,6 @@ import dev.mobilewebcam.sender.app.model.ConnectionUiState
 import dev.mobilewebcam.sender.app.model.SenderDialogUiState
 import dev.mobilewebcam.sender.app.model.UiText
 import dev.mobilewebcam.sender.config.VideoProfiles
-import dev.mobilewebcam.sender.connection.discovery.PendingApproval
 import dev.mobilewebcam.sender.feature.webcam.SenderDomainSnapshot
 import dev.mobilewebcam.sender.feature.webcam.SenderScreenStateMapper
 import dev.mobilewebcam.sender.media.camera.CameraInteractionState
@@ -29,13 +28,10 @@ class SenderScreenStateMapperTest {
     }
 
     @Test
-    fun pendingApprovalMapsToAUiDialogWithoutExposingApprovalModel() {
-        val state = mapSnapshot(
-            pendingApproval = PendingApproval("receiver-id", "Test desktop"),
-        )
+    fun cameraPermissionMapsToUiDialogWithoutExposingPermissionState() {
+        val state = mapSnapshot(isPermissionDialogOpen = true)
 
-        val dialog = state.dialog as SenderDialogUiState.PendingApproval
-        assertEquals(UiText.Plain("Test desktop"), dialog.receiverName)
+        assertTrue(state.dialog is SenderDialogUiState.CameraPermission)
     }
 
     @Test
@@ -91,8 +87,8 @@ class SenderScreenStateMapperTest {
 
     private fun mapSnapshot(
         streamState: StreamState = StreamState.Idle,
-        pendingApproval: PendingApproval? = null,
         activeReceiverName: String? = null,
+        isPermissionDialogOpen: Boolean = false,
     ) = SenderScreenStateMapper.map(
         SenderDomainSnapshot(
             codecPreference = CodecPreference.AUTO_PREFER_H265,
@@ -100,12 +96,11 @@ class SenderScreenStateMapperTest {
             cameraInteraction = CameraInteractionState(),
             streamState = streamState,
             cameraPermissionGranted = true,
-            pendingApproval = pendingApproval,
             activeReceiverName = activeReceiverName,
             validationMessage = null,
             isScreenDimmed = false,
             isZoomTrayOpen = false,
-            isPermissionDialogOpen = false,
+            isPermissionDialogOpen = isPermissionDialogOpen,
         ),
     )
 

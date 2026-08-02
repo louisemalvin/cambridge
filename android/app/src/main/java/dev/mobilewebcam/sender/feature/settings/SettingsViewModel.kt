@@ -12,8 +12,8 @@ import dev.mobilewebcam.sender.feature.webcam.SenderDomainSnapshot
 import dev.mobilewebcam.sender.feature.webcam.SenderScreenStateMapper
 import dev.mobilewebcam.sender.media.camera.CameraController
 import dev.mobilewebcam.sender.model.CodecPreference
+import dev.mobilewebcam.sender.model.SenderSettingsRepository
 import dev.mobilewebcam.sender.model.StreamState
-import dev.mobilewebcam.sender.model.VideoProfile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,7 +22,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -30,8 +29,9 @@ import javax.inject.Inject
 class SettingsViewModel @Inject constructor(
     private val coordinator: SenderConnectionCoordinator,
     private val cameraController: CameraController,
+    private val settings: SenderSettingsRepository,
 ) : ViewModel() {
-    private val localState = MutableStateFlow(LocalSettingsState())
+    private val validationMessage = MutableStateFlow<String?>(null)
     private val effectFlow = MutableSharedFlow<SenderUiEffect>(
         extraBufferCapacity = EFFECT_BUFFER_CAPACITY,
     )
@@ -40,18 +40,18 @@ class SettingsViewModel @Inject constructor(
         coordinator.streamState,
         coordinator.activeReceiverName,
         cameraController.state,
-        localState,
-    ) { streamState, receiverName, cameraInteraction, local ->
+        settings.state,
+        validationMessage,
+    ) { streamState, receiverName, cameraInteraction, configuredSettings, validation ->
         val fullState = SenderScreenStateMapper.map(
             SenderDomainSnapshot(
-                codecPreference = local.codecPreference,
-                profile = local.profile,
+                codecPreference = configuredSettings.codecPreference,
+                profile = configuredSettings.profile,
                 cameraInteraction = cameraInteraction,
                 streamState = streamState,
                 cameraPermissionGranted = true,
-                pendingApproval = null,
                 activeReceiverName = receiverName,
-                validationMessage = local.validationMessage,
+                validationMessage = validation,
                 isScreenDimmed = false,
                 isZoomTrayOpen = false,
                 isPermissionDialogOpen = false,
@@ -92,20 +92,14 @@ class SettingsViewModel @Inject constructor(
 
     private fun updateCodecPreference(key: String) {
         val preference = CodecPreference.entries.firstOrNull { it.name == key } ?: return
-        val profile = localState.value.profile
-        localState.update {
-            it.copy(codecPreference = preference, validationMessage = null)
-        }
-        coordinator.updateConfiguration(preference, profile)
+        settings.updateCodecPreference(preference)
+        validationMessage.value = null
     }
 
     private fun updateProfile(key: String) {
         val profile = VideoProfiles.all.firstOrNull { it.id == key } ?: return
-        val preference = localState.value.codecPreference
-        localState.update {
-            it.copy(profile = profile, validationMessage = null)
-        }
-        coordinator.updateConfiguration(preference, profile)
+        settings.updateProfile(profile)
+        validationMessage.value = null
     }
 
     private fun setZoomRatio(zoomRatio: Float) {
@@ -143,12 +137,6 @@ class SettingsViewModel @Inject constructor(
         val details = uiState.value.failureDiagnostics ?: return
         effectFlow.tryEmit(SenderUiEffect.CopyDiagnostics(details))
     }
-
-    private data class LocalSettingsState(
-        val codecPreference: CodecPreference = CodecPreference.AUTO_PREFER_H265,
-        val profile: VideoProfile = VideoProfiles.default,
-        val validationMessage: String? = null,
-    )
 
     private companion object {
         const val EFFECT_BUFFER_CAPACITY = 4

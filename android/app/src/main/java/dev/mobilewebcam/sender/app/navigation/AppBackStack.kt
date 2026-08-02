@@ -31,6 +31,10 @@ class AppBackStack(
         elements.add(AppDestination.Pairing)
     }
 
+    fun showPairingForApproval() {
+        navigateTo(AppDestination.Pairing)
+    }
+
     fun replaceWithWebcam() {
         elements.clear()
         elements.add(AppDestination.Webcam)

@@ -10,3 +10,7 @@ sealed interface PairingUiState {
     data class Connected(val receiverName: UiText) : PairingUiState
     data class Failed(val message: UiText) : PairingUiState
 }
+
+data class ReceiverApprovalUiState(
+    val receiverName: UiText,
+)
