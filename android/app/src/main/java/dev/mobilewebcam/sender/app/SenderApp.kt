@@ -25,13 +25,13 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.mobilewebcam.sender.MobileWebcamApplication
 import dev.mobilewebcam.sender.R
+import dev.mobilewebcam.sender.app.model.SenderScreenAction
+import dev.mobilewebcam.sender.app.model.SenderUiEffect
 import dev.mobilewebcam.sender.app.navigation.AppDestination
 import dev.mobilewebcam.sender.app.navigation.AppNavigation
 import dev.mobilewebcam.sender.app.navigation.rememberAppBackStack
 import dev.mobilewebcam.sender.app.startup.StartupStateResolver
 import dev.mobilewebcam.sender.feature.webcam.WebcamViewModel
-import dev.mobilewebcam.sender.ui.model.SenderScreenAction
-import dev.mobilewebcam.sender.ui.model.SenderUiEffect
 
 @Composable
 fun SenderApp() {
@@ -91,7 +91,7 @@ fun SenderApp() {
         Surface(modifier = Modifier.fillMaxSize()) {
             AppNavigation(
                 backStack = backStack,
-                state = dev.mobilewebcam.sender.ui.model.SenderScreenState(
+                state = dev.mobilewebcam.sender.app.model.SenderScreenState(
                     preview = screenState.preview,
                     connection = screenState.connection,
                     camera = screenState.camera,

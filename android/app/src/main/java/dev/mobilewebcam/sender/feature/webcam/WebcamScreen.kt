@@ -7,13 +7,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
-import dev.mobilewebcam.sender.camera.CameraPreviewSurface
+import dev.mobilewebcam.sender.app.model.PreviewOrientation
+import dev.mobilewebcam.sender.app.model.SenderDialogUiState
+import dev.mobilewebcam.sender.app.model.SenderScreenAction
+import dev.mobilewebcam.sender.app.model.SenderScreenState
 import dev.mobilewebcam.sender.feature.webcam.components.PreviewStage
 import dev.mobilewebcam.sender.feature.webcam.overlays.CameraPermissionDialog
-import dev.mobilewebcam.sender.ui.model.PreviewOrientation
-import dev.mobilewebcam.sender.ui.model.SenderDialogUiState
-import dev.mobilewebcam.sender.ui.model.SenderScreenAction
-import dev.mobilewebcam.sender.ui.model.SenderScreenState
+import dev.mobilewebcam.sender.media.camera.CameraPreviewSurface
 
 @Composable
 fun WebcamScreen(

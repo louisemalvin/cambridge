@@ -3,10 +3,10 @@ package dev.mobilewebcam.sender.feature.pairing
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dev.mobilewebcam.sender.discovery.SenderConnectionCoordinator
+import dev.mobilewebcam.sender.app.model.UiText
+import dev.mobilewebcam.sender.connection.discovery.SenderConnectionCoordinator
+import dev.mobilewebcam.sender.feature.webcam.SenderScreenStateMapper
 import dev.mobilewebcam.sender.model.StreamState
-import dev.mobilewebcam.sender.ui.SenderScreenStateMapper
-import dev.mobilewebcam.sender.ui.model.UiText
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine

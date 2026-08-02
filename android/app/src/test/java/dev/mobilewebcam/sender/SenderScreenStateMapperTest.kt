@@ -1,16 +1,16 @@
 package dev.mobilewebcam.sender
 
-import dev.mobilewebcam.sender.camera.CameraInteractionState
+import dev.mobilewebcam.sender.app.model.ConnectionUiState
+import dev.mobilewebcam.sender.app.model.SenderDialogUiState
+import dev.mobilewebcam.sender.app.model.UiText
 import dev.mobilewebcam.sender.config.VideoProfiles
-import dev.mobilewebcam.sender.discovery.PendingApproval
+import dev.mobilewebcam.sender.connection.discovery.PendingApproval
+import dev.mobilewebcam.sender.feature.webcam.SenderDomainSnapshot
+import dev.mobilewebcam.sender.feature.webcam.SenderScreenStateMapper
+import dev.mobilewebcam.sender.media.camera.CameraInteractionState
 import dev.mobilewebcam.sender.model.CodecPreference
 import dev.mobilewebcam.sender.model.StreamFailure
 import dev.mobilewebcam.sender.model.StreamState
-import dev.mobilewebcam.sender.ui.SenderDomainSnapshot
-import dev.mobilewebcam.sender.ui.SenderScreenStateMapper
-import dev.mobilewebcam.sender.ui.model.ConnectionUiState
-import dev.mobilewebcam.sender.ui.model.SenderDialogUiState
-import dev.mobilewebcam.sender.ui.model.UiText
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -77,7 +77,7 @@ class SenderScreenStateMapperTest {
 
     @Test
     fun connectingStateMapsToConnectingUiState() {
-        val state = mapSnapshot(streamState = StreamState.Negotiating)
+        val state = mapSnapshot(streamState = StreamState.NegotiatingCodec)
         assertTrue(state.connection is ConnectionUiState.Connecting)
         assertFalse(state.preview.isLive)
     }

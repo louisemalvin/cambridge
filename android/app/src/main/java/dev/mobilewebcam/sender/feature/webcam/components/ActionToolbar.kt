@@ -22,9 +22,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import dev.mobilewebcam.sender.R
-import dev.mobilewebcam.sender.ui.model.ConnectionUiState
-import dev.mobilewebcam.sender.ui.model.SenderScreenAction
-import dev.mobilewebcam.sender.ui.model.SenderScreenState
+import dev.mobilewebcam.sender.app.model.ConnectionUiState
+import dev.mobilewebcam.sender.app.model.SenderScreenAction
+import dev.mobilewebcam.sender.app.model.SenderScreenState
 
 @Composable
 fun PreviewActions(

@@ -3,9 +3,9 @@ package dev.mobilewebcam.sender.feature.webcam.components
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import dev.mobilewebcam.sender.R
+import dev.mobilewebcam.sender.app.model.LensOptionUi
+import dev.mobilewebcam.sender.app.model.SelectOptionUi
 import dev.mobilewebcam.sender.feature.settings.components.SettingsChoiceRow
-import dev.mobilewebcam.sender.ui.model.LensOptionUi
-import dev.mobilewebcam.sender.ui.model.SelectOptionUi
 
 @Composable
 fun CameraLensControls(

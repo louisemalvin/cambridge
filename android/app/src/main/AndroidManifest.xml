@@ -24,7 +24,7 @@
             </intent-filter>
         </activity>
         <service
-            android:name=".platform.ForegroundStreamingService"
+            android:name=".platform.service.ForegroundStreamingService"
             android:exported="false"
             android:foregroundServiceType="camera" />
     </application>

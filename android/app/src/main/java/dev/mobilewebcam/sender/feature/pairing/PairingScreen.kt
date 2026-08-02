@@ -15,10 +15,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import dev.mobilewebcam.sender.R
+import dev.mobilewebcam.sender.app.model.SenderDialogUiState
+import dev.mobilewebcam.sender.app.model.SenderScreenAction
+import dev.mobilewebcam.sender.app.model.value
 import dev.mobilewebcam.sender.feature.pairing.components.ReceiverApprovalDialog
-import dev.mobilewebcam.sender.ui.model.SenderDialogUiState
-import dev.mobilewebcam.sender.ui.model.SenderScreenAction
-import dev.mobilewebcam.sender.ui.model.value
 
 @Composable
 fun PairingScreen(

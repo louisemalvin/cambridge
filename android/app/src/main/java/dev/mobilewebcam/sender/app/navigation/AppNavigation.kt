@@ -4,11 +4,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.ui.NavDisplay
-import dev.mobilewebcam.sender.camera.CameraPreviewSurface
+import dev.mobilewebcam.sender.app.model.SenderScreenAction
+import dev.mobilewebcam.sender.app.model.SenderScreenState
 import dev.mobilewebcam.sender.feature.settings.SettingsScreen
 import dev.mobilewebcam.sender.feature.webcam.WebcamScreen
-import dev.mobilewebcam.sender.ui.model.SenderScreenAction
-import dev.mobilewebcam.sender.ui.model.SenderScreenState
+import dev.mobilewebcam.sender.media.camera.CameraPreviewSurface
 
 @Composable
 fun AppNavigation(

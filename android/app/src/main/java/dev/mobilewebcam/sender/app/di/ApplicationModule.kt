@@ -6,9 +6,9 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
-import dev.mobilewebcam.sender.discovery.PairingStore
-import dev.mobilewebcam.sender.platform.AndroidStreamingPowerManager
-import dev.mobilewebcam.sender.platform.StreamingPowerManager
+import dev.mobilewebcam.sender.connection.discovery.PairingStore
+import dev.mobilewebcam.sender.platform.power.AndroidStreamingPowerManager
+import dev.mobilewebcam.sender.platform.power.StreamingPowerManager
 import javax.inject.Singleton
 
 @Module

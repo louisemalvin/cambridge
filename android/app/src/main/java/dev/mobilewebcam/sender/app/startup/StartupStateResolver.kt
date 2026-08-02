@@ -1,7 +1,7 @@
 package dev.mobilewebcam.sender.app.startup
 
 import dev.mobilewebcam.sender.app.navigation.AppDestination
-import dev.mobilewebcam.sender.discovery.PairingStore
+import dev.mobilewebcam.sender.connection.discovery.PairingStore
 
 class StartupStateResolver(
     private val pairings: PairingStore,

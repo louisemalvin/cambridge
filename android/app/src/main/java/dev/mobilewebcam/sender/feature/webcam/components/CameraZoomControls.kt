@@ -13,7 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import dev.mobilewebcam.sender.R
-import dev.mobilewebcam.sender.ui.model.ZoomUiState
+import dev.mobilewebcam.sender.app.model.ZoomUiState
 import java.util.Locale
 
 @Composable

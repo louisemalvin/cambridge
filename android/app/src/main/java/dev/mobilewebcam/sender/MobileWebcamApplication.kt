@@ -2,12 +2,12 @@ package dev.mobilewebcam.sender
 
 import android.app.Application
 import dagger.hilt.android.HiltAndroidApp
-import dev.mobilewebcam.sender.camera.CameraController
-import dev.mobilewebcam.sender.discovery.PairingStore
-import dev.mobilewebcam.sender.discovery.SenderConnectionCoordinator
-import dev.mobilewebcam.sender.discovery.SenderControlServer
-import dev.mobilewebcam.sender.platform.StreamingPowerManager
-import dev.mobilewebcam.sender.session.StreamSessionController
+import dev.mobilewebcam.sender.connection.discovery.PairingStore
+import dev.mobilewebcam.sender.connection.discovery.SenderConnectionCoordinator
+import dev.mobilewebcam.sender.connection.discovery.SenderControlServer
+import dev.mobilewebcam.sender.media.camera.CameraController
+import dev.mobilewebcam.sender.media.streaming.session.StreamSessionController
+import dev.mobilewebcam.sender.platform.power.StreamingPowerManager
 import javax.inject.Inject
 
 @HiltAndroidApp

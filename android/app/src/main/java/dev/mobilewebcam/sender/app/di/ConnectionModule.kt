@@ -7,10 +7,10 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
-import dev.mobilewebcam.sender.discovery.PairingStore
-import dev.mobilewebcam.sender.discovery.SenderConnectionCoordinator
-import dev.mobilewebcam.sender.discovery.SenderControlServer
-import dev.mobilewebcam.sender.session.StreamSessionController
+import dev.mobilewebcam.sender.connection.discovery.PairingStore
+import dev.mobilewebcam.sender.connection.discovery.SenderConnectionCoordinator
+import dev.mobilewebcam.sender.connection.discovery.SenderControlServer
+import dev.mobilewebcam.sender.media.streaming.session.StreamSessionController
 import javax.inject.Singleton
 
 @Module

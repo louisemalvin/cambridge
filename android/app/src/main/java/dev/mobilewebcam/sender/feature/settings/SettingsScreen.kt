@@ -25,16 +25,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import dev.mobilewebcam.sender.R
+import dev.mobilewebcam.sender.app.model.ConnectionUiState
+import dev.mobilewebcam.sender.app.model.SenderScreenAction
+import dev.mobilewebcam.sender.app.model.SenderScreenState
+import dev.mobilewebcam.sender.app.model.UiText
+import dev.mobilewebcam.sender.app.model.value
 import dev.mobilewebcam.sender.feature.settings.components.CodecSelector
 import dev.mobilewebcam.sender.feature.settings.components.VideoProfileSelector
 import dev.mobilewebcam.sender.feature.webcam.components.CameraLensControls
 import dev.mobilewebcam.sender.feature.webcam.components.CameraStabilizationControls
 import dev.mobilewebcam.sender.feature.webcam.components.CameraZoomControls
-import dev.mobilewebcam.sender.ui.model.ConnectionUiState
-import dev.mobilewebcam.sender.ui.model.SenderScreenAction
-import dev.mobilewebcam.sender.ui.model.SenderScreenState
-import dev.mobilewebcam.sender.ui.model.UiText
-import dev.mobilewebcam.sender.ui.model.value
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)

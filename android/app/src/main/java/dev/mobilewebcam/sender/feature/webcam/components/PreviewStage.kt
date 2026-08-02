@@ -13,12 +13,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import dev.mobilewebcam.sender.camera.CameraPreviewSurface
+import dev.mobilewebcam.sender.app.model.PreviewOrientation
+import dev.mobilewebcam.sender.app.model.PreviewViewportCalculator
+import dev.mobilewebcam.sender.app.model.SenderScreenAction
+import dev.mobilewebcam.sender.app.model.SenderScreenState
 import dev.mobilewebcam.sender.feature.webcam.overlays.ZoomTray
-import dev.mobilewebcam.sender.ui.model.PreviewOrientation
-import dev.mobilewebcam.sender.ui.model.PreviewViewportCalculator
-import dev.mobilewebcam.sender.ui.model.SenderScreenAction
-import dev.mobilewebcam.sender.ui.model.SenderScreenState
+import dev.mobilewebcam.sender.media.camera.CameraPreviewSurface
 
 @Composable
 fun PreviewStage(

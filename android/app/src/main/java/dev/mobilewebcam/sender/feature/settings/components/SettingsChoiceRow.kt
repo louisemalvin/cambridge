@@ -13,8 +13,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import dev.mobilewebcam.sender.ui.model.SelectOptionUi
-import dev.mobilewebcam.sender.ui.model.value
+import dev.mobilewebcam.sender.app.model.SelectOptionUi
+import dev.mobilewebcam.sender.app.model.value
 
 @Composable
 @OptIn(ExperimentalLayoutApi::class)

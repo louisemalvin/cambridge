@@ -6,16 +6,16 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
-import dev.mobilewebcam.sender.camera.CameraController
-import dev.mobilewebcam.sender.capabilities.mediacodec.MediaCodecCapabilityProbe
-import dev.mobilewebcam.sender.control.http.HttpReceiverControlClient
-import dev.mobilewebcam.sender.platform.AndroidForegroundStreamingController
-import dev.mobilewebcam.sender.platform.StreamingPowerManager
-import dev.mobilewebcam.sender.session.CodecNegotiator
-import dev.mobilewebcam.sender.session.StreamSessionController
-import dev.mobilewebcam.sender.session.StreamSessionControllerImpl
-import dev.mobilewebcam.sender.streaming.StreamEngine
-import dev.mobilewebcam.sender.streaming.rootencoder.RootEncoderStreamEngine
+import dev.mobilewebcam.sender.connection.control.http.HttpReceiverControlClient
+import dev.mobilewebcam.sender.media.camera.CameraController
+import dev.mobilewebcam.sender.media.capabilities.mediacodec.MediaCodecCapabilityProbe
+import dev.mobilewebcam.sender.media.streaming.StreamEngine
+import dev.mobilewebcam.sender.media.streaming.rootencoder.RootEncoderStreamEngine
+import dev.mobilewebcam.sender.media.streaming.session.CodecNegotiator
+import dev.mobilewebcam.sender.media.streaming.session.StreamSessionController
+import dev.mobilewebcam.sender.media.streaming.session.StreamSessionControllerImpl
+import dev.mobilewebcam.sender.platform.power.StreamingPowerManager
+import dev.mobilewebcam.sender.platform.service.AndroidForegroundStreamingController
 import javax.inject.Singleton
 
 @Module

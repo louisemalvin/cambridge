@@ -9,12 +9,12 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.viewinterop.AndroidView
-import dev.mobilewebcam.sender.camera.CameraPreviewSurface
-import dev.mobilewebcam.sender.camera.DisplayOrientation
-import dev.mobilewebcam.sender.camera.MINIMUM_PREVIEW_DIMENSION
+import dev.mobilewebcam.sender.app.model.PreviewOrientation
+import dev.mobilewebcam.sender.app.model.ZoomUiState
 import dev.mobilewebcam.sender.config.CameraZoom
-import dev.mobilewebcam.sender.ui.model.PreviewOrientation
-import dev.mobilewebcam.sender.ui.model.ZoomUiState
+import dev.mobilewebcam.sender.media.camera.CameraPreviewSurface
+import dev.mobilewebcam.sender.media.camera.DisplayOrientation
+import dev.mobilewebcam.sender.media.camera.MINIMUM_PREVIEW_DIMENSION
 
 @Composable
 fun CameraPreview(

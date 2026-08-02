@@ -7,9 +7,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import dev.mobilewebcam.sender.R
-import dev.mobilewebcam.sender.ui.model.SenderDialogUiState
-import dev.mobilewebcam.sender.ui.model.SenderScreenAction
-import dev.mobilewebcam.sender.ui.model.value
+import dev.mobilewebcam.sender.app.model.SenderDialogUiState
+import dev.mobilewebcam.sender.app.model.SenderScreenAction
+import dev.mobilewebcam.sender.app.model.value
 
 @Composable
 fun CameraPermissionDialog(
