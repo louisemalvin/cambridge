@@ -51,15 +51,20 @@ surface, while the encoded stream keeps the negotiated profile width and
 height. The receiver therefore receives the same profile aspect ratio instead
 of a stretched portrait surface.
 
-The preview and connection controls share one screen-level scroll container.
-The connect and streaming panels are non-scrolling content so Compose does not
-measure nested vertical scroll containers with unbounded height.
+The Android screen is preview-first. Before a receiver starts a negotiated
+session, it shows a waiting state. During a session, the preview is fitted into
+the available portrait or landscape window with black letterbox space instead
+of stretching or creating a screen-level scroll container. Settings open in a
+Material 3 bottom sheet, so codec/profile defaults, physical lens selection,
+stabilization, full zoom, connection details, and diagnostics are not
+permanently visible.
 
-While streaming, the camera card exposes a slider bounded by the active
-camera's reported zoom range and a reset action that returns to 1x. Pinch
-gestures on the preview use the same controller. Zoom changes update the
+While streaming, pinch gestures and a compact zoom tray use a slider bounded by
+the active camera's reported zoom range. The settings sheet also exposes the
+full slider and a reset action that returns to 1x. Zoom changes update the
 existing RootEncoder `Camera2Source` capture request and do not renegotiate or
-restart the stream.
+restart the stream. The screen dim action applies a reversible UI scrim and
+does not change Android window brightness.
 
 On Android P and newer, devices that expose logical multi-camera physical IDs
 also show an `Auto` option and one runtime-labeled button per physical camera.

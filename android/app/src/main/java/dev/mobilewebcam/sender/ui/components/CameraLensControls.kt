@@ -14,16 +14,17 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import dev.mobilewebcam.sender.camera.CameraInteractionState
-import dev.mobilewebcam.sender.camera.PhysicalLensOption
+import dev.mobilewebcam.sender.R
+import dev.mobilewebcam.sender.ui.model.Content
+import dev.mobilewebcam.sender.ui.model.LensOptionUi
 
 @Composable
 fun CameraLensControls(
-    state: CameraInteractionState,
-    onLensSelected: (PhysicalLensOption) -> Unit,
+    options: List<LensOptionUi>,
+    onLensSelected: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    if (state.physicalLensOptions.isEmpty()) return
+    if (options.isEmpty()) return
 
     Card(modifier = modifier.fillMaxWidth()) {
         Column(
@@ -32,20 +33,20 @@ fun CameraLensControls(
                 .padding(PHYSICAL_LENS_CONTENT_PADDING_DP.dp),
             verticalArrangement = Arrangement.spacedBy(PHYSICAL_LENS_TITLE_SPACING_DP.dp),
         ) {
-            Text(PHYSICAL_LENS_TITLE)
+            Text(androidx.compose.ui.res.stringResource(R.string.physical_lens))
             Row(
                 modifier = Modifier.horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(PHYSICAL_LENS_ITEM_SPACING_DP.dp),
             ) {
-                state.physicalLensOptions.forEach { lens ->
-                    val isSelected = lens == state.selectedPhysicalLens
+                options.forEach { lens ->
+                    val isSelected = lens.isSelected
                     if (isSelected) {
-                        Button(onClick = { onLensSelected(lens) }) {
-                            Text(lens.label)
+                        Button(onClick = { onLensSelected(lens.key) }) {
+                            lens.label.Content()
                         }
                     } else {
-                        OutlinedButton(onClick = { onLensSelected(lens) }) {
-                            Text(lens.label)
+                        OutlinedButton(onClick = { onLensSelected(lens.key) }) {
+                            lens.label.Content()
                         }
                     }
                 }
@@ -57,4 +58,3 @@ fun CameraLensControls(
 private const val PHYSICAL_LENS_CONTENT_PADDING_DP = 12
 private const val PHYSICAL_LENS_ITEM_SPACING_DP = 8
 private const val PHYSICAL_LENS_TITLE_SPACING_DP = 4
-private const val PHYSICAL_LENS_TITLE = "Physical lens"

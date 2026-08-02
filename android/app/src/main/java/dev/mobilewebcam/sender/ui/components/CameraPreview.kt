@@ -9,26 +9,27 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.viewinterop.AndroidView
-import dev.mobilewebcam.sender.camera.CameraInteractionState
 import dev.mobilewebcam.sender.camera.CameraPreviewSurface
 import dev.mobilewebcam.sender.camera.DisplayOrientation
 import dev.mobilewebcam.sender.camera.MINIMUM_PREVIEW_DIMENSION
 import dev.mobilewebcam.sender.config.CameraZoom
+import dev.mobilewebcam.sender.ui.model.PreviewOrientation
+import dev.mobilewebcam.sender.ui.model.ZoomUiState
 
 @Composable
 fun CameraPreview(
-    orientation: DisplayOrientation,
-    zoomState: CameraInteractionState,
+    orientation: PreviewOrientation,
+    zoomState: ZoomUiState,
     onSurfaceChanged: (CameraPreviewSurface?) -> Unit,
     onZoomRatioChanged: (Float) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val currentOnSurfaceChanged by rememberUpdatedState(onSurfaceChanged)
     val currentOnZoomRatioChanged by rememberUpdatedState(onZoomRatioChanged)
-    val currentZoomRatio by rememberUpdatedState(zoomState.zoomRatio)
-    val currentMinZoomRatio by rememberUpdatedState(zoomState.minZoomRatio)
-    val currentMaxZoomRatio by rememberUpdatedState(zoomState.maxZoomRatio)
-    val currentOrientation by rememberUpdatedState(orientation)
+    val currentZoomRatio by rememberUpdatedState(zoomState.ratio)
+    val currentMinZoomRatio by rememberUpdatedState(zoomState.minimumRatio)
+    val currentMaxZoomRatio by rememberUpdatedState(zoomState.maximumRatio)
+    val currentOrientation by rememberUpdatedState(orientation.toDisplayOrientation())
 
     AndroidView(
         modifier = modifier.pointerInput(Unit) {
@@ -89,6 +90,11 @@ fun CameraPreview(
             )
         },
     )
+}
+
+private fun PreviewOrientation.toDisplayOrientation(): DisplayOrientation = when (this) {
+    PreviewOrientation.PORTRAIT -> DisplayOrientation.PORTRAIT
+    PreviewOrientation.LANDSCAPE -> DisplayOrientation.LANDSCAPE
 }
 
 private fun publishSurface(

@@ -36,7 +36,10 @@ The app is one Gradle module with these dependency directions:
 
 ```text
 Compose UI
-  -> SenderViewModel
+  <- SenderScreenState / SenderUiEffect
+  -> SenderScreenAction
+SenderViewModel
+  -> pure SenderScreenState mapper
   -> SenderConnectionCoordinator
        -> pairing store and reverse-control service
   -> StreamSessionController
@@ -58,6 +61,13 @@ application. Android framework types such as `Context`, `Surface`, and
 `MediaFormat` are not part of the wire contract; codec MIME mapping is kept in
 the Android MediaCodec capability package. Further extraction is incremental
 and must improve the active Android path rather than reorganise the repository.
+
+The Compose screen consumes only the immutable `SenderScreenState` presentation
+model. `SenderViewModel` combines coordinator and camera-controller flows,
+maps domain state through a pure screen-state mapper, and handles
+`SenderScreenAction` values. One-shot Android work such as requesting camera
+permission or copying diagnostics is exposed as `SenderUiEffect`; composables
+do not access the coordinator, RootEncoder, or camera controller directly.
 
 ## iOS development boundary
 

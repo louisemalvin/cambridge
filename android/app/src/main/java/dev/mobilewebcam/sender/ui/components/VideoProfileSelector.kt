@@ -10,37 +10,32 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import dev.mobilewebcam.sender.config.VideoProfiles
-import dev.mobilewebcam.sender.model.VideoProfile
+import dev.mobilewebcam.sender.R
+import dev.mobilewebcam.sender.ui.model.Content
+import dev.mobilewebcam.sender.ui.model.SelectOptionUi
 
 @Composable
 fun VideoProfileSelector(
-    selected: VideoProfile,
-    onSelected: (VideoProfile) -> Unit,
+    options: List<SelectOptionUi>,
+    onSelected: (String) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
+    val selected = options.firstOrNull { it.isSelected }
     Column {
-        Text("Video profile")
-        TextButton(onClick = { expanded = true }) {
-            Text(selected.label())
+        Text(androidx.compose.ui.res.stringResource(R.string.video_profile))
+        TextButton(onClick = { expanded = true }, enabled = options.isNotEmpty()) {
+            selected?.label?.Content()
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            VideoProfiles.all.forEach { profile ->
+            options.forEach { option ->
                 DropdownMenuItem(
-                    text = { Text(profile.label()) },
+                    text = { option.label.Content() },
                     onClick = {
                         expanded = false
-                        onSelected(profile)
+                        onSelected(option.key)
                     },
                 )
             }
         }
     }
-}
-
-private fun VideoProfile.label(): String = when (id) {
-    "1080p30" -> "1080p30 - 1920 x 1080"
-    "1440p30" -> "1440p30 - 2560 x 1440"
-    "4k30" -> "4K UHD30 - 3840 x 2160 (experimental)"
-    else -> "$width x $height @ ${fps} FPS"
 }

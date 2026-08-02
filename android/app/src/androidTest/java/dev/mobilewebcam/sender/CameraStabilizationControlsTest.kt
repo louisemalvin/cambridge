@@ -4,8 +4,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
-import dev.mobilewebcam.sender.camera.CameraInteractionState
 import dev.mobilewebcam.sender.ui.components.CameraStabilizationControls
+import dev.mobilewebcam.sender.ui.model.StabilizationUiState
 import org.junit.Rule
 import org.junit.Test
 
@@ -18,7 +18,7 @@ class CameraStabilizationControlsTest {
         composeRule.setContent {
             MaterialTheme {
                 CameraStabilizationControls(
-                    state = CameraInteractionState().withStabilizationSupport(supported = true),
+                    state = StabilizationUiState(isSupported = true),
                     onStabilizationEnabledChanged = {},
                 )
             }

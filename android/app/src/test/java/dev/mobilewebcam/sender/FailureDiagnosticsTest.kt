@@ -1,7 +1,6 @@
 package dev.mobilewebcam.sender
 
 import dev.mobilewebcam.sender.model.StreamFailure
-import dev.mobilewebcam.sender.ui.SenderUiState
 import dev.mobilewebcam.sender.ui.buildFailureDiagnostics
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -9,13 +8,12 @@ import org.junit.Test
 class FailureDiagnosticsTest {
     @Test
     fun diagnosticsIncludeConnectionContextAndExceptionStack() {
-        val state = SenderUiState(
-            activeReceiverName = "Test desktop",
-        )
         val cause = NoSuchMethodError("No static method ByteChannel")
 
         val details = buildFailureDiagnostics(
-            state = state,
+            receiverName = "Test desktop",
+            profile = defaultProfile,
+            codecPreference = dev.mobilewebcam.sender.model.CodecPreference.AUTO_PREFER_H265,
             failure = StreamFailure.ReceiverUnavailable("Health check failed"),
             cause = cause,
         )
@@ -23,5 +21,9 @@ class FailureDiagnosticsTest {
         assertTrue(details.contains("Test desktop"))
         assertTrue(details.contains("No static method ByteChannel"))
         assertTrue(details.contains("NoSuchMethodError"))
+    }
+
+    private companion object {
+        val defaultProfile = dev.mobilewebcam.sender.config.VideoProfiles.default
     }
 }
