@@ -40,23 +40,23 @@ object AndroidAppLogger : AppLogger {
         putBase(level, message)
         putFields(fields)
         cause?.let {
-            put("causeType", it::class.qualifiedName ?: it::class.simpleName.orEmpty())
-            put("causeMessage", it.message.orEmpty())
+            put("causeType", JsonPrimitive(it::class.qualifiedName ?: it::class.simpleName.orEmpty()))
+            put("causeMessage", JsonPrimitive(it.message.orEmpty()))
         }
     }.toString()
 
     private fun formatEvent(name: String, fields: Map<String, Any?>): String = buildJsonObject {
         putBase("info", name)
-        put("event", name)
+        put("event", JsonPrimitive(name))
         putFields(fields)
     }.toString()
 
     private fun JsonObjectBuilder.putBase(level: String, message: String) {
-        put("schema", DIAGNOSTIC_SCHEMA)
-        put("source", DIAGNOSTIC_SOURCE)
-        put("level", level)
-        put("message", message)
-        put("timestampMs", System.currentTimeMillis())
+        put("schema", JsonPrimitive(DIAGNOSTIC_SCHEMA))
+        put("source", JsonPrimitive(DIAGNOSTIC_SOURCE))
+        put("level", JsonPrimitive(level))
+        put("message", JsonPrimitive(message))
+        put("timestampMs", JsonPrimitive(System.currentTimeMillis()))
     }
 
     private fun JsonObjectBuilder.putFields(fields: Map<String, Any?>) {
