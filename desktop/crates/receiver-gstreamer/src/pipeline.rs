@@ -306,7 +306,7 @@ mod tests {
         gst::init().unwrap();
         let mut receiver = GStreamerReceiver::new(FakesinkFactory).unwrap();
         let mut config = config(VideoCodec::H264);
-        config.media_port = 0;
+        config.media_port = PORT_UNASSIGNED;
 
         let allocated = receiver.prepare(config).unwrap();
 

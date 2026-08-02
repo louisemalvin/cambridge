@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 pub const PROTOCOL_VERSION: u32 = 1;
 pub const SENDER_CONTROL_PORT: u16 = 53_555;
+pub const PORT_UNASSIGNED: u16 = 0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -33,7 +34,7 @@ impl SenderAdvertisement {
         self.protocol_version == PROTOCOL_VERSION
             && !self.sender_id.trim().is_empty()
             && !self.display_name.trim().is_empty()
-            && self.control_port != 0
+            && self.control_port != PORT_UNASSIGNED
     }
 }
 
@@ -54,7 +55,7 @@ impl StartStreamRequest {
         self.protocol_version == PROTOCOL_VERSION
             && !self.receiver_id.trim().is_empty()
             && !self.receiver_name.trim().is_empty()
-            && self.receiver_control_port != 0
+            && self.receiver_control_port != PORT_UNASSIGNED
     }
 }
 

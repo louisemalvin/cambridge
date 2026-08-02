@@ -15,7 +15,7 @@ pub(crate) fn poll(
     metrics: &mut Metrics,
 ) -> BusPollResult {
     let mut result = BusPollResult::default();
-    while let Some(message) = bus.timed_pop(gst::ClockTime::from_nseconds(0)) {
+    while let Some(message) = bus.timed_pop(gst::ClockTime::ZERO) {
         match message.view() {
             gst::MessageView::Error(error_message) => {
                 error!(

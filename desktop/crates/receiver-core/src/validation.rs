@@ -1,14 +1,16 @@
 use receiver_protocol::{PixelFormat, VideoProfile};
 
-use crate::{OutputFormat, ReceiverCapabilities, ReceiverConfig, ReceiverError};
+use crate::{OutputFormat, ReceiverCapabilities, ReceiverConfig, ReceiverError, PORT_UNASSIGNED};
+
+const YUY2_PREFERRED_MAX_WIDTH: u32 = 1_920;
 
 pub fn validate_config(config: &ReceiverConfig) -> Result<(), ReceiverError> {
-    if config.control_port == 0 {
+    if config.control_port == PORT_UNASSIGNED {
         return Err(ReceiverError::InvalidConfiguration(
             "control port must be non-zero".to_owned(),
         ));
     }
-    if config.media_port != 0 && config.control_port == config.media_port {
+    if config.media_port != PORT_UNASSIGNED && config.control_port == config.media_port {
         return Err(ReceiverError::InvalidConfiguration(
             "control and media ports must be different".to_owned(),
         ));
@@ -37,7 +39,7 @@ pub fn select_output_format(
     let supported = &capabilities.output.pixel_formats;
     let preferred = match requested {
         OutputFormat::Auto => {
-            if profile.width <= 1920 {
+            if profile.width <= YUY2_PREFERRED_MAX_WIDTH {
                 [PixelFormat::Yuy2, PixelFormat::Nv12, PixelFormat::I420]
             } else {
                 [PixelFormat::Nv12, PixelFormat::Yuy2, PixelFormat::I420]

@@ -4,6 +4,8 @@ use receiver_protocol::{DecoderAcceleration, VideoCodec};
 
 use crate::PipelineError;
 
+const PARSER_CONFIG_INTERVAL_EVERY_KEYFRAME: i32 = -1;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CodecSupport {
     pub supported: bool,
@@ -32,7 +34,7 @@ impl CodecPipelineFactory for DefaultCodecPipelineFactory {
             name: factory.to_owned(),
             reason: error.to_string(),
         })?;
-        parser.set_property("config-interval", -1i32);
+        parser.set_property("config-interval", PARSER_CONFIG_INTERVAL_EVERY_KEYFRAME);
         Ok(parser)
     }
 
@@ -76,7 +78,10 @@ mod tests {
             parser.factory().map(|factory| factory.name().to_string()),
             Some("h265parse".to_owned())
         );
-        assert_eq!(parser.property::<i32>("config-interval"), -1);
+        assert_eq!(
+            parser.property::<i32>("config-interval"),
+            PARSER_CONFIG_INTERVAL_EVERY_KEYFRAME,
+        );
     }
 
     #[test]

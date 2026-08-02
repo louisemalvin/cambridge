@@ -29,9 +29,15 @@ const SCAN_INTERVAL: Duration = Duration::from_secs(5);
 const PHONE_EXPIRY: Duration = Duration::from_secs(12);
 const PROBE_TIMEOUT: Duration = Duration::from_millis(120);
 const CONTROL_TIMEOUT: Duration = Duration::from_secs(10);
+const COMMAND_POLL_INTERVAL: Duration = Duration::from_millis(200);
+const SCAN_RETRY_SLEEP: Duration = Duration::from_millis(100);
 const MAX_RESPONSE_BYTES: u64 = 16 * 1024;
 const MAX_SCAN_HOSTS: u32 = 4_096;
 const SCAN_WORKERS: usize = 32;
+const IPV4_ADDRESS_BITS: u32 = 32;
+const RESERVED_SUBNET_HOSTS: u32 = 2;
+const FIRST_HOST_OFFSET: u32 = 1;
+const MIN_SCAN_CHUNK_SIZE: usize = 1;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiscoveredPhone {
@@ -106,7 +112,7 @@ impl DiscoveryService {
                 let mut worker = DiscoveryWorker::new(receiver_control_port, pairings, event_tx);
                 worker.publish();
                 loop {
-                    match command_rx.recv_timeout(Duration::from_millis(200)) {
+                    match command_rx.recv_timeout(COMMAND_POLL_INTERVAL) {
                         Ok(DiscoveryCommand::Attach(sender_id)) => worker.select(sender_id),
                         Ok(DiscoveryCommand::Shutdown)
                         | Err(mpsc::RecvTimeoutError::Disconnected) => {
@@ -373,7 +379,7 @@ fn scanner_loop(sender: &Sender<Vec<ScannedPhone>>, shutdown: &AtomicBool) {
         let _ = sender.send(scan_local_senders());
         let started = Instant::now();
         while started.elapsed() < SCAN_INTERVAL && !shutdown.load(Ordering::Relaxed) {
-            thread::sleep(Duration::from_millis(100));
+            thread::sleep(SCAN_RETRY_SLEEP);
         }
     }
 }
@@ -384,7 +390,7 @@ fn scan_local_senders() -> Vec<ScannedPhone> {
         return Vec::new();
     }
     let found = Mutex::new(Vec::new());
-    let chunk_size = candidates.len().div_ceil(SCAN_WORKERS).max(1);
+    let chunk_size = candidates.len().div_ceil(SCAN_WORKERS).max(MIN_SCAN_CHUNK_SIZE);
     thread::scope(|scope| {
         for chunk in candidates.chunks(chunk_size) {
             let found = &found;
@@ -414,15 +420,16 @@ fn local_scan_candidates() -> Vec<SocketAddr> {
         let IfAddr::V4(address) = interface.addr else {
             continue;
         };
-        let host_count = 1u32.checked_shl(u32::from(32 - address.prefixlen)).unwrap_or(u32::MAX);
-        if host_count <= 2 || host_count > MAX_SCAN_HOSTS {
+        let host_count =
+            1u32.checked_shl(IPV4_ADDRESS_BITS - u32::from(address.prefixlen)).unwrap_or(u32::MAX);
+        if host_count <= RESERVED_SUBNET_HOSTS || host_count > MAX_SCAN_HOSTS {
             continue;
         }
         let local = u32::from(address.ip);
         let mask = u32::from(address.netmask);
         let network = local & mask;
         let broadcast = network | !mask;
-        for host in (network + 1)..broadcast {
+        for host in (network + FIRST_HOST_OFFSET)..broadcast {
             if host != local {
                 candidates
                     .insert(SocketAddr::new(IpAddr::V4(Ipv4Addr::from(host)), SENDER_CONTROL_PORT));
