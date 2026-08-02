@@ -5,20 +5,29 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
-import dev.mobilewebcam.sender.MobileWebcamApplication
+import dagger.hilt.android.AndroidEntryPoint
+import dev.mobilewebcam.sender.session.StreamSessionController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
+@AndroidEntryPoint
 class ForegroundStreamingService : Service() {
+    @Inject
+    lateinit var sessionController: StreamSessionController
+
+    @Inject
+    lateinit var powerManager: StreamingPowerManager
+
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
             serviceScope.launch {
-                webcamApplication.sessionController.stop()
+                sessionController.stop()
                 stopSelfResult(startId)
             }
             return START_NOT_STICKY
@@ -33,15 +42,14 @@ class ForegroundStreamingService : Service() {
     }
 
     override fun onDestroy() {
-        webcamApplication.powerManager.release()
+        if (::powerManager.isInitialized) {
+            powerManager.release()
+        }
         serviceScope.cancel()
         super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
-
-    private val webcamApplication: MobileWebcamApplication
-        get() = getApplication() as MobileWebcamApplication
 
     companion object {
         const val ACTION_START = "dev.mobilewebcam.sender.action.START_STREAMING"

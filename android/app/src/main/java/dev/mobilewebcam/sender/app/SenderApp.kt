@@ -22,7 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import dev.mobilewebcam.sender.MobileWebcamApplication
 import dev.mobilewebcam.sender.R
 import dev.mobilewebcam.sender.app.navigation.AppDestination
@@ -37,9 +37,7 @@ import dev.mobilewebcam.sender.ui.model.SenderUiEffect
 fun SenderApp() {
     val context = LocalContext.current
     val application = context.applicationContext as MobileWebcamApplication
-    val viewModel: WebcamViewModel = viewModel(
-        factory = WebcamViewModelFactory(application),
-    )
+    val viewModel: WebcamViewModel = hiltViewModel()
     val screenState by viewModel.uiState.collectAsState()
     val diagnosticsClipboardLabel = stringResource(R.string.diagnostics_clipboard_label)
     val errorDetailsCopiedMessage = stringResource(R.string.error_details_copied)
@@ -122,16 +120,3 @@ fun SenderApp() {
 private fun Context.hasCameraPermission(): Boolean =
     ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
         PackageManager.PERMISSION_GRANTED
-
-private class WebcamViewModelFactory(
-    private val application: MobileWebcamApplication,
-) : androidx.lifecycle.ViewModelProvider.Factory {
-    @Suppress("UNCHECKED_CAST")
-    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-        check(modelClass.isAssignableFrom(WebcamViewModel::class.java))
-        return WebcamViewModel(
-            coordinator = application.connectionCoordinator,
-            cameraController = application.cameraController,
-        ) as T
-    }
-}
