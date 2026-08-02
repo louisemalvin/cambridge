@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use gst::prelude::*;
 use gstreamer as gst;
-use receiver_core::MediaSessionConfig;
+use receiver_core::{MediaSessionConfig, DEFAULT_LISTEN_ADDRESS};
 use receiver_protocol::{PixelFormat, VideoCodec};
 use tracing::{debug, warn};
 
@@ -45,7 +45,7 @@ pub(crate) fn build_pipeline<F: VideoSinkFactory>(
     let sink = sink_factory.create_sink(config.output_format)?;
     let preview_sink = sink_factory.create_preview_sink()?;
 
-    source.set_property("address", "0.0.0.0");
+    source.set_property("address", DEFAULT_LISTEN_ADDRESS.to_string());
     source.set_property("port", i32::from(config.media_port));
     source.set_property("caps", mpeg_ts_caps());
     source.set_property("buffer-size", UDP_RECEIVE_BUFFER_SIZE_BYTES);

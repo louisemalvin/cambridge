@@ -1,4 +1,4 @@
-use receiver_core::ReceiverConfig;
+use receiver_core::{ReceiverConfig, DEFAULT_LISTEN_ADDRESS};
 use receiver_protocol::ReceiverCapabilities;
 
 const NANOSECONDS_PER_MILLISECOND: u64 = 1_000_000;
@@ -24,7 +24,9 @@ pub fn print_capabilities(capabilities: &ReceiverCapabilities) -> anyhow::Result
 
 pub fn print_pipeline(config: &ReceiverConfig) {
     let timeout_nanos = config.udp_timeout_ms.saturating_mul(NANOSECONDS_PER_MILLISECOND);
-    println!("udpsrc address=0.0.0.0 port=<assigned-per-session> timeout={timeout_nanos}");
+    println!(
+        "udpsrc address={DEFAULT_LISTEN_ADDRESS} port=<assigned-per-session> timeout={timeout_nanos}"
+    );
     println!("  -> tsparse -> tsdemux latency={}", config.latency.demux_latency_ms);
     println!("  -> h264parse or h265parse -> decodebin");
     println!(
