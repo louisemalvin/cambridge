@@ -37,7 +37,45 @@ pub struct Cli {
 
     #[arg(long)]
     pub print_pipeline: bool,
+
+    /// Poll a live receiver session and build a bounded performance report.
+    #[arg(long)]
+    pub inspect_session: Option<String>,
+
+    #[arg(long, default_value = DEFAULT_INSPECTOR_RECEIVER_URL)]
+    pub receiver_url: String,
+
+    #[arg(long, default_value_t = DEFAULT_INSPECTION_DURATION_SECONDS)]
+    pub inspect_duration_seconds: u64,
+
+    #[arg(long, default_value_t = DEFAULT_INSPECTION_POLL_MILLIS)]
+    pub inspect_poll_ms: u64,
+
+    #[arg(long, default_value = "unspecified")]
+    pub network: String,
+
+    #[arg(long, default_value = "unspecified")]
+    pub consumer: String,
+
+    #[arg(long)]
+    pub run_id: Option<String>,
+
+    #[arg(long)]
+    pub sender_log: Option<PathBuf>,
+
+    #[arg(long)]
+    pub receiver_log: Option<PathBuf>,
+
+    #[arg(long)]
+    pub output: Option<PathBuf>,
+
+    #[arg(long)]
+    pub json_logs: bool,
 }
+
+pub const DEFAULT_INSPECTION_DURATION_SECONDS: u64 = 60;
+pub const DEFAULT_INSPECTION_POLL_MILLIS: u64 = 1_000;
+pub const DEFAULT_INSPECTOR_RECEIVER_URL: &str = "http://127.0.0.1:5001";
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum OutputFormatArg {

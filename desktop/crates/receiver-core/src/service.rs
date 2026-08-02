@@ -1,4 +1,7 @@
-use std::time::{Duration, Instant};
+use std::{
+    collections::VecDeque,
+    time::{Duration, Instant},
+};
 
 use receiver_protocol::{
     MediaResponse, OutputResponse, PrepareSessionRequest, PrepareSessionResponse,
@@ -7,9 +10,14 @@ use receiver_protocol::{
 use uuid::Uuid;
 
 use crate::{
-    negotiate_codec, select_output_format, validate_config, LatencyConfig, MediaSessionConfig,
-    ReceiverCapabilityProvider, ReceiverConfig, ReceiverError, ReceiverSession, ReceiverState,
+    diagnostic_timestamp_ms, negotiate_codec, select_output_format, validate_config, LatencyConfig,
+    MediaSessionConfig, ReceiverCapabilityProvider, ReceiverConfig, ReceiverDiagnostics,
+    ReceiverDiagnosticsRun, ReceiverError, ReceiverSession, ReceiverState, DIAGNOSTICS_SCHEMA,
 };
+
+// The HTTP watchdog samples every 250 ms, so this retains about two and a half
+// minutes while keeping completed-run memory bounded.
+const MAX_DIAGNOSTIC_SNAPSHOT_COUNT: usize = 600;
 
 pub trait MediaReceiver: Send {
     fn prepare(&mut self, config: MediaSessionConfig) -> Result<u16, ReceiverError>;
@@ -31,6 +39,10 @@ pub trait MediaReceiver: Send {
     fn timeout_count(&self) -> u64 {
         0
     }
+
+    fn diagnostics(&self) -> Option<ReceiverDiagnostics> {
+        None
+    }
 }
 
 pub struct ReceiverService {
@@ -41,6 +53,8 @@ pub struct ReceiverService {
     session: Option<ReceiverSession>,
     last_session_id: Option<Uuid>,
     timed_out_at: Option<Instant>,
+    diagnostic_snapshots: VecDeque<ReceiverDiagnostics>,
+    last_diagnostics: Option<ReceiverDiagnosticsRun>,
 }
 
 impl ReceiverService {
@@ -59,6 +73,8 @@ impl ReceiverService {
             session: None,
             last_session_id: None,
             timed_out_at: None,
+            diagnostic_snapshots: VecDeque::new(),
+            last_diagnostics: None,
         })
     }
 
@@ -112,6 +128,7 @@ impl ReceiverService {
         session.state = self.media_receiver.state();
         self.last_session_id = Some(session_id);
         self.timed_out_at = None;
+        self.diagnostic_snapshots.clear();
         self.session = Some(session.clone());
         Ok(PrepareSessionResponse {
             session_id: session_id.to_string(),
@@ -147,6 +164,25 @@ impl ReceiverService {
         })
     }
 
+    pub fn diagnostics(&mut self, session_id: &str) -> Result<ReceiverDiagnostics, ReceiverError> {
+        self.refresh_session();
+        let session = self
+            .session
+            .as_ref()
+            .ok_or_else(|| ReceiverError::SessionNotFound(session_id.to_owned()))?;
+        if session.id.to_string() != session_id {
+            return Err(ReceiverError::SessionNotFound(session_id.to_owned()));
+        }
+        self.media_receiver.diagnostics().ok_or_else(|| {
+            ReceiverError::GStreamer("receiver diagnostics are unavailable".to_owned())
+        })
+    }
+
+    pub fn latest_diagnostics(&mut self) -> Result<ReceiverDiagnosticsRun, ReceiverError> {
+        self.refresh_session();
+        self.last_diagnostics.clone().ok_or(ReceiverError::DiagnosticsNotFound)
+    }
+
     pub fn stop_session(&mut self, session_id: &str) -> Result<(), ReceiverError> {
         if self.session.is_none() {
             if self.last_session_id.is_some_and(|last_id| last_id.to_string() == session_id) {
@@ -161,7 +197,11 @@ impl ReceiverService {
         if let Some(session) = self.session.as_mut() {
             session.state = ReceiverState::Stopping;
         }
+        if let Some(diagnostics) = self.media_receiver.diagnostics() {
+            self.record_diagnostic_snapshot(diagnostics);
+        }
         let stop_result = self.media_receiver.stop();
+        self.finalize_diagnostics(session_id);
         self.session = None;
         self.timed_out_at = None;
         stop_result.map_err(|error| ReceiverError::MediaStop(error.to_string()))
@@ -188,6 +228,9 @@ impl ReceiverService {
             return;
         }
         let media_state = self.media_receiver.state();
+        if let Some(diagnostics) = self.media_receiver.diagnostics() {
+            self.record_diagnostic_snapshot(diagnostics);
+        }
         if media_state == ReceiverState::TimedOut {
             let timed_out_at = self.timed_out_at.get_or_insert_with(Instant::now);
             if timed_out_at.elapsed() >= Duration::from_millis(self.config.session_timeout_grace_ms)
@@ -208,6 +251,28 @@ impl ReceiverService {
         session.decoder = self.media_receiver.decoder_name();
         session.received_bitrate_bps = self.media_receiver.received_bitrate_bps();
         session.timeout_count = self.media_receiver.timeout_count();
+    }
+
+    fn record_diagnostic_snapshot(&mut self, diagnostics: ReceiverDiagnostics) {
+        if self.diagnostic_snapshots.len() == MAX_DIAGNOSTIC_SNAPSHOT_COUNT {
+            self.diagnostic_snapshots.pop_front();
+        }
+        self.diagnostic_snapshots.push_back(diagnostics);
+    }
+
+    fn finalize_diagnostics(&mut self, session_id: &str) {
+        if self.diagnostic_snapshots.is_empty() {
+            return;
+        }
+        let snapshots: Vec<ReceiverDiagnostics> = self.diagnostic_snapshots.drain(..).collect();
+        let started_at_ms = snapshots.first().map_or(0, |snapshot| snapshot.started_at_ms);
+        self.last_diagnostics = Some(ReceiverDiagnosticsRun {
+            schema: DIAGNOSTICS_SCHEMA.to_owned(),
+            session_id: session_id.to_owned(),
+            started_at_ms,
+            completed_at_ms: diagnostic_timestamp_ms(),
+            snapshots,
+        });
     }
 }
 

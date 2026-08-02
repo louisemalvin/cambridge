@@ -10,7 +10,10 @@ use tracing::info;
 use tracing_subscriber::EnvFilter;
 
 mod cli;
+mod http;
+mod inspect;
 mod output;
+mod report;
 mod shutdown;
 
 use cli::Cli;
@@ -18,7 +21,11 @@ use cli::Cli;
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
-    init_logging(&cli.log_level)?;
+    init_logging(&cli.log_level, cli.json_logs)?;
+    if cli.inspect_session.is_some() {
+        inspect::run(&cli)?;
+        return Ok(());
+    }
     let config = if cli.print_pipeline || cli.print_capabilities {
         cli.receiver_config(
             cli.device.clone().unwrap_or_else(|| PathBuf::from("<auto-detected-v4l2loopback>")),
@@ -82,9 +89,13 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-fn init_logging(level: &str) -> Result<()> {
+fn init_logging(level: &str, json_logs: bool) -> Result<()> {
     let filter =
         EnvFilter::try_new(level).with_context(|| format!("invalid log level: {level}"))?;
-    tracing_subscriber::fmt().with_env_filter(filter).try_init().ok();
+    if json_logs {
+        tracing_subscriber::fmt().json().with_env_filter(filter).try_init().ok();
+    } else {
+        tracing_subscriber::fmt().with_env_filter(filter).try_init().ok();
+    }
     Ok(())
 }

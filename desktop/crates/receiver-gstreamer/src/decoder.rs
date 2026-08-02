@@ -4,12 +4,13 @@ use receiver_protocol::VideoCodec;
 use std::sync::{Arc, Mutex};
 use tracing::debug;
 
-use crate::metrics::Metrics;
+use crate::{metrics::Metrics, pipeline_event::PipelineObserver};
 
 pub fn connect_decoder_diagnostics(
     decodebin: &gst::Element,
     codec: VideoCodec,
     metrics: Arc<Mutex<Metrics>>,
+    observer: Arc<PipelineObserver>,
 ) {
     let Ok(decodebin) = decodebin.clone().downcast::<gst::Bin>() else {
         return;
@@ -26,8 +27,9 @@ pub fn connect_decoder_diagnostics(
         }
         let factory_name = factory.name().to_string();
         let decoder_name = format!("{} ({factory_name})", element.name());
-        if let Ok(mut metrics) = metrics.lock() {
-            metrics.set_decoder(decoder_name.clone());
+        let selected = metrics.lock().is_ok_and(|mut metrics| metrics.set_decoder(decoder_name.clone()));
+        if selected {
+            observer.on_decoder_selected(decoder_name.clone());
         }
         debug!(codec = %codec, decoder = %decoder_name, factory = %factory_name, "GStreamer selected video decoder");
     });

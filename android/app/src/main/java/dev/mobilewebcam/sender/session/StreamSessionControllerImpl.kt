@@ -1,5 +1,6 @@
 package dev.mobilewebcam.sender.session
 
+import android.os.Build
 import dev.mobilewebcam.sender.capabilities.EncoderCapabilityProbe
 import dev.mobilewebcam.sender.control.ReceiverControlClient
 import dev.mobilewebcam.sender.control.ReceiverControlError
@@ -32,6 +33,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.util.UUID
 
 class StreamSessionControllerImpl(
     private val receiver: ReceiverControlClient,
@@ -45,6 +47,8 @@ class StreamSessionControllerImpl(
     private val lifecycleMutex = Mutex()
     private val stateFlow = MutableStateFlow<StreamState>(StreamState.Idle)
     private var activeSession: NegotiatedSession? = null
+    private var activeRunId: String? = null
+    private var lastLoggedBitrateAtMillis: Long = NO_BITRATE_SAMPLE_TIMESTAMP_MILLIS
 
     override val state: StateFlow<StreamState> = stateFlow.asStateFlow()
 
@@ -62,21 +66,48 @@ class StreamSessionControllerImpl(
         if (activeSession != null) {
             return@withLock failure(StreamFailure.ReceiverRejectedProfile("A stream is already active"))
         }
-        logger.info(
-            "stream start requested",
+        val runId = "$RUN_ID_PREFIX${UUID.randomUUID()}"
+        activeRunId = runId
+        diagnosticEvent(
+            "stream_start_requested",
             mapOf("host" to endpoint.host, "controlPort" to endpoint.controlPort),
+        )
+        diagnosticEvent(
+            "sender_environment",
+            mapOf(
+                "phoneManufacturer" to Build.MANUFACTURER,
+                "phoneModel" to Build.MODEL,
+                "androidApi" to Build.VERSION.SDK_INT,
+                "profileId" to profile.id,
+                "width" to profile.width,
+                "height" to profile.height,
+                "fps" to profile.fps,
+            ),
         )
         stateFlow.value = StreamState.CheckingReceiver
         try {
             receiver.health(endpoint).orReceiverFailure("Health check failed")
+            diagnosticEvent("receiver_health_checked")
             val receiverCapabilities = receiver.capabilities(endpoint)
                 .orReceiverFailure("Capability request failed")
+            diagnosticEvent(
+                "receiver_capabilities_received",
+                mapOf("codecCount" to receiverCapabilities.codecs.size),
+            )
             stateFlow.value = StreamState.Negotiating
             val senderCapabilities = SenderCapabilities(capabilityProbe.getCapabilities(listOf(profile)))
             val codec = negotiator.negotiate(preference, senderCapabilities, receiverCapabilities, profile)
-            logger.info(
-                "codec negotiated",
-                mapOf("codec" to codec.protocolId, "profile" to profile.id, "preference" to preference),
+            diagnosticEvent(
+                "codec_negotiated",
+                mapOf(
+                    "codec" to codec.protocolId,
+                    "profileId" to profile.id,
+                    "width" to profile.width,
+                    "height" to profile.height,
+                    "fps" to profile.fps,
+                    "targetBitrateBps" to profile.bitrateFor(codec),
+                    "preference" to preference,
+                ),
             )
             val request = PrepareSessionRequest(
                 preferredCodecs = preference.candidates(),
@@ -86,6 +117,16 @@ class StreamSessionControllerImpl(
             val session = receiver.prepareSession(endpoint, request)
                 .orPrepareFailure()
             activeSession = session
+            diagnosticEvent(
+                "receiver_session_prepared",
+                mapOf(
+                    "sessionId" to session.sessionId,
+                    "mediaPort" to session.mediaPort,
+                    "codec" to session.selectedCodec.protocolId,
+                    "bitrateBps" to session.bitrateBps,
+                    "outputPixelFormat" to session.outputPixelFormat,
+                ),
+            )
             checkNegotiatedCodec(codec, session.selectedCodec, preference, profile)
             stateFlow.value = StreamState.Preparing(codec, profile)
             val configuration = StreamConfiguration(
@@ -93,17 +134,30 @@ class StreamSessionControllerImpl(
                 profile = session.profile,
                 bitrateBps = session.bitrateBps,
                 keyframeIntervalSeconds = session.profile.keyframeIntervalSeconds,
+                runId = runId,
+                sessionId = session.sessionId,
             )
             StreamConfigurationValidator.validate(configuration)
                 .getOrElse { throw StreamFailureException(StreamFailure.ReceiverRejectedProfile(it.message.orEmpty()), it) }
             foreground.start().getOrElse { cause -> throw StreamFailureException(StreamFailure.Unexpected(cause), cause) }
             streamEngine.prepare(configuration).getOrThrow()
+            diagnosticEvent(
+                "encoder_prepared",
+                mapOf(
+                    "codec" to configuration.codec.protocolId,
+                    "width" to configuration.profile.width,
+                    "height" to configuration.profile.height,
+                    "fps" to configuration.profile.fps,
+                    "bitrateBps" to configuration.bitrateBps,
+                ),
+            )
             stateFlow.value = StreamState.Starting(session)
+            diagnosticEvent("media_stream_starting", mapOf("mediaPort" to session.mediaPort))
             streamEngine.start(endpoint.host, session.mediaPort).getOrThrow()
             stateFlow.value = StreamState.Streaming(session, System.currentTimeMillis())
-            logger.info(
-                "stream started",
-                mapOf("sessionId" to session.sessionId, "codec" to session.selectedCodec.protocolId),
+            diagnosticEvent(
+                "stream_started",
+                mapOf("codec" to session.selectedCodec.protocolId, "bitrateBps" to session.bitrateBps),
             )
             Result.success(Unit)
         } catch (cancelled: CancellationException) {
@@ -111,11 +165,19 @@ class StreamSessionControllerImpl(
             stateFlow.value = StreamState.Idle
             throw cancelled
         } catch (failure: StreamFailureException) {
+            diagnosticEvent(
+                "stream_start_failed",
+                mapOf("failureType" to failure.failure::class.simpleName, "reason" to failure.message),
+            )
             cleanupLocked(activeSession)
             stateFlow.value = StreamState.Failed(failure.failure)
             logger.warn("stream start failed", failure)
             Result.failure(failure)
         } catch (error: Throwable) {
+            diagnosticEvent(
+                "stream_failed",
+                mapOf("failureType" to error::class.simpleName, "reason" to error.message),
+            )
             cleanupLocked(activeSession)
             val failure = StreamFailure.Unexpected(error)
             stateFlow.value = StreamState.Failed(failure)
@@ -127,9 +189,10 @@ class StreamSessionControllerImpl(
     override suspend fun stop(): Result<Unit> = lifecycleMutex.withLock {
         if (activeSession == null && stateFlow.value == StreamState.Idle) return@withLock Result.success(Unit)
         stateFlow.value = StreamState.Stopping
+        diagnosticEvent("stream_stopping")
+        diagnosticEvent("stream_stopped")
         cleanupLocked(activeSession)
         stateFlow.value = StreamState.Idle
-        logger.info("stream stopped")
         Result.success(Unit)
     }
 
@@ -137,18 +200,25 @@ class StreamSessionControllerImpl(
         if (activeSession == null) {
             return@withLock Result.failure(IllegalStateException("No active stream"))
         }
-        streamEngine.updateBitrate(bitrateBps)
+        diagnosticEvent("bitrate_update_requested", mapOf("bitrateBps" to bitrateBps))
+        return@withLock streamEngine.updateBitrate(bitrateBps).also { result ->
+            if (result.isSuccess) {
+                diagnosticEvent("bitrate_updated", mapOf("bitrateBps" to bitrateBps))
+            }
+        }
     }
 
     private suspend fun handleEngineEvent(event: StreamEngineEvent) {
         lifecycleMutex.withLock {
             if (activeSession == null || stateFlow.value !is StreamState.Streaming) return@withLock
+            logEngineEvent(event)
             val failure = when (event) {
                 is StreamEngineEvent.ConnectionFailed ->
                     StreamFailure.StreamStartFailed(IllegalStateException(event.reason))
                 StreamEngineEvent.Disconnected -> StreamFailure.NetworkDisconnected
                 else -> return@withLock
             }
+            diagnosticEvent("stream_failed", mapOf("failureType" to failure::class.simpleName))
             cleanupLocked(activeSession)
             stateFlow.value = StreamState.Failed(failure)
         }
@@ -162,6 +232,42 @@ class StreamSessionControllerImpl(
             runCatching { receiver.stopSession(session.endpoint, session.sessionId) }
         }
         activeSession = null
+        activeRunId = null
+    }
+
+    private fun logEngineEvent(event: StreamEngineEvent) {
+        when (event) {
+            is StreamEngineEvent.ConnectionStarted -> diagnosticEvent(
+                "encoder_connection_started",
+                mapOf("endpoint" to event.endpoint),
+            )
+            StreamEngineEvent.Connected -> diagnosticEvent("encoder_connected")
+            is StreamEngineEvent.ConnectionFailed -> diagnosticEvent(
+                "encoder_connection_failed",
+                mapOf("reason" to event.reason),
+            )
+            StreamEngineEvent.Disconnected -> diagnosticEvent("encoder_disconnected")
+            StreamEngineEvent.AuthenticationError -> diagnosticEvent("encoder_authentication_error")
+            StreamEngineEvent.AuthenticationSucceeded -> diagnosticEvent("encoder_authentication_succeeded")
+            is StreamEngineEvent.BitrateChanged -> {
+                val now = System.currentTimeMillis()
+                if (now - lastLoggedBitrateAtMillis >= BITRATE_SAMPLE_INTERVAL_MILLIS) {
+                    lastLoggedBitrateAtMillis = now
+                    diagnosticEvent(
+                        "encoder_bitrate_changed",
+                        mapOf("bitrateBps" to event.bitrateBps),
+                    )
+                }
+            }
+        }
+    }
+
+    private fun diagnosticEvent(name: String, fields: Map<String, Any?> = emptyMap()) {
+        val context = mapOf(
+            "runId" to activeRunId,
+            "sessionId" to activeSession?.sessionId,
+        )
+        logger.event(name, (fields + context).filterValues { it != null })
     }
 
     private fun checkNegotiatedCodec(
@@ -207,4 +313,10 @@ class StreamSessionControllerImpl(
 
     private fun failure(failure: StreamFailure): Result<Unit> =
         Result.failure(StreamFailureException(failure))
+
+    private companion object {
+        const val RUN_ID_PREFIX = "run-"
+        const val BITRATE_SAMPLE_INTERVAL_MILLIS = 5_000L
+        const val NO_BITRATE_SAMPLE_TIMESTAMP_MILLIS = 0L
+    }
 }

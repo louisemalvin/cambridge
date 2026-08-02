@@ -35,6 +35,9 @@ impl HttpControlError {
                 }
                 ReceiverError::SessionConflict => (StatusCode::CONFLICT, "session_conflict"),
                 ReceiverError::SessionNotFound(_) => (StatusCode::NOT_FOUND, "session_not_found"),
+                ReceiverError::DiagnosticsNotFound => {
+                    (StatusCode::NOT_FOUND, "diagnostics_not_found")
+                }
                 ReceiverError::MediaPreparation(_)
                 | ReceiverError::MediaStart(_)
                 | ReceiverError::MediaStop(_)

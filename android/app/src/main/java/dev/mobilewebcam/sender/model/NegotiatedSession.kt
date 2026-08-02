@@ -16,4 +16,6 @@ data class StreamConfiguration(
     val profile: VideoProfile,
     val bitrateBps: Int,
     val keyframeIntervalSeconds: Int,
+    val runId: String? = null,
+    val sessionId: String? = null,
 )

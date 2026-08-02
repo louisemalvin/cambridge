@@ -42,6 +42,19 @@ mod handlers {
         Ok(Json(lock_service(&state)?.session(&session_id)?))
     }
 
+    pub async fn diagnostics(
+        State(state): State<ControlState>,
+        Path(session_id): Path<String>,
+    ) -> Result<Json<receiver_core::ReceiverDiagnostics>, HttpControlError> {
+        Ok(Json(lock_service(&state)?.diagnostics(&session_id)?))
+    }
+
+    pub async fn latest_diagnostics(
+        State(state): State<ControlState>,
+    ) -> Result<Json<receiver_core::ReceiverDiagnosticsRun>, HttpControlError> {
+        Ok(Json(lock_service(&state)?.latest_diagnostics()?))
+    }
+
     pub async fn stop_session(
         State(state): State<ControlState>,
         Path(session_id): Path<String>,
@@ -56,6 +69,8 @@ pub fn router(state: ControlState) -> Router {
         .route("/v1/health", get(handlers::health))
         .route("/v1/capabilities", get(handlers::capabilities))
         .route("/v1/sessions/prepare", post(handlers::prepare_session))
+        .route("/v1/diagnostics/latest", get(handlers::latest_diagnostics))
+        .route("/v1/sessions/{session_id}/diagnostics", get(handlers::diagnostics))
         .route("/v1/sessions/{session_id}", get(handlers::session).delete(handlers::stop_session))
         .with_state(state)
 }

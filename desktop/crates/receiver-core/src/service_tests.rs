@@ -1,5 +1,8 @@
 use super::*;
-use crate::StaticCapabilityProvider;
+use crate::{
+    DiagnosticPhase, FrameIntervalStatistics, QueueDiagnostics, ReceiverDiagnostics,
+    StaticCapabilityProvider, DIAGNOSTICS_SCHEMA,
+};
 use receiver_protocol::{
     DecoderAcceleration, MediaCapabilities, MediaPortAssignment, OutputCapabilities,
     ReceiverSessionState, SessionCapabilities, VideoCodec, VideoCodecCapability, VideoProfile,
@@ -10,15 +13,18 @@ use std::{
     thread,
     time::Duration,
 };
+use uuid::Uuid;
 
 #[derive(Default)]
 struct FakeReceiver {
     state: ReceiverState,
+    session_id: Option<Uuid>,
 }
 
 impl MediaReceiver for FakeReceiver {
     fn prepare(&mut self, config: MediaSessionConfig) -> Result<u16, ReceiverError> {
         self.state = ReceiverState::Prepared;
+        self.session_id = Some(config.session_id);
         Ok(if config.media_port == 0 { 55_123 } else { config.media_port })
     }
 
@@ -29,11 +35,44 @@ impl MediaReceiver for FakeReceiver {
 
     fn stop(&mut self) -> Result<(), ReceiverError> {
         self.state = ReceiverState::Idle;
+        self.session_id = None;
         Ok(())
     }
 
     fn state(&self) -> ReceiverState {
         self.state
+    }
+
+    fn diagnostics(&self) -> Option<ReceiverDiagnostics> {
+        Some(ReceiverDiagnostics {
+            schema: DIAGNOSTICS_SCHEMA.to_owned(),
+            session_id: self.session_id?.to_string(),
+            started_at_ms: 1,
+            captured_at_ms: 2,
+            elapsed_ms: 1,
+            state: self.state,
+            selected_codec: VideoCodec::H264,
+            target_profile: VideoProfile { width: 1920, height: 1080, fps: 30 },
+            target_bitrate_bps: 10_000_000,
+            output_pixel_format: receiver_protocol::PixelFormat::Yuy2,
+            decoder: None,
+            first_frame_elapsed_ms: None,
+            last_network_age_ms: None,
+            last_decoded_frame_age_ms: None,
+            observed_fps: None,
+            frame_intervals: FrameIntervalStatistics::default(),
+            received_bitrate_bps: 0,
+            recent_received_bitrate_bps: 0,
+            received_bytes: 0,
+            decoded_frames: 0,
+            timeout_count: 0,
+            continuity_warning_count: 0,
+            pipeline_warning_count: 0,
+            pipeline_error_count: 0,
+            output_queue: QueueDiagnostics::default(),
+            phase: DiagnosticPhase::WaitingForPackets,
+            events: Vec::new(),
+        })
     }
 }
 
@@ -125,6 +164,41 @@ fn session_conflict_and_idempotent_stop_are_handled() {
     receiver.stop_session(&prepared.session_id).unwrap();
     receiver.stop_session(&prepared.session_id).unwrap();
     assert_eq!(receiver.state(), ReceiverState::Idle);
+}
+
+#[test]
+fn latest_diagnostics_is_retained_after_stop() {
+    let mut receiver = service(true, true);
+    let prepared = receiver.prepare_session(&request(vec![VideoCodec::H264])).unwrap();
+    let _ = receiver.session(&prepared.session_id);
+
+    receiver.stop_session(&prepared.session_id).unwrap();
+
+    let run = receiver.latest_diagnostics().unwrap();
+    assert_eq!(run.session_id, prepared.session_id);
+    assert_eq!(run.schema, DIAGNOSTICS_SCHEMA);
+    assert!(!run.snapshots.is_empty());
+}
+
+#[test]
+fn latest_diagnostics_is_unavailable_before_a_completed_run() {
+    let mut receiver = service(true, true);
+
+    assert!(matches!(receiver.latest_diagnostics(), Err(ReceiverError::DiagnosticsNotFound)));
+}
+
+#[test]
+fn diagnostic_snapshot_retention_is_bounded() {
+    let mut receiver = service(true, true);
+    let prepared = receiver.prepare_session(&request(vec![VideoCodec::H264])).unwrap();
+    for _ in 0..=MAX_DIAGNOSTIC_SNAPSHOT_COUNT {
+        let _ = receiver.session(&prepared.session_id);
+    }
+
+    receiver.stop_session(&prepared.session_id).unwrap();
+
+    let run = receiver.latest_diagnostics().unwrap();
+    assert_eq!(run.snapshots.len(), MAX_DIAGNOSTIC_SNAPSHOT_COUNT);
 }
 
 #[test]

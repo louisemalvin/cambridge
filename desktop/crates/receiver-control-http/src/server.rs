@@ -59,8 +59,9 @@ mod tests {
     use axum::http::StatusCode;
     use http_body_util::BodyExt;
     use receiver_core::{
-        MediaReceiver, MediaSessionConfig, ReceiverConfig, ReceiverError, ReceiverService,
-        ReceiverState, StaticCapabilityProvider,
+        DiagnosticPhase, FrameIntervalStatistics, MediaReceiver, MediaSessionConfig,
+        QueueDiagnostics, ReceiverConfig, ReceiverDiagnostics, ReceiverError, ReceiverService,
+        ReceiverState, StaticCapabilityProvider, DIAGNOSTICS_SCHEMA,
     };
     use receiver_protocol::{
         DecoderAcceleration, MediaCapabilities, MediaPortAssignment, OutputCapabilities,
@@ -82,6 +83,42 @@ mod tests {
         }
         fn state(&self) -> ReceiverState {
             ReceiverState::WaitingForStream
+        }
+
+        fn diagnostics(&self) -> Option<ReceiverDiagnostics> {
+            Some(ReceiverDiagnostics {
+                schema: DIAGNOSTICS_SCHEMA.to_owned(),
+                session_id: "fake".to_owned(),
+                started_at_ms: 1,
+                captured_at_ms: 2,
+                elapsed_ms: 1,
+                state: ReceiverState::WaitingForStream,
+                selected_codec: VideoCodec::H264,
+                target_profile: receiver_protocol::VideoProfile {
+                    width: 320,
+                    height: 240,
+                    fps: 30,
+                },
+                target_bitrate_bps: 500_000,
+                output_pixel_format: receiver_protocol::PixelFormat::Yuy2,
+                decoder: None,
+                first_frame_elapsed_ms: None,
+                last_network_age_ms: None,
+                last_decoded_frame_age_ms: None,
+                observed_fps: None,
+                frame_intervals: FrameIntervalStatistics::default(),
+                received_bitrate_bps: 0,
+                recent_received_bitrate_bps: 0,
+                received_bytes: 0,
+                decoded_frames: 0,
+                timeout_count: 0,
+                continuity_warning_count: 0,
+                pipeline_warning_count: 0,
+                pipeline_error_count: 0,
+                output_queue: QueueDiagnostics::default(),
+                phase: DiagnosticPhase::WaitingForPackets,
+                events: Vec::new(),
+            })
         }
     }
 
@@ -131,6 +168,18 @@ mod tests {
     #[tokio::test]
     async fn session_endpoints_prepare_report_and_stop_a_session() {
         let app = router(ControlState::new(service()));
+        let missing_diagnostics = app
+            .clone()
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/v1/diagnostics/latest")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(missing_diagnostics.status(), StatusCode::NOT_FOUND);
+
         let capabilities = app
             .clone()
             .oneshot(
@@ -178,7 +227,23 @@ mod tests {
             .unwrap();
         assert_eq!(state.status(), StatusCode::OK);
 
+        let diagnostics = app
+            .clone()
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri(format!("/v1/sessions/{}/diagnostics", prepared.session_id))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(diagnostics.status(), StatusCode::OK);
+        let body = diagnostics.into_body().collect().await.unwrap().to_bytes();
+        let report: receiver_core::ReceiverDiagnostics = serde_json::from_slice(&body).unwrap();
+        assert_eq!(report.schema, DIAGNOSTICS_SCHEMA);
+
         let stopped = app
+            .clone()
             .oneshot(
                 axum::http::Request::builder()
                     .method("DELETE")
@@ -189,5 +254,20 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(stopped.status(), StatusCode::NO_CONTENT);
+
+        let latest = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/v1/diagnostics/latest")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(latest.status(), StatusCode::OK);
+        let body = latest.into_body().collect().await.unwrap().to_bytes();
+        let report: receiver_core::ReceiverDiagnosticsRun = serde_json::from_slice(&body).unwrap();
+        assert_eq!(report.schema, DIAGNOSTICS_SCHEMA);
+        assert!(!report.snapshots.is_empty());
     }
 }

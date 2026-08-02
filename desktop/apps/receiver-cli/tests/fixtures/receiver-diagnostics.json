@@ -1,0 +1,46 @@
+{
+  "schema": "mobile-webcam-diagnostics-v1",
+  "sessionId": "fixture-session",
+  "startedAtMs": 1710000000000,
+  "capturedAtMs": 1710000005000,
+  "elapsedMs": 5000,
+  "state": "receiving",
+  "selectedCodec": "h264",
+  "targetProfile": {"width": 1920, "height": 1080, "fps": 30},
+  "targetBitrateBps": 10000000,
+  "outputPixelFormat": "yuy2",
+  "decoder": "avdec_h264",
+  "firstFrameElapsedMs": 3500,
+  "lastNetworkAgeMs": 10,
+  "lastDecodedFrameAgeMs": 20,
+  "observedFps": 24.0,
+  "frameIntervals": {
+    "sampleCount": 100,
+    "minMs": 20.0,
+    "meanMs": 41.6,
+    "p50Ms": 33.3,
+    "p95Ms": 50.0,
+    "maxMs": 80.0,
+    "meanAbsoluteJitterMs": 8.3
+  },
+  "receivedBitrateBps": 9000000,
+  "recentReceivedBitrateBps": 9500000,
+  "receivedBytes": 5625000,
+  "decodedFrames": 120,
+  "timeoutCount": 1,
+  "continuityWarningCount": 2,
+  "pipelineWarningCount": 2,
+  "pipelineErrorCount": 0,
+  "outputQueue": {
+    "configuredMaxFrames": 2,
+    "currentFrames": 2,
+    "maximumObservedFrames": 2,
+    "highWatermarkSamples": 4
+  },
+  "phase": "output_backpressure",
+  "events": [
+    {"sequence": 1, "timestampMs": 1710000000000, "elapsedMs": 0, "event": "receiver_state_changed", "state": "waiting_for_stream"},
+    {"sequence": 2, "timestampMs": 1710000003500, "elapsedMs": 3500, "event": "receiver_first_frame", "codec": "h264"},
+    {"sequence": 3, "timestampMs": 1710000004000, "elapsedMs": 4000, "event": "receiver_stream_timed_out", "timeoutCount": 1}
+  ]
+}

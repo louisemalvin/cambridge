@@ -17,6 +17,8 @@ import dev.mobilewebcam.sender.camera.PhysicalLensOption
 import dev.mobilewebcam.sender.camera.physicalLensOptionsFor
 import dev.mobilewebcam.sender.camera.preferredStabilizationMode
 import dev.mobilewebcam.sender.config.CameraZoom
+import dev.mobilewebcam.sender.logging.AndroidAppLogger
+import dev.mobilewebcam.sender.logging.AppLogger
 import dev.mobilewebcam.sender.model.StreamConfiguration
 import dev.mobilewebcam.sender.model.StreamFailure
 import dev.mobilewebcam.sender.model.StreamFailureException
@@ -30,7 +32,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-class RootEncoderStreamEngine(context: Context) : StreamEngine, CameraController {
+class RootEncoderStreamEngine(
+    context: Context,
+    private val logger: AppLogger = AndroidAppLogger,
+) : StreamEngine, CameraController {
     private val applicationContext = context.applicationContext
     private val cameraManager = applicationContext
         .getSystemService(Context.CAMERA_SERVICE) as CameraManager
@@ -44,6 +49,8 @@ class RootEncoderStreamEngine(context: Context) : StreamEngine, CameraController
     private var previewSurface: CameraPreviewSurface? = null
     private var physicalLensOptions = emptyList<PhysicalLensOption>()
     private var stabilizationSupport = unsupportedStabilization()
+    private var diagnosticRunId: String? = null
+    private var diagnosticSessionId: String? = null
 
     override val events: Flow<StreamEngineEvent> = eventFlow
     override val state: StateFlow<CameraInteractionState> = cameraState.asStateFlow()
@@ -53,6 +60,8 @@ class RootEncoderStreamEngine(context: Context) : StreamEngine, CameraController
             var encoder: UdpStream? = null
             return@withLock try {
                 check(stream == null) { "A stream is already prepared" }
+                diagnosticRunId = configuration.runId
+                diagnosticSessionId = configuration.sessionId
                 val source = Camera2Source(applicationContext)
                 val createdEncoder = UdpStream(
                     applicationContext,
@@ -83,8 +92,32 @@ class RootEncoderStreamEngine(context: Context) : StreamEngine, CameraController
                     attachPreviewIfValidLocked(createdEncoder, target)
                 }
                 updateCameraStateLocked()
+                diagnosticEvent(
+                    "camera_configuration",
+                    mapOf(
+                        "lensOptions" to physicalLensOptions.joinToString(",") { it.label },
+                        "selectedLens" to cameraState.value.selectedPhysicalLens?.label,
+                        "opticalStabilizationSupported" to stabilizationSupport.opticalSupported,
+                        "electronicStabilizationSupported" to stabilizationSupport.electronicSupported,
+                        "stabilizationSupported" to stabilizationSupport.isSupported,
+                    ),
+                )
+                diagnosticEvent(
+                    "root_encoder_prepared",
+                    mapOf(
+                        "codec" to configuration.codec.protocolId,
+                        "width" to video.width,
+                        "height" to video.height,
+                        "fps" to video.fps,
+                        "bitrateBps" to video.bitrateBps,
+                    ),
+                )
                 Result.success(Unit)
             } catch (cause: Throwable) {
+                diagnosticEvent(
+                    "root_encoder_prepare_failed",
+                    mapOf("reason" to cause.message, "failureType" to cause::class.simpleName),
+                )
                 runCatching { encoder?.release() }
                 stream = null
                 cameraSource = null
@@ -126,17 +159,21 @@ class RootEncoderStreamEngine(context: Context) : StreamEngine, CameraController
                 if (encoder.isStreaming) encoder.stopStream()
                 if (encoder.isOnPreview) encoder.stopPreview()
             }
+            diagnosticEvent("root_encoder_stopped")
             cameraState.value = CameraInteractionState.inactive()
         }
     }
 
     override suspend fun release() = cameraMutex.withLock {
-            stream?.release()
-            stream = null
-            cameraSource = null
-            physicalLensOptions = emptyList()
-            stabilizationSupport = unsupportedStabilization()
-            cameraState.value = CameraInteractionState.inactive()
+        stream?.release()
+        diagnosticEvent("root_encoder_released")
+        stream = null
+        cameraSource = null
+        physicalLensOptions = emptyList()
+        stabilizationSupport = unsupportedStabilization()
+        cameraState.value = CameraInteractionState.inactive()
+        diagnosticRunId = null
+        diagnosticSessionId = null
     }
 
     override suspend fun setPreviewSurface(surface: CameraPreviewSurface?) = cameraMutex.withLock {
@@ -145,11 +182,13 @@ class RootEncoderStreamEngine(context: Context) : StreamEngine, CameraController
         val encoder = stream ?: return@withLock
         if (surface == null) {
             if (encoder.isOnPreview) encoder.stopPreview()
+            diagnosticEvent("preview_surface_detached")
             updateCameraStateLocked()
             return@withLock
         }
         if (encoder.isOnPreview) encoder.stopPreview()
         attachPreviewIfValidLocked(encoder, surface)
+        diagnosticEvent("preview_surface_attached")
         updateCameraStateLocked()
     }
 
@@ -158,6 +197,7 @@ class RootEncoderStreamEngine(context: Context) : StreamEngine, CameraController
         cameraState.value = nextState
         val source = cameraSource?.takeIf { it.isRunning() } ?: return@withLock
         source.setZoom(nextState.zoomRatio)
+        diagnosticEvent("camera_zoom_changed", mapOf("zoomRatio" to nextState.zoomRatio))
         updateCameraStateLocked()
     }
 
@@ -166,28 +206,65 @@ class RootEncoderStreamEngine(context: Context) : StreamEngine, CameraController
         cameraState.value = nextState
         val source = cameraSource?.takeIf { it.isRunning() } ?: return@withLock
         source.setZoom(nextState.zoomRatio)
+        diagnosticEvent("camera_zoom_reset", mapOf("zoomRatio" to nextState.zoomRatio))
         updateCameraStateLocked()
     }
 
     override suspend fun setStabilizationEnabled(enabled: Boolean) = cameraMutex.withLock {
         val source = cameraSource?.takeIf { it.isRunning() } ?: return@withLock
-        if (enabled && !stabilizationSupport.isSupported) return@withLock
+        if (enabled && !stabilizationSupport.isSupported) {
+            diagnosticEvent(
+                "camera_stabilization_changed",
+                mapOf("requested" to enabled, "applied" to false, "reason" to "unsupported"),
+            )
+            return@withLock
+        }
         val applied = runCatching {
             applyStabilization(source, enabled)
         }.getOrDefault(false)
         if (applied) {
             cameraState.value = cameraState.value.withStabilizationEnabled(enabled)
         }
+        diagnosticEvent(
+            "camera_stabilization_changed",
+            mapOf(
+                "requested" to enabled,
+                "applied" to applied,
+                "opticalSupported" to stabilizationSupport.opticalSupported,
+                "electronicSupported" to stabilizationSupport.electronicSupported,
+            ),
+        )
     }
 
     override suspend fun selectPhysicalLens(lens: PhysicalLensOption) = cameraMutex.withLock {
-        if (lens !in physicalLensOptions) return@withLock
+        if (lens !in physicalLensOptions) {
+            diagnosticEvent(
+                "camera_lens_selection_failed",
+                mapOf("lens" to lens.label, "reason" to "unavailable"),
+            )
+            return@withLock
+        }
         val nextState = cameraState.value.withSelectedPhysicalLens(lens)
         cameraState.value = nextState
         val source = cameraSource?.takeIf { it.isRunning() } ?: return@withLock
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return@withLock
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+            diagnosticEvent(
+                "camera_lens_selection_failed",
+                mapOf("lens" to lens.label, "reason" to "android_api_unsupported"),
+            )
+            return@withLock
+        }
         runCatching { source.openPhysicalCamera(lens.cameraId) }
-            .onSuccess { updateCameraStateLocked() }
+            .onSuccess {
+                diagnosticEvent("camera_lens_selected", mapOf("lens" to lens.label))
+                updateCameraStateLocked()
+            }
+            .onFailure { cause ->
+                diagnosticEvent(
+                    "camera_lens_selection_failed",
+                    mapOf("lens" to lens.label, "reason" to cause.message),
+                )
+            }
     }
 
     private fun attachPreviewLocked(
@@ -213,7 +290,13 @@ class RootEncoderStreamEngine(context: Context) : StreamEngine, CameraController
             return
         }
         runCatching { attachPreviewLocked(encoder, target) }
-            .onFailure { previewSurface = null }
+            .onFailure { cause ->
+                previewSurface = null
+                diagnosticEvent(
+                    "preview_surface_attach_failed",
+                    mapOf("reason" to cause.message),
+                )
+            }
     }
 
     private fun updateCameraStateLocked() {
@@ -280,6 +363,14 @@ class RootEncoderStreamEngine(context: Context) : StreamEngine, CameraController
     private fun applyElectronicStabilization(source: Camera2Source): Boolean {
         source.disableOpticalVideoStabilization()
         return source.enableVideoStabilization()
+    }
+
+    private fun diagnosticEvent(name: String, fields: Map<String, Any?> = emptyMap()) {
+        val context = mapOf(
+            "runId" to diagnosticRunId,
+            "sessionId" to diagnosticSessionId,
+        )
+        logger.event(name, (fields + context).filterValues { it != null })
     }
 
     private companion object {

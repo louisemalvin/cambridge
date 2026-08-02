@@ -1,7 +1,8 @@
 package dev.mobilewebcam.sender.discovery
 
-import android.util.Log
 import dev.mobilewebcam.sender.control.http.ProtocolJson
+import dev.mobilewebcam.sender.logging.AndroidAppLogger
+import dev.mobilewebcam.sender.logging.AppLogger
 import java.io.ByteArrayOutputStream
 import java.net.InetSocketAddress
 import java.net.ServerSocket
@@ -22,6 +23,7 @@ class SenderControlServer(
     private val coordinator: SenderConnectionCoordinator,
     private val senderId: String,
     private val displayName: String,
+    private val logger: AppLogger = AndroidAppLogger,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
 ) {
     private var serverSocket: ServerSocket? = null
@@ -37,7 +39,7 @@ class SenderControlServer(
         acceptJob = scope.launch {
             while (isActive) {
                 val socket = runCatching { server.accept() }.getOrElse { error ->
-                    if (isActive) Log.e(TAG, "Sender control accept failed", error)
+                    if (isActive) logger.error("sender control accept failed", error)
                     break
                 }
                 launch { handle(socket) }
@@ -79,15 +81,20 @@ class SenderControlServer(
                         requestJson,
                     )
                     val response = coordinator.handleStartRequest(request, peerAddress).also {
-                        Log.i(
-                            TAG,
-                            "Control request from ${request.receiverName}: ${it.status}",
+                        logger.event(
+                            "sender_control_request",
+                            mapOf(
+                                "receiverId" to request.receiverId,
+                                "receiverName" to request.receiverName,
+                                "status" to it.status,
+                                "peerAddress" to peerAddress,
+                            ),
                         )
                     }
                     ProtocolJson.instance.encodeToString(response)
                 }
             }.getOrElse { error ->
-                Log.w(TAG, "Invalid sender control request", error)
+                logger.warn("invalid sender control request", error)
                 ProtocolJson.instance.encodeToString(
                     StartStreamResponseDto(
                         protocolVersion = SENDER_CONTROL_PROTOCOL_VERSION,
@@ -117,7 +124,6 @@ class SenderControlServer(
     }
 
     private companion object {
-        const val TAG = "MobileWebcamControl"
         const val SOCKET_TIMEOUT_MILLIS = 15_000
         const val MIN_MESSAGE_BYTES = 1
         const val MAX_MESSAGE_BYTES = 16 * 1024

@@ -7,14 +7,18 @@ use std::{
 use gst::prelude::*;
 use gstreamer as gst;
 use receiver_core::{
-    MediaReceiver, MediaSessionConfig, ReceiverError, ReceiverState, MEDIA_PORT_RANGE_END,
-    MEDIA_PORT_RANGE_SIZE, MEDIA_PORT_RANGE_START, PORT_UNASSIGNED,
+    MediaReceiver, MediaSessionConfig, ReceiverDiagnostics, ReceiverError, ReceiverState,
+    MEDIA_PORT_RANGE_END, MEDIA_PORT_RANGE_SIZE, MEDIA_PORT_RANGE_START, PORT_UNASSIGNED,
 };
 use receiver_protocol::PixelFormat;
 
 use crate::{
-    codec_branch::DefaultCodecPipelineFactory, metrics::Metrics, pipeline_builder::build_pipeline,
-    pipeline_bus::poll, pipeline_event::PipelineObserver, PipelineError,
+    codec_branch::DefaultCodecPipelineFactory,
+    metrics::{Metrics, MetricsConfig},
+    pipeline_builder::build_pipeline,
+    pipeline_bus::poll,
+    pipeline_event::PipelineObserver,
+    PipelineError,
 };
 
 pub trait VideoSinkFactory: Send + Sync {
@@ -125,7 +129,15 @@ where
         }
         let observer = PipelineObserver::new(config.session_id, config.codec);
         if let Ok(mut metrics) = self.metrics.lock() {
-            metrics.reset();
+            metrics.reset(MetricsConfig {
+                session_id: config.session_id,
+                codec: config.codec,
+                profile: config.profile.clone(),
+                target_bitrate_bps: config.bitrate_bps,
+                output_pixel_format: config.output_format,
+                output_queue_max_frames: config.latency.output_queue_frames,
+                udp_timeout_ms: config.udp_timeout_ms,
+            });
         }
         let media_socket = if config.media_port == PORT_UNASSIGNED {
             Some(bind_session_socket(config.session_id)?)
@@ -211,6 +223,13 @@ where
 
     fn timeout_count(&self) -> u64 {
         self.metrics.lock().map_or(0, |metrics| metrics.timeout_count())
+    }
+
+    fn diagnostics(&self) -> Option<ReceiverDiagnostics> {
+        self.poll_bus();
+        let observer = self.observer.as_ref()?;
+        let metrics = self.metrics.lock().ok()?;
+        Some(metrics.snapshot(observer.state(), observer.diagnostics()))
     }
 }
 

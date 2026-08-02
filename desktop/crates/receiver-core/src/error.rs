@@ -17,6 +17,8 @@ pub enum ReceiverError {
     SessionConflict,
     #[error("receiver session not found: {0}")]
     SessionNotFound(String),
+    #[error("receiver diagnostics are not available")]
+    DiagnosticsNotFound,
     #[error("media preparation failed: {0}")]
     MediaPreparation(String),
     #[error("media start failed: {0}")]

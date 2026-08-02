@@ -40,3 +40,44 @@ session after the configured grace period so a new preparation can succeed.
 
 Measure first-frame time after a restart separately from steady-state
 latency. A keyframe interval of one second is used to bound recovery time.
+
+## Structured performance baseline
+
+The default workflow is automatic: run the Android app, let the stream run for
+the desired condition, stop it, and tell the assistant the run is finished.
+The assistant reads the latest completed receiver run from:
+
+```text
+http://127.0.0.1:5001/v1/diagnostics/latest
+```
+
+When ADB is connected, the assistant also pulls the structured Android Logcat
+events directly. You do not need to find a session ID or export logs.
+
+The receiver-side inspector remains available for a bounded live capture. It
+polls the additive per-session diagnostics endpoint, so the existing session
+response and media contract remain unchanged:
+
+```bash
+mobile-webcam-receiver \
+  --inspect-session SESSION_ID \
+  --network wifi \
+  --consumer obs \
+  --sender-log sender-logcat.txt \
+  --receiver-log receiver.jsonl \
+  --output baseline-wifi.json
+```
+
+The inspector prints a human-readable summary and writes machine-readable
+JSON when `--output` is supplied. Use `--json-logs` on the receiver when a
+structured receiver log is needed. Android events are structured JSON Logcat
+lines and are supplied separately with `--sender-log`; they are not coupled to
+the media or control data paths.
+
+Repeat a 60-second run at 1080p30 over Wi-Fi and USB tethering. Keep the phone
+model/API, receiver host, codec, profile, selected lens, stabilization state,
+decoder, output consumer, timeout count, and continuity count with each
+report. Compare first-frame time, observed FPS, interval p50/p95/max, recent
+bitrate, and the report categories before changing pipeline behavior. See
+[`diagnostics.md`](diagnostics.md) for the event vocabulary and classification
+rules.

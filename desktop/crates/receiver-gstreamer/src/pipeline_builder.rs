@@ -89,7 +89,7 @@ pub(crate) fn build_pipeline<F: VideoSinkFactory>(
     )?;
 
     connect_demux_pad(&demux, &parser, config.codec, observer.clone());
-    connect_decoder_diagnostics(&decoder, config.codec, metrics.clone());
+    connect_decoder_diagnostics(&decoder, config.codec, metrics.clone(), observer.clone());
     connect_decoder_pad(&decoder, &convert, config.codec);
     add_source_probe(&source, metrics.clone())?;
     add_output_probe(&output_queue, observer, metrics)?;
@@ -230,17 +230,23 @@ fn add_output_probe(
     let Some(sink_pad) = output_queue.static_pad("sink") else {
         return Err(PipelineError::MissingElement("output queue sink pad".to_owned()));
     };
+    let output_queue = output_queue.clone();
     sink_pad.add_probe(gst::PadProbeType::BUFFER, move |_pad, _info| {
-        let (first_frame, decoder) = metrics.lock().map_or((false, None), |mut metrics| {
-            let first_frame = !metrics.has_first_frame();
-            if first_frame {
+        let (first_frame, decoder, queue_pressure) =
+            metrics.lock().map_or((false, None, None), |mut metrics| {
+                let first_frame = metrics.record_decoded_frame();
                 let decoder = metrics.decoder();
-                metrics.record_first_frame(decoder);
-            }
-            (first_frame, metrics.decoder())
-        });
+                let current_frames = output_queue.property::<u32>("current-level-buffers");
+                let maximum_frames = output_queue.property::<u32>("max-size-buffers");
+                let pressure_started = metrics.record_queue_depth(current_frames, maximum_frames);
+                let queue_pressure = pressure_started.then_some((current_frames, maximum_frames));
+                (first_frame, decoder, queue_pressure)
+            });
         if first_frame {
             debug!(decoder = ?decoder, "received first decoded video frame");
+        }
+        if let Some((current_frames, maximum_frames)) = queue_pressure {
+            observer.on_queue_pressure(current_frames, maximum_frames);
         }
         observer.on_frame(false);
         gst::PadProbeReturn::Ok
