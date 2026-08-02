@@ -47,15 +47,15 @@ class MediaCodecCapabilityProbe : EncoderCapabilityProbe {
     ): EncoderCapability {
         val matchingEncoders = codecInfos.filter { info ->
             info.isEncoder && info.supportedTypes.any {
-                it.equals(codec.androidMimeType, ignoreCase = true)
+                it.equals(codec.mediaCodecMimeType, ignoreCase = true)
             }
         }
         if (matchingEncoders.isEmpty()) {
-            return unsupported(codec, profile, "No encoder advertises " + codec.androidMimeType)
+            return unsupported(codec, profile, "No encoder advertises " + codec.mediaCodecMimeType)
         }
         val candidates = matchingEncoders.mapNotNull { info ->
             val capabilities = runCatching {
-                info.getCapabilitiesForType(codec.androidMimeType)
+                info.getCapabilitiesForType(codec.mediaCodecMimeType)
             }.getOrNull() ?: return@mapNotNull null
             val video = capabilities.videoCapabilities ?: return@mapNotNull null
             val supported = video.areSizeAndRateSupported(

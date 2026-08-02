@@ -3,7 +3,6 @@ package dev.mobilewebcam.sender.discovery
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
-import android.view.Surface
 import androidx.core.content.ContextCompat
 import dev.mobilewebcam.sender.config.VideoProfiles
 import dev.mobilewebcam.sender.model.CodecPreference
@@ -46,9 +45,6 @@ class SenderConnectionCoordinator(
     @Volatile
     private var profile: VideoProfile = VideoProfiles.default
 
-    @Volatile
-    private var previewSurface: Surface? = null
-
     val streamState: StateFlow<StreamState> = controller.state
     val pendingApproval: StateFlow<PendingApproval?> = pendingFlow.asStateFlow()
     val activeReceiverName: StateFlow<String?> = activeReceiverNameFlow.asStateFlow()
@@ -69,10 +65,6 @@ class SenderConnectionCoordinator(
     fun updateConfiguration(preference: CodecPreference, profile: VideoProfile) {
         codecPreference = preference
         this.profile = profile
-    }
-
-    fun setPreviewSurface(surface: Surface?) {
-        previewSurface = surface
     }
 
     suspend fun handleStartRequest(
@@ -124,7 +116,6 @@ class SenderConnectionCoordinator(
             endpoint = endpoint,
             preference = codecPreference,
             profile = profile,
-            previewSurface = previewSurface,
         )
         if (started.isFailure) {
             return@withLock response(

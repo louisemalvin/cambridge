@@ -4,7 +4,9 @@ The receiver control plane is HTTP/JSON over TCP. All paths are versioned
 under `/v1/`. The control plane negotiates a session and reports the UDP media
 port allocated for that session. It never carries video bytes.
 
-Media uses MPEG-TS over UDP unicast. The stable protocol identifiers are:
+Media uses MPEG-TS over UDP unicast. The normative media-plane contract is
+[`docs/media-transport-v1.md`](../docs/media-transport-v1.md). The stable
+protocol identifiers are:
 
 - Codecs: `h264`, `h265`.
 - Transport: `mpegts-udp`.
@@ -26,7 +28,7 @@ required enum values must be rejected with a typed error.
 
 ## Sender discovery and reverse control
 
-Android senders listen on TCP port `53555`. The desktop probes bounded local
+Mobile senders listen on TCP port `53555`. The desktop probes bounded local
 IPv4 subnets with the side-effect-free `describe` request and receives a
 versioned `senderAdvertisement`. The same service accepts one newline-delimited
 start request and returns one response using `sender-control-v1.schema.json`.

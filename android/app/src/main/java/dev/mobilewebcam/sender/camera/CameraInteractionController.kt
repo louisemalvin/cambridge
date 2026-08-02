@@ -1,0 +1,23 @@
+package dev.mobilewebcam.sender.camera
+
+import kotlinx.coroutines.flow.StateFlow
+
+/** Camera controls that can be consumed by platform-neutral UI state. */
+interface CameraInteractionController {
+    val state: StateFlow<CameraInteractionState>
+
+    suspend fun setZoomRatio(zoomRatio: Float)
+
+    suspend fun resetZoom()
+
+    suspend fun setStabilizationEnabled(enabled: Boolean)
+
+    suspend fun selectPhysicalLens(lens: PhysicalLensOption)
+}
+
+/** Android-only preview surface lifecycle boundary. */
+interface CameraPreviewSurfaceController {
+    suspend fun setPreviewSurface(surface: CameraPreviewSurface?)
+}
+
+interface CameraController : CameraInteractionController, CameraPreviewSurfaceController

@@ -9,6 +9,10 @@ Keep these terms separate:
 The Phase 1 data path is MPEG-TS over UDP unicast. It is not raw H.264, raw
 H.265, RTP, or UDP broadcast.
 
+The complete packet, timestamp, restart, and parameter-set rules are in
+[`media-transport-v1.md`](media-transport-v1.md). H.264 is the required
+interoperability baseline; H.265 is an optional negotiated capability.
+
 ## Selection policy
 
 The sender exposes three preferences:
@@ -29,6 +33,12 @@ The receiver maps H.264 to `h264parse` and H.265 to `h265parse`, then uses
 `decodebin`. The selected decoder factory is logged when GStreamer exposes it;
 the receiver does not claim hardware acceleration when the plugin does not
 identify it.
+
+The current control schema negotiates dimensions, frame rate, and bitrate. A
+future compatible extension must carry codec profile and level, explicit
+keyframe interval, parameter-set repetition policy, and any orientation
+metadata needed by a sender. These values must remain transport-contract
+fields rather than Android- or iOS-specific configuration.
 
 ## Profiles
 

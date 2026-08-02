@@ -226,7 +226,7 @@ impl DiscoveryWorker {
                         last_seen: Instant::now(),
                     });
                 if is_new {
-                    info!(%sender_id, address = %result.address, "discovered Android phone");
+                    info!(%sender_id, address = %result.address, "discovered mobile sender");
                 }
                 changed = true;
             }

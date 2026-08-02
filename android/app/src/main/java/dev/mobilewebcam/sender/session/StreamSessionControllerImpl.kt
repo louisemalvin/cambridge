@@ -1,6 +1,5 @@
 package dev.mobilewebcam.sender.session
 
-import android.view.Surface
 import dev.mobilewebcam.sender.capabilities.EncoderCapabilityProbe
 import dev.mobilewebcam.sender.control.ReceiverControlClient
 import dev.mobilewebcam.sender.control.ReceiverControlError
@@ -59,7 +58,6 @@ class StreamSessionControllerImpl(
         endpoint: ReceiverEndpoint,
         preference: CodecPreference,
         profile: VideoProfile,
-        previewSurface: Surface?,
     ): Result<Unit> = lifecycleMutex.withLock {
         if (activeSession != null) {
             return@withLock failure(StreamFailure.ReceiverRejectedProfile("A stream is already active"))
@@ -99,7 +97,7 @@ class StreamSessionControllerImpl(
             StreamConfigurationValidator.validate(configuration)
                 .getOrElse { throw StreamFailureException(StreamFailure.ReceiverRejectedProfile(it.message.orEmpty()), it) }
             foreground.start().getOrElse { cause -> throw StreamFailureException(StreamFailure.Unexpected(cause), cause) }
-            streamEngine.prepare(previewSurface, configuration).getOrThrow()
+            streamEngine.prepare(configuration).getOrThrow()
             stateFlow.value = StreamState.Starting(session)
             streamEngine.start(endpoint.host, session.mediaPort).getOrThrow()
             stateFlow.value = StreamState.Streaming(session, System.currentTimeMillis())

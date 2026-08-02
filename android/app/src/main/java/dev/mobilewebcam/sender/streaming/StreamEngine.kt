@@ -1,16 +1,12 @@
 package dev.mobilewebcam.sender.streaming
 
-import android.view.Surface
 import dev.mobilewebcam.sender.model.StreamConfiguration
 import kotlinx.coroutines.flow.Flow
 
 interface StreamEngine {
     val events: Flow<StreamEngineEvent>
 
-    suspend fun prepare(
-        previewSurface: Surface?,
-        configuration: StreamConfiguration,
-    ): Result<Unit>
+    suspend fun prepare(configuration: StreamConfiguration): Result<Unit>
 
     suspend fun start(
         receiverHost: String,

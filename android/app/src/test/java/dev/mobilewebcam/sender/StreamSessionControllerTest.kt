@@ -37,8 +37,8 @@ class StreamSessionControllerTest {
         val foreground = FakeForeground()
         val controller = controller(receiver, engine, foreground, backgroundScope)
 
-        assertTrue(controller.start(endpoint, CodecPreference.AUTO_PREFER_H265, profile, null).isSuccess)
-        assertTrue(controller.start(endpoint, CodecPreference.AUTO_PREFER_H265, profile, null).isFailure)
+        assertTrue(controller.start(endpoint, CodecPreference.AUTO_PREFER_H265, profile).isSuccess)
+        assertTrue(controller.start(endpoint, CodecPreference.AUTO_PREFER_H265, profile).isFailure)
         assertEquals(1, engine.prepareCount)
 
         assertTrue(controller.stop().isSuccess)
@@ -54,7 +54,7 @@ class StreamSessionControllerTest {
         val engine = FakeEngine(prepareFailure = IllegalStateException("test"))
         val controller = controller(receiver, engine, FakeForeground(), backgroundScope)
 
-        assertTrue(controller.start(endpoint, CodecPreference.FORCE_H264, profile, null).isFailure)
+        assertTrue(controller.start(endpoint, CodecPreference.FORCE_H264, profile).isFailure)
         assertEquals(1, receiver.stopCount)
     }
 
@@ -126,7 +126,6 @@ class StreamSessionControllerTest {
         override val events: Flow<StreamEngineEvent> = emptyFlow()
 
         override suspend fun prepare(
-            previewSurface: android.view.Surface?,
             configuration: StreamConfiguration,
         ): Result<Unit> {
             prepareCount += 1

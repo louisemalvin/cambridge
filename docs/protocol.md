@@ -3,6 +3,11 @@
 The versioned control API is HTTP/JSON on TCP port `5001`. All routes start
 with `/v1/`. Video is not sent over this connection.
 
+The media-plane contract is documented separately in
+[`media-transport-v1.md`](media-transport-v1.md). It applies equally to
+Android and iOS senders and deliberately does not expose camera or encoder
+implementation details through the wire protocol.
+
 The machine-readable source of truth is
 [`protocol/control-v1.schema.json`](../protocol/control-v1.schema.json). Shared
 request and response examples are in [`protocol/examples`](../protocol/examples).
@@ -57,19 +62,19 @@ Sender -> start MPEG-TS/UDP to the returned session port
 Sender -> DELETE session on stop
 ```
 
-The receiver may keep its input pipeline waiting for packets while the phone
+The receiver may keep its input pipeline waiting for packets while the sender
 prepares its encoder. A temporary packet interruption is a recoverable state,
 not an instruction to terminate the receiver process.
 
 ## Discovery and reverse control
 
-Android listens on TCP port `53555`. The desktop probes local IPv4 hosts with a
+Mobile senders listen on TCP port `53555`. The desktop probes local IPv4 hosts with a
 side-effect-free `describe` request, then sends one newline-delimited JSON start
-request to the selected phone. The phone infers the receiver address from the
+request to the selected sender. The sender infers the receiver address from the
 TCP peer. The shared contract is
 [`protocol/sender-control-v1.schema.json`](../protocol/sender-control-v1.schema.json).
 
-The first request returns `approval_required`. Android approval creates a
+The first request returns `approval_required`. Mobile sender approval creates a
 pairing token. A later request with that token starts automatically while still
 showing the camera foreground notification.
 

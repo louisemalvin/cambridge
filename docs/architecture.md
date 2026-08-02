@@ -1,13 +1,13 @@
 # Architecture
 
-Phase 1 has one Android sender and one reusable Rust receiver. The media path
-is intentionally simple and local:
+Phase 1 has an Android sender, an iOS development skeleton, and one reusable
+Rust receiver. Media production is platform-specific, while the encoded media
+transport is platform-agnostic:
 
 ```text
-Android camera
-  -> MediaCodec hardware H.264 or H.265 encoder through RootEncoder
-  -> MPEG-TS muxing
-  -> UDP unicast
+Android camera/encoder ─┐
+                        ├─> MPEG-TS over UDP unicast
+iOS camera/encoder ────┘
   -> GStreamer udpsrc, tsparse, tsdemux, codec parser, decodebin
   -> videoconvert -> tee
        -> videoscale -> videorate -> fixed output caps -> bounded queue
@@ -15,14 +15,20 @@ Android camera
        -> bounded queue -> RGBA conversion -> desktop preview window
 ```
 
-The phone exposes a versioned control service on TCP port `53555`. The desktop
+The sender exposes a versioned control service on TCP port `53555`. The desktop
 probes bounded local IPv4 subnets with a side-effect-free describe request,
-then uses the selected phone for paired reverse control. The phone infers the
+then uses the selected sender for paired reverse control. The sender infers the
 desktop address from the TCP peer and calls the receiver's HTTP/JSON API on TCP
 port `5001`. Session preparation allocates a new UDP media port from the
-application-owned range `50000-50099`. Only the selected phone receives that
+application-owned range `50000-50099`. Only the selected sender receives that
 port, which keeps host firewall policy narrow without returning to a shared
 fixed media socket.
+
+The normative media contract is
+[`media-transport-v1.md`](media-transport-v1.md). It defines MPEG-TS packet
+alignment, H.264/H.265 compatibility, timestamp and restart semantics, and
+stream epochs. The receiver does not inspect whether a stream was produced by
+Android or iOS.
 
 ## Android boundaries
 
@@ -47,9 +53,54 @@ Only `streaming/rootencoder/` imports RootEncoder types. The session
 controller owns validation, negotiation, preparation, lifecycle serialization,
 cleanup, and typed failures.
 
+The current Android session and preview contracts remain inside the Android
+application. Android framework types such as `Context`, `Surface`, and
+`MediaFormat` are not part of the wire contract; codec MIME mapping is kept in
+the Android MediaCodec capability package. Further extraction is incremental
+and must improve the active Android path rather than reorganise the repository.
+
+## iOS development boundary
+
+`ios/` contains a native SwiftUI/Xcode application skeleton. Its
+`IOSMediaEngine` boundary owns the future AVFoundation, VideoToolbox, MPEG-TS,
+and UDP implementation, while the session, discovery, pairing, and receiver
+control files expose only coarse models and integration points. The current
+stub deliberately stops before camera capture or per-frame processing.
+
+Kotlin Multiplatform is optional future infrastructure for low-throughput
+control/session behavior such as DTOs, pairing, negotiation, retries,
+configuration, and coarse events. It must not sit in the per-frame media path
+or carry native camera frames, encoded buffers, MPEG-TS packets, or platform
+media objects.
+
 The foreground service owns notification lifetime and receives the Stop
 action. It does not create a second stream engine. The application-scoped
 session controller remains the single owner of the stream.
+
+The Android camera interaction boundary is separate from session negotiation:
+
+```text
+Compose preview and zoom controls
+  -> CameraController state/events
+  -> RootEncoderStreamEngine
+       -> one Camera2Source
+       -> attach/detach preview surface without stream restart
+```
+
+`VideoProfile.width` and `VideoProfile.height` remain the encoded output
+dimensions used by the receiver. The Compose preview derives its aspect ratio
+from those dimensions and the current display orientation, swapping the
+dimensions for portrait layout. RootEncoder's preview renderer receives the
+surface dimensions and orientation independently, while the encoder keeps the
+negotiated profile dimensions so the receiver's fixed output caps preserve the
+same aspect ratio.
+
+Zoom is applied through RootEncoder `Camera2Source.setZoom(Float)` using the
+camera-reported `getZoomRange()`. The zoom state and reset action are coarse
+UI state; camera frames and Android camera objects do not cross the session or
+wire contracts. A destroyed preview surface detaches only the GL preview. The
+foreground service and application-scoped stream engine continue the media
+session, and a later surface can attach to the existing camera source.
 
 ## Rust crate boundaries
 
@@ -88,7 +139,8 @@ apply this policy without requiring a status request.
 
 ## Security and deferred work
 
-Phase 1 is for a trusted local network. First use requires approval on Android,
-and the sender stores a token scoped to stable phone and desktop IDs. HTTP
+Phase 1 is for a trusted local network. First use requires approval on the
+mobile sender, and the sender stores a token scoped to stable sender and
+desktop IDs. HTTP
 receiver control and UDP media remain unencrypted. Audio, cloud relays, WebRTC,
 SRT, Tauri, and non-Linux virtual-camera backends are deferred.

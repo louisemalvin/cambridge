@@ -13,7 +13,9 @@
 The project pins RootEncoder `2.8.0` in
 [`android/gradle/libs.versions.toml`](../android/gradle/libs.versions.toml). The
 RootEncoder dependency is isolated to `streaming/rootencoder/`; the rest of the
-app uses the project-owned `StreamEngine` interface.
+app uses the project-owned `StreamEngine` interface. Compose dependencies use
+the stable Compose BOM so Material 3 is resolved as a compatible stable set;
+the app does not independently pin a Material 3 artifact.
 
 ## Build and install
 
@@ -43,6 +45,38 @@ The media stream is sent to the receiver's session-specific UDP port in
 encoder, preview, notification, wake-lock, and Wi-Fi-lock resources are
 released when the session stops or fails.
 
+The preview uses the selected profile's aspect ratio. In portrait display
+orientation the preview layout uses the profile dimensions transposed for the
+surface, while the encoded stream keeps the negotiated profile width and
+height. The receiver therefore receives the same profile aspect ratio instead
+of a stretched portrait surface.
+
+The preview and connection controls share one screen-level scroll container.
+The connect and streaming panels are non-scrolling content so Compose does not
+measure nested vertical scroll containers with unbounded height.
+
+While streaming, the camera card exposes a slider bounded by the active
+camera's reported zoom range and a reset action that returns to 1x. Pinch
+gestures on the preview use the same controller. Zoom changes update the
+existing RootEncoder `Camera2Source` capture request and do not renegotiate or
+restart the stream.
+
+On Android P and newer, devices that expose logical multi-camera physical IDs
+also show an `Auto` option and one runtime-labeled button per physical camera.
+The buttons pass the discovered opaque ID to RootEncoder's existing
+`Camera2Source.openPhysicalCamera` operation. No camera IDs are hardcoded and
+no second camera source is opened. RootEncoder reopens the existing camera
+session with the selected physical output, so a brief frame pause is possible
+while the UDP stream object remains active. Devices without physical IDs keep
+the normal logical-camera behavior.
+
+When the active logical camera reports optical or electronic stabilization
+support, the streaming controls also show a simple Stabilization switch. On
+requests optical stabilization first and falls back to the phone's electronic
+video stabilization if optical stabilization cannot be enabled. Off disables
+both requests. The app does not implement its own stabilization algorithm, and
+the effectiveness of the selected phone mode still needs device validation.
+
 ## Permissions and background behavior
 
 The app requests camera permission only. It exposes a local sender-control
@@ -50,6 +84,9 @@ service while the activity is open and uses a remembered pairing token to
 prevent automatic activation by an unapproved desktop. It keeps the setup
 screen awake so the process remains available. It uses the camera foreground-service
 type while streaming and keeps an ongoing notification. Activity recreation
-uses the application-scoped session controller and does not start a second
-encoder. A process kill cannot preserve an active hardware encoder session;
+uses the application-scoped session and camera controller, detaches the old
+preview surface, and attaches the new one without starting a second encoder.
+Minimizing or locking the app has the same behavior because preview surface
+visibility is independent from foreground media ownership. A process kill
+cannot preserve an active hardware encoder session;
 restart the stream after reopening the app.

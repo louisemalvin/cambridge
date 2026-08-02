@@ -1,0 +1,427 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A21000000000000000000001 /* MobileWebcamIOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11000000000000000000001 /* MobileWebcamIOSApp.swift */; };
+		A21000000000000000000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11000000000000000000002 /* ContentView.swift */; };
+		A21000000000000000000003 /* IOSMediaConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11000000000000000000003 /* IOSMediaConfiguration.swift */; };
+		A21000000000000000000004 /* IOSMediaEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11000000000000000000004 /* IOSMediaEngine.swift */; };
+		A21000000000000000000005 /* IOSReceiverControlClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11000000000000000000005 /* IOSReceiverControlClient.swift */; };
+		A21000000000000000000006 /* IOSSenderControlServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11000000000000000000006 /* IOSSenderControlServer.swift */; };
+		A21000000000000000000007 /* IOSPairingStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11000000000000000000007 /* IOSPairingStore.swift */; };
+		A21000000000000000000008 /* IOSSenderSessionCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11000000000000000000008 /* IOSSenderSessionCoordinator.swift */; };
+		A21000000000000000000009 /* IOSMediaEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11000000000000000000009 /* IOSMediaEngineTests.swift */; };
+		A21000000000000000000010 /* IOSPlatformLifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11000000000000000000014 /* IOSPlatformLifecycle.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		A11000000000000000000001 /* MobileWebcamIOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileWebcamIOSApp.swift; sourceTree = "<group>"; };
+		A11000000000000000000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		A11000000000000000000003 /* IOSMediaConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSMediaConfiguration.swift; sourceTree = "<group>"; };
+		A11000000000000000000004 /* IOSMediaEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSMediaEngine.swift; sourceTree = "<group>"; };
+		A11000000000000000000005 /* IOSReceiverControlClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSReceiverControlClient.swift; sourceTree = "<group>"; };
+		A11000000000000000000006 /* IOSSenderControlServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSSenderControlServer.swift; sourceTree = "<group>"; };
+		A11000000000000000000007 /* IOSPairingStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSPairingStore.swift; sourceTree = "<group>"; };
+		A11000000000000000000008 /* IOSSenderSessionCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSSenderSessionCoordinator.swift; sourceTree = "<group>"; };
+		A11000000000000000000009 /* IOSMediaEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSMediaEngineTests.swift; sourceTree = "<group>"; };
+		A11000000000000000000010 /* MobileWebcamIOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MobileWebcamIOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A11000000000000000000011 /* MobileWebcamIOSTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MobileWebcamIOSTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A11000000000000000000012 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A11000000000000000000013 /* MobileWebcamIOS.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = wrapper.pb-project; name = MobileWebcamIOS.xcodeproj; path = MobileWebcamIOS.xcodeproj; sourceTree = SOURCE_ROOT; };
+		A11000000000000000000014 /* IOSPlatformLifecycle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSPlatformLifecycle.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A53000000000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A53000000000000000000002 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A41000000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				A41100000000000000000001 /* MobileWebcamIOS */,
+				A41300000000000000000001 /* MobileWebcamIOSTests */,
+				A41400000000000000000001 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A41100000000000000000001 /* MobileWebcamIOS */ = {
+			isa = PBXGroup;
+			children = (
+				A41200000000000000000001 /* App */,
+				A41200000000000000000002 /* Configuration */,
+				A41200000000000000000003 /* Control */,
+				A41200000000000000000004 /* Discovery */,
+				A41200000000000000000005 /* Media */,
+				A41200000000000000000006 /* Pairing */,
+				A41200000000000000000007 /* Session */,
+				A41200000000000000000008 /* UI */,
+				A41200000000000000000009 /* Platform */,
+				A11000000000000000000012 /* Info.plist */,
+			);
+			path = MobileWebcamIOS;
+			sourceTree = "<group>";
+		};
+		A41200000000000000000001 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				A11000000000000000000001 /* MobileWebcamIOSApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		A41200000000000000000002 /* Configuration */ = {
+			isa = PBXGroup;
+			children = (
+				A11000000000000000000003 /* IOSMediaConfiguration.swift */,
+			);
+			path = Configuration;
+			sourceTree = "<group>";
+		};
+		A41200000000000000000003 /* Control */ = {
+			isa = PBXGroup;
+			children = (
+				A11000000000000000000005 /* IOSReceiverControlClient.swift */,
+			);
+			path = Control;
+			sourceTree = "<group>";
+		};
+		A41200000000000000000004 /* Discovery */ = {
+			isa = PBXGroup;
+			children = (
+				A11000000000000000000006 /* IOSSenderControlServer.swift */,
+			);
+			path = Discovery;
+			sourceTree = "<group>";
+		};
+		A41200000000000000000005 /* Media */ = {
+			isa = PBXGroup;
+			children = (
+				A11000000000000000000004 /* IOSMediaEngine.swift */,
+			);
+			path = Media;
+			sourceTree = "<group>";
+		};
+		A41200000000000000000006 /* Pairing */ = {
+			isa = PBXGroup;
+			children = (
+				A11000000000000000000007 /* IOSPairingStore.swift */,
+			);
+			path = Pairing;
+			sourceTree = "<group>";
+		};
+		A41200000000000000000007 /* Session */ = {
+			isa = PBXGroup;
+			children = (
+				A11000000000000000000008 /* IOSSenderSessionCoordinator.swift */,
+			);
+			path = Session;
+			sourceTree = "<group>";
+		};
+		A41200000000000000000008 /* UI */ = {
+			isa = PBXGroup;
+			children = (
+				A11000000000000000000002 /* ContentView.swift */,
+			);
+			path = UI;
+			sourceTree = "<group>";
+		};
+		A41200000000000000000009 /* Platform */ = {
+			isa = PBXGroup;
+			children = (
+				A11000000000000000000014 /* IOSPlatformLifecycle.swift */,
+			);
+			path = Platform;
+			sourceTree = "<group>";
+		};
+		A41300000000000000000001 /* MobileWebcamIOSTests */ = {
+			isa = PBXGroup;
+			children = (
+				A11000000000000000000009 /* IOSMediaEngineTests.swift */,
+			);
+			path = MobileWebcamIOSTests;
+			sourceTree = "<group>";
+		};
+		A41400000000000000000001 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A11000000000000000000010 /* MobileWebcamIOS.app */,
+				A11000000000000000000011 /* MobileWebcamIOSTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A61000000000000000000001 /* MobileWebcamIOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A81100000000000000000001 /* Build configuration list for PBXNativeTarget "MobileWebcamIOS" */;
+			buildPhases = (
+				A51000000000000000000001 /* Sources */,
+				A52000000000000000000001 /* Resources */,
+				A53000000000000000000001 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = MobileWebcamIOS;
+			productName = MobileWebcamIOS;
+			productReference = A11000000000000000000010 /* MobileWebcamIOS.app */;
+			productType = "com.apple.product-type.application";
+		};
+		A61000000000000000000002 /* MobileWebcamIOSTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A81100000000000000000002 /* Build configuration list for PBXNativeTarget "MobileWebcamIOSTests" */;
+			buildPhases = (
+				A51000000000000000000002 /* Sources */,
+				A53000000000000000000002 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A91000000000000000000001 /* PBXTargetDependency */,
+			);
+			name = MobileWebcamIOSTests;
+			productName = MobileWebcamIOSTests;
+			productReference = A11000000000000000000011 /* MobileWebcamIOSTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A70000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					A61000000000000000000001 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+					A61000000000000000000002 = {
+						CreatedOnToolsVersion = 15.0;
+						TestTargetID = A61000000000000000000001;
+					};
+				};
+			};
+			buildConfigurationList = A81000000000000000000001 /* Build configuration list for PBXProject "MobileWebcamIOS" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = A41000000000000000000001;
+			productRefGroup = A41400000000000000000001 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A61000000000000000000001 /* MobileWebcamIOS */,
+				A61000000000000000000002 /* MobileWebcamIOSTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A52000000000000000000001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A51000000000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A21000000000000000000001 /* MobileWebcamIOSApp.swift in Sources */,
+				A21000000000000000000002 /* ContentView.swift in Sources */,
+				A21000000000000000000003 /* IOSMediaConfiguration.swift in Sources */,
+				A21000000000000000000004 /* IOSMediaEngine.swift in Sources */,
+				A21000000000000000000005 /* IOSReceiverControlClient.swift in Sources */,
+				A21000000000000000000006 /* IOSSenderControlServer.swift in Sources */,
+				A21000000000000000000007 /* IOSPairingStore.swift in Sources */,
+				A21000000000000000000008 /* IOSSenderSessionCoordinator.swift in Sources */,
+				A21000000000000000000010 /* IOSPlatformLifecycle.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A51000000000000000000002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A21000000000000000000009 /* IOSMediaEngineTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A91000000000000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A61000000000000000000001 /* MobileWebcamIOS */;
+			targetProxy = A91100000000000000000001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin PBXContainerItemProxy section */
+		A91100000000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A70000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A61000000000000000000001;
+			remoteInfo = MobileWebcamIOS;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin XCBuildConfiguration section */
+		A82000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		A82000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		A82000000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_TESTABILITY = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = MobileWebcamIOS/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.mobilewebcam.ios;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		A82000000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = MobileWebcamIOS/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.mobilewebcam.ios;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		A82000000000000000000005 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.mobilewebcam.ios.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MobileWebcamIOS.app/MobileWebcamIOS";
+			};
+			name = Debug;
+		};
+		A82000000000000000000006 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.mobilewebcam.ios.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MobileWebcamIOS.app/MobileWebcamIOS";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A81000000000000000000001 /* Build configuration list for PBXProject "MobileWebcamIOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A82000000000000000000001 /* Debug */,
+				A82000000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A81100000000000000000001 /* Build configuration list for PBXNativeTarget "MobileWebcamIOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A82000000000000000000003 /* Debug */,
+				A82000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A81100000000000000000002 /* Build configuration list for PBXNativeTarget "MobileWebcamIOSTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A82000000000000000000005 /* Debug */,
+				A82000000000000000000006 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = A70000000000000000000001 /* Project object */;
+}

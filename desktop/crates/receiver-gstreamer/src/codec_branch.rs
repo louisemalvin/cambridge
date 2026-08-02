@@ -66,22 +66,28 @@ mod tests {
     use gst::prelude::*;
 
     #[test]
-    fn h265_parser_is_selected_when_available() {
+    fn codec_parsers_repeat_configuration_on_keyframes() {
         gst::init().unwrap();
         let factory = DefaultCodecPipelineFactory;
-        if !factory.supports(VideoCodec::H265).supported {
-            eprintln!("skipped: H.265 parser or shared GStreamer input elements are unavailable");
-            return;
+        for codec in VideoCodec::ALL {
+            if !factory.supports(codec).supported {
+                eprintln!("skipped: parser or shared GStreamer input elements are unavailable for {codec}");
+                continue;
+            }
+            let parser = factory.create_parser(codec).unwrap();
+            let expected_factory = match codec {
+                VideoCodec::H264 => "h264parse",
+                VideoCodec::H265 => "h265parse",
+            };
+            assert_eq!(
+                parser.factory().map(|factory| factory.name().to_string()),
+                Some(expected_factory.to_owned())
+            );
+            assert_eq!(
+                parser.property::<i32>("config-interval"),
+                PARSER_CONFIG_INTERVAL_EVERY_KEYFRAME,
+            );
         }
-        let parser = factory.create_parser(VideoCodec::H265).unwrap();
-        assert_eq!(
-            parser.factory().map(|factory| factory.name().to_string()),
-            Some("h265parse".to_owned())
-        );
-        assert_eq!(
-            parser.property::<i32>("config-interval"),
-            PARSER_CONFIG_INTERVAL_EVERY_KEYFRAME,
-        );
     }
 
     #[test]

@@ -1,6 +1,5 @@
 package dev.mobilewebcam.sender.session
 
-import android.view.Surface
 import dev.mobilewebcam.sender.model.CodecPreference
 import dev.mobilewebcam.sender.model.ReceiverEndpoint
 import dev.mobilewebcam.sender.model.StreamState
@@ -14,7 +13,6 @@ interface StreamSessionController {
         endpoint: ReceiverEndpoint,
         preference: CodecPreference,
         profile: VideoProfile,
-        previewSurface: Surface?,
     ): Result<Unit>
 
     suspend fun stop(): Result<Unit>

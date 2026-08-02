@@ -21,7 +21,16 @@ Rust tests cover JSON schema fixtures, protocol version and codec rejection,
 codec negotiation, output policy, HTTP routes, session conflicts, timeout
 cleanup, bounded pipeline construction, H.265 parser selection, discovery
 state, and Linux device inspection. Kotlin tests cover shared fixture decoding,
-negotiation, and session cleanup behavior.
+negotiation, session cleanup behavior, profile-driven preview geometry,
+orientation mapping, zoom clamping/reset, and RootEncoder output-dimension
+mapping. The Android instrumentation suite also checks that the Material 3
+zoom control exposes its slider and reset action.
+
+The MPEG-TS compatibility checks also assert 188-byte packet caps and the
+H.264/H.265 parser branches. Android transport tests assert the derived
+six-packet datagram limit. The iOS skeleton has source-level unit tests for
+configuration validation and stub media-engine boundaries; they do not require
+camera hardware or a completed media pipeline.
 
 ## Synthetic H.264
 
@@ -88,7 +97,7 @@ same ports and virtual-camera device.
 
 ## End-to-end matrix
 
-Run each applicable row on a physical phone and configured Linux host:
+Run each applicable row on a physical mobile sender and configured Linux host:
 
 | Sender | Network | Receiver | Consumer |
 | --- | --- | --- | --- |
@@ -100,9 +109,22 @@ Run each applicable row on a physical phone and configured Linux host:
 | Android H.265 | USB tethering | Linux | OBS |
 | Android H.264 | Wi-Fi or USB | Linux | Browser |
 
+The iOS skeleton is not included in the end-to-end matrix until its native
+media spike is complete. Once implemented, iOS H.264 must pass the same
+receiver-side rows and MPEG-TS compatibility checks as Android.
+
 For each row verify codec selection, first-frame time, stable latency, sender
 restart without receiver restart, and receiver recovery after a two-second
 network interruption.
+
+For Android camera interaction, also verify on a physical device that the
+receiver reports decoded frames with the selected profile aspect ratio while
+the phone is held in portrait and landscape orientations. Change zoom through
+the slider and pinch gesture, confirm minimum/maximum/reset behavior, and
+confirm the media session remains active. Minimize the app, lock and unlock the
+phone, rotate or recreate the activity, and destroy/recreate the preview
+surface; each operation must leave streaming running. Stop and restart after
+these transitions, and repeat at least once with H.265.
 
 ## Stability runs
 

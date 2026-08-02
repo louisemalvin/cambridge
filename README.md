@@ -1,16 +1,17 @@
 # Mobile Webcam
 
-Mobile Webcam streams video from an Android phone to a Linux desktop with a
-low-latency, bounded-buffer path:
+Mobile Webcam streams video from a mobile sender to a Linux desktop with a
+low-latency, bounded-buffer path. Android is the active sender implementation;
+iOS currently provides a native development skeleton:
 
 ```text
-Android camera -> hardware H.264/H.265 encoder -> MPEG-TS over UDP
+Android or iOS camera -> platform H.264/H.265 encoder -> MPEG-TS over UDP
     -> Rust/GStreamer receiver -> v4l2loopback -> OBS or browser
 ```
 
 The local-network flow has three explicit boundaries:
 
-- Desktop-side discovery of the Android sender's TCP control service.
+- Desktop-side discovery of the mobile sender's TCP control service.
 - HTTP/JSON receiver control on TCP port `5001`.
 - MPEG-TS media on a UDP port allocated from `50000-50099` for each session.
 
@@ -22,9 +23,10 @@ Phase 1.
 ## Repository
 
 - `android/`: one Kotlin/Compose sender application.
+- `ios/`: native SwiftUI/Xcode development skeleton and future media boundary.
 - `desktop/`: reusable Rust receiver crates and thin CLI.
 - `protocol/`: versioned control contract and JSON fixtures.
-- `docs/`: architecture, setup, testing, troubleshooting, and decisions.
+- `docs/`: architecture, media transport, setup, testing, troubleshooting, and decisions.
 - `scripts/`: Linux setup and synthetic stream helpers.
 
 ## Quick start
@@ -47,8 +49,8 @@ mobile-webcam-desktop
 It opens the receiver window, shows a live preview, and writes the same decoded
 frames to the virtual camera. No device path or port arguments are required.
 The receiver automatically selects the first v4l2loopback device, discovers
-available phones, and connects to the only phone automatically. The first
-connection requires approval on the phone. Approved pairs reconnect without
+available mobile senders, and connects to the only sender automatically. The
+first connection requires approval on the sender. Approved pairs reconnect without
 entering an address.
 
 The headless receiver is also available for servers or terminal-only sessions:
@@ -75,12 +77,15 @@ The Phase 1 implementation is intentionally hardware-dependent at its final
 edges. Synthetic GStreamer tests and Rust/Kotlin unit tests cover the control,
 negotiation, and media architecture. Physical Android, v4l2loopback, OBS,
 browser, Wi-Fi, and USB-tethering validation must be run on a configured host.
+The iOS target is a non-functional skeleton until its native media spike is
+complete.
 
 See [known limitations](docs/known-limitations.md) and [testing](docs/testing.md).
 
 Key references:
 
 - [Architecture](docs/architecture.md)
+- [MPEG-TS/UDP media contract](docs/media-transport-v1.md)
 - [Control protocol](docs/protocol.md)
 - [Codec behavior](docs/codecs.md)
 - [Latency testing](docs/latency-testing.md)

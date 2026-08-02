@@ -16,6 +16,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.mobilewebcam.sender.model.StreamState
 import dev.mobilewebcam.sender.ui.SenderUiState
+import dev.mobilewebcam.sender.camera.PhysicalLensOption
+import dev.mobilewebcam.sender.ui.components.CameraLensControls
+import dev.mobilewebcam.sender.ui.components.CameraStabilizationControls
+import dev.mobilewebcam.sender.ui.components.CameraZoomControls
 import dev.mobilewebcam.sender.ui.components.ConnectionStatus
 import kotlinx.coroutines.delay
 
@@ -29,6 +33,10 @@ private const val BITS_PER_MEGABIT = 1_000_000.0
 fun StreamingScreen(
     state: SenderUiState,
     onStop: () -> Unit,
+    onZoomRatioChanged: (Float) -> Unit,
+    onResetZoom: () -> Unit,
+    onStabilizationEnabledChanged: (Boolean) -> Unit,
+    onPhysicalLensSelected: (PhysicalLensOption) -> Unit,
 ) {
     val streaming = state.streamState as? StreamState.Streaming
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -39,10 +47,25 @@ fun StreamingScreen(
         }
     }
     Column(
-        modifier = Modifier.padding(STREAMING_CONTENT_PADDING_DP.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(STREAMING_CONTENT_PADDING_DP.dp),
         verticalArrangement = Arrangement.spacedBy(STREAMING_ITEM_SPACING_DP.dp),
     ) {
         ConnectionStatus(state.streamState)
+        CameraLensControls(
+            state = state.cameraInteraction,
+            onLensSelected = onPhysicalLensSelected,
+        )
+        CameraStabilizationControls(
+            state = state.cameraInteraction,
+            onStabilizationEnabledChanged = onStabilizationEnabledChanged,
+        )
+        CameraZoomControls(
+            state = state.cameraInteraction,
+            onZoomRatioChanged = onZoomRatioChanged,
+            onResetZoom = onResetZoom,
+        )
         streaming?.let { session ->
             Text("Codec: ${session.session.selectedCodec.protocolId}")
             Text(

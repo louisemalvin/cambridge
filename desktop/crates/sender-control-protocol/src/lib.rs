@@ -1,4 +1,4 @@
-//! Discovery metadata and reverse-control messages exposed by an Android sender.
+//! Discovery metadata and reverse-control messages exposed by a mobile sender.
 
 use serde::{Deserialize, Serialize};
 

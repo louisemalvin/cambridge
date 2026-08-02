@@ -354,6 +354,25 @@ mod tests {
     }
 
     #[test]
+    fn decoded_output_caps_match_the_negotiated_profile_dimensions() {
+        gst::init().unwrap();
+        let config = config();
+        let caps = raw_caps(&config);
+        let structure = caps.structure(0).unwrap();
+        let expected_width = i32::try_from(config.profile.width).unwrap();
+        let expected_height = i32::try_from(config.profile.height).unwrap();
+        let expected_fps = i32::try_from(config.profile.fps).unwrap();
+
+        assert_eq!(structure.get::<&str>("format"), Ok("YUY2"));
+        assert_eq!(structure.get::<i32>("width"), Ok(expected_width));
+        assert_eq!(structure.get::<i32>("height"), Ok(expected_height));
+        assert_eq!(
+            structure.get::<gst::Fraction>("framerate"),
+            Ok(gst::Fraction::new(expected_fps, 1)),
+        );
+    }
+
+    #[test]
     fn compressed_video_is_not_routed_through_a_leaky_queue() {
         gst::init().unwrap();
         let config = config();

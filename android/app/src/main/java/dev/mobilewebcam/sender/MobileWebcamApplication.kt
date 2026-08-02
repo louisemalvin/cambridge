@@ -3,6 +3,7 @@ package dev.mobilewebcam.sender
 import android.app.Application
 import android.os.Build
 import dev.mobilewebcam.sender.capabilities.mediacodec.MediaCodecCapabilityProbe
+import dev.mobilewebcam.sender.camera.CameraController
 import dev.mobilewebcam.sender.control.http.HttpReceiverControlClient
 import dev.mobilewebcam.sender.discovery.PairingStore
 import dev.mobilewebcam.sender.discovery.SenderConnectionCoordinator
@@ -22,6 +23,9 @@ class MobileWebcamApplication : Application() {
     lateinit var connectionCoordinator: SenderConnectionCoordinator
         private set
 
+    lateinit var cameraController: CameraController
+        private set
+
     private lateinit var senderControlServer: SenderControlServer
 
     lateinit var powerManager: StreamingPowerManager
@@ -30,11 +34,13 @@ class MobileWebcamApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         powerManager = AndroidStreamingPowerManager(this)
+        val streamEngine = RootEncoderStreamEngine(this)
+        cameraController = streamEngine
         sessionController = StreamSessionControllerImpl(
             receiver = HttpReceiverControlClient(),
             capabilityProbe = MediaCodecCapabilityProbe(),
             negotiator = CodecNegotiator(),
-            streamEngine = RootEncoderStreamEngine(this),
+            streamEngine = streamEngine,
             foreground = AndroidForegroundStreamingController(this, powerManager),
         )
         val pairings = PairingStore(this)
