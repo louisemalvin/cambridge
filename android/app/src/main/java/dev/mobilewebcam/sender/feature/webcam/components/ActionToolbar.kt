@@ -44,7 +44,7 @@ fun PreviewActions(
 
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(ACTION_TOOLBAR_CORNER_RADIUS.dp),
+        shape = MaterialTheme.shapes.extraLarge,
         color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = ACTION_TOOLBAR_ALPHA),
         tonalElevation = ACTION_TOOLBAR_TONAL_ELEVATION.dp,
     ) {

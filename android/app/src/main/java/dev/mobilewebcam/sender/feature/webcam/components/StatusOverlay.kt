@@ -76,7 +76,7 @@ private fun ConnectionChip(
     }
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(STATUS_CHIP_CORNER_RADIUS.dp),
+        shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = STATUS_CHIP_ALPHA),
     ) {
         Text(
@@ -127,7 +127,7 @@ private fun StatusCard(
 ) {
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(STATUS_CARD_CORNER_RADIUS.dp),
+        shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = STATUS_CARD_ALPHA),
     ) {
         Text(

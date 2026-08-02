@@ -87,7 +87,7 @@ fun SenderApp() {
         }
     }
 
-    MaterialTheme {
+    dev.mobilewebcam.sender.app.theme.MobileWebcamTheme {
         Surface(modifier = Modifier.fillMaxSize()) {
             AppNavigation(
                 backStack = backStack,
