@@ -10,6 +10,10 @@
 - Android Gradle tests, lint, and debug APK assembly are build-verified in the
   current environment, but a physical phone is still required for camera and
   hardware-encoder validation.
+- RootEncoder 2.8.0 `CameraXSource` exposes logical lens facing and zoom, but
+  not physical multi-camera IDs or video stabilization controls. The sender
+  reports those options as unsupported until a compatible upstream or adapter
+  API is selected.
 - A desktop preview requires GTK 4 development/runtime libraries and the
   GStreamer App plugin. Hosts without those packages can still use the CLI
   receiver, but cannot build or launch the preview application.

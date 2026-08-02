@@ -58,12 +58,15 @@ application. Android framework types such as `Context`, `Surface`, and
 the Android MediaCodec capability package. Further extraction is incremental
 and must improve the active Android path rather than reorganise the repository.
 
-The Compose screen consumes only the immutable `SenderScreenState` presentation
-model. `SenderViewModel` combines coordinator and camera-controller flows,
-maps domain state through a pure screen-state mapper, and handles
-`SenderScreenAction` values. One-shot Android work such as requesting camera
-permission or copying diagnostics is exposed as `SenderUiEffect`; composables
-do not access the coordinator, RootEncoder, or camera controller directly.
+Each destination composable consumes only its immutable presentation model.
+`PairingViewModel`, `WebcamViewModel`, and `SettingsViewModel` own their
+destination state and map coordinator or camera-controller flows through pure
+screen-state mappers. `SenderScreenAction` remains the UI intent boundary.
+One-shot Android work such as requesting camera permission or copying
+diagnostics is exposed as `SenderUiEffect`; composables do not access the
+coordinator, RootEncoder, or camera controller directly. Navigation 3 entry
+decorators scope each destination ViewModel to its back-stack entry while the
+application-scoped session and stream owner remains shared.
 
 ## iOS development boundary
 
@@ -89,7 +92,7 @@ The Android camera interaction boundary is separate from session negotiation:
 Compose preview and zoom controls
   -> CameraController state/events
   -> RootEncoderStreamEngine
-       -> one Camera2Source
+       -> one RootEncoder CameraXSource
        -> attach/detach preview surface without stream restart
 ```
 
@@ -101,12 +104,18 @@ surface dimensions and orientation independently, while the encoder keeps the
 negotiated profile dimensions so the receiver's fixed output caps preserve the
 same aspect ratio.
 
-Zoom is applied through RootEncoder `Camera2Source.setZoom(Float)` using the
-camera-reported `getZoomRange()`. The zoom state and reset action are coarse
-UI state; camera frames and Android camera objects do not cross the session or
-wire contracts. A destroyed preview surface detaches only the GL preview. The
-foreground service and application-scoped stream engine continue the media
-session, and a later surface can attach to the existing camera source.
+Zoom is applied through RootEncoder `CameraXSource.setZoom(Float)` using the
+camera-reported `getZoomRange()`. CameraX lifecycle operations are dispatched
+to the Android main dispatcher because RootEncoder's `CameraXSource` owns a
+`LifecycleRegistry` and binds its single preview use case there. The zoom state
+and reset action are coarse UI state; camera frames and Android camera objects
+do not cross the session or wire contracts. A destroyed preview surface
+detaches only the GL preview. The foreground service and application-scoped
+stream engine continue the media session, and a later surface can attach to the
+existing camera source. RootEncoder's supported CameraX API currently does not
+provide physical-camera selection or video stabilization controls, so those
+capabilities remain explicitly unsupported rather than using a second capture
+path.
 
 ## Rust crate boundaries
 

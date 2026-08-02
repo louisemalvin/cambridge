@@ -14,7 +14,7 @@ Make the Android app a preview-first surface:
   right in landscape.
 - Preserve the existing RootEncoder camera boundary, negotiated profile dimensions, rotation handling, and stable Compose BOM.
 
-The current RootEncoder engine creates the camera source during session preparation. Therefore the initial UI proposal shows a waiting surface before a receiver starts a session rather than adding a second local-preview camera lifecycle. A pre-connection live camera preview would be a separate media-lifecycle change.
+The implemented RootEncoder engine creates one `CameraXSource` during session preparation and keeps its lifecycle operations on the main dispatcher. Therefore the UI shows a waiting surface before a receiver starts a session rather than adding a second local-preview camera lifecycle. A pre-connection live camera preview remains a separate media-lifecycle change.
 
 ## Proposed Material 3 composition
 
@@ -54,10 +54,11 @@ not introduce another screen-level scroll owner around the preview.
 
 ## MVVM and state boundaries
 
-The current `SenderUiState` is too close to the domain model: it exposes
-`StreamState`, `CameraInteractionState`, `VideoProfile`, and
-`CodecPreference` directly to Compose. The rehaul should replace it with a
-presentation model and make the boundary explicit.
+The implementation keeps infrastructure state out of Compose. Destination-scoped
+`PairingViewModel`, `WebcamViewModel`, and `SettingsViewModel` map coordinator,
+camera, and settings state into immutable presentation models and handle screen
+actions. Navigation 3 entry decorators scope those ViewModels to their
+destinations.
 
 ### Model and service state
 
@@ -93,9 +94,10 @@ Compose.
 
 ### ViewModel and UI contract
 
-- `SenderViewModel` combines the coordinator and camera-controller flows with
-  local screen preference state, maps them into one `StateFlow<SenderScreenState>`,
-  and handles screen actions.
+- `PairingViewModel`, `WebcamViewModel`, and `SettingsViewModel` expose the
+  presentation state needed by their destinations and delegate actions to the
+  coordinator or camera controller. The Navigation 3 entry decorators own the
+  destination-scoped ViewModel lifecycles.
 - Expose a small `SenderScreenAction` surface for settings, dimming, zoom,
   lens, stabilization, permission, approval, stop, and diagnostics actions.
 - Expose one-shot `SenderUiEffect` values only for events the UI must perform,
@@ -113,18 +115,18 @@ This keeps MVVM meaningful: model state owns behavior, the ViewModel owns the
 screen projection and intent handling, and Compose owns rendering plus narrow
 ephemeral interaction state.
 
-## Open decisions for review
+## Resolved implementation decisions
 
-- Screen dim: use a reversible black scrim over the preview as the first implementation, or lower the Android window backlight. The scrim is self-contained and lifecycle-safe; hardware brightness is a separate window policy with restoration edge cases. Use `Icons.Outlined.BrightnessLow` for the dim action and `Icons.Outlined.BrightnessHigh` when the action is to brighten the screen. Do not use a moon text glyph.
-- Zoom placement: recommended is pinch as the primary interaction plus a compact zoom chip/tray on the main surface. The alternative is keeping a full slider permanently visible, which is more discoverable but less clean.
-- Pre-connection preview: recommended is the requested waiting state because the current engine only opens the camera after negotiation. A live pre-connection preview requires a separate camera ownership decision.
+- Screen dim uses a reversible black scrim over the preview. It is lifecycle-safe and avoids window-brightness restoration concerns. The action uses the outlined brightness icons.
+- Zoom uses pinch as the primary interaction plus a compact zoom chip/tray on the main surface. The slider is bounded by the camera-reported range and supports reset to 1x.
+- The pre-connection surface remains a waiting state because the current engine opens its single camera source after negotiation. A live pre-connection preview would require a separate camera ownership decision.
 
 ## Acceptance criteria for implementation
 
 - The app has one preview-first screen composition instead of separate connect and streaming columns.
 - Portrait and landscape preview geometry preserve the selected profile aspect ratio without stretching or nested unbounded scrolling.
 - The main surface contains only the preview, waiting/status treatment, dim action, zoom affordance, and settings action.
-- OIS/EIS, physical lens selection, codec, profile, diagnostics, and connection details are reachable from Material 3 surfaces without being permanently visible.
+- Codec, profile, diagnostics, and connection details are reachable from Material 3 surfaces without being permanently visible. Physical lens and stabilization rows are capability-gated because RootEncoder 2.8.0's public `CameraXSource` does not expose those controls.
 - Compose receives only `SenderScreenState`; domain state is translated by a pure ViewModel mapper and is not passed directly into screen composables.
 - Existing camera interaction and session contracts remain unchanged unless an explicit pre-connection preview decision is made.
 - Compose tests cover waiting, streaming, settings visibility, dim state, rotation/aspect-ratio layout, and the existing zoom bounds/reset behavior.
