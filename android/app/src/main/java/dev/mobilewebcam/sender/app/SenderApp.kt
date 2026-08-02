@@ -1,4 +1,4 @@
-package dev.mobilewebcam.sender.ui
+package dev.mobilewebcam.sender.app
 
 import android.Manifest
 import android.content.ClipData
@@ -29,6 +29,7 @@ import dev.mobilewebcam.sender.app.navigation.AppDestination
 import dev.mobilewebcam.sender.app.navigation.AppNavigation
 import dev.mobilewebcam.sender.app.navigation.rememberAppBackStack
 import dev.mobilewebcam.sender.app.startup.StartupStateResolver
+import dev.mobilewebcam.sender.feature.webcam.WebcamViewModel
 import dev.mobilewebcam.sender.ui.model.SenderScreenAction
 import dev.mobilewebcam.sender.ui.model.SenderUiEffect
 
@@ -36,8 +37,8 @@ import dev.mobilewebcam.sender.ui.model.SenderUiEffect
 fun SenderApp() {
     val context = LocalContext.current
     val application = context.applicationContext as MobileWebcamApplication
-    val viewModel: SenderViewModel = viewModel(
-        factory = SenderViewModelFactory(application),
+    val viewModel: WebcamViewModel = viewModel(
+        factory = WebcamViewModelFactory(application),
     )
     val screenState by viewModel.uiState.collectAsState()
     val diagnosticsClipboardLabel = stringResource(R.string.diagnostics_clipboard_label)
@@ -92,7 +93,15 @@ fun SenderApp() {
         Surface(modifier = Modifier.fillMaxSize()) {
             AppNavigation(
                 backStack = backStack,
-                state = screenState,
+                state = dev.mobilewebcam.sender.ui.model.SenderScreenState(
+                    preview = screenState.preview,
+                    connection = screenState.connection,
+                    camera = screenState.camera,
+                    isScreenDimmed = screenState.isScreenDimmed,
+                    isZoomTrayOpen = screenState.isZoomTrayOpen,
+                    cameraPermissionGranted = screenState.cameraPermissionGranted,
+                    failureDiagnostics = screenState.failureDiagnostics,
+                ),
                 onAction = { action ->
                     when (action) {
                         SenderScreenAction.OpenSettings -> backStack.navigateTo(AppDestination.Settings)
@@ -114,13 +123,13 @@ private fun Context.hasCameraPermission(): Boolean =
     ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
         PackageManager.PERMISSION_GRANTED
 
-private class SenderViewModelFactory(
+private class WebcamViewModelFactory(
     private val application: MobileWebcamApplication,
 ) : androidx.lifecycle.ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-        check(modelClass.isAssignableFrom(SenderViewModel::class.java))
-        return SenderViewModel(
+        check(modelClass.isAssignableFrom(WebcamViewModel::class.java))
+        return WebcamViewModel(
             coordinator = application.connectionCoordinator,
             cameraController = application.cameraController,
         ) as T

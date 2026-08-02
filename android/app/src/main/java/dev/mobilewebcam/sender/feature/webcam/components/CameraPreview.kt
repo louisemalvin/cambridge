@@ -1,4 +1,4 @@
-package dev.mobilewebcam.sender.ui.components
+package dev.mobilewebcam.sender.feature.webcam.components
 
 import android.view.SurfaceHolder
 import android.view.SurfaceView
@@ -29,54 +29,55 @@ fun CameraPreview(
     val currentZoomRatio by rememberUpdatedState(zoomState.ratio)
     val currentMinZoomRatio by rememberUpdatedState(zoomState.minimumRatio)
     val currentMaxZoomRatio by rememberUpdatedState(zoomState.maximumRatio)
-    val currentOrientation by rememberUpdatedState(orientation.toDisplayOrientation())
+    val currentOrientation = orientation.toDisplayOrientation()
 
     AndroidView(
-        modifier = modifier.pointerInput(Unit) {
-            detectTransformGestures { _, _, zoomChange, _ ->
-                if (zoomChange != CameraZoom.DEFAULT_ZOOM_RATIO) {
-                    val requestedZoom = (currentZoomRatio * zoomChange).coerceIn(
-                        currentMinZoomRatio,
-                        currentMaxZoomRatio,
-                    )
-                    currentOnZoomRatioChanged(requestedZoom)
+        modifier = modifier.pointerInput(zoomState.isCameraActive, zoomState.isSupported) {
+            if (!zoomState.isCameraActive || !zoomState.isSupported) return@pointerInput
+            detectTransformGestures { _, _, zoomFactor, _ ->
+                val targetZoom = (currentZoomRatio * zoomFactor)
+                    .coerceIn(currentMinZoomRatio, currentMaxZoomRatio)
+                if (targetZoom != currentZoomRatio) {
+                    currentOnZoomRatioChanged(targetZoom)
                 }
             }
         },
-        factory = { context ->
-            SurfaceView(context).also { view ->
-                view.holder.addCallback(object : SurfaceHolder.Callback {
-                    override fun surfaceCreated(holder: SurfaceHolder) {
-                        publishSurface(
-                            view,
-                            holder,
-                            view.width,
-                            view.height,
-                            currentOrientation,
-                            currentOnSurfaceChanged,
-                        )
-                    }
+        factory = { viewContext ->
+            SurfaceView(viewContext).apply {
+                holder.addCallback(
+                    object : SurfaceHolder.Callback {
+                        override fun surfaceCreated(holder: SurfaceHolder) {
+                            publishSurface(
+                                this@apply,
+                                holder,
+                                width,
+                                height,
+                                currentOrientation,
+                                currentOnSurfaceChanged,
+                            )
+                        }
 
-                    override fun surfaceChanged(
-                        holder: SurfaceHolder,
-                        format: Int,
-                        width: Int,
-                        height: Int,
-                    ) {
-                        publishSurface(
-                            view,
-                            holder,
-                            width,
-                            height,
-                            currentOrientation,
-                            currentOnSurfaceChanged,
-                        )
-                    }
+                        override fun surfaceChanged(
+                            holder: SurfaceHolder,
+                            format: Int,
+                            width: Int,
+                            height: Int,
+                        ) {
+                            publishSurface(
+                                this@apply,
+                                holder,
+                                width,
+                                height,
+                                currentOrientation,
+                                currentOnSurfaceChanged,
+                            )
+                        }
 
-                    override fun surfaceDestroyed(holder: SurfaceHolder) {
-                        currentOnSurfaceChanged(null)
-                    }
-                })
+                        override fun surfaceDestroyed(holder: SurfaceHolder) {
+                            currentOnSurfaceChanged(null)
+                        }
+                    },
+                )
             }
         },
         update = { view ->
@@ -110,10 +111,14 @@ private fun publishSurface(
     if (!holder.surface.isValid || !hasValidDimensions) {
         return
     }
-    val orientation = view.display?.rotation?.let { rotation ->
-        DisplayOrientation.fromSurfaceRotation(rotation)
+
+    val display = view.display
+    val orientation = if (display != null) {
+        DisplayOrientation.fromSurfaceRotation(display.rotation)
+    } else {
+        fallbackOrientation
     }
-        ?: fallbackOrientation
+
     onSurfaceChanged(
         CameraPreviewSurface(
             surface = holder.surface,

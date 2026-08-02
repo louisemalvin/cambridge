@@ -1,4 +1,4 @@
-package dev.mobilewebcam.sender.ui.components
+package dev.mobilewebcam.sender.feature.webcam.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -14,11 +14,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import dev.mobilewebcam.sender.camera.CameraPreviewSurface
+import dev.mobilewebcam.sender.feature.webcam.overlays.ZoomTray
 import dev.mobilewebcam.sender.ui.model.PreviewOrientation
 import dev.mobilewebcam.sender.ui.model.PreviewViewportCalculator
 import dev.mobilewebcam.sender.ui.model.SenderScreenAction
 import dev.mobilewebcam.sender.ui.model.SenderScreenState
-import dev.mobilewebcam.sender.ui.overlays.ZoomTray
 
 @Composable
 fun PreviewStage(

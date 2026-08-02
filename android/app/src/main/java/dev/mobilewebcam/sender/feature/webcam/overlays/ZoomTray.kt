@@ -1,4 +1,4 @@
-package dev.mobilewebcam.sender.ui.overlays
+package dev.mobilewebcam.sender.feature.webcam.overlays
 
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -7,7 +7,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import dev.mobilewebcam.sender.ui.components.CameraZoomControls
+import dev.mobilewebcam.sender.feature.webcam.components.CameraZoomControls
 import dev.mobilewebcam.sender.ui.model.SenderScreenAction
 import dev.mobilewebcam.sender.ui.model.SenderScreenState
 

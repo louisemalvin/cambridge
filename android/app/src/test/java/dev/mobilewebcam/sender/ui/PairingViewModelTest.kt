@@ -1,6 +1,6 @@
 package dev.mobilewebcam.sender.ui
 
-import dev.mobilewebcam.sender.ui.model.PairingUiState
+import dev.mobilewebcam.sender.feature.pairing.PairingUiState
 import dev.mobilewebcam.sender.ui.model.UiText
 import org.junit.Assert.assertEquals
 import org.junit.Test

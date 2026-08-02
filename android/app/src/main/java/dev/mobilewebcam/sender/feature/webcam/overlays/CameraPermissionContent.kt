@@ -1,4 +1,4 @@
-package dev.mobilewebcam.sender.ui.overlays
+package dev.mobilewebcam.sender.feature.webcam.overlays
 
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button

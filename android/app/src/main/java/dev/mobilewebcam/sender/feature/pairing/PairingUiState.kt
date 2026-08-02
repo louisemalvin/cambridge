@@ -1,4 +1,6 @@
-package dev.mobilewebcam.sender.ui.model
+package dev.mobilewebcam.sender.feature.pairing
+
+import dev.mobilewebcam.sender.ui.model.UiText
 
 sealed interface PairingUiState {
     data object Idle : PairingUiState

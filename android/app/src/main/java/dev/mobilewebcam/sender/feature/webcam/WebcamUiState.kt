@@ -1,4 +1,8 @@
-package dev.mobilewebcam.sender.ui.model
+package dev.mobilewebcam.sender.feature.webcam
+
+import dev.mobilewebcam.sender.ui.model.CameraControlsUiState
+import dev.mobilewebcam.sender.ui.model.ConnectionUiState
+import dev.mobilewebcam.sender.ui.model.PreviewUiState
 
 data class WebcamUiState(
     val preview: PreviewUiState = PreviewUiState(),

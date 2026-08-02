@@ -1,7 +1,6 @@
-package dev.mobilewebcam.sender.ui
+package dev.mobilewebcam.sender.feature.webcam
 
 import android.content.res.Configuration
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -9,16 +8,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import dev.mobilewebcam.sender.camera.CameraPreviewSurface
-import dev.mobilewebcam.sender.ui.components.PreviewStage
+import dev.mobilewebcam.sender.feature.webcam.components.PreviewStage
+import dev.mobilewebcam.sender.feature.webcam.overlays.CameraPermissionDialog
 import dev.mobilewebcam.sender.ui.model.PreviewOrientation
 import dev.mobilewebcam.sender.ui.model.SenderDialogUiState
 import dev.mobilewebcam.sender.ui.model.SenderScreenAction
 import dev.mobilewebcam.sender.ui.model.SenderScreenState
-import dev.mobilewebcam.sender.ui.overlays.CameraPermissionDialog
-import dev.mobilewebcam.sender.ui.overlays.ReceiverApprovalDialog
 
 @Composable
-fun SenderScreen(
+fun WebcamScreen(
     state: SenderScreenState,
     onAction: (SenderScreenAction) -> Unit,
     onSurfaceChanged: (CameraPreviewSurface?) -> Unit,
@@ -71,9 +69,6 @@ private fun SenderDialog(
             dialog = dialog,
             onAction = onAction,
         )
-        is SenderDialogUiState.PendingApproval -> ReceiverApprovalDialog(
-            dialog = dialog,
-            onAction = onAction,
-        )
+        is SenderDialogUiState.PendingApproval -> Unit
     }
 }

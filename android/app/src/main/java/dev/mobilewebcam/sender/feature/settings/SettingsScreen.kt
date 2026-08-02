@@ -1,4 +1,4 @@
-package dev.mobilewebcam.sender.ui
+package dev.mobilewebcam.sender.feature.settings
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -25,11 +25,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import dev.mobilewebcam.sender.R
-import dev.mobilewebcam.sender.ui.components.CameraLensControls
-import dev.mobilewebcam.sender.ui.components.CameraStabilizationControls
-import dev.mobilewebcam.sender.ui.components.CameraZoomControls
-import dev.mobilewebcam.sender.ui.components.CodecSelector
-import dev.mobilewebcam.sender.ui.components.VideoProfileSelector
+import dev.mobilewebcam.sender.feature.settings.components.CodecSelector
+import dev.mobilewebcam.sender.feature.settings.components.VideoProfileSelector
+import dev.mobilewebcam.sender.feature.webcam.components.CameraLensControls
+import dev.mobilewebcam.sender.feature.webcam.components.CameraStabilizationControls
+import dev.mobilewebcam.sender.feature.webcam.components.CameraZoomControls
 import dev.mobilewebcam.sender.ui.model.ConnectionUiState
 import dev.mobilewebcam.sender.ui.model.SenderScreenAction
 import dev.mobilewebcam.sender.ui.model.SenderScreenState

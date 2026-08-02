@@ -1,10 +1,10 @@
-package dev.mobilewebcam.sender.ui
+package dev.mobilewebcam.sender.feature.pairing
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.mobilewebcam.sender.discovery.SenderConnectionCoordinator
 import dev.mobilewebcam.sender.model.StreamState
-import dev.mobilewebcam.sender.ui.model.PairingUiState
+import dev.mobilewebcam.sender.ui.SenderScreenStateMapper
 import dev.mobilewebcam.sender.ui.model.UiText
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow

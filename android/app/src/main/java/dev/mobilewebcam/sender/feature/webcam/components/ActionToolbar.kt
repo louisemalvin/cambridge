@@ -1,4 +1,4 @@
-package dev.mobilewebcam.sender.ui.components
+package dev.mobilewebcam.sender.feature.webcam.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column

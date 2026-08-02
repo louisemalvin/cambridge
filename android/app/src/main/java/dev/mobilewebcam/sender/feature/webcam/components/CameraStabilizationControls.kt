@@ -1,4 +1,4 @@
-package dev.mobilewebcam.sender.ui.components
+package dev.mobilewebcam.sender.feature.webcam.components
 
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.ListItem
@@ -6,6 +6,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import dev.mobilewebcam.sender.R
 import dev.mobilewebcam.sender.ui.model.StabilizationUiState
 
@@ -18,20 +19,13 @@ fun CameraStabilizationControls(
     if (!state.isSupported) return
 
     ListItem(
-        modifier = modifier.fillMaxWidth(),
-        headlineContent = { Text(androidx.compose.ui.res.stringResource(R.string.stabilization)) },
-        supportingContent = {
-            Text(
-                androidx.compose.ui.res.stringResource(
-                    if (state.isEnabled) R.string.on else R.string.off,
-                ),
-            )
-        },
+        headlineContent = { Text(stringResource(R.string.stabilization)) },
         trailingContent = {
             Switch(
                 checked = state.isEnabled,
                 onCheckedChange = onStabilizationEnabledChanged,
             )
         },
+        modifier = modifier.fillMaxWidth(),
     )
 }

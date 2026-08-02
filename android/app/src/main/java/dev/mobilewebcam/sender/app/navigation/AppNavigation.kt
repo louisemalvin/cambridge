@@ -5,8 +5,8 @@ import androidx.compose.ui.Modifier
 import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.ui.NavDisplay
 import dev.mobilewebcam.sender.camera.CameraPreviewSurface
-import dev.mobilewebcam.sender.ui.SenderScreen
-import dev.mobilewebcam.sender.ui.SettingsScreen
+import dev.mobilewebcam.sender.feature.settings.SettingsScreen
+import dev.mobilewebcam.sender.feature.webcam.WebcamScreen
 import dev.mobilewebcam.sender.ui.model.SenderScreenAction
 import dev.mobilewebcam.sender.ui.model.SenderScreenState
 
@@ -28,14 +28,14 @@ fun AppNavigation(
         entryProvider = { destination ->
             when (destination) {
                 AppDestination.Pairing -> NavEntry(destination) {
-                    SenderScreen(
+                    WebcamScreen(
                         state = state,
                         onAction = onAction,
                         onSurfaceChanged = onSurfaceChanged,
                     )
                 }
                 AppDestination.Webcam -> NavEntry(destination) {
-                    SenderScreen(
+                    WebcamScreen(
                         state = state,
                         onAction = onAction,
                         onSurfaceChanged = onSurfaceChanged,
