@@ -1,7 +1,7 @@
 package dev.mobilewebcam.sender.media.streaming.rootencoder
 
 import com.pedro.common.ConnectChecker
-import dev.mobilewebcam.sender.streaming.StreamEngineEvent
+import dev.mobilewebcam.sender.media.streaming.StreamEngineEvent
 import kotlinx.coroutines.flow.MutableSharedFlow
 
 internal class RootEncoderEventAdapter(

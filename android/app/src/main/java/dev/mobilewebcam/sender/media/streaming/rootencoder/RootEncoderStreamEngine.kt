@@ -6,24 +6,24 @@ import android.hardware.camera2.CameraManager
 import android.hardware.camera2.CaptureRequest
 import android.os.Build
 import com.pedro.encoder.input.sources.audio.NoAudioSource
-import com.pedro.encoder.input.sources.video.Camera2Source
+import com.pedro.extrasources.CameraXSource
 import com.pedro.library.udp.UdpStream
-import dev.mobilewebcam.sender.camera.CameraController
-import dev.mobilewebcam.sender.camera.CameraInteractionState
-import dev.mobilewebcam.sender.camera.CameraPreviewSurface
-import dev.mobilewebcam.sender.camera.CameraStabilizationMode
-import dev.mobilewebcam.sender.camera.CameraStabilizationSupport
-import dev.mobilewebcam.sender.camera.PhysicalLensOption
-import dev.mobilewebcam.sender.camera.physicalLensOptionsFor
-import dev.mobilewebcam.sender.camera.preferredStabilizationMode
+import dev.mobilewebcam.sender.media.camera.CameraController
+import dev.mobilewebcam.sender.media.camera.CameraInteractionState
+import dev.mobilewebcam.sender.media.camera.CameraPreviewSurface
+import dev.mobilewebcam.sender.media.camera.CameraStabilizationMode
+import dev.mobilewebcam.sender.media.camera.CameraStabilizationSupport
+import dev.mobilewebcam.sender.media.camera.PhysicalLensOption
+import dev.mobilewebcam.sender.media.camera.physicalLensOptionsFor
+import dev.mobilewebcam.sender.media.camera.preferredStabilizationMode
 import dev.mobilewebcam.sender.config.CameraZoom
 import dev.mobilewebcam.sender.logging.AndroidAppLogger
 import dev.mobilewebcam.sender.logging.AppLogger
 import dev.mobilewebcam.sender.model.StreamConfiguration
 import dev.mobilewebcam.sender.model.StreamFailure
 import dev.mobilewebcam.sender.model.StreamFailureException
-import dev.mobilewebcam.sender.streaming.StreamEngine
-import dev.mobilewebcam.sender.streaming.StreamEngineEvent
+import dev.mobilewebcam.sender.media.streaming.StreamEngine
+import dev.mobilewebcam.sender.media.streaming.StreamEngineEvent
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -45,7 +45,7 @@ class RootEncoderStreamEngine(
     private val cameraMutex = Mutex()
     private val cameraState = MutableStateFlow(CameraInteractionState())
     private var stream: UdpStream? = null
-    private var cameraSource: Camera2Source? = null
+    private var cameraSource: CameraXSource? = null
     private var previewSurface: CameraPreviewSurface? = null
     private var physicalLensOptions = emptyList<PhysicalLensOption>()
     private var stabilizationSupport = unsupportedStabilization()
@@ -62,7 +62,7 @@ class RootEncoderStreamEngine(
                 check(stream == null) { "A stream is already prepared" }
                 diagnosticRunId = configuration.runId
                 diagnosticSessionId = configuration.sessionId
-                val source = Camera2Source(applicationContext)
+                val source = RootEncoderCameraSourceFactory(applicationContext).createCameraXSource()
                 val createdEncoder = UdpStream(
                     applicationContext,
                     RootEncoderEventAdapter(eventFlow),

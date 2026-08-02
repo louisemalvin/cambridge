@@ -3,7 +3,7 @@ plugins {
 }
 
 android {
-    namespace = "com.pedro.udp"
+    namespace = "dev.mobilewebcam.sender.rootencoder.udp"
     compileSdk = 37
 
     defaultConfig {
