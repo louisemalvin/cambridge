@@ -75,6 +75,20 @@ class SenderScreenStateMapperTest {
         assertTrue(state.failureDiagnostics?.contains("Test desktop") == true)
     }
 
+    @Test
+    fun connectingStateMapsToConnectingUiState() {
+        val state = mapSnapshot(streamState = StreamState.Negotiating)
+        assertTrue(state.connection is ConnectionUiState.Connecting)
+        assertFalse(state.preview.isLive)
+    }
+
+    @Test
+    fun stoppingStateMapsToStoppingUiState() {
+        val state = mapSnapshot(streamState = StreamState.Stopping)
+        assertEquals(ConnectionUiState.Stopping, state.connection)
+        assertTrue(state.preview.isLive)
+    }
+
     private fun mapSnapshot(
         streamState: StreamState = StreamState.Idle,
         pendingApproval: PendingApproval? = null,
