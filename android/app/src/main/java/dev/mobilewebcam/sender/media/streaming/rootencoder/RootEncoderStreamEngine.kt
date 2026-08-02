@@ -17,6 +17,7 @@ import dev.mobilewebcam.sender.model.StreamFailure
 import dev.mobilewebcam.sender.model.StreamFailureException
 import dev.mobilewebcam.sender.media.streaming.StreamEngine
 import dev.mobilewebcam.sender.media.streaming.StreamEngineEvent
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,6 +25,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 class RootEncoderStreamEngine(
     context: Context,
@@ -64,14 +66,16 @@ class RootEncoderStreamEngine(
                 val video = configuration.toRootEncoderVideo()
                 createdEncoder.setVideoCodec(configuration.codec.toRootEncoder())
                 createdEncoder.getStreamClient().setOnlyVideo(true)
-                check(createdEncoder.prepareVideo(
-                    video.width,
-                    video.height,
-                    video.bitrateBps,
-                    video.fps,
-                    video.keyframeIntervalSeconds,
-                    video.rotationDegrees,
-                )) { "RootEncoder video preparation failed" }
+                check(withContext(Dispatchers.Main.immediate) {
+                    createdEncoder.prepareVideo(
+                        video.width,
+                        video.height,
+                        video.bitrateBps,
+                        video.fps,
+                        video.keyframeIntervalSeconds,
+                        video.rotationDegrees,
+                    )
+                }) { "RootEncoder video preparation failed" }
                 check(createdEncoder.prepareAudio(AUDIO_SAMPLE_RATE_HZ, false, AUDIO_BITRATE_BPS)) {
                     "RootEncoder audio preparation failed"
                 }
@@ -103,7 +107,7 @@ class RootEncoderStreamEngine(
                     "root_encoder_prepare_failed",
                     mapOf("reason" to cause.message, "failureType" to cause::class.simpleName),
                 )
-                runCatching { encoder?.release() }
+                runCatching { releaseEncoderOnMain(encoder) }
                 stream = null
                 cameraSource = null
                 cameraState.value = CameraInteractionState.inactive()
@@ -122,7 +126,9 @@ class RootEncoderStreamEngine(
     ): Result<Unit> = cameraMutex.withLock {
         runCatching {
             val encoder = stream ?: error("Stream has not been prepared")
-            encoder.startStream("udp://$receiverHost:$mediaPort")
+            withContext(Dispatchers.Main.immediate) {
+                encoder.startStream("udp://$receiverHost:$mediaPort")
+            }
             updateCameraStateLocked()
         }.recoverCatching { cause ->
             throw StreamFailureException(StreamFailure.StreamStartFailed(cause), cause)
@@ -139,8 +145,10 @@ class RootEncoderStreamEngine(
     override suspend fun stop(): Result<Unit> = cameraMutex.withLock {
         runCatching {
             stream?.let { encoder ->
-                if (encoder.isStreaming) encoder.stopStream()
-                if (encoder.isOnPreview) encoder.stopPreview()
+                withContext(Dispatchers.Main.immediate) {
+                    if (encoder.isStreaming) encoder.stopStream()
+                    if (encoder.isOnPreview) encoder.stopPreview()
+                }
             }
             diagnosticEvent("root_encoder_stopped")
             cameraState.value = CameraInteractionState.inactive()
@@ -148,7 +156,7 @@ class RootEncoderStreamEngine(
     }
 
     override suspend fun release() = cameraMutex.withLock {
-        stream?.release()
+        releaseEncoderOnMain(stream)
         diagnosticEvent("root_encoder_released")
         stream = null
         cameraSource = null
@@ -162,12 +170,16 @@ class RootEncoderStreamEngine(
         previewSurface = surface
         val encoder = stream ?: return@withLock
         if (surface == null) {
-            if (encoder.isOnPreview) encoder.stopPreview()
+            withContext(Dispatchers.Main.immediate) {
+                if (encoder.isOnPreview) encoder.stopPreview()
+            }
             diagnosticEvent("preview_surface_detached")
             updateCameraStateLocked()
             return@withLock
         }
-        if (encoder.isOnPreview) encoder.stopPreview()
+        withContext(Dispatchers.Main.immediate) {
+            if (encoder.isOnPreview) encoder.stopPreview()
+        }
         attachPreviewIfValidLocked(encoder, surface)
         diagnosticEvent("preview_surface_attached")
         updateCameraStateLocked()
@@ -221,7 +233,7 @@ class RootEncoderStreamEngine(
         encoder.startPreview(target.surface, target.width, target.height)
     }
 
-    private fun attachPreviewIfValidLocked(
+    private suspend fun attachPreviewIfValidLocked(
         encoder: UdpStream,
         target: CameraPreviewSurface,
     ) {
@@ -229,14 +241,22 @@ class RootEncoderStreamEngine(
             previewSurface = null
             return
         }
-        runCatching { attachPreviewLocked(encoder, target) }
-            .onFailure { cause ->
-                previewSurface = null
-                diagnosticEvent(
-                    "preview_surface_attach_failed",
-                    mapOf("reason" to cause.message),
-                )
-            }
+        withContext(Dispatchers.Main.immediate) {
+            runCatching { attachPreviewLocked(encoder, target) }
+                .onFailure { cause ->
+                    previewSurface = null
+                    diagnosticEvent(
+                        "preview_surface_attach_failed",
+                        mapOf("reason" to cause.message),
+                    )
+                }
+        }
+    }
+
+    private suspend fun releaseEncoderOnMain(encoder: UdpStream?) {
+        withContext(Dispatchers.Main.immediate) {
+            encoder?.release()
+        }
     }
 
     private fun updateCameraStateLocked() {

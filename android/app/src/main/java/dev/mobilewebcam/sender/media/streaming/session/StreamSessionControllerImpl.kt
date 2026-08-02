@@ -110,7 +110,8 @@ class StreamSessionControllerImpl(
                 ),
             )
             val request = PrepareSessionRequest(
-                preferredCodecs = preference.candidates(),
+                // The receiver must not renegotiate to a codec that the sender probe rejected.
+                preferredCodecs = listOf(codec),
                 profile = profile,
                 bitrateByCodec = VideoCodec.entries.associateWith(profile::bitrateFor),
             )
@@ -283,12 +284,6 @@ class StreamSessionControllerImpl(
             StreamFailure.ForcedCodecUnsupported(expected, profile)
         }
         throw StreamFailureException(failure)
-    }
-
-    private fun CodecPreference.candidates(): List<VideoCodec> = when (this) {
-        CodecPreference.AUTO_PREFER_H265 -> listOf(VideoCodec.H265, VideoCodec.H264)
-        CodecPreference.FORCE_H264 -> listOf(VideoCodec.H264)
-        CodecPreference.FORCE_H265 -> listOf(VideoCodec.H265)
     }
 
     private fun <T> Result<T>.orReceiverFailure(operation: String): T = getOrElse { error ->

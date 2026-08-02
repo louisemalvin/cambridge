@@ -40,12 +40,30 @@ class StreamSessionControllerTest {
         assertTrue(controller.start(endpoint, CodecPreference.AUTO_PREFER_H265, profile).isSuccess)
         assertTrue(controller.start(endpoint, CodecPreference.AUTO_PREFER_H265, profile).isFailure)
         assertEquals(1, engine.prepareCount)
+        assertEquals(listOf(VideoCodec.H265), receiver.lastPreferredCodecs)
 
         assertTrue(controller.stop().isSuccess)
         assertTrue(controller.stop().isSuccess)
         assertEquals(1, engine.stopCount)
         assertEquals(1, foreground.stopCount)
         assertEquals(1, receiver.stopCount)
+    }
+
+    @Test
+    fun automaticFallbackRequestsOnlyTheSenderSupportedCodec() = runTest {
+        val receiver = FakeReceiver()
+        val controller = StreamSessionControllerImpl(
+            receiver = receiver,
+            capabilityProbe = FakeProbe(h265Supported = false),
+            negotiator = CodecNegotiator(),
+            streamEngine = FakeEngine(),
+            foreground = FakeForeground(),
+            logger = TestLogger,
+            scope = backgroundScope,
+        )
+
+        assertTrue(controller.start(endpoint, CodecPreference.AUTO_PREFER_H265, profile).isSuccess)
+        assertEquals(listOf(VideoCodec.H264), receiver.lastPreferredCodecs)
     }
 
     @Test
@@ -73,14 +91,16 @@ class StreamSessionControllerTest {
         scope = scope,
     )
 
-    private class FakeProbe : dev.mobilewebcam.sender.media.capabilities.EncoderCapabilityProbe {
+    private class FakeProbe(
+        private val h265Supported: Boolean = true,
+    ) : dev.mobilewebcam.sender.media.capabilities.EncoderCapabilityProbe {
         override suspend fun getCapabilities(profiles: List<VideoProfile>): List<EncoderCapability> =
             profiles.flatMap { profile ->
                 VideoCodec.entries.map { codec ->
                     EncoderCapability(
                         codec = codec,
                         profileId = profile.id,
-                        supported = true,
+                        supported = codec != VideoCodec.H265 || h265Supported,
                         acceleration = EncoderAcceleration.HARDWARE,
                         encoderName = "fake-$codec",
                     )
@@ -90,6 +110,7 @@ class StreamSessionControllerTest {
 
     private class FakeReceiver : ReceiverControlClient {
         var stopCount = 0
+        var lastPreferredCodecs: List<VideoCodec> = emptyList()
         override suspend fun health(endpoint: ReceiverEndpoint): Result<ReceiverHealth> =
             Result.success(ReceiverHealth("ready", 1))
 
@@ -99,18 +120,22 @@ class StreamSessionControllerTest {
         override suspend fun prepareSession(
             endpoint: ReceiverEndpoint,
             request: PrepareSessionRequest,
-        ): Result<NegotiatedSession> = Result.success(
-            NegotiatedSession(
-                sessionId = "test-session",
-                endpoint = endpoint,
-                selectedCodec = request.preferredCodecs.first(),
-                profile = request.profile,
-                bitrateBps = request.bitrateByCodec.getValue(request.preferredCodecs.first()),
-                mediaPort = 5000,
-                outputPixelFormat = OutputPixelFormat.YUY2,
-                warnings = emptyList(),
-            ),
-        )
+        ): Result<NegotiatedSession> {
+            lastPreferredCodecs = request.preferredCodecs
+            val codec = request.preferredCodecs.first()
+            return Result.success(
+                NegotiatedSession(
+                    sessionId = "test-session",
+                    endpoint = endpoint,
+                    selectedCodec = codec,
+                    profile = request.profile,
+                    bitrateBps = request.bitrateByCodec.getValue(codec),
+                    mediaPort = 5000,
+                    outputPixelFormat = OutputPixelFormat.YUY2,
+                    warnings = emptyList(),
+                ),
+            )
+        }
 
         override suspend fun stopSession(endpoint: ReceiverEndpoint, sessionId: String): Result<Unit> {
             stopCount += 1
