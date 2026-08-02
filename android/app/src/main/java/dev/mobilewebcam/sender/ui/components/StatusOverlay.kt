@@ -1,0 +1,169 @@
+package dev.mobilewebcam.sender.ui.components
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import dev.mobilewebcam.sender.R
+import dev.mobilewebcam.sender.ui.model.ConnectionUiState
+import dev.mobilewebcam.sender.ui.model.SenderScreenAction
+import dev.mobilewebcam.sender.ui.model.SenderScreenState
+import dev.mobilewebcam.sender.ui.model.UiText
+import dev.mobilewebcam.sender.ui.model.value
+
+@Composable
+fun PreviewStatusOverlay(
+    state: SenderScreenState,
+    onAction: (SenderScreenAction) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier = modifier) {
+        ConnectionChip(
+            state = state.connection,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(TOP_STATUS_PADDING.dp),
+        )
+
+        when (val connection = state.connection) {
+            ConnectionUiState.Waiting -> WaitingCard(
+                state = state,
+                onAction = onAction,
+                modifier = Modifier.align(Alignment.Center),
+            )
+            is ConnectionUiState.Connecting -> StatusCard(
+                message = connection.status,
+                modifier = Modifier.align(Alignment.Center),
+            )
+            ConnectionUiState.Stopping -> StatusCard(
+                message = UiText.Resource(R.string.stopping_stream),
+                modifier = Modifier.align(Alignment.Center),
+            )
+            is ConnectionUiState.Failed -> FailureCard(
+                message = connection.message,
+                onOpenSettings = { onAction(SenderScreenAction.OpenSettings) },
+                modifier = Modifier.align(Alignment.Center),
+            )
+            is ConnectionUiState.Streaming -> Unit
+        }
+    }
+}
+
+@Composable
+private fun ConnectionChip(
+    state: ConnectionUiState,
+    modifier: Modifier = Modifier,
+) {
+    val label = when (state) {
+        ConnectionUiState.Waiting -> UiText.Resource(R.string.waiting_for_connection)
+        is ConnectionUiState.Connecting -> state.status
+        is ConnectionUiState.Streaming -> state.receiverName
+            ?: UiText.Resource(R.string.connected_to_receiver, listOf("receiver"))
+        ConnectionUiState.Stopping -> UiText.Resource(R.string.stopping_stream)
+        is ConnectionUiState.Failed -> state.message
+    }
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(STATUS_CHIP_CORNER_RADIUS.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = STATUS_CHIP_ALPHA),
+    ) {
+        Text(
+            text = label.value(),
+            modifier = Modifier.padding(STATUS_CHIP_PADDING.dp),
+        )
+    }
+}
+
+@Composable
+private fun WaitingCard(
+    state: SenderScreenState,
+    onAction: (SenderScreenAction) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    ElevatedCard(
+        modifier = modifier.padding(WAITING_CARD_PADDING.dp),
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        ),
+    ) {
+        Column(
+            modifier = Modifier.padding(WAITING_CARD_CONTENT_PADDING.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(WAITING_CARD_ITEM_SPACING.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.waiting_for_connection),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                text = stringResource(R.string.waiting_for_connection_support),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            if (!state.cameraPermissionGranted) {
+                OutlinedButton(onClick = { onAction(SenderScreenAction.OpenPermissionDialog) }) {
+                    Text(stringResource(R.string.allow_camera_access))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusCard(
+    message: UiText,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(STATUS_CARD_CORNER_RADIUS.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = STATUS_CARD_ALPHA),
+    ) {
+        Text(
+            text = message.value(),
+            modifier = Modifier.padding(STATUS_CARD_PADDING.dp),
+        )
+    }
+}
+
+@Composable
+private fun FailureCard(
+    message: UiText,
+    onOpenSettings: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    ElevatedCard(modifier = modifier.padding(WAITING_CARD_PADDING.dp)) {
+        Column(
+            modifier = Modifier.padding(WAITING_CARD_CONTENT_PADDING.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(WAITING_CARD_ITEM_SPACING.dp),
+        ) {
+            Text(text = message.value(), style = MaterialTheme.typography.titleMedium)
+            OutlinedButton(onClick = onOpenSettings) {
+                Text(stringResource(R.string.settings))
+            }
+        }
+    }
+}
+
+private const val TOP_STATUS_PADDING = 16
+private const val STATUS_CHIP_CORNER_RADIUS = 20
+private const val STATUS_CHIP_ALPHA = 0.92f
+private const val STATUS_CHIP_PADDING = 10
+private const val WAITING_CARD_PADDING = 16
+private const val WAITING_CARD_CONTENT_PADDING = 20
+private const val WAITING_CARD_ITEM_SPACING = 8
+private const val STATUS_CARD_CORNER_RADIUS = 16
+private const val STATUS_CARD_ALPHA = 0.92f
+private const val STATUS_CARD_PADDING = 16
