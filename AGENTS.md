@@ -33,6 +33,14 @@ Phase 1 monorepo for a low-latency Android phone webcam sender and reusable Rust
 - `desktop/apps/receiver-cli`: thin composition root
 - `docs/` and `scripts/`: durable setup, testing, and operational guidance
 
+## Strict Code Rules
+
+- Never add magic numbers or unexplained numeric literals to production code. Protocol versions, ports, timeouts, retry limits, buffer sizes, codec settings, dimensions, notification IDs, UI metrics, and sentinel values must come from configuration, an existing API constant, or a narrowly scoped named constant whose reason is clear at the definition.
+- Keep one source of truth for related values. Do not duplicate ports, timeouts, profiles, transport limits, or protocol values across Android, Rust, scripts, and fixtures. Derive dependent values instead of copying them.
+- Every variable must have a clear purpose, such as expressing a domain concept, avoiding repeated work, managing ownership or lifetime, or clarifying control flow. Do not introduce variables or abstractions only to hide a literal or to make code appear more structured.
+- Tests and protocol fixtures may use literals when the value is the subject of the test or fixture. Repeated contract values still need named test data or a shared source.
+- Before completing a change, inspect changed production files for unexplained literals and either replace them, derive them, or document why they are intentionally local.
+
 ## Known Traps
 
 - Keep codec, container, and transport terminology distinct: H.264/H.265, MPEG-TS, and UDP unicast.
