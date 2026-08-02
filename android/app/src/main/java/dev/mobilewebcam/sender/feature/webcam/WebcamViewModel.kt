@@ -2,7 +2,6 @@ package dev.mobilewebcam.sender.feature.webcam
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.mobilewebcam.sender.app.model.SenderScreenAction
 import dev.mobilewebcam.sender.app.model.SenderUiEffect
 import dev.mobilewebcam.sender.config.VideoProfiles
@@ -21,10 +20,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
-@HiltViewModel
-class WebcamViewModel @Inject constructor(
+class WebcamViewModel(
     private val coordinator: SenderConnectionCoordinator,
     private val cameraController: CameraController,
 ) : ViewModel() {

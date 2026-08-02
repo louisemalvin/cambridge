@@ -9,7 +9,6 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -22,7 +21,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
-import androidx.hilt.navigation.compose.hiltViewModel
 import dev.mobilewebcam.sender.MobileWebcamApplication
 import dev.mobilewebcam.sender.R
 import dev.mobilewebcam.sender.app.model.SenderScreenAction
@@ -37,7 +35,12 @@ import dev.mobilewebcam.sender.feature.webcam.WebcamViewModel
 fun SenderApp() {
     val context = LocalContext.current
     val application = context.applicationContext as MobileWebcamApplication
-    val viewModel: WebcamViewModel = hiltViewModel()
+    val viewModel: WebcamViewModel = remember(application) {
+        WebcamViewModel(
+            coordinator = application.connectionCoordinator,
+            cameraController = application.cameraController,
+        )
+    }
     val screenState by viewModel.uiState.collectAsState()
     val diagnosticsClipboardLabel = stringResource(R.string.diagnostics_clipboard_label)
     val errorDetailsCopiedMessage = stringResource(R.string.error_details_copied)

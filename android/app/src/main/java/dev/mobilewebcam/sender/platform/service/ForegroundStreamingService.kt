@@ -5,7 +5,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
-import dagger.hilt.android.AndroidEntryPoint
+import dev.mobilewebcam.sender.MobileWebcamApplication
 import dev.mobilewebcam.sender.media.streaming.session.StreamSessionController
 import dev.mobilewebcam.sender.platform.notification.NotificationFactory
 import dev.mobilewebcam.sender.platform.power.StreamingPowerManager
@@ -14,17 +14,19 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
-@AndroidEntryPoint
 class ForegroundStreamingService : Service() {
-    @Inject
-    lateinit var sessionController: StreamSessionController
-
-    @Inject
-    lateinit var powerManager: StreamingPowerManager
+    private lateinit var sessionController: StreamSessionController
+    private lateinit var powerManager: StreamingPowerManager
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    override fun onCreate() {
+        super.onCreate()
+        val app = applicationContext as MobileWebcamApplication
+        sessionController = app.sessionController
+        powerManager = app.powerManager
+    }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
