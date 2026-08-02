@@ -14,6 +14,9 @@ class PairingStore(context: Context) {
         @Synchronized get() = state.senderId
 
     @Synchronized
+    fun hasApprovedReceivers(): Boolean = state.receivers.isNotEmpty()
+
+    @Synchronized
     fun authentication(
         receiverId: String,
         token: String?,

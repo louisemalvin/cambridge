@@ -25,6 +25,11 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.mobilewebcam.sender.MobileWebcamApplication
 import dev.mobilewebcam.sender.R
+import dev.mobilewebcam.sender.app.navigation.AppDestination
+import dev.mobilewebcam.sender.app.navigation.AppNavigation
+import dev.mobilewebcam.sender.app.navigation.rememberAppBackStack
+import dev.mobilewebcam.sender.app.startup.StartupStateResolver
+import dev.mobilewebcam.sender.ui.model.SenderScreenAction
 import dev.mobilewebcam.sender.ui.model.SenderUiEffect
 
 @Composable
@@ -40,6 +45,12 @@ fun SenderApp() {
     var cameraPermissionGranted by remember {
         mutableStateOf(context.hasCameraPermission())
     }
+
+    val initialDestination = remember {
+        StartupStateResolver(application.pairings).resolveInitialDestination()
+    }
+    val backStack = rememberAppBackStack(initialDestination)
+
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
@@ -79,10 +90,21 @@ fun SenderApp() {
 
     MaterialTheme {
         Surface(modifier = Modifier.fillMaxSize()) {
-            SenderScreen(
+            AppNavigation(
+                backStack = backStack,
                 state = screenState,
-                onAction = viewModel::onAction,
+                onAction = { action ->
+                    when (action) {
+                        SenderScreenAction.OpenSettings -> backStack.navigateTo(AppDestination.Settings)
+                        SenderScreenAction.CloseSettings -> backStack.pop()
+                        else -> viewModel.onAction(action)
+                    }
+                },
                 onSurfaceChanged = viewModel::setPreviewSurface,
+                onNavigateToPairing = { backStack.popToPairing() },
+                onNavigateToWebcam = { backStack.replaceWithWebcam() },
+                onNavigateToSettings = { backStack.navigateTo(AppDestination.Settings) },
+                onNavigateBack = { backStack.pop() },
             )
         }
     }

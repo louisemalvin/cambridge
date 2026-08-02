@@ -23,6 +23,9 @@ class MobileWebcamApplication : Application() {
     lateinit var connectionCoordinator: SenderConnectionCoordinator
         private set
 
+    lateinit var pairings: PairingStore
+        private set
+
     lateinit var cameraController: CameraController
         private set
 
@@ -43,11 +46,12 @@ class MobileWebcamApplication : Application() {
             streamEngine = streamEngine,
             foreground = AndroidForegroundStreamingController(this, powerManager),
         )
-        val pairings = PairingStore(this)
-        connectionCoordinator = SenderConnectionCoordinator(this, sessionController, pairings)
+        val pairingsStore = PairingStore(this)
+        pairings = pairingsStore
+        connectionCoordinator = SenderConnectionCoordinator(this, sessionController, pairingsStore)
         senderControlServer = SenderControlServer(
             coordinator = connectionCoordinator,
-            senderId = pairings.senderId,
+            senderId = pairingsStore.senderId,
             displayName = Build.MODEL.takeIf { it.isNotBlank() } ?: "Android phone",
         )
         senderControlServer.start()
