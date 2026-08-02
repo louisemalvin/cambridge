@@ -2,6 +2,7 @@ package dev.mobilewebcam.sender.feature.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.mobilewebcam.sender.app.model.SenderScreenAction
 import dev.mobilewebcam.sender.app.model.SenderUiEffect
 import dev.mobilewebcam.sender.app.model.SettingsUiState
@@ -23,8 +24,10 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
-class SettingsViewModel(
+@HiltViewModel
+class SettingsViewModel @Inject constructor(
     private val coordinator: SenderConnectionCoordinator,
     private val cameraController: CameraController,
 ) : ViewModel() {

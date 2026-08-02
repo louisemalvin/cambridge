@@ -2,6 +2,7 @@ package dev.mobilewebcam.sender.feature.pairing
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.mobilewebcam.sender.app.model.UiText
 import dev.mobilewebcam.sender.connection.discovery.SenderConnectionCoordinator
 import dev.mobilewebcam.sender.feature.webcam.SenderScreenStateMapper
@@ -11,8 +12,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
-class PairingViewModel(
+@HiltViewModel
+class PairingViewModel @Inject constructor(
     private val coordinator: SenderConnectionCoordinator,
 ) : ViewModel() {
     val uiState: StateFlow<PairingUiState> = combine(

@@ -5,27 +5,32 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
-import dev.mobilewebcam.sender.MobileWebcamApplication
 import dev.mobilewebcam.sender.media.streaming.session.StreamSessionController
 import dev.mobilewebcam.sender.platform.notification.NotificationFactory
 import dev.mobilewebcam.sender.platform.power.StreamingPowerManager
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
+@AndroidEntryPoint
 class ForegroundStreamingService : Service() {
-    private lateinit var sessionController: StreamSessionController
-    private lateinit var powerManager: StreamingPowerManager
+    @Inject
+    lateinit var sessionController: StreamSessionController
+
+    @Inject
+    lateinit var powerManager: StreamingPowerManager
+
+    @Inject
+    lateinit var notificationFactory: NotificationFactory
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     override fun onCreate() {
         super.onCreate()
-        val app = applicationContext as MobileWebcamApplication
-        sessionController = app.sessionController
-        powerManager = app.powerManager
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -36,7 +41,7 @@ class ForegroundStreamingService : Service() {
             }
             return START_NOT_STICKY
         }
-        val notification = NotificationFactory(this).createStreamingNotification()
+        val notification = notificationFactory.createStreamingNotification()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA)
         } else {

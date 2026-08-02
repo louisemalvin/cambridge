@@ -21,7 +21,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
-import dev.mobilewebcam.sender.MobileWebcamApplication
 import dev.mobilewebcam.sender.R
 import dev.mobilewebcam.sender.app.model.SenderScreenAction
 import dev.mobilewebcam.sender.app.model.SenderUiEffect
@@ -29,18 +28,14 @@ import dev.mobilewebcam.sender.app.navigation.AppDestination
 import dev.mobilewebcam.sender.app.navigation.AppNavigation
 import dev.mobilewebcam.sender.app.navigation.rememberAppBackStack
 import dev.mobilewebcam.sender.app.startup.StartupStateResolver
+import dev.mobilewebcam.sender.connection.discovery.PairingStore
 import dev.mobilewebcam.sender.feature.webcam.WebcamViewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 
 @Composable
-fun SenderApp() {
+fun SenderApp(pairings: PairingStore) {
     val context = LocalContext.current
-    val application = context.applicationContext as MobileWebcamApplication
-    val viewModel: WebcamViewModel = remember(application) {
-        WebcamViewModel(
-            coordinator = application.connectionCoordinator,
-            cameraController = application.cameraController,
-        )
-    }
+    val viewModel: WebcamViewModel = hiltViewModel()
     val screenState by viewModel.uiState.collectAsState()
     val diagnosticsClipboardLabel = stringResource(R.string.diagnostics_clipboard_label)
     val errorDetailsCopiedMessage = stringResource(R.string.error_details_copied)
@@ -49,7 +44,7 @@ fun SenderApp() {
     }
 
     val initialDestination = remember {
-        StartupStateResolver(application.pairings).resolveInitialDestination()
+        StartupStateResolver(pairings).resolveInitialDestination()
     }
     val backStack = rememberAppBackStack(initialDestination)
 
