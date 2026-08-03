@@ -58,6 +58,7 @@ fun WebcamRoute(
                     permissionLauncher.launch(Manifest.permission.CAMERA)
                 }
                 is SenderUiEffect.CopyDiagnostics -> onCopyDiagnostics(effect.details)
+                SenderUiEffect.NavigateToPairing -> Unit
             }
         }
     }

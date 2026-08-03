@@ -44,6 +44,7 @@ import dev.mobilewebcam.sender.feature.webcam.components.CameraZoomControls
 @Composable
 fun SettingsRoute(
     onNavigateBack: () -> Unit,
+    onNavigateToPairing: () -> Unit,
     onCopyDiagnostics: (String) -> Unit,
 ) {
     val viewModel: SettingsViewModel = hiltViewModel()
@@ -54,6 +55,7 @@ fun SettingsRoute(
             when (effect) {
                 is SenderUiEffect.CopyDiagnostics -> onCopyDiagnostics(effect.details)
                 SenderUiEffect.RequestCameraPermission -> Unit
+                SenderUiEffect.NavigateToPairing -> onNavigateToPairing()
             }
         }
     }
@@ -159,6 +161,16 @@ fun SettingsScreen(
             }
             item {
                 SettingsConnectionDetails(state)
+            }
+            if (state.hasApprovedReceiver) {
+                item {
+                    TextButton(
+                        onClick = { onAction(SenderScreenAction.ForgetPairing) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.forget_pairing))
+                    }
+                }
             }
             state.validationMessage?.let { validationMessage ->
                 item {

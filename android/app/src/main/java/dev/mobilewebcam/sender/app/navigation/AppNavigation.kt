@@ -15,6 +15,7 @@ fun AppNavigation(
     backStack: AppBackStack,
     onNavigateToWebcam: () -> Unit,
     onNavigateToSettings: () -> Unit,
+    onNavigateToPairing: () -> Unit,
     onNavigateBack: () -> Unit,
     onCopyDiagnostics: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -45,6 +46,7 @@ fun AppNavigation(
                 AppDestination.Settings -> NavEntry(destination) {
                     SettingsRoute(
                         onNavigateBack = onNavigateBack,
+                        onNavigateToPairing = onNavigateToPairing,
                         onCopyDiagnostics = onCopyDiagnostics,
                     )
                 }

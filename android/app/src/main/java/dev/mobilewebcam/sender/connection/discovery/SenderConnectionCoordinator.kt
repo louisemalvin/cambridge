@@ -34,6 +34,7 @@ class SenderConnectionCoordinator(
     private val mutex = Mutex()
     private val pendingFlow = MutableStateFlow<PendingApproval?>(null)
     private val activeReceiverNameFlow = MutableStateFlow<String?>(null)
+    private val approvedReceiverFlow = MutableStateFlow(pairings.hasApprovedReceivers())
     private var pendingConnection: PendingConnection? = null
     private val rejectedReceivers = mutableSetOf<String>()
     private var activeReceiverId: String? = null
@@ -41,6 +42,7 @@ class SenderConnectionCoordinator(
     val streamState: StateFlow<StreamState> = controller.state
     val pendingApproval: StateFlow<PendingApproval?> = pendingFlow.asStateFlow()
     val activeReceiverName: StateFlow<String?> = activeReceiverNameFlow.asStateFlow()
+    val hasApprovedReceiver: StateFlow<Boolean> = approvedReceiverFlow.asStateFlow()
 
     init {
         scope.launch {
@@ -127,6 +129,7 @@ class SenderConnectionCoordinator(
             receiverName = pending.request.receiverName,
             peerAddress = pending.peerAddress,
         )
+        approvedReceiverFlow.value = true
         pendingConnection = null
         pendingFlow.value = null
     }
@@ -139,6 +142,19 @@ class SenderConnectionCoordinator(
     }
 
     suspend fun stop(): Result<Unit> = controller.stop()
+
+    suspend fun forgetPairing(): Result<Unit> = mutex.withLock {
+        val stopped = controller.stop()
+        if (stopped.isFailure) return@withLock stopped
+        pairings.forgetAll()
+        approvedReceiverFlow.value = false
+        pendingConnection = null
+        pendingFlow.value = null
+        rejectedReceivers.clear()
+        activeReceiverId = null
+        activeReceiverNameFlow.value = null
+        stopped
+    }
 
     private fun accepted(authentication: PairingAuthentication): StartStreamResponseDto {
         val pairingToken = when (authentication) {

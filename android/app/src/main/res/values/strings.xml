@@ -30,6 +30,7 @@
     <string name="connection">Connection</string>
     <string name="receiver">Receiver</string>
     <string name="stream_status">Stream status</string>
+    <string name="forget_pairing">Forget receiver pairing</string>
     <string name="diagnostics">Diagnostics</string>
     <string name="copy_error_details">Copy error details</string>
     <string name="copy">Copy</string>

@@ -1,6 +1,6 @@
 package dev.mobilewebcam.sender.app.model
 
-import dev.mobilewebcam.sender.config.CameraZoom
+import dev.mobilewebcam.sender.media.camera.CameraZoom
 
 data class SenderScreenState(
     val preview: PreviewUiState = PreviewUiState(),
@@ -94,6 +94,7 @@ data class SettingsUiState(
     val profileOptions: List<SelectOptionUi> = emptyList(),
     val receiverName: UiText? = null,
     val connectionStatus: UiText? = null,
+    val hasApprovedReceiver: Boolean = false,
     val camera: CameraControlsUiState = CameraControlsUiState(),
     val validationMessage: UiText? = null,
     val failureDiagnostics: String? = null,
@@ -131,6 +132,7 @@ sealed interface SenderScreenAction {
     data object ApprovePending : SenderScreenAction
     data object RejectPending : SenderScreenAction
     data object StopStream : SenderScreenAction
+    data object ForgetPairing : SenderScreenAction
     data object CopyDiagnostics : SenderScreenAction
 }
 
@@ -138,6 +140,8 @@ sealed interface SenderUiEffect {
     data object RequestCameraPermission : SenderUiEffect
 
     data class CopyDiagnostics(val details: String) : SenderUiEffect
+
+    data object NavigateToPairing : SenderUiEffect
 }
 
 private const val DEFAULT_PREVIEW_ASPECT_RATIO = 16.0f / 9.0f

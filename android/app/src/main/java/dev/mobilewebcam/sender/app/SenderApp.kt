@@ -48,6 +48,7 @@ fun SenderApp(
                 backStack = backStack,
                 onNavigateToWebcam = { backStack.replaceWithWebcam() },
                 onNavigateToSettings = { backStack.navigateTo(AppDestination.Settings) },
+                onNavigateToPairing = { backStack.popToPairing() },
                 onNavigateBack = { backStack.pop() },
                 onCopyDiagnostics = { details ->
                     context.copyDiagnostics(

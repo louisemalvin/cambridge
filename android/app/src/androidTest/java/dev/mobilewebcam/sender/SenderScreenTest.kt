@@ -74,6 +74,7 @@ class SenderScreenTest {
                                 isSelected = true,
                             ),
                         ),
+                        hasApprovedReceiver = true,
                     ),
                     onAction = {},
                 )
@@ -85,5 +86,6 @@ class SenderScreenTest {
         composeRule.onNodeWithText("Stream defaults").assertIsDisplayed()
         composeRule.onNodeWithText("Codec mode").assertIsDisplayed()
         composeRule.onNodeWithText("Video profile").assertIsDisplayed()
+        composeRule.onNodeWithText("Forget receiver pairing").assertIsDisplayed()
     }
 }

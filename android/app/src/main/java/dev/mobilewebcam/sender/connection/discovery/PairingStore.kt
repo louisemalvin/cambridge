@@ -56,6 +56,20 @@ class PairingStore(context: Context) {
         persist()
     }
 
+    @Synchronized
+    fun forget(receiverId: String) {
+        if (receiverId !in state.receivers) return
+        state = state.copy(receivers = state.receivers - receiverId)
+        persist()
+    }
+
+    @Synchronized
+    fun forgetAll() {
+        if (state.receivers.isEmpty()) return
+        state = state.copy(receivers = emptyMap())
+        persist()
+    }
+
     private fun load(): StoredPairings {
         val encoded = preferences.getString(STORAGE_KEY, null)
         if (encoded != null) {
