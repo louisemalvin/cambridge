@@ -33,9 +33,11 @@ fun PairingRoute(
         ReceiverApprovalUiState(awaiting.receiverName)
     }
 
-    LaunchedEffect(state) {
-        if (state is PairingUiState.Connected) {
-            onNavigateToWebcam()
+    LaunchedEffect(viewModel) {
+        viewModel.effects.collect { effect ->
+            when (effect) {
+                PairingUiEffect.NavigateToWebcam -> onNavigateToWebcam()
+            }
         }
     }
 
