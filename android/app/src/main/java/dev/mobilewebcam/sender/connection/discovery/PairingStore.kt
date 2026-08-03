@@ -90,16 +90,17 @@ class PairingStore(context: Context) {
         val leftBytes = left.encodeToByteArray()
         val rightBytes = right.encodeToByteArray()
         var difference = leftBytes.size xor rightBytes.size
-        val length = maxOf(leftBytes.size, rightBytes.size)
-        for (index in 0 until length) {
-            val leftByte = leftBytes.getOrElse(index) { 0 }
-            val rightByte = rightBytes.getOrElse(index) { 0 }
+        for (index in leftBytes.indices) {
+            val leftByte = leftBytes[index]
+            val rightByte = rightBytes.getOrElse(index) { ZERO_BYTE_VALUE }
             difference = difference or (leftByte.toInt() xor rightByte.toInt())
         }
-        return difference == 0
+        return difference == ZERO_DIFFERENCE
     }
 
     private companion object {
+        const val ZERO_BYTE_VALUE: Byte = 0
+        const val ZERO_DIFFERENCE = 0
         const val PREFERENCES_NAME = "sender-pairings"
         const val STORAGE_KEY = "pairings-v1"
     }
