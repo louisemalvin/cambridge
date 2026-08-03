@@ -3,6 +3,7 @@ set -euo pipefail
 
 VIDEO_NUMBER="${1:-10}"
 DEVICE="/dev/video${VIDEO_NUMBER}"
+MIN_SUPPORTED_VERSION="0.15.0"
 
 is_loopback_device() {
   local entry="/sys/class/video4linux/video${VIDEO_NUMBER}"
@@ -31,6 +32,16 @@ Install the distribution package, then retry. Do not unload unrelated video
 modules. On Secure Boot systems, a signed kernel module or Secure Boot policy
 change may be required by your distribution.
 EOF
+  exit 1
+fi
+
+MODULE_VERSION="$(modinfo -F version v4l2loopback 2>/dev/null || true)"
+if [[ -z "${MODULE_VERSION}" ]]; then
+  echo "Could not determine the installed v4l2loopback version." >&2
+  exit 1
+fi
+if [[ "${MODULE_VERSION}" != 0.* ]] || [[ "${MODULE_VERSION}" < "${MIN_SUPPORTED_VERSION}" ]]; then
+  echo "v4l2loopback ${MODULE_VERSION} is unsupported; install ${MIN_SUPPORTED_VERSION} or newer for client-usage events." >&2
   exit 1
 fi
 

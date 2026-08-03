@@ -20,4 +20,8 @@ pub enum LinuxPlatformError {
     MissingV4l2Sink(String),
     #[error("failed to create virtual-camera sink: {0}")]
     SinkCreation(String),
+    #[error("v4l2loopback client-usage events are unavailable on {0}: {1}")]
+    DemandEventsUnavailable(String, String),
+    #[error("v4l2loopback demand monitor failed: {0}")]
+    DemandMonitor(String),
 }

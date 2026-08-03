@@ -8,7 +8,8 @@ Run the one-time installer from the repository root:
 
 It installs the Rust and GStreamer dependencies, configures one persistent
 `v4l2loopback` device with `exclusive_caps=1`, loads the module, verifies the
-required GStreamer elements, and builds the receiver. The installer may ask
+required GStreamer elements, validates a v4l2loopback version of at least
+`0.15.0` for client-usage events, and builds the receiver. The installer may ask
 for `sudo`. It never unloads a module or changes Secure Boot settings.
 
 Start the desktop receiver with the normal user account:
@@ -41,6 +42,16 @@ For troubleshooting, inspect the devices and GStreamer elements directly:
 scripts/linux/inspect-video-devices.sh
 gst-inspect-1.0 udpsrc tsparse tsdemux h264parse h265parse decodebin v4l2sink appsink
 ```
+
+The receiver uses the upstream private client-usage event to distinguish real
+capture demand from enumeration. Probe it directly with:
+
+```bash
+scripts/linux/probe-v4l2loopback-demand.sh /dev/video10
+```
+
+If event subscription fails, the receiver reports an actionable error rather
+than falling back to process scanning.
 
 The `x264enc` and `x265enc` elements are only required for synthetic sender
 tests. Ubuntu Secure Boot may reject an unsigned DKMS module. Install the

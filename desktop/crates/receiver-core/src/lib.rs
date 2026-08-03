@@ -1,6 +1,7 @@
 //! Platform-independent receiver service and session policy.
 
 mod config;
+mod demand;
 mod diagnostics;
 mod error;
 mod event;
@@ -16,6 +17,7 @@ pub use config::{
     DEFAULT_UDP_TIMEOUT_MS, DEFAULT_VIDEO_DEVICE, MEDIA_PORT_RANGE_END, MEDIA_PORT_RANGE_SIZE,
     MEDIA_PORT_RANGE_START, PORT_UNASSIGNED,
 };
+pub use demand::VirtualCameraDemand;
 pub use diagnostics::{
     diagnostic_timestamp_ms, DiagnosticPhase, FrameIntervalStatistics, QueueDiagnostics,
     ReceiverDiagnosticEvent, ReceiverDiagnosticEventKind, ReceiverDiagnostics,

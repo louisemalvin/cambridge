@@ -6,9 +6,13 @@ license.workspace = true
 
 [dependencies]
 gstreamer = "0.24"
+libc = "0.2"
+nix = { version = "0.31", features = ["ioctl", "poll"] }
+receiver-core = { path = "../receiver-core" }
 receiver-gstreamer = { path = "../receiver-gstreamer" }
 receiver-protocol = { path = "../receiver-protocol" }
 thiserror = "2.0"
+tracing = "0.1"
 
 [lints]
 workspace = true

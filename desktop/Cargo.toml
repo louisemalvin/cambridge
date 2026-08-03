@@ -18,7 +18,7 @@ license = "Apache-2.0"
 authors = ["Mobile Webcam contributors"]
 
 [workspace.lints.rust]
-unsafe_code = "forbid"
+unsafe_code = "warn"
 
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }

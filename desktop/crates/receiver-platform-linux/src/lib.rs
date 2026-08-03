@@ -1,11 +1,16 @@
 //! Linux video-device inspection and virtual-camera output.
 
+mod demand_monitor;
 mod device;
 mod error;
 mod inspection;
 mod output_factory;
 mod v4l2loopback;
 
+pub use demand_monitor::{
+    DemandMonitorConfig, DemandMonitorHandle, V4l2LoopbackDemandMonitor, VirtualCameraDemandEvent,
+    DEMAND_ACTIVATION_DEBOUNCE, DEMAND_POLL_INTERVAL, DEMAND_RELEASE_DEBOUNCE,
+};
 pub use device::VideoDevice;
 pub use error::LinuxPlatformError;
 pub use inspection::inspect_video_devices;
