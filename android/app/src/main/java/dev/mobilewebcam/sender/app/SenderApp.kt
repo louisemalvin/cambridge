@@ -29,7 +29,7 @@ fun SenderApp(
 ) {
     val context = LocalContext.current
     val initialDestination = remember(pairings) {
-        StartupStateResolver(pairings).resolveInitialDestination()
+        StartupStateResolver(pairings.hasApprovedReceivers()).resolveInitialDestination()
     }
     val backStack = rememberAppBackStack(initialDestination)
     val pendingApproval by coordinator.pendingApproval.collectAsState()

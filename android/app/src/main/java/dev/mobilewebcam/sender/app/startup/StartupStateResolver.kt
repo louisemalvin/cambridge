@@ -1,13 +1,12 @@
 package dev.mobilewebcam.sender.app.startup
 
 import dev.mobilewebcam.sender.app.navigation.AppDestination
-import dev.mobilewebcam.sender.connection.discovery.PairingStore
 
 class StartupStateResolver(
-    private val pairings: PairingStore,
+    private val hasApprovedReceivers: Boolean,
 ) {
     fun resolveInitialDestination(): AppDestination {
-        return if (pairings.hasApprovedReceivers()) {
+        return if (hasApprovedReceivers) {
             AppDestination.Webcam
         } else {
             AppDestination.Pairing
