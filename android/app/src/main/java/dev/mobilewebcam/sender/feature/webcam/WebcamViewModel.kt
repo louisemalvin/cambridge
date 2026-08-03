@@ -4,8 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.mobilewebcam.sender.app.model.SenderScreenAction
-import dev.mobilewebcam.sender.app.model.SenderScreenState
 import dev.mobilewebcam.sender.app.model.SenderUiEffect
+import dev.mobilewebcam.sender.app.model.StreamPresentationSnapshot
 import dev.mobilewebcam.sender.connection.discovery.SenderConnectionCoordinator
 import dev.mobilewebcam.sender.media.camera.CameraController
 import dev.mobilewebcam.sender.media.camera.CameraPreviewSurface
@@ -33,31 +33,31 @@ class WebcamViewModel @Inject constructor(
         extraBufferCapacity = EFFECT_BUFFER_CAPACITY,
     )
 
-    val uiState: StateFlow<SenderScreenState> = combine(
+    val uiState: StateFlow<WebcamUiState> = combine(
         coordinator.streamState,
         coordinator.activeReceiverName,
         cameraController.state,
         settings.state,
         localState,
     ) { streamState, receiverName, cameraInteraction, configuredSettings, local ->
-        SenderScreenStateMapper.map(
-            SenderDomainSnapshot(
+        WebcamUiStateMapper.map(
+            snapshot = StreamPresentationSnapshot(
                 codecPreference = configuredSettings.codecPreference,
                 profile = configuredSettings.profile,
                 cameraInteraction = cameraInteraction,
                 streamState = streamState,
-                cameraPermissionGranted = local.cameraPermissionGranted,
                 activeReceiverName = receiverName,
                 validationMessage = null,
-                isScreenDimmed = local.isScreenDimmed,
-                isZoomTrayOpen = local.isZoomTrayOpen,
-                isPermissionDialogOpen = local.isPermissionDialogOpen,
             ),
+            cameraPermissionGranted = local.cameraPermissionGranted,
+            isScreenDimmed = local.isScreenDimmed,
+            isZoomTrayOpen = local.isZoomTrayOpen,
+            isPermissionDialogOpen = local.isPermissionDialogOpen,
         )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.Eagerly,
-        initialValue = SenderScreenState(),
+        initialValue = WebcamUiState(),
     )
 
     val effects = effectFlow.asSharedFlow()

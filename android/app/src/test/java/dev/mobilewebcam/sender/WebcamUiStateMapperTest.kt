@@ -2,29 +2,31 @@ package dev.mobilewebcam.sender
 
 import dev.mobilewebcam.sender.app.model.ConnectionUiState
 import dev.mobilewebcam.sender.app.model.SenderDialogUiState
+import dev.mobilewebcam.sender.app.model.StreamPresentationSnapshot
 import dev.mobilewebcam.sender.app.model.UiText
-import dev.mobilewebcam.sender.session.VideoProfiles
-import dev.mobilewebcam.sender.feature.webcam.SenderDomainSnapshot
-import dev.mobilewebcam.sender.feature.webcam.SenderScreenStateMapper
+import dev.mobilewebcam.sender.feature.webcam.WebcamUiStateMapper
 import dev.mobilewebcam.sender.media.camera.CameraInteractionState
 import dev.mobilewebcam.sender.model.CodecPreference
 import dev.mobilewebcam.sender.model.StreamFailure
 import dev.mobilewebcam.sender.model.StreamState
+import dev.mobilewebcam.sender.model.VideoCodec
+import dev.mobilewebcam.sender.model.NegotiatedSession
+import dev.mobilewebcam.sender.model.OutputPixelFormat
+import dev.mobilewebcam.sender.model.ReceiverEndpoint
+import dev.mobilewebcam.sender.session.VideoProfiles
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-class SenderScreenStateMapperTest {
+class WebcamUiStateMapperTest {
     @Test
-    fun idleMapsToWaitingPreviewAndPresentationOptions() {
+    fun idleMapsToWaitingPreview() {
         val state = mapSnapshot()
 
         assertEquals(ConnectionUiState.Waiting, state.connection)
         assertFalse(state.preview.isLive)
         assertEquals(16.0f / 9.0f, state.preview.landscapeAspectRatio, ASPECT_RATIO_TOLERANCE)
-        assertTrue(state.settings.codecOptions.any { it.isSelected })
-        assertTrue(state.settings.profileOptions.any { it.isSelected })
     }
 
     @Test
@@ -38,14 +40,14 @@ class SenderScreenStateMapperTest {
     fun streamingMapsToConnectionPresentationAndLivePreview() {
         val state = mapSnapshot(
             streamState = StreamState.Streaming(
-                session = dev.mobilewebcam.sender.model.NegotiatedSession(
+                session = NegotiatedSession(
                     sessionId = "session",
-                    endpoint = dev.mobilewebcam.sender.model.ReceiverEndpoint("desktop", 50000),
-                    selectedCodec = dev.mobilewebcam.sender.model.VideoCodec.H264,
+                    endpoint = ReceiverEndpoint("desktop", 50000),
+                    selectedCodec = VideoCodec.H264,
                     profile = VideoProfiles.default,
                     bitrateBps = VideoProfiles.default.h264BitrateBps,
                     mediaPort = 50001,
-                    outputPixelFormat = dev.mobilewebcam.sender.model.OutputPixelFormat.NV12,
+                    outputPixelFormat = OutputPixelFormat.NV12,
                     warnings = emptyList(),
                 ),
                 startedAtMillis = 0,
@@ -89,19 +91,19 @@ class SenderScreenStateMapperTest {
         streamState: StreamState = StreamState.Idle,
         activeReceiverName: String? = null,
         isPermissionDialogOpen: Boolean = false,
-    ) = SenderScreenStateMapper.map(
-        SenderDomainSnapshot(
+    ) = WebcamUiStateMapper.map(
+        snapshot = StreamPresentationSnapshot(
             codecPreference = CodecPreference.AUTO_PREFER_H265,
             profile = VideoProfiles.default,
             cameraInteraction = CameraInteractionState(),
             streamState = streamState,
-            cameraPermissionGranted = true,
             activeReceiverName = activeReceiverName,
             validationMessage = null,
-            isScreenDimmed = false,
-            isZoomTrayOpen = false,
-            isPermissionDialogOpen = isPermissionDialogOpen,
         ),
+        cameraPermissionGranted = true,
+        isScreenDimmed = false,
+        isZoomTrayOpen = false,
+        isPermissionDialogOpen = isPermissionDialogOpen,
     )
 
     private companion object {

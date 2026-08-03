@@ -2,19 +2,6 @@ package dev.mobilewebcam.sender.app.model
 
 import dev.mobilewebcam.sender.media.camera.CameraZoom
 
-data class SenderScreenState(
-    val preview: PreviewUiState = PreviewUiState(),
-    val connection: ConnectionUiState = ConnectionUiState.Waiting,
-    val camera: CameraControlsUiState = CameraControlsUiState(),
-    val settings: SettingsUiState = SettingsUiState(),
-    val dialog: SenderDialogUiState? = null,
-    val cameraPermissionGranted: Boolean = false,
-    val validationMessage: UiText? = null,
-    val failureDiagnostics: String? = null,
-    val isScreenDimmed: Boolean = false,
-    val isZoomTrayOpen: Boolean = false,
-)
-
 data class PreviewUiState(
     val landscapeAspectRatio: Float = DEFAULT_PREVIEW_ASPECT_RATIO,
     val isLive: Boolean = false,
@@ -86,19 +73,6 @@ data class LensOptionUi(
 data class StabilizationUiState(
     val isSupported: Boolean = false,
     val isEnabled: Boolean = false,
-)
-
-data class SettingsUiState(
-    val connection: ConnectionUiState = ConnectionUiState.Waiting,
-    val codecOptions: List<SelectOptionUi> = emptyList(),
-    val profileOptions: List<SelectOptionUi> = emptyList(),
-    val receiverName: UiText? = null,
-    val connectionStatus: UiText? = null,
-    val hasApprovedReceiver: Boolean = false,
-    val camera: CameraControlsUiState = CameraControlsUiState(),
-    val validationMessage: UiText? = null,
-    val failureDiagnostics: String? = null,
-    val isStreaming: Boolean = false,
 )
 
 data class SelectOptionUi(

@@ -21,56 +21,19 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
 import dev.mobilewebcam.sender.R
 import dev.mobilewebcam.sender.app.model.ConnectionUiState
 import dev.mobilewebcam.sender.app.model.SenderScreenAction
-import dev.mobilewebcam.sender.app.model.SettingsUiState
 import dev.mobilewebcam.sender.app.model.UiText
-import dev.mobilewebcam.sender.app.model.SenderUiEffect
 import dev.mobilewebcam.sender.app.model.value
 import dev.mobilewebcam.sender.feature.settings.components.CodecSelector
 import dev.mobilewebcam.sender.feature.settings.components.VideoProfileSelector
 import dev.mobilewebcam.sender.feature.webcam.components.CameraLensControls
 import dev.mobilewebcam.sender.feature.webcam.components.CameraStabilizationControls
 import dev.mobilewebcam.sender.feature.webcam.components.CameraZoomControls
-
-@Composable
-fun SettingsRoute(
-    onNavigateBack: () -> Unit,
-    onNavigateToPairing: () -> Unit,
-    onCopyDiagnostics: (String) -> Unit,
-) {
-    val viewModel: SettingsViewModel = hiltViewModel()
-    val state by viewModel.uiState.collectAsState()
-
-    LaunchedEffect(viewModel) {
-        viewModel.effects.collect { effect ->
-            when (effect) {
-                is SenderUiEffect.CopyDiagnostics -> onCopyDiagnostics(effect.details)
-                SenderUiEffect.RequestCameraPermission -> Unit
-                SenderUiEffect.NavigateToPairing -> onNavigateToPairing()
-            }
-        }
-    }
-
-    SettingsScreen(
-        state = state,
-        onAction = { action ->
-            if (action == SenderScreenAction.CloseSettings) {
-                onNavigateBack()
-            } else {
-                viewModel.onAction(action)
-            }
-        },
-    )
-}
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)

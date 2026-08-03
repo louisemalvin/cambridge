@@ -16,13 +16,13 @@ import androidx.compose.ui.unit.dp
 import dev.mobilewebcam.sender.app.model.PreviewOrientation
 import dev.mobilewebcam.sender.app.model.PreviewViewportCalculator
 import dev.mobilewebcam.sender.app.model.SenderScreenAction
-import dev.mobilewebcam.sender.app.model.SenderScreenState
+import dev.mobilewebcam.sender.feature.webcam.WebcamUiState
 import dev.mobilewebcam.sender.feature.webcam.overlays.ZoomTray
 import dev.mobilewebcam.sender.media.camera.CameraPreviewSurface
 
 @Composable
 fun PreviewStage(
-    state: SenderScreenState,
+    state: WebcamUiState,
     orientation: PreviewOrientation,
     onAction: (SenderScreenAction) -> Unit,
     onSurfaceChanged: (CameraPreviewSurface?) -> Unit,

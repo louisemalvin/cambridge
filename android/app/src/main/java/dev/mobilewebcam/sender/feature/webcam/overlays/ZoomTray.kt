@@ -8,12 +8,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.mobilewebcam.sender.app.model.SenderScreenAction
-import dev.mobilewebcam.sender.app.model.SenderScreenState
+import dev.mobilewebcam.sender.feature.webcam.WebcamUiState
 import dev.mobilewebcam.sender.feature.webcam.components.CameraZoomControls
 
 @Composable
 fun ZoomTray(
-    state: SenderScreenState,
+    state: WebcamUiState,
     onAction: (SenderScreenAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {

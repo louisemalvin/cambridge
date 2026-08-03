@@ -24,11 +24,11 @@ import androidx.compose.ui.unit.dp
 import dev.mobilewebcam.sender.R
 import dev.mobilewebcam.sender.app.model.ConnectionUiState
 import dev.mobilewebcam.sender.app.model.SenderScreenAction
-import dev.mobilewebcam.sender.app.model.SenderScreenState
+import dev.mobilewebcam.sender.feature.webcam.WebcamUiState
 
 @Composable
 fun PreviewActions(
-    state: SenderScreenState,
+    state: WebcamUiState,
     isLandscape: Boolean,
     onAction: (SenderScreenAction) -> Unit,
     modifier: Modifier = Modifier,
@@ -85,7 +85,7 @@ fun PreviewActions(
 
 @Composable
 private fun PreviewActionButtons(
-    state: SenderScreenState,
+    state: WebcamUiState,
     dimContentDescription: String,
     zoomContentDescription: String,
     settingsContentDescription: String,

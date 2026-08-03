@@ -19,13 +19,13 @@ import androidx.compose.ui.unit.dp
 import dev.mobilewebcam.sender.R
 import dev.mobilewebcam.sender.app.model.ConnectionUiState
 import dev.mobilewebcam.sender.app.model.SenderScreenAction
-import dev.mobilewebcam.sender.app.model.SenderScreenState
+import dev.mobilewebcam.sender.feature.webcam.WebcamUiState
 import dev.mobilewebcam.sender.app.model.UiText
 import dev.mobilewebcam.sender.app.model.value
 
 @Composable
 fun PreviewStatusOverlay(
-    state: SenderScreenState,
+    state: WebcamUiState,
     onAction: (SenderScreenAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -88,7 +88,7 @@ private fun ConnectionChip(
 
 @Composable
 private fun WaitingCard(
-    state: SenderScreenState,
+    state: WebcamUiState,
     onAction: (SenderScreenAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {

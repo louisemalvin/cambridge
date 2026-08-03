@@ -1,7 +1,7 @@
 package dev.mobilewebcam.sender
 
 import dev.mobilewebcam.sender.model.StreamFailure
-import dev.mobilewebcam.sender.feature.webcam.buildFailureDiagnostics
+import dev.mobilewebcam.sender.app.model.buildFailureDiagnostics
 import org.junit.Assert.assertTrue
 import org.junit.Test
 

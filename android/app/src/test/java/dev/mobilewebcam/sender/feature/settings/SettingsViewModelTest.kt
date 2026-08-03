@@ -1,8 +1,7 @@
 package dev.mobilewebcam.sender.feature.settings
 
 import dev.mobilewebcam.sender.app.model.ConnectionUiState
-import dev.mobilewebcam.sender.feature.webcam.SenderDomainSnapshot
-import dev.mobilewebcam.sender.feature.webcam.SenderScreenStateMapper
+import dev.mobilewebcam.sender.app.model.StreamPresentationSnapshot
 import dev.mobilewebcam.sender.media.camera.CameraInteractionState
 import dev.mobilewebcam.sender.model.CodecPreference
 import dev.mobilewebcam.sender.model.StreamState
@@ -15,12 +14,13 @@ import org.junit.Test
 class SettingsViewModelTest {
     @Test
     fun configuredSettingsAreMappedToSelectedOptions() {
-        val state = SenderScreenStateMapper.map(
-            snapshot(
+        val state = SettingsUiStateMapper.map(
+            snapshot = snapshot(
                 codecPreference = CodecPreference.FORCE_H264,
                 profile = VideoProfiles.PROFILE_1440P30,
             ),
-        ).settings
+            hasApprovedReceiver = true,
+        )
 
         assertEquals(
             CodecPreference.FORCE_H264.name,
@@ -34,9 +34,10 @@ class SettingsViewModelTest {
 
     @Test
     fun settingsExposeConnectionStatusAndUnsupportedCameraCapabilities() {
-        val state = SenderScreenStateMapper.map(
-            snapshot(streamState = StreamState.CheckingReceiver),
-        ).settings
+        val state = SettingsUiStateMapper.map(
+            snapshot = snapshot(streamState = StreamState.CheckingReceiver),
+            hasApprovedReceiver = false,
+        )
 
         assertTrue(state.connection is ConnectionUiState.Connecting)
         assertTrue(state.connectionStatus != null)
@@ -48,16 +49,12 @@ class SettingsViewModelTest {
         codecPreference: CodecPreference = CodecPreference.AUTO_PREFER_H265,
         profile: dev.mobilewebcam.sender.model.VideoProfile = VideoProfiles.default,
         streamState: StreamState = StreamState.Idle,
-    ) = SenderDomainSnapshot(
+    ) = StreamPresentationSnapshot(
         codecPreference = codecPreference,
         profile = profile,
         cameraInteraction = CameraInteractionState(),
         streamState = streamState,
-        cameraPermissionGranted = true,
         activeReceiverName = null,
         validationMessage = null,
-        isScreenDimmed = false,
-        isZoomTrayOpen = false,
-        isPermissionDialogOpen = false,
     )
 }

@@ -8,8 +8,8 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import dev.mobilewebcam.sender.app.model.CameraControlsUiState
 import dev.mobilewebcam.sender.app.model.SelectOptionUi
-import dev.mobilewebcam.sender.app.model.SenderScreenState
-import dev.mobilewebcam.sender.app.model.SettingsUiState
+import dev.mobilewebcam.sender.feature.settings.SettingsUiState
+import dev.mobilewebcam.sender.feature.webcam.WebcamUiState
 import dev.mobilewebcam.sender.app.model.UiText
 import dev.mobilewebcam.sender.feature.webcam.WebcamScreen
 import dev.mobilewebcam.sender.feature.settings.SettingsScreen
@@ -25,7 +25,7 @@ class SenderScreenTest {
         composeRule.setContent {
             MaterialTheme {
                 WebcamScreen(
-                    state = SenderScreenState(),
+                    state = WebcamUiState(),
                     onAction = {},
                     onSurfaceChanged = {},
                 )
@@ -43,7 +43,7 @@ class SenderScreenTest {
         composeRule.setContent {
             MaterialTheme {
                 WebcamScreen(
-                    state = SenderScreenState(isScreenDimmed = true),
+                    state = WebcamUiState(isScreenDimmed = true),
                     onAction = {},
                     onSurfaceChanged = {},
                 )

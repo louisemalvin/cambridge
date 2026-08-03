@@ -1,4 +1,4 @@
-package dev.mobilewebcam.sender.feature.webcam
+package dev.mobilewebcam.sender.app.model
 
 import dev.mobilewebcam.sender.model.CodecPreference
 import dev.mobilewebcam.sender.model.StreamFailure
@@ -12,7 +12,7 @@ internal fun buildFailureDiagnostics(
     cause: Throwable?,
 ): String = buildString {
     appendLine("Mobile Webcam Android diagnostic")
-    appendLine("User message: ${SenderScreenStateMapper.failureMessage(failure)}")
+    appendLine("User message: ${StreamPresentationMapper.failureMessage(failure)}")
     appendLine("Receiver: ${receiverName ?: "not connected"}")
     appendLine(
         "Profile: ${profile.width}x${profile.height}@${profile.fps}",

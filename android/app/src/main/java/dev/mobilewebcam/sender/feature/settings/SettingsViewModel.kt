@@ -5,15 +5,12 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.mobilewebcam.sender.app.model.SenderScreenAction
 import dev.mobilewebcam.sender.app.model.SenderUiEffect
-import dev.mobilewebcam.sender.app.model.SettingsUiState
+import dev.mobilewebcam.sender.app.model.StreamPresentationSnapshot
 import dev.mobilewebcam.sender.connection.discovery.SenderConnectionCoordinator
-import dev.mobilewebcam.sender.feature.webcam.SenderDomainSnapshot
-import dev.mobilewebcam.sender.feature.webcam.SenderScreenStateMapper
 import dev.mobilewebcam.sender.media.camera.CameraController
 import dev.mobilewebcam.sender.session.VideoProfiles
 import dev.mobilewebcam.sender.model.CodecPreference
 import dev.mobilewebcam.sender.model.SenderSettingsRepository
-import dev.mobilewebcam.sender.model.StreamState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -43,30 +40,16 @@ class SettingsViewModel @Inject constructor(
         settings.state,
         validationMessage,
     ) { streamState, receiverName, cameraInteraction, configuredSettings, validation ->
-        val fullState = SenderScreenStateMapper.map(
-            SenderDomainSnapshot(
+        SettingsUiStateMapper.map(
+            snapshot = StreamPresentationSnapshot(
                 codecPreference = configuredSettings.codecPreference,
                 profile = configuredSettings.profile,
                 cameraInteraction = cameraInteraction,
                 streamState = streamState,
-                cameraPermissionGranted = true,
                 activeReceiverName = receiverName,
                 validationMessage = validation,
-                isScreenDimmed = false,
-                isZoomTrayOpen = false,
-                isPermissionDialogOpen = false,
             ),
-        )
-        SettingsUiState(
-            connection = fullState.connection,
-            codecOptions = fullState.settings.codecOptions,
-            profileOptions = fullState.settings.profileOptions,
-            receiverName = fullState.settings.receiverName,
-            connectionStatus = fullState.settings.connectionStatus,
-            camera = fullState.camera,
-            validationMessage = fullState.validationMessage,
-            failureDiagnostics = fullState.failureDiagnostics,
-            isStreaming = streamState is StreamState.Streaming || streamState is StreamState.Preparing || streamState is StreamState.Starting,
+            hasApprovedReceiver = false,
         )
     }
 
