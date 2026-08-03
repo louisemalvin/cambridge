@@ -4,8 +4,8 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import dev.mobilewebcam.sender.connection.discovery.PairingStore
 import dev.mobilewebcam.sender.connection.discovery.SenderConnectionCoordinator
-import dev.mobilewebcam.sender.media.streaming.session.StreamSessionController
-import dev.mobilewebcam.sender.media.streaming.session.VideoProfiles
+import dev.mobilewebcam.sender.session.StreamSessionController
+import dev.mobilewebcam.sender.session.VideoProfiles
 import dev.mobilewebcam.sender.model.CodecPreference
 import dev.mobilewebcam.sender.model.ReceiverEndpoint
 import dev.mobilewebcam.sender.model.SenderSettings

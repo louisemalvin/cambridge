@@ -1,7 +1,7 @@
 package dev.mobilewebcam.sender.platform.preferences
 
 import android.content.Context
-import dev.mobilewebcam.sender.media.streaming.session.VideoProfiles
+import dev.mobilewebcam.sender.session.VideoProfiles
 import dev.mobilewebcam.sender.model.CodecPreference
 import dev.mobilewebcam.sender.model.SenderSettings
 import dev.mobilewebcam.sender.model.SenderSettingsRepository

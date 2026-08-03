@@ -1,4 +1,4 @@
-package dev.mobilewebcam.sender.media.streaming.session
+package dev.mobilewebcam.sender.session
 
 import android.os.Build
 import dev.mobilewebcam.sender.connection.control.ReceiverControlClient

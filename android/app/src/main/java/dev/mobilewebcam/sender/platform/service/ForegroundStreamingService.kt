@@ -5,7 +5,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
-import dev.mobilewebcam.sender.media.streaming.session.StreamSessionController
+import dev.mobilewebcam.sender.session.StreamSessionController
 import dev.mobilewebcam.sender.platform.notification.NotificationFactory
 import dev.mobilewebcam.sender.platform.power.StreamingPowerManager
 import dagger.hilt.android.AndroidEntryPoint

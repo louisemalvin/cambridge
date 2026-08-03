@@ -13,9 +13,9 @@ import dev.mobilewebcam.sender.media.capabilities.EncoderCapabilityProbe
 import dev.mobilewebcam.sender.media.capabilities.mediacodec.MediaCodecCapabilityProbe
 import dev.mobilewebcam.sender.media.streaming.StreamEngine
 import dev.mobilewebcam.sender.media.streaming.rootencoder.RootEncoderStreamEngine
-import dev.mobilewebcam.sender.media.streaming.session.CodecNegotiator
-import dev.mobilewebcam.sender.media.streaming.session.StreamSessionController
-import dev.mobilewebcam.sender.media.streaming.session.StreamSessionControllerImpl
+import dev.mobilewebcam.sender.session.CodecNegotiator
+import dev.mobilewebcam.sender.session.StreamSessionController
+import dev.mobilewebcam.sender.session.StreamSessionControllerImpl
 import dev.mobilewebcam.sender.platform.power.StreamingPowerManager
 import dev.mobilewebcam.sender.platform.service.AndroidForegroundStreamingController
 import dev.mobilewebcam.sender.platform.service.ForegroundStreamingController

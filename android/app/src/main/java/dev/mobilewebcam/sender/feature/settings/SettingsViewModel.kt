@@ -10,7 +10,7 @@ import dev.mobilewebcam.sender.connection.discovery.SenderConnectionCoordinator
 import dev.mobilewebcam.sender.feature.webcam.SenderDomainSnapshot
 import dev.mobilewebcam.sender.feature.webcam.SenderScreenStateMapper
 import dev.mobilewebcam.sender.media.camera.CameraController
-import dev.mobilewebcam.sender.media.streaming.session.VideoProfiles
+import dev.mobilewebcam.sender.session.VideoProfiles
 import dev.mobilewebcam.sender.model.CodecPreference
 import dev.mobilewebcam.sender.model.SenderSettingsRepository
 import dev.mobilewebcam.sender.model.StreamState

@@ -41,7 +41,7 @@ feature/ (pairing, webcam, settings)
 destination ViewModels (PairingViewModel, WebcamViewModel, SettingsViewModel)
   -> pure state mappers
   -> connection/discovery/ (SenderConnectionCoordinator, PairingStore, SenderControlServer)
-  -> media/streaming/session/ (StreamSessionController)
+  -> session/ (StreamSessionController, CodecNegotiator, VideoProfiles)
        -> connection/control/http/ (HttpReceiverControlClient)
        -> media/capabilities/ (MediaCodecCapabilityProbe)
        -> media/streaming/ (StreamEngine, CodecNegotiator)

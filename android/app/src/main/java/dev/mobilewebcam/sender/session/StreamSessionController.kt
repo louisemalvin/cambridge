@@ -1,4 +1,4 @@
-package dev.mobilewebcam.sender.media.streaming.session
+package dev.mobilewebcam.sender.session
 
 import dev.mobilewebcam.sender.model.CodecPreference
 import dev.mobilewebcam.sender.model.ReceiverEndpoint

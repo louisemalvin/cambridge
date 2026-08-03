@@ -1,7 +1,7 @@
 package dev.mobilewebcam.sender.feature.pairing
 
 import dev.mobilewebcam.sender.app.model.UiText
-import dev.mobilewebcam.sender.media.streaming.session.VideoProfiles
+import dev.mobilewebcam.sender.session.VideoProfiles
 import dev.mobilewebcam.sender.model.StreamFailure
 import dev.mobilewebcam.sender.model.StreamState
 import dev.mobilewebcam.sender.model.VideoCodec

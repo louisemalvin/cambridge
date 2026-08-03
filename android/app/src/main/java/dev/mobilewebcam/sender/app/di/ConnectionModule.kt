@@ -14,7 +14,7 @@ import dev.mobilewebcam.sender.connection.discovery.PairingStore
 import dev.mobilewebcam.sender.connection.discovery.SenderConnectionCoordinator
 import dev.mobilewebcam.sender.connection.discovery.SenderControlServer
 import dev.mobilewebcam.sender.logging.AppLogger
-import dev.mobilewebcam.sender.media.streaming.session.StreamSessionController
+import dev.mobilewebcam.sender.session.StreamSessionController
 import dev.mobilewebcam.sender.model.SenderSettingsRepository
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO

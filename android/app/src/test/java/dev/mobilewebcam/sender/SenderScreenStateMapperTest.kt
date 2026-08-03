@@ -3,7 +3,7 @@ package dev.mobilewebcam.sender
 import dev.mobilewebcam.sender.app.model.ConnectionUiState
 import dev.mobilewebcam.sender.app.model.SenderDialogUiState
 import dev.mobilewebcam.sender.app.model.UiText
-import dev.mobilewebcam.sender.media.streaming.session.VideoProfiles
+import dev.mobilewebcam.sender.session.VideoProfiles
 import dev.mobilewebcam.sender.feature.webcam.SenderDomainSnapshot
 import dev.mobilewebcam.sender.feature.webcam.SenderScreenStateMapper
 import dev.mobilewebcam.sender.media.camera.CameraInteractionState
