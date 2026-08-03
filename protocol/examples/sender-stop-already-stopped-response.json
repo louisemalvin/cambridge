@@ -1,0 +1,7 @@
+{
+  "protocolVersion": 2,
+  "action": "stop_result",
+  "streamId": "d3ebda88-5e25-4a47-99e4-44029adf49ef",
+  "senderId": "47bdc760-ef2f-4a8a-93af-a80c5bc4a2c7",
+  "status": "already_stopped"
+}

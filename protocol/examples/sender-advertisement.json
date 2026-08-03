@@ -1,6 +1,8 @@
 {
-  "protocolVersion": 1,
+  "protocolVersion": 2,
+  "action": "describe_result",
   "senderId": "47bdc760-ef2f-4a8a-93af-a80c5bc4a2c7",
   "displayName": "Android phone",
-  "controlPort": 53555
+  "controlPort": 53555,
+  "availability": "standby"
 }

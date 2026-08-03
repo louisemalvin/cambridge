@@ -69,14 +69,17 @@ not an instruction to terminate the receiver process.
 ## Discovery and reverse control
 
 Mobile senders listen on TCP port `53555`. The desktop probes local IPv4 hosts with a
-side-effect-free `describe` request, then sends one newline-delimited JSON start
-request to the selected sender. The sender infers the receiver address from the
-TCP peer. The shared contract is
-[`protocol/sender-control-v1.schema.json`](../protocol/sender-control-v1.schema.json).
+side-effect-free `describe` request, then sends one newline-delimited JSON `start`
+or `stop` request to the selected sender. The sender infers the receiver address
+from the TCP peer. The shared contract is
+[`protocol/sender-control-v2.schema.json`](../protocol/sender-control-v2.schema.json).
 
 The first request returns `approval_required`. Mobile sender approval creates a
-pairing token. A later request with that token starts automatically while still
-showing the camera foreground notification.
+pairing token. A later request with that token starts or stops automatically
+while still showing the camera foreground notification during media activity.
+Each demand activation creates a new UUID `streamId`. Start retries, approval
+retries, and the matching stop use the same ID. A receiver HTTP `sessionId` is
+not a stream ID and is never substituted for it.
 
 ## Network modes
 

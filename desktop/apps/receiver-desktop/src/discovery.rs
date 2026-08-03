@@ -299,6 +299,8 @@ impl DiscoveryWorker {
 
         let request = StartStreamRequest {
             protocol_version: PROTOCOL_VERSION,
+            action: SenderControlAction::Start,
+            stream_id: Uuid::new_v4(),
             receiver_id: self.pairings.receiver_id.clone(),
             receiver_name: "Desktop receiver".to_owned(),
             receiver_control_port: self.receiver_control_port,

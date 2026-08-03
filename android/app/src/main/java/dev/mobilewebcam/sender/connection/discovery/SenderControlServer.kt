@@ -71,9 +71,11 @@ class SenderControlServer(
                     ProtocolJson.instance.encodeToString(
                         SenderAdvertisementDto(
                             protocolVersion = SENDER_CONTROL_PROTOCOL_VERSION,
+                            action = SenderControlActionDto.DESCRIBE_RESULT,
                             senderId = senderId,
                             displayName = displayName,
                             controlPort = SENDER_CONTROL_PORT,
+                            availability = SenderAvailabilityDto.STANDBY,
                         ),
                     )
                 } else {
@@ -98,6 +100,8 @@ class SenderControlServer(
                 ProtocolJson.instance.encodeToString(
                     StartStreamResponseDto(
                         protocolVersion = SENDER_CONTROL_PROTOCOL_VERSION,
+                        action = SenderControlActionDto.START_RESULT,
+                        streamId = ZERO_STREAM_ID,
                         senderId = senderId,
                         status = StartStreamStatusDto.INVALID_REQUEST,
                         message = error.message,
@@ -127,5 +131,6 @@ class SenderControlServer(
         const val SOCKET_TIMEOUT_MILLIS = 15_000
         const val MIN_MESSAGE_BYTES = 1
         const val MAX_MESSAGE_BYTES = 16 * 1024
+        const val ZERO_STREAM_ID = "00000000-0000-0000-0000-000000000000"
     }
 }

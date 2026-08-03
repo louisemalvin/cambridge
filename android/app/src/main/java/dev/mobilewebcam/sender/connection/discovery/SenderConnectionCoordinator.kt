@@ -173,10 +173,13 @@ class SenderConnectionCoordinator(
 
     private fun response(
         status: StartStreamStatusDto,
+        streamId: String = ZERO_STREAM_ID,
         pairingToken: String? = null,
         message: String? = null,
     ) = StartStreamResponseDto(
         protocolVersion = SENDER_CONTROL_PROTOCOL_VERSION,
+        action = SenderControlActionDto.START_RESULT,
+        streamId = streamId,
         senderId = pairings.senderId,
         status = status,
         pairingToken = pairingToken,
@@ -197,4 +200,8 @@ class SenderConnectionCoordinator(
         val request: StartStreamRequestDto,
         val peerAddress: String,
     )
+
+    private companion object {
+        const val ZERO_STREAM_ID = "00000000-0000-0000-0000-000000000000"
+    }
 }

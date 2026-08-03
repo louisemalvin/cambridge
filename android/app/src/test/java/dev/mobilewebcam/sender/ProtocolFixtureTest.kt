@@ -11,6 +11,10 @@ import dev.mobilewebcam.sender.connection.discovery.StartStreamResponseDto
 import dev.mobilewebcam.sender.connection.discovery.StartStreamStatusDto
 import dev.mobilewebcam.sender.connection.discovery.DescribeSenderRequestDto
 import dev.mobilewebcam.sender.connection.discovery.SenderAdvertisementDto
+import dev.mobilewebcam.sender.connection.discovery.SenderAvailabilityDto
+import dev.mobilewebcam.sender.connection.discovery.SenderControlActionDto
+import dev.mobilewebcam.sender.connection.discovery.StopStreamRequestDto
+import dev.mobilewebcam.sender.connection.discovery.StopStreamResponseDto
 import java.io.File
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -33,6 +37,8 @@ class ProtocolFixtureTest {
         val describeSender = decode<DescribeSenderRequestDto>("sender-describe-request.json")
         val senderRequest = decode<StartStreamRequestDto>("sender-start-request.json")
         val senderResponse = decode<StartStreamResponseDto>("sender-start-response.json")
+        val stopRequest = decode<StopStreamRequestDto>("sender-stop-request.json")
+        val stopResponse = decode<StopStreamResponseDto>("sender-stop-stopped-response.json")
 
         assertEquals(1, health.protocolVersion)
         assertEquals(2, capabilities.videoCodecs.size)
@@ -43,25 +49,33 @@ class ProtocolFixtureTest {
         assertEquals("receiving", state.state.name.lowercase())
         assertEquals("describe", describeSender.action.name.lowercase())
         assertEquals(5001, senderRequest.receiverControlPort)
+        assertEquals(2, senderRequest.protocolVersion)
+        assertEquals(senderRequest.streamId, senderResponse.streamId)
+        assertEquals(senderRequest.streamId, stopRequest.streamId)
         assertEquals("accepted", senderResponse.status.name.lowercase())
+        assertEquals("stopped", stopResponse.status.name.lowercase())
     }
 
     @Test
     fun senderResponsesAlwaysEncodeTheRequiredProtocolVersion() {
         val advertisement = SenderAdvertisementDto(
-            protocolVersion = 1,
+            protocolVersion = 2,
+            action = SenderControlActionDto.DESCRIBE_RESULT,
             senderId = "phone-1",
             displayName = "Android phone",
             controlPort = 53_555,
+            availability = SenderAvailabilityDto.STANDBY,
         )
         val response = StartStreamResponseDto(
-            protocolVersion = 1,
+            protocolVersion = 2,
+            action = SenderControlActionDto.START_RESULT,
+            streamId = "d3ebda88-5e25-4a47-99e4-44029adf49ef",
             senderId = "phone-1",
             status = StartStreamStatusDto.APPROVAL_REQUIRED,
         )
 
-        assertEquals(1, encodedProtocolVersion(advertisement))
-        assertEquals(1, encodedProtocolVersion(response))
+        assertEquals(2, encodedProtocolVersion(advertisement))
+        assertEquals(2, encodedProtocolVersion(response))
     }
 
     private inline fun <reified T> decode(name: String): T {
