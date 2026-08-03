@@ -63,8 +63,7 @@ Make the Linux receiver keep a selectable virtual camera in paired standby and s
 
 ## Status
 
-Implementation complete through M5. M6 documentation and real Linux lifecycle
-verification are in progress.
+Complete. All milestones M0-M6 implemented, verified, and committed.
 
 ## Handoff Notes
 
