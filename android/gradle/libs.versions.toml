@@ -1,6 +1,6 @@
 [versions]
 agp = "9.3.1"
-kotlin = "2.2.10"
+kotlin = "2.3.21"
 compose-bom = "2026.06.00"
 core-ktx = "1.13.1"
 activity-compose = "1.13.0"
@@ -17,7 +17,7 @@ navigation3 = "1.1.4"
 hilt-navigation-compose = "1.2.0"
 
 hilt = "2.60.1"
-ksp = "2.2.10-2.0.2"
+ksp = "2.3.10"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "core-ktx" }
