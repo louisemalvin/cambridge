@@ -113,9 +113,10 @@ launch the exact debug APK, exercise paired reverse control, stream H.264
 through the Rust receiver, stop and restart the stream, and read the Linux
 `v4l2loopback` output. A full diagnostic snapshot reached `receiving`, decoded
 607 frames with a 1,211 ms first-frame delay, reported about 1.96 Mbps and
-zero receiver pipeline errors; the current exact APK also completed two
-H.264 sessions and produced ten 1920x1080 YUY2 frames (41,472,000 bytes) after
-a stop/restart cycle. The emulator run also showed queue-pressure and
-continuity warnings, so it is a functional smoke check rather than a latency
-or throughput baseline. Physical-device and latency comparison remain
-unverified.
+zero receiver pipeline errors; an exact APK run completed two H.264 sessions
+and produced ten 1920x1080 YUY2 frames (41,472,000 bytes) after a stop/restart
+cycle. The final post-package-move APK also reached `receiving` for a fresh
+H.264 session and produced the same ten-frame v4l2 capture. The emulator run
+also showed queue-pressure and continuity warnings, so it is a functional
+smoke check rather than a latency or throughput baseline. Physical-device and
+latency comparison remain unverified.
