@@ -7,6 +7,7 @@ mod discovery;
 mod output;
 mod preview;
 mod runtime;
+pub mod stream_coordinator;
 mod ui;
 
 use cli::Cli;

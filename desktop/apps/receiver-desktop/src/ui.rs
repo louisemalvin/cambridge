@@ -166,9 +166,12 @@ fn apply_discovery_snapshot(
 
     status.set_text(match &snapshot.connection {
         ConnectionState::Searching => "Searching for phones on the local network",
+        ConnectionState::PairedStandby(name) => {
+            return status.set_text(&format!("Paired with {name} - waiting for webcam use"));
+        }
         ConnectionState::WaitingForSelection => "Choose which phone to use",
         ConnectionState::Connecting(name) => {
-            return status.set_text(&format!("Connecting to {name}"));
+            return status.set_text(&format!("Webcam requested - starting phone camera on {name}"));
         }
         ConnectionState::WaitingForApproval(name) => {
             return status.set_text(&format!("Approve this computer on {name}"));
@@ -177,8 +180,9 @@ fn apply_discovery_snapshot(
             return status.set_text(&format!("Allow camera access on {name}"));
         }
         ConnectionState::Connected(name) => {
-            return status.set_text(&format!("Connected to {name} - waiting for video"));
+            return status.set_text(&format!("Streaming from {name}"));
         }
+        ConnectionState::Stopping(name) => return status.set_text(&format!("Stopping {name}")),
         ConnectionState::Error(message) => return status.set_text(message),
     });
 }
