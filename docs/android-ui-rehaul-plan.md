@@ -1,6 +1,6 @@
 # Android preview-first UI rehaul
 
-Status: complete. The feature-oriented presentation architecture, Navigation 3, destination ViewModels, Hilt DI, grouped infrastructure packages, persisted sender settings, Pairing-owned approval presentation, and RootEncoder CameraXSource migration are implemented and verified.
+Status: complete. The feature-oriented presentation architecture, Navigation 3, destination ViewModels, destination-owned immutable state and mappers, Hilt DI, grouped infrastructure packages, persisted sender settings, Pairing-owned approval presentation, and RootEncoder CameraXSource migration are implemented and verified.
 
 ## Direction
 
@@ -60,6 +60,17 @@ camera, and settings state into immutable presentation models and handle screen
 actions. Navigation 3 entry decorators scope those ViewModels to their
 destinations.
 
+Each destination keeps its route, screen, immutable state, and mapper together:
+
+- `feature/pairing`: `PairingRoute`, `PairingScreen`, `PairingUiState`, and `PairingUiStateMapper`;
+- `feature/webcam`: `WebcamRoute`, `WebcamScreen`, `WebcamUiState`, and `WebcamUiStateMapper`;
+- `feature/settings`: `SettingsRoute`, `SettingsScreen`, `SettingsUiState`, and `SettingsUiStateMapper`.
+
+The `app/model` package contains only shared presentation values and common
+stream/camera mapping helpers. It does not contain a monolithic state object for
+all destinations, and feature mappers consume an immutable
+`StreamPresentationSnapshot` rather than reaching into infrastructure state.
+
 ### Model and service state
 
 - Keep `StreamState`, `NegotiatedSession`, `VideoProfile`, `CodecPreference`,
@@ -71,10 +82,10 @@ destinations.
 - The coordinator and camera controller remain the sources of truth for their
   respective behavior.
 
-### Screen state
+### Destination state
 
-Add an immutable `SenderScreenState` under the UI presentation layer. It should
-contain only values the screen can render, for example:
+Each destination exposes an immutable state containing only values its screen
+can render. `WebcamUiState` contains, for example:
 
 - `preview`: fitted aspect ratio, orientation, and whether a live surface is
   expected;
@@ -82,16 +93,20 @@ contain only values the screen can render, for example:
   presentation state with display-ready text/resource IDs;
 - `camera`: zoom display/range, lens options with display labels, and
   stabilization availability/state;
-- `settings`: codec/profile option lists and selected display values;
 - `dialog`: camera-permission dialog state when one is active; receiver
   approval is owned by the Pairing destination;
 - `isScreenDimmed`: the screen preference for this activity/session;
-- `isSettingsOpen` and `isZoomTrayOpen`: main-surface presentation state.
+- `isZoomTrayOpen`: main-surface presentation state.
 
-The screen state must not contain `StreamState`, `CameraInteractionState`,
+`SettingsUiState` owns codec/profile options, connection details, diagnostics,
+and camera controls. `PairingUiState` owns receiver approval and pairing status.
+Shared display values such as connection states, camera controls, and actions
+remain in `app/model` because they are consumed by more than one destination.
+
+Destination state must not contain `StreamState`, `CameraInteractionState`,
 RootEncoder objects, protocol DTOs, or raw exception types. A pure mapper from
-domain snapshots to `SenderScreenState` should be unit tested independently of
-Compose.
+the shared infrastructure snapshot to each destination state should be unit
+tested independently of Compose.
 
 ### ViewModel and UI contract
 
@@ -104,10 +119,10 @@ Compose.
 - Expose one-shot `SenderUiEffect` values only for events the UI must perform,
   such as copying diagnostics or showing a transient message. The ViewModel
   does not access `Context`, `ClipboardManager`, `Toast`, or Compose APIs.
-- `SenderScreen`, `PreviewShell`, and `SettingsScreen` receive screen state and
-  callbacks only. They do not access the coordinator, RootEncoder, or Android
-  camera APIs.
-- Keep main-surface visibility state in `SenderScreenState` and change it only
+- `PairingScreen`, `WebcamScreen`, and `SettingsScreen` receive their
+  destination state and callbacks only. They do not access the coordinator,
+  RootEncoder, or Android camera APIs.
+- Keep main-surface visibility state in `WebcamUiState` and change it only
   through ViewModel actions. Do not mix those booleans into the domain model.
   Internal dropdown expansion inside a settings component may remain local
   because it does not affect the screen projection or domain behavior.
@@ -128,7 +143,7 @@ ephemeral interaction state.
 - Portrait and landscape preview geometry preserve the selected profile aspect ratio without stretching or nested unbounded scrolling.
 - The main surface contains only the preview, waiting/status treatment, dim action, zoom affordance, and settings action.
 - Codec, profile, diagnostics, and connection details are reachable from Material 3 surfaces without being permanently visible. Physical lens and stabilization rows are capability-gated because RootEncoder 2.8.0's public `CameraXSource` does not expose those controls.
-- Compose receives only `SenderScreenState`; domain state is translated by a pure ViewModel mapper and is not passed directly into screen composables.
+- Compose receives only destination-owned immutable state; domain state is translated by pure ViewModel mappers and is not passed directly into screen composables.
 - Existing camera interaction and session contracts remain unchanged unless an explicit pre-connection preview decision is made.
 - Compose tests cover waiting, streaming, settings visibility, dim state, rotation/aspect-ratio layout, and the existing zoom bounds/reset behavior.
 - Android unit tests, instrumentation compilation, lint, and debug assembly remain green.
