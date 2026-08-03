@@ -63,12 +63,13 @@ Make the Linux receiver keep a selectable virtual camera in paired standby and s
 
 ## Status
 
-Baseline complete. Protocol implementation is next.
+Implementation complete through M5. M6 documentation and real Linux lifecycle
+verification are in progress.
 
 ## Handoff Notes
 
-- Next exact step: inspect all sender-control fixtures and desktop/Android test seams, then add v2 schema/DTOs without changing iOS.
-- Files changed: only this task artifact so far; pre-existing worktree changes remain untouched.
-- Commands run: `git status --short --branch`; Rust format/tests/clippy; Android `./gradlew test`; kernel/module/v4l2 inspection; `work-context AGENTS.md`.
-- Errors encountered: Android test blocked because no `java` command or `JAVA_HOME`; `work-context AGENTS.md` reports the guide itself is not a task contract.
-- Verification evidence: Rust baseline passed; v4l2loopback 0.15.4 loaded and `/dev/video10` listed; private event support still needs probing.
+- Next exact step: run the demand-driven Linux lifecycle script, finish durable lifecycle/testing documentation, then run the full repository checks.
+- Files changed: protocol v2, Linux demand monitor/output, desktop coordinator/runtime, Android stop/watchdog, tests, scripts, and lifecycle documentation; pre-existing unrelated worktree changes remain untouched.
+- Commands run: Rust workspace format/tests/clippy; Android `./gradlew test lint`; Android instrumentation source compilation; v4l2loopback setup/probe and persistent standby capture.
+- Errors encountered: initial Android Java path was absent; `/opt/android-studio/jbr` was then used. The Rust event ABI initially read payload offset 4 instead of the aligned offset 8 and was corrected.
+- Verification evidence: Rust and Android unit/lint checks pass; v4l2loopback 0.15.4 client-usage events produced active/inactive transitions; persistent standby output accepted real V4L2 capture. No physical Android device or adb emulator is available.

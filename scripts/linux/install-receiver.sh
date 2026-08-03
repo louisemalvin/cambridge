@@ -12,6 +12,7 @@ INSTALLED_BINARY="/usr/local/bin/mobile-webcam-receiver"
 INSTALLED_DESKTOP_BINARY="/usr/local/bin/mobile-webcam-desktop"
 DESKTOP_ENTRY_TARGET="/usr/local/share/applications/mobile-webcam.desktop"
 MEDIA_PORT_RANGE="50000:50099"
+MIN_SUPPORTED_V4L2LOOPBACK_VERSION="0.15.0"
 
 declare -a PRIVILEGE=()
 
@@ -154,6 +155,11 @@ configure_firewall() {
 }
 
 install_packages
+MODULE_VERSION="$(modinfo -F version v4l2loopback 2>/dev/null || true)"
+[[ -n "${MODULE_VERSION}" ]] || fail "could not determine the installed v4l2loopback version."
+if [[ "${MODULE_VERSION}" != 0.* ]] || [[ "${MODULE_VERSION}" < "${MIN_SUPPORTED_V4L2LOOPBACK_VERSION}" ]]; then
+  fail "v4l2loopback ${MODULE_VERSION} is unsupported; install ${MIN_SUPPORTED_V4L2LOOPBACK_VERSION} or newer for client-usage events."
+fi
 check_module_configuration_conflicts
 write_managed_file "${MODULE_LOAD_FILE}" "${MODULE_NAME}"
 write_managed_file "${MODULE_OPTIONS_FILE}" "${MODULE_OPTIONS}"

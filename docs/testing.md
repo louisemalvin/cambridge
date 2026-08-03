@@ -82,13 +82,27 @@ scripts/linux/inspect-video-devices.sh
 scripts/linux/test-virtual-camera.sh
 ```
 
+The demand-driven loopback test validates the private client-usage event and
+the persistent standby producer without scanning processes:
+
+```bash
+scripts/linux/test-demand-driven-webcam.sh /dev/video10
+```
+
+It checks side-effect-free capability enumeration, sustained capture, a second
+consumer where the driver permits it, final release, and abrupt consumer death.
+The monitor must report `Active` only during sustained capture and `Inactive`
+after the final consumer leaves. The persistent producer remains attached in
+both states.
+
 The test script automatically selects the first v4l2loopback device. Pass an
 explicit device path only when testing a non-default loopback configuration.
 
-Open the device in OBS or a browser after the producer attaches. In OBS, add
-`Video Capture Device (V4L2)` and select `Mobile Webcam`. With
-`exclusive_caps=1`, the device is initially producer-facing and becomes
-capture-facing after `v4l2sink` connects.
+Open the device in OBS, Firefox, Chromium, or a browser after the persistent
+desktop producer attaches. In OBS, add `Video Capture Device (V4L2)` and select
+`Mobile Webcam`. Capability enumeration alone must leave the phone camera off;
+starting preview or capture should start it, and releasing the final consumer
+should return the output to black standby.
 
 The desktop application can be used instead of the CLI:
 
@@ -99,6 +113,12 @@ mobile-webcam-desktop
 It is the single receiver process for the control API, UDP media, decoded
 preview, and v4l2loopback output. Do not start both receiver binaries on the
 same ports and virtual-camera device.
+
+During a physical Android lifecycle check, record the sender-control `streamId`
+for each demand activation. A repeated start retry must reuse the same ID, a
+later activation must use a new ID, and an old stop must not stop the newer
+activation. Killing the desktop while streaming should stop the Android camera
+after the bounded receiver-session watchdog window.
 
 ## End-to-end matrix
 
