@@ -11,7 +11,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.viewinterop.AndroidView
 import dev.mobilewebcam.sender.app.model.PreviewOrientation
 import dev.mobilewebcam.sender.app.model.ZoomUiState
-import dev.mobilewebcam.sender.config.CameraZoom
+import dev.mobilewebcam.sender.media.camera.CameraZoom
 import dev.mobilewebcam.sender.media.camera.CameraPreviewSurface
 import dev.mobilewebcam.sender.media.camera.DisplayOrientation
 import dev.mobilewebcam.sender.media.camera.MINIMUM_PREVIEW_DIMENSION
