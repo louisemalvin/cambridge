@@ -24,4 +24,6 @@ pub enum LinuxPlatformError {
     DemandEventsUnavailable(String, String),
     #[error("v4l2loopback demand monitor failed: {0}")]
     DemandMonitor(String),
+    #[error("persistent virtual-camera output failed: {0}")]
+    PersistentOutput(String),
 }

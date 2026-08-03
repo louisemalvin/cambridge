@@ -9,7 +9,7 @@ use anyhow::{anyhow, Context, Result};
 use receiver_control_http::{serve_listener, ControlState};
 use receiver_core::{ReceiverService, StaticCapabilityProvider};
 use receiver_gstreamer::{probe_capabilities, GStreamerReceiver};
-use receiver_platform_linux::resolve_v4l2loopback_device;
+use receiver_platform_linux::{resolve_v4l2loopback_device, PersistentVirtualCameraOutput};
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
 use tracing::error;
@@ -28,6 +28,7 @@ pub struct ReceiverRuntime {
     shutdown: Option<oneshot::Sender<()>>,
     thread: Option<JoinHandle<()>>,
     discovery: Option<DiscoveryService>,
+    persistent_output: PersistentVirtualCameraOutput,
 }
 
 impl ReceiverRuntime {
@@ -52,6 +53,7 @@ impl ReceiverRuntime {
         let sink_factory = DesktopSinkFactory::new(&config.device)
             .context("validate Linux v4l2loopback output device")?;
         let preview_store = sink_factory.preview_store();
+        let persistent_output = sink_factory.persistent_output();
         PreviewStore::validate().context("validate desktop preview GStreamer elements")?;
         let media_receiver =
             GStreamerReceiver::new(sink_factory).context("initialise the GStreamer receiver")?;
@@ -100,8 +102,13 @@ impl ReceiverRuntime {
                 return Err(anyhow!("control server could not listen on {control_addr}: {error}"));
             }
         }
-        let mut receiver =
-            Self { state, shutdown: Some(shutdown_tx), thread: Some(thread), discovery: None };
+        let mut receiver = Self {
+            state,
+            shutdown: Some(shutdown_tx),
+            thread: Some(thread),
+            discovery: None,
+            persistent_output,
+        };
         let pairing_path =
             gtk4::glib::user_config_dir().join("mobile-webcam").join("pairings.json");
         let (discovery, discovery_handle) =
@@ -114,6 +121,8 @@ impl ReceiverRuntime {
     fn stop(&mut self) {
         self.discovery.take();
         let _ = self.state.shutdown();
+        let _ = self.persistent_output.set_standby();
+        let _ = self.persistent_output.stop();
         if let Some(shutdown) = self.shutdown.take() {
             let _ = shutdown.send(());
         }

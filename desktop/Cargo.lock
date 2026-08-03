@@ -1648,6 +1648,7 @@ name = "receiver-platform-linux"
 version = "0.1.0"
 dependencies = [
  "gstreamer",
+ "gstreamer-app",
  "libc",
  "nix",
  "receiver-core",

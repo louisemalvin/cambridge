@@ -6,6 +6,7 @@ mod error;
 mod inspection;
 mod output_factory;
 mod v4l2loopback;
+mod virtual_camera_output;
 
 pub use demand_monitor::{
     DemandMonitorConfig, DemandMonitorHandle, V4l2LoopbackDemandMonitor, VirtualCameraDemandEvent,
@@ -17,4 +18,8 @@ pub use inspection::inspect_video_devices;
 pub use output_factory::LinuxVideoSinkFactory;
 pub use v4l2loopback::{
     find_v4l2loopback_device, resolve_v4l2loopback_device, validate_v4l2loopback,
+};
+pub use virtual_camera_output::{
+    PersistentVirtualCameraOutput, VirtualCameraOutputMode, STANDBY_FRAME_RATE,
+    VIRTUAL_CAMERA_FRAME_RATE, VIRTUAL_CAMERA_HEIGHT, VIRTUAL_CAMERA_WIDTH,
 };
