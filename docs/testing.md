@@ -24,10 +24,12 @@ state, and Linux device inspection. Kotlin tests cover shared fixture decoding,
 negotiation, session cleanup behavior, profile-driven preview geometry,
 orientation mapping, zoom clamping/reset, and RootEncoder output-dimension
 mapping. The Android instrumentation suite also checks that the Material 3
-zoom control exposes its slider and reset action. The presentation mapper tests
-cover waiting, approval, streaming, failure diagnostics, and camera-control
-projection without exposing domain types to Compose. The preview viewport tests
-cover fitted landscape and portrait geometry.
+zoom control exposes its slider and reset action, pairing persistence can be
+forgotten, and the coordinator clears its approved receiver state. The
+presentation mapper tests cover waiting, approval, streaming, failure
+diagnostics, and camera-control projection without exposing domain types to
+Compose. The preview viewport tests cover fitted landscape and portrait
+geometry.
 
 The MPEG-TS compatibility checks also assert 188-byte packet caps and the
 H.264/H.265 parser branches. Android transport tests assert the derived

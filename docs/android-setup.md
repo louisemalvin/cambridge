@@ -27,9 +27,9 @@ android/gradlew -p android test lint assembleDebug
 adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-The project uses AGP 9.3.1, Gradle 9.6.1, compile SDK 37, Kotlin 2.2.10,
+The project uses AGP 9.3.1, Gradle 9.6.1, compile SDK 37, Kotlin 2.3.21,
 Activity 1.13.0, Lifecycle 2.11.0, Navigation 3 1.1.4, Hilt 2.60.1, and KSP
-2.2.10-2.0.2. Java and Kotlin bytecode target JVM 17 in both Android modules;
+2.3.10. Java and Kotlin bytecode target JVM 17 in both Android modules;
 the Gradle settings enable automatic JDK 17 toolchain resolution. The first
 build downloads Gradle, the JDK toolchain, AndroidX, Compose, Ktor, and
 RootEncoder dependencies. No microphone permission is requested.
@@ -54,7 +54,8 @@ Codec and profile defaults are owned by the application-scoped
 settings change survives activity recreation and is used by the next
 negotiated session. Pending receiver approval is presented on the Pairing
 destination, including when a request arrives while the preview destination is
-visible.
+visible. Settings also exposes an explicit Forget receiver pairing action that
+stops the session, clears the approved receiver, and returns to Pairing.
 
 The RootEncoder adapter serializes camera, preview, and stream teardown through
 the single session owner. Its stop path uses one ordered RootEncoder stop
@@ -110,9 +111,11 @@ restart the stream after reopening the app.
 The API 35 `codex-phone-webcam-api35` emulator has been used to install and
 launch the exact debug APK, exercise paired reverse control, stream H.264
 through the Rust receiver, stop and restart the stream, and read the Linux
-`v4l2loopback` output. A representative run decoded 944 frames with a 7.0
-second first-frame delay and zero receiver pipeline errors; ten 1920x1080 YUY2
-frames produced 41,472,000 bytes. The emulator run also showed queue-pressure
-and continuity warnings, so it is a functional smoke check rather than a
-latency or throughput baseline. Physical-device and latency comparison remain
+`v4l2loopback` output. A full diagnostic snapshot reached `receiving`, decoded
+607 frames with a 1,211 ms first-frame delay, reported about 1.96 Mbps and
+zero receiver pipeline errors; the current exact APK also completed two
+H.264 sessions and produced ten 1920x1080 YUY2 frames (41,472,000 bytes) after
+a stop/restart cycle. The emulator run also showed queue-pressure and
+continuity warnings, so it is a functional smoke check rather than a latency
+or throughput baseline. Physical-device and latency comparison remain
 unverified.
