@@ -12,8 +12,8 @@ import dev.mobilewebcam.sender.app.model.SettingsUiState
 import dev.mobilewebcam.sender.app.model.StabilizationUiState
 import dev.mobilewebcam.sender.app.model.UiText
 import dev.mobilewebcam.sender.app.model.ZoomUiState
-import dev.mobilewebcam.sender.config.VideoProfiles
 import dev.mobilewebcam.sender.media.camera.CameraInteractionState
+import dev.mobilewebcam.sender.media.streaming.session.VideoProfiles
 import dev.mobilewebcam.sender.model.CodecPreference
 import dev.mobilewebcam.sender.model.StreamFailure
 import dev.mobilewebcam.sender.model.StreamState

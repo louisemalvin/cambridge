@@ -1,6 +1,5 @@
 package dev.mobilewebcam.sender.media.camera
 
-import dev.mobilewebcam.sender.config.CameraZoom
 
 @ConsistentCopyVisibility
 data class PhysicalLensOption internal constructor(

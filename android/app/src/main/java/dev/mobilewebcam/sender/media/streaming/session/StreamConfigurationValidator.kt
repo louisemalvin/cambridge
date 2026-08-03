@@ -1,4 +1,4 @@
-package dev.mobilewebcam.sender.validation
+package dev.mobilewebcam.sender.media.streaming.session
 
 import dev.mobilewebcam.sender.model.StreamConfiguration
 

@@ -24,6 +24,6 @@ class FailureDiagnosticsTest {
     }
 
     private companion object {
-        val defaultProfile = dev.mobilewebcam.sender.config.VideoProfiles.default
+        val defaultProfile = dev.mobilewebcam.sender.media.streaming.session.VideoProfiles.default
     }
 }

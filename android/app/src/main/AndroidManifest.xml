@@ -10,13 +10,13 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
 
     <application
-        android:name=".MobileWebcamApplication"
+        android:name=".app.MobileWebcamApplication"
         android:allowBackup="false"
         android:label="Mobile Webcam"
         android:supportsRtl="true"
         android:theme="@style/Theme.MobileWebcam">
         <activity
-            android:name=".MainActivity"
+            android:name=".app.MainActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

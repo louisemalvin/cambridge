@@ -1,14 +1,13 @@
-package dev.mobilewebcam.sender
+package dev.mobilewebcam.sender.app
 
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import dev.mobilewebcam.sender.app.SenderApp
+import dagger.hilt.android.AndroidEntryPoint
 import dev.mobilewebcam.sender.connection.discovery.PairingStore
 import dev.mobilewebcam.sender.connection.discovery.SenderConnectionCoordinator
-import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
 @AndroidEntryPoint

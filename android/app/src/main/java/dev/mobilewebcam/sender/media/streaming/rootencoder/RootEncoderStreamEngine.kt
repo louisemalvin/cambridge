@@ -8,7 +8,7 @@ import dev.mobilewebcam.sender.media.camera.CameraController
 import dev.mobilewebcam.sender.media.camera.CameraInteractionState
 import dev.mobilewebcam.sender.media.camera.CameraPreviewSurface
 import dev.mobilewebcam.sender.media.camera.PhysicalLensOption
-import dev.mobilewebcam.sender.config.CameraZoom
+import dev.mobilewebcam.sender.media.camera.CameraZoom
 import dev.mobilewebcam.sender.logging.AndroidAppLogger
 import dev.mobilewebcam.sender.logging.AppLogger
 import dev.mobilewebcam.sender.model.StreamConfiguration

@@ -1,8 +1,8 @@
-package dev.mobilewebcam.sender
+package dev.mobilewebcam.sender.app
 
 import android.app.Application
-import dev.mobilewebcam.sender.connection.discovery.SenderControlServer
 import dagger.hilt.android.HiltAndroidApp
+import dev.mobilewebcam.sender.connection.discovery.SenderControlServer
 import javax.inject.Inject
 
 @HiltAndroidApp

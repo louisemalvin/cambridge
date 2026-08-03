@@ -2,7 +2,7 @@ package dev.mobilewebcam.sender
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
-import dev.mobilewebcam.sender.config.VideoProfiles
+import dev.mobilewebcam.sender.media.streaming.session.VideoProfiles
 import dev.mobilewebcam.sender.model.CodecPreference
 import dev.mobilewebcam.sender.platform.preferences.SenderSettingsStore
 import org.junit.Assert.assertEquals

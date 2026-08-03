@@ -21,7 +21,6 @@ import dev.mobilewebcam.sender.model.StreamState
 import dev.mobilewebcam.sender.model.VideoCodec
 import dev.mobilewebcam.sender.model.VideoProfile
 import dev.mobilewebcam.sender.platform.service.ForegroundStreamingController
-import dev.mobilewebcam.sender.validation.StreamConfigurationValidator
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

@@ -6,11 +6,11 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.mobilewebcam.sender.app.model.SenderScreenAction
 import dev.mobilewebcam.sender.app.model.SenderUiEffect
 import dev.mobilewebcam.sender.app.model.SettingsUiState
-import dev.mobilewebcam.sender.config.VideoProfiles
 import dev.mobilewebcam.sender.connection.discovery.SenderConnectionCoordinator
 import dev.mobilewebcam.sender.feature.webcam.SenderDomainSnapshot
 import dev.mobilewebcam.sender.feature.webcam.SenderScreenStateMapper
 import dev.mobilewebcam.sender.media.camera.CameraController
+import dev.mobilewebcam.sender.media.streaming.session.VideoProfiles
 import dev.mobilewebcam.sender.model.CodecPreference
 import dev.mobilewebcam.sender.model.SenderSettingsRepository
 import dev.mobilewebcam.sender.model.StreamState
@@ -36,7 +36,7 @@ class SettingsViewModel @Inject constructor(
         extraBufferCapacity = EFFECT_BUFFER_CAPACITY,
     )
 
-    val uiState: StateFlow<SettingsUiState> = combine(
+    private val baseUiState = combine(
         coordinator.streamState,
         coordinator.activeReceiverName,
         cameraController.state,
@@ -68,6 +68,13 @@ class SettingsViewModel @Inject constructor(
             failureDiagnostics = fullState.failureDiagnostics,
             isStreaming = streamState is StreamState.Streaming || streamState is StreamState.Preparing || streamState is StreamState.Starting,
         )
+    }
+
+    val uiState: StateFlow<SettingsUiState> = combine(
+        baseUiState,
+        coordinator.hasApprovedReceiver,
+    ) { state, hasApprovedReceiver ->
+        state.copy(hasApprovedReceiver = hasApprovedReceiver)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.Eagerly,
@@ -85,6 +92,7 @@ class SettingsViewModel @Inject constructor(
             is SenderScreenAction.LensSelected -> selectPhysicalLens(action.key)
             is SenderScreenAction.StabilizationChanged -> setStabilizationEnabled(action.enabled)
             SenderScreenAction.StopStream -> stop()
+            SenderScreenAction.ForgetPairing -> forgetPairing()
             SenderScreenAction.CopyDiagnostics -> copyDiagnostics()
             else -> Unit
         }
@@ -131,6 +139,18 @@ class SettingsViewModel @Inject constructor(
 
     private fun stop() {
         viewModelScope.launch { coordinator.stop() }
+    }
+
+    private fun forgetPairing() {
+        viewModelScope.launch {
+            val result = coordinator.forgetPairing()
+            if (result.isSuccess) {
+                effectFlow.tryEmit(SenderUiEffect.NavigateToPairing)
+            } else {
+                validationMessage.value = result.exceptionOrNull()?.message
+                    ?: "Could not forget the receiver pairing"
+            }
+        }
     }
 
     private fun copyDiagnostics() {

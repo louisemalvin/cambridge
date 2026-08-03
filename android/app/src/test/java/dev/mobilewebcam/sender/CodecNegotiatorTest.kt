@@ -1,6 +1,6 @@
 package dev.mobilewebcam.sender
 
-import dev.mobilewebcam.sender.config.VideoProfiles
+import dev.mobilewebcam.sender.media.streaming.session.VideoProfiles
 import dev.mobilewebcam.sender.model.CodecPreference
 import dev.mobilewebcam.sender.model.DecoderAcceleration
 import dev.mobilewebcam.sender.model.EncoderAcceleration

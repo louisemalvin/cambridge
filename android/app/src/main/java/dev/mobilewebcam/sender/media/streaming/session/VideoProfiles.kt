@@ -1,4 +1,4 @@
-package dev.mobilewebcam.sender.config
+package dev.mobilewebcam.sender.media.streaming.session
 
 import dev.mobilewebcam.sender.model.VideoProfile
 
@@ -38,5 +38,5 @@ object VideoProfiles {
 
     val all: List<VideoProfile> = listOf(PROFILE_1080P30, PROFILE_1440P30, PROFILE_4K30)
 
-    val default: VideoProfile = all.first { it.id == AppDefaults.defaultProfileId }
+    val default: VideoProfile = PROFILE_1080P30
 }
