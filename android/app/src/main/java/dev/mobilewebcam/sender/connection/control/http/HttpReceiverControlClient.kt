@@ -26,7 +26,7 @@ class HttpReceiverControlClient(
     private val client: HttpClient = defaultClient(),
 ) : ReceiverControlClient {
     override suspend fun health(endpoint: ReceiverEndpoint): Result<ReceiverHealth> =
-        request(endpoint) {
+        executeRequest(endpoint) {
             val response = client.get(endpoint.path("health")).requireSuccess()
             val dto = response.body<HealthResponseDto>()
             checkVersion(dto.protocolVersion)
@@ -34,7 +34,7 @@ class HttpReceiverControlClient(
         }
 
     override suspend fun capabilities(endpoint: ReceiverEndpoint): Result<ReceiverCapabilities> =
-        request(endpoint) {
+        executeRequest(endpoint) {
             val response = client.get(endpoint.path("capabilities")).requireSuccess()
             val dto = response.body<CapabilitiesResponseDto>()
             checkVersion(dto.protocolVersion)
@@ -43,28 +43,28 @@ class HttpReceiverControlClient(
 
     override suspend fun prepareSession(
         endpoint: ReceiverEndpoint,
-        sessionRequest: PrepareSessionRequest,
-    ): Result<NegotiatedSession> = request(endpoint) {
+        request: PrepareSessionRequest,
+    ): Result<NegotiatedSession> = executeRequest(endpoint) {
         val response = client.post(endpoint.path("sessions/prepare")) {
             contentType(ContentType.Application.Json)
             setBody(
                 PrepareSessionRequestDto(
                     protocolVersion = CONTROL_PROTOCOL_VERSION,
-                    preferredCodecs = sessionRequest.preferredCodecs.map(VideoCodec::toDto),
+                    preferredCodecs = request.preferredCodecs.map(VideoCodec::toDto),
                     profile = VideoProfileDto(
-                        width = sessionRequest.profile.width,
-                        height = sessionRequest.profile.height,
-                        fps = sessionRequest.profile.fps,
+                        width = request.profile.width,
+                        height = request.profile.height,
+                        fps = request.profile.fps,
                     ),
                     bitrateByCodec = BitrateByCodecDto(
-                        h264 = sessionRequest.bitrateByCodec.getValue(VideoCodec.H264),
-                        h265 = sessionRequest.bitrateByCodec.getValue(VideoCodec.H265),
+                        h264 = request.bitrateByCodec.getValue(VideoCodec.H264),
+                        h265 = request.bitrateByCodec.getValue(VideoCodec.H265),
                     ),
                 ),
             )
         }.requireSuccess()
         val dto = response.body<PrepareSessionResponseDto>()
-        val profile = sessionRequest.profile.copy(
+        val profile = request.profile.copy(
             width = dto.profile.width,
             height = dto.profile.height,
             fps = dto.profile.fps,
@@ -84,12 +84,25 @@ class HttpReceiverControlClient(
     override suspend fun stopSession(
         endpoint: ReceiverEndpoint,
         sessionId: String,
-    ): Result<Unit> = request(endpoint) {
+    ): Result<Unit> = executeRequest(endpoint) {
         client.delete(endpoint.path("sessions/$sessionId")).requireSuccess()
         Unit
     }
 
-    private suspend fun <T> request(
+    override suspend fun sessionState(
+        endpoint: ReceiverEndpoint,
+        sessionId: String,
+    ): Result<Unit> = executeRequest(endpoint) {
+        val response = client.get(endpoint.path("sessions/$sessionId")).requireSuccess()
+        val dto = response.body<SessionStateResponseDto>()
+        check(dto.sessionId == sessionId) { "Receiver returned a different session ID" }
+        check(dto.state != ControlSessionState.IDLE && dto.state != ControlSessionState.FAILED) {
+            "Receiver session is no longer active: ${dto.state}"
+        }
+        Unit
+    }
+
+    private suspend fun <T> executeRequest(
         endpoint: ReceiverEndpoint,
         block: suspend () -> T,
     ): Result<T> = runCatching { block() }.recoverCatching { error ->

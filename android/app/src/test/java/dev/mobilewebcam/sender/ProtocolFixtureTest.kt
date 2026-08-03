@@ -15,6 +15,7 @@ import dev.mobilewebcam.sender.connection.discovery.SenderAvailabilityDto
 import dev.mobilewebcam.sender.connection.discovery.SenderControlActionDto
 import dev.mobilewebcam.sender.connection.discovery.StopStreamRequestDto
 import dev.mobilewebcam.sender.connection.discovery.StopStreamResponseDto
+import dev.mobilewebcam.sender.connection.discovery.isValidStreamId
 import java.io.File
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -22,6 +23,7 @@ import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ProtocolFixtureTest {
@@ -39,6 +41,19 @@ class ProtocolFixtureTest {
         val senderResponse = decode<StartStreamResponseDto>("sender-start-response.json")
         val stopRequest = decode<StopStreamRequestDto>("sender-stop-request.json")
         val stopResponse = decode<StopStreamResponseDto>("sender-stop-stopped-response.json")
+        listOf(
+            "sender-start-approval-required-response.json",
+            "sender-start-busy-response.json",
+            "sender-start-permission-required-response.json",
+            "sender-start-rejected-response.json",
+            "sender-start-invalid-response.json",
+        ).forEach { decode<StartStreamResponseDto>(it) }
+        listOf(
+            "sender-stop-already-stopped-response.json",
+            "sender-stop-stale-response.json",
+            "sender-stop-rejected-response.json",
+            "sender-stop-invalid-response.json",
+        ).forEach { decode<StopStreamResponseDto>(it) }
 
         assertEquals(1, health.protocolVersion)
         assertEquals(2, capabilities.videoCodecs.size)
@@ -76,6 +91,12 @@ class ProtocolFixtureTest {
 
         assertEquals(2, encodedProtocolVersion(advertisement))
         assertEquals(2, encodedProtocolVersion(response))
+    }
+
+    @Test
+    fun invalidStreamIdFailsProtocolValidation() {
+        assertTrue(!"not-a-uuid".isValidStreamId())
+        assertTrue(!"00000000-0000-0000-0000-000000000000".isValidStreamId())
     }
 
     private inline fun <reified T> decode(name: String): T {

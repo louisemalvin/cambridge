@@ -23,7 +23,7 @@ class PairingStore(context: Context) {
         peerAddress: String,
     ): PairingAuthentication {
         val pairing = state.receivers[receiverId] ?: return PairingAuthentication.Unpaired
-        if (token != null && constantTimeEquals(token, pairing.token)) {
+        if (token != null && pairing.peerAddress == peerAddress && constantTimeEquals(token, pairing.token)) {
             return PairingAuthentication.Authenticated(pairing.token)
         }
         return if (!pairing.tokenDelivered && token == null && pairing.peerAddress == peerAddress) {

@@ -14,4 +14,6 @@ interface ReceiverControlClient {
         request: PrepareSessionRequest,
     ): Result<NegotiatedSession>
     suspend fun stopSession(endpoint: ReceiverEndpoint, sessionId: String): Result<Unit>
+
+    suspend fun sessionState(endpoint: ReceiverEndpoint, sessionId: String): Result<Unit>
 }

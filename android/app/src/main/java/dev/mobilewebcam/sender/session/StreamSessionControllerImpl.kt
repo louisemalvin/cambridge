@@ -25,11 +25,13 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.UUID
@@ -47,6 +49,7 @@ class StreamSessionControllerImpl(
     private val stateFlow = MutableStateFlow<StreamState>(StreamState.Idle)
     private var activeSession: NegotiatedSession? = null
     private var activeRunId: String? = null
+    private var receiverWatchdogJob: kotlinx.coroutines.Job? = null
     private var lastLoggedBitrateAtMillis: Long = NO_BITRATE_SAMPLE_TIMESTAMP_MILLIS
 
     override val state: StateFlow<StreamState> = stateFlow.asStateFlow()
@@ -155,6 +158,7 @@ class StreamSessionControllerImpl(
             diagnosticEvent("media_stream_starting", mapOf("mediaPort" to session.mediaPort))
             streamEngine.start(endpoint.host, session.mediaPort).getOrThrow()
             stateFlow.value = StreamState.Streaming(session, System.currentTimeMillis())
+            startReceiverSessionWatchdog(session)
             diagnosticEvent(
                 "stream_started",
                 mapOf("codec" to session.selectedCodec.protocolId, "bitrateBps" to session.bitrateBps),
@@ -190,9 +194,9 @@ class StreamSessionControllerImpl(
         if (activeSession == null && stateFlow.value == StreamState.Idle) return@withLock Result.success(Unit)
         stateFlow.value = StreamState.Stopping
         diagnosticEvent("stream_stopping")
-        diagnosticEvent("stream_stopped")
         cleanupLocked(activeSession)
         stateFlow.value = StreamState.Idle
+        diagnosticEvent("stream_stopped")
         Result.success(Unit)
     }
 
@@ -225,6 +229,8 @@ class StreamSessionControllerImpl(
     }
 
     private suspend fun cleanupLocked(session: NegotiatedSession?) {
+        receiverWatchdogJob?.cancel()
+        receiverWatchdogJob = null
         runCatching { streamEngine.stop() }
         runCatching { streamEngine.release() }
         foreground.stop()
@@ -235,6 +241,38 @@ class StreamSessionControllerImpl(
         activeRunId = null
     }
 
+    private fun startReceiverSessionWatchdog(session: NegotiatedSession) {
+        receiverWatchdogJob?.cancel()
+        receiverWatchdogJob = scope.launch {
+            var consecutiveFailures = 0
+            while (isActive) {
+                delay(RECEIVER_SESSION_WATCHDOG_INTERVAL_MILLIS)
+                val check = receiver.sessionState(session.endpoint, session.sessionId)
+                if (check.isSuccess) {
+                    consecutiveFailures = 0
+                    continue
+                }
+                consecutiveFailures += 1
+                if (consecutiveFailures < RECEIVER_SESSION_WATCHDOG_FAILURE_THRESHOLD) continue
+                lifecycleMutex.withLock {
+                    if (activeSession?.sessionId != session.sessionId ||
+                        stateFlow.value !is StreamState.Streaming
+                    ) {
+                        return@withLock
+                    }
+                    diagnosticEvent(
+                        "receiver_session_watchdog_expired",
+                        mapOf("consecutiveFailures" to consecutiveFailures),
+                    )
+                    cleanupLocked(activeSession)
+                    stateFlow.value = StreamState.Failed(
+                        StreamFailure.ReceiverUnavailable("Receiver session became unreachable"),
+                    )
+                }
+                break
+            }
+        }
+    }
     private fun logEngineEvent(event: StreamEngineEvent) {
         when (event) {
             is StreamEngineEvent.ConnectionStarted -> diagnosticEvent(
@@ -312,5 +350,7 @@ class StreamSessionControllerImpl(
         const val RUN_ID_PREFIX = "run-"
         const val BITRATE_SAMPLE_INTERVAL_MILLIS = 5_000L
         const val NO_BITRATE_SAMPLE_TIMESTAMP_MILLIS = 0L
+        const val RECEIVER_SESSION_WATCHDOG_INTERVAL_MILLIS = 2_000L
+        const val RECEIVER_SESSION_WATCHDOG_FAILURE_THRESHOLD = 3
     }
 }

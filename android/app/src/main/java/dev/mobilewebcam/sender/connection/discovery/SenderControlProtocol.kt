@@ -138,5 +138,7 @@ data class StopStreamResponseDto(
 )
 
 internal fun String.isValidStreamId(): Boolean = runCatching {
-    java.util.UUID.fromString(this)
-}.isSuccess
+    java.util.UUID.fromString(this).let { uuid ->
+        uuid.mostSignificantBits != 0L || uuid.leastSignificantBits != 0L
+    }
+}.getOrDefault(false)

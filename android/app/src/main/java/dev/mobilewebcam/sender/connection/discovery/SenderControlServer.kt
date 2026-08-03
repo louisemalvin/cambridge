@@ -59,54 +59,84 @@ class SenderControlServer(
         socket.use { client ->
             client.soTimeout = SOCKET_TIMEOUT_MILLIS
             val peerAddress = client.inetAddress.hostAddress.orEmpty()
-            val encoded = runCatching {
-                val requestJson = readLine(client)
-                val action = ProtocolJson.instance.parseToJsonElement(requestJson)
-                    .jsonObject["action"]?.jsonPrimitive?.contentOrNull
-                if (action == "describe") {
-                    val request = ProtocolJson.instance.decodeFromString<DescribeSenderRequestDto>(
-                        requestJson,
-                    )
-                    require(request.protocolVersion == SENDER_CONTROL_PROTOCOL_VERSION)
-                    ProtocolJson.instance.encodeToString(
-                        SenderAdvertisementDto(
-                            protocolVersion = SENDER_CONTROL_PROTOCOL_VERSION,
-                            action = SenderControlActionDto.DESCRIBE_RESULT,
-                            senderId = senderId,
-                            displayName = displayName,
-                            controlPort = SENDER_CONTROL_PORT,
-                            availability = SenderAvailabilityDto.STANDBY,
-                        ),
-                    )
-                } else {
-                    val request = ProtocolJson.instance.decodeFromString<StartStreamRequestDto>(
-                        requestJson,
-                    )
-                    val response = coordinator.handleStartRequest(request, peerAddress).also {
-                        logger.event(
-                            "sender_control_request",
-                            mapOf(
-                                "receiverId" to request.receiverId,
-                                "receiverName" to request.receiverName,
-                                "status" to it.status,
-                                "peerAddress" to peerAddress,
+            val requestResult = runCatching { readLine(client) }
+            val requestJson = requestResult.getOrNull()
+            val action = requestJson?.let {
+                runCatching {
+                    ProtocolJson.instance.parseToJsonElement(it)
+                        .jsonObject["action"]?.jsonPrimitive?.contentOrNull
+                }.getOrNull()
+            }
+            val encoded = requestResult.fold(
+                onSuccess = { json ->
+                    runCatching {
+                        when (action) {
+                    "describe" -> {
+                        val request = ProtocolJson.instance.decodeFromString<DescribeSenderRequestDto>(
+                            json,
+                        )
+                        require(
+                            request.protocolVersion == SENDER_CONTROL_PROTOCOL_VERSION &&
+                                request.action == SenderControlActionDto.DESCRIBE,
+                        )
+                        ProtocolJson.instance.encodeToString(
+                            SenderAdvertisementDto(
+                                protocolVersion = SENDER_CONTROL_PROTOCOL_VERSION,
+                                action = SenderControlActionDto.DESCRIBE_RESULT,
+                                senderId = senderId,
+                                displayName = displayName,
+                                controlPort = SENDER_CONTROL_PORT,
+                                availability = coordinator.describeAvailability(),
                             ),
                         )
                     }
-                    ProtocolJson.instance.encodeToString(response)
+                    "start" -> {
+                        val request = ProtocolJson.instance.decodeFromString<StartStreamRequestDto>(
+                            json,
+                        )
+                        val response = coordinator.handleStartRequest(request, peerAddress).also {
+                            logger.event(
+                                "sender_control_start_request",
+                                mapOf(
+                                    "receiverId" to request.receiverId,
+                                    "receiverName" to request.receiverName,
+                                    "streamId" to request.streamId,
+                                    "status" to it.status,
+                                    "peerAddress" to peerAddress,
+                                ),
+                            )
+                        }
+                        ProtocolJson.instance.encodeToString(response)
+                    }
+                    "stop" -> {
+                        val request = ProtocolJson.instance.decodeFromString<StopStreamRequestDto>(
+                            json,
+                        )
+                        val response = coordinator.handleStopRequest(request, peerAddress).also {
+                            logger.event(
+                                "sender_control_stop_request",
+                                mapOf(
+                                    "receiverId" to request.receiverId,
+                                    "streamId" to request.streamId,
+                                    "status" to it.status,
+                                    "peerAddress" to peerAddress,
+                                ),
+                            )
+                        }
+                        ProtocolJson.instance.encodeToString(response)
+                    }
+                    else -> error("Unknown sender-control action: $action")
+                        }
+                    }.getOrElse { error ->
+                        invalidResponse(json, action, error)
+                    }
+                },
+                onFailure = { error ->
+                    invalidResponse(requestJson, action, error)
                 }
-            }.getOrElse { error ->
-                logger.warn("invalid sender control request", error)
-                ProtocolJson.instance.encodeToString(
-                    StartStreamResponseDto(
-                        protocolVersion = SENDER_CONTROL_PROTOCOL_VERSION,
-                        action = SenderControlActionDto.START_RESULT,
-                        streamId = ZERO_STREAM_ID,
-                        senderId = senderId,
-                        status = StartStreamStatusDto.INVALID_REQUEST,
-                        message = error.message,
-                    ),
-                )
+            )
+            require(encoded.encodeToByteArray().size < MAX_MESSAGE_BYTES) {
+                "Sender control response is too large"
             }
             client.getOutputStream().write((encoded + "\n").encodeToByteArray())
             client.getOutputStream().flush()
@@ -125,6 +155,44 @@ class SenderControlServer(
             "Sender control request is empty or too large"
         }
         return output.toString(Charsets.UTF_8.name())
+    }
+
+    private fun streamIdFrom(requestJson: String?): String = runCatching {
+        requestJson
+            ?.let { ProtocolJson.instance.parseToJsonElement(it).jsonObject["streamId"]?.jsonPrimitive?.content }
+            ?.takeIf(String::isValidStreamId)
+    }.getOrNull() ?: ZERO_STREAM_ID
+
+    private fun invalidResponse(
+        requestJson: String?,
+        action: String?,
+        error: Throwable,
+    ): String {
+        logger.warn("invalid sender control request", error)
+        val streamId = streamIdFrom(requestJson)
+        return if (action == "stop") {
+            ProtocolJson.instance.encodeToString(
+                StopStreamResponseDto(
+                    protocolVersion = SENDER_CONTROL_PROTOCOL_VERSION,
+                    action = SenderControlActionDto.STOP_RESULT,
+                    streamId = streamId,
+                    senderId = senderId,
+                    status = StopStreamStatusDto.INVALID_REQUEST,
+                    message = error.message,
+                ),
+            )
+        } else {
+            ProtocolJson.instance.encodeToString(
+                StartStreamResponseDto(
+                    protocolVersion = SENDER_CONTROL_PROTOCOL_VERSION,
+                    action = SenderControlActionDto.START_RESULT,
+                    streamId = streamId,
+                    senderId = senderId,
+                    status = StartStreamStatusDto.INVALID_REQUEST,
+                    message = error.message,
+                ),
+            )
+        }
     }
 
     private companion object {

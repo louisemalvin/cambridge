@@ -55,7 +55,7 @@ class HttpReceiverControlClientTest {
         try {
             val result = HttpReceiverControlClient(client).prepareSession(
                 endpoint = ReceiverEndpoint("127.0.0.1", 5001),
-                sessionRequest = PrepareSessionRequest(
+                request = PrepareSessionRequest(
                     preferredCodecs = listOf(VideoCodec.H265),
                     profile = profile,
                     bitrateByCodec = mapOf(
