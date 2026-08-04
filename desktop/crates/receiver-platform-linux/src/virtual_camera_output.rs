@@ -33,6 +33,7 @@ struct OutputState {
     mode: VirtualCameraOutputMode,
 }
 
+#[allow(clippy::too_many_lines)]
 impl PersistentVirtualCameraOutput {
     pub fn start(device: impl AsRef<std::path::Path>) -> Result<Self, LinuxPlatformError> {
         let device = device.as_ref();
@@ -123,6 +124,26 @@ impl PersistentVirtualCameraOutput {
             LinuxPlatformError::PersistentOutput(format!("link persistent v4l2sink: {error}"))
         })?;
         selector.set_property("active-pad", &standby_pad);
+        let bus = pipeline.bus().ok_or_else(|| {
+            LinuxPlatformError::PersistentOutput("persistent pipeline has no bus".to_owned())
+        })?;
+        bus.connect_message(None, |_bus, message| match message.view() {
+            gst::MessageView::Error(error) => {
+                tracing::error!(
+                    src = ?error.src().map(gst::prelude::GstObjectExt::path_string),
+                    error = %error.error(),
+                    "persistent virtual-camera pipeline error",
+                );
+            }
+            gst::MessageView::Warning(warning) => {
+                tracing::warn!(
+                    src = ?warning.src().map(gst::prelude::GstObjectExt::path_string),
+                    warning = %warning.error(),
+                    "persistent virtual-camera pipeline warning",
+                );
+            }
+            _ => {}
+        });
         pipeline
             .set_state(gst::State::Playing)
             .map_err(|error| LinuxPlatformError::PersistentOutput(error.to_string()))?;
