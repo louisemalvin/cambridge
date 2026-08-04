@@ -12,6 +12,7 @@ mod virtual_camera_output;
 pub use demand_monitor::{
     DemandMonitorConfig, DemandMonitorHandle, V4l2LoopbackDemandMonitor, VirtualCameraDemandEvent,
     DEMAND_ACTIVATION_DEBOUNCE, DEMAND_POLL_INTERVAL, DEMAND_RELEASE_DEBOUNCE,
+    PERSISTENT_PRODUCER_BASELINE,
 };
 pub use device::VideoDevice;
 pub use error::LinuxPlatformError;

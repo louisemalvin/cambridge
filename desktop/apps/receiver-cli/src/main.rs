@@ -1,4 +1,14 @@
-use std::{net::SocketAddr, path::PathBuf};
+use std::{
+    net::SocketAddr,
+    path::PathBuf,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc::RecvTimeoutError,
+        Arc,
+    },
+    thread,
+    time::Duration,
+};
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -6,7 +16,10 @@ use receiver_control_http::{serve, ControlState};
 use receiver_core::{ReceiverService, StaticCapabilityProvider};
 use receiver_discovery::{DiscoveryConfig, ReceiverDiscoveryPublisher};
 use receiver_gstreamer::{probe_capabilities, GStreamerReceiver};
-use receiver_platform_linux::{resolve_v4l2loopback_device, PersistentVideoSinkFactory};
+use receiver_platform_linux::{
+    resolve_v4l2loopback_device, PersistentVideoSinkFactory, V4l2LoopbackDemandMonitor,
+    DEMAND_POLL_INTERVAL, PERSISTENT_PRODUCER_BASELINE,
+};
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
@@ -47,6 +60,9 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
+    let sink_factory = PersistentVideoSinkFactory::new(&config.device)
+        .context("validate Linux v4l2loopback output device")?;
+    let persistent_output = sink_factory.persistent_output();
     let capabilities = probe_capabilities(
         config.device.to_string_lossy().into_owned(),
         vec![
@@ -60,9 +76,9 @@ async fn main() -> Result<()> {
         return output::print_capabilities(&capabilities);
     }
 
-    let sink_factory = PersistentVideoSinkFactory::new(&config.device)
-        .context("validate Linux v4l2loopback output device")?;
-    let persistent_output = sink_factory.persistent_output();
+    let (mut demand_monitor, demand_events) =
+        V4l2LoopbackDemandMonitor::start(&config.device, PERSISTENT_PRODUCER_BASELINE)
+            .context("start v4l2loopback client-usage demand monitor")?;
     let provider = StaticCapabilityProvider::new(capabilities.clone());
     let media_receiver =
         GStreamerReceiver::new(sink_factory).context("initialise the GStreamer receiver")?;
@@ -80,14 +96,38 @@ async fn main() -> Result<()> {
         "receiver ready"
     );
 
+    let demand_relay_shutdown = Arc::new(AtomicBool::new(false));
+    let relay_shutdown = demand_relay_shutdown.clone();
+    let relay_state = state.clone();
+    let relay_output = persistent_output.clone();
+    let demand_relay = thread::Builder::new()
+        .name("mobile-webcam-demand-relay".to_owned())
+        .spawn(move || {
+            while !relay_shutdown.load(Ordering::Relaxed) {
+                match demand_events.recv_timeout(DEMAND_RELAY_TIMEOUT) {
+                    Ok(event) => {
+                        if !event.demand.is_active() {
+                            let _ = relay_output.set_standby();
+                        }
+                        relay_state.publish_demand(event.demand);
+                    }
+                    Err(RecvTimeoutError::Timeout) => {}
+                    Err(RecvTimeoutError::Disconnected) => break,
+                }
+            }
+        })
+        .context("start webcam demand relay thread")?;
+
     let shutdown_signal = async {
         if let Err(error) = shutdown::wait_for_shutdown().await {
             tracing::error!(%error, "shutdown signal listener failed");
         }
     };
-    serve(state.clone(), control_addr, shutdown_signal)
-        .await
-        .context("run receiver control server")?;
+    let serve_result = serve(state.clone(), control_addr, shutdown_signal).await;
+    demand_relay_shutdown.store(true, Ordering::Relaxed);
+    demand_monitor.stop();
+    let _ = demand_relay.join();
+    serve_result.context("run receiver control server")?;
     state.shutdown().context("stop active receiver session")?;
     persistent_output
         .stop()
@@ -95,6 +135,8 @@ async fn main() -> Result<()> {
         .context("stop persistent virtual-camera output")?;
     Ok(())
 }
+
+const DEMAND_RELAY_TIMEOUT: Duration = DEMAND_POLL_INTERVAL;
 
 fn start_discovery(config: &receiver_core::ReceiverConfig) -> Option<ReceiverDiscoveryPublisher> {
     let discovery_config = DiscoveryConfig {

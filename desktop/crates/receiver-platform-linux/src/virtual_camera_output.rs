@@ -17,10 +17,11 @@ pub const VIRTUAL_CAMERA_WIDTH: i32 = 1_280;
 pub const VIRTUAL_CAMERA_HEIGHT: i32 = 720;
 pub const VIRTUAL_CAMERA_FRAME_RATE: i32 = 30;
 pub const STANDBY_FRAME_RATE: i32 = 5;
-const OUTPUT_QUEUE_MAX_BUFFERS: u32 = 2;
 const APP_SOURCE_MAX_BUFFERS: u32 = 2;
+const NANOSECONDS_PER_SECOND: u64 = 1_000_000_000;
 const LIVE_FRAME_INTERVAL_MILLIS: u64 = 1_000 / VIRTUAL_CAMERA_FRAME_RATE as u64;
 const STANDBY_FRAME_INTERVAL_MILLIS: u64 = 1_000 / STANDBY_FRAME_RATE as u64;
+const FRAME_DURATION_NANOSECONDS: u64 = NANOSECONDS_PER_SECOND / VIRTUAL_CAMERA_FRAME_RATE as u64;
 const BLACK_Y: u8 = 16;
 const BLACK_CHROMA: u8 = 128;
 const YUY2_BYTES_PER_PIXEL: usize = 2;
@@ -67,36 +68,26 @@ impl PersistentVirtualCameraOutput {
         })?;
         let convert = make_element("videoconvert", "virtual-camera-convert")?;
         let scale = make_element("videoscale", "virtual-camera-scale")?;
-        let rate = make_element("videorate", "virtual-camera-rate")?;
         let output_caps_filter = make_element("capsfilter", "virtual-camera-caps")?;
-        let queue = make_element("queue", "virtual-camera-queue")?;
         let sink = make_element("v4l2sink", "persistent-virtual-camera-sink")?;
 
         appsrc.set_property("is-live", true);
         appsrc.set_property("do-timestamp", true);
         appsrc.set_property("block", false);
+        appsrc.set_property("format", gst::Format::Time);
         appsrc.set_property("max-buffers", u64::from(APP_SOURCE_MAX_BUFFERS));
         appsrc.set_property("max-bytes", 0u64);
+        appsrc.set_property("caps", output_caps());
         appsrc.set_property_from_str("leaky-type", "downstream");
         output_caps_filter.set_property("caps", output_caps());
-        configure_queue(&queue);
 
         sink.set_property("device", device.to_string_lossy().as_ref());
         sink.set_property("sync", false);
 
         pipeline
-            .add_many([
-                &appsrc_element,
-                &convert,
-                &scale,
-                &rate,
-                &output_caps_filter,
-                &queue,
-                &sink,
-            ])
+            .add_many([&appsrc_element, &convert, &scale, &output_caps_filter, &sink])
             .map_err(|error| LinuxPlatformError::PersistentOutput(error.to_string()))?;
-        link(&[&appsrc_element, &convert, &scale, &rate, &output_caps_filter, &queue])?;
-        link(&[&queue, &sink])?;
+        link(&[&appsrc_element, &convert, &scale, &output_caps_filter, &sink])?;
 
         let bus = pipeline.bus().ok_or_else(|| {
             LinuxPlatformError::PersistentOutput("persistent pipeline has no bus".to_owned())
@@ -121,14 +112,6 @@ impl PersistentVirtualCameraOutput {
         pipeline
             .set_state(gst::State::Playing)
             .map_err(|error| LinuxPlatformError::PersistentOutput(error.to_string()))?;
-        let (success, state, _pending) =
-            pipeline.state(gst::ClockTime::from_seconds(PIPELINE_START_TIMEOUT_SECONDS));
-        let state_is_startable = matches!(state, gst::State::Paused | gst::State::Playing);
-        if success.is_err() || !state_is_startable {
-            return Err(LinuxPlatformError::PersistentOutput(format!(
-                "persistent pipeline did not reach Playing: success={success:?} state={state:?}"
-            )));
-        }
 
         let shared = Arc::new(SharedOutput {
             state: Mutex::new(OutputState { pipeline, appsrc, standby_sample: black_sample() }),
@@ -145,6 +128,25 @@ impl PersistentVirtualCameraOutput {
         *shared.pusher.lock().map_err(|_| {
             LinuxPlatformError::PersistentOutput("persistent output lock poisoned".to_owned())
         })? = Some(pusher);
+
+        let pipeline = shared
+            .state
+            .lock()
+            .map_err(|_| {
+                LinuxPlatformError::PersistentOutput("persistent output lock poisoned".to_owned())
+            })?
+            .pipeline
+            .clone();
+        let (success, state, _pending) =
+            pipeline.state(gst::ClockTime::from_seconds(PIPELINE_START_TIMEOUT_SECONDS));
+        let state_is_startable = matches!(state, gst::State::Paused | gst::State::Playing);
+        if success.is_err() || !state_is_startable {
+            let output = Self { shared };
+            let _ = output.stop();
+            return Err(LinuxPlatformError::PersistentOutput(format!(
+                "persistent pipeline did not reach Playing: success={success:?} state={state:?}"
+            )));
+        }
 
         Ok(Self { shared })
     }
@@ -228,7 +230,11 @@ fn black_sample() -> gst::Sample {
     for byte in pixels.iter_mut().step_by(2) {
         *byte = BLACK_Y;
     }
-    let buffer = gst::Buffer::from_mut_slice(pixels);
+    let mut buffer = gst::Buffer::from_mut_slice(pixels);
+    buffer
+        .get_mut()
+        .unwrap()
+        .set_duration(gst::ClockTime::from_nseconds(FRAME_DURATION_NANOSECONDS));
     gst::Sample::builder().caps(&output_caps()).buffer(&buffer).build()
 }
 
@@ -242,13 +248,6 @@ fn make_element(factory: &str, name: &str) -> Result<gst::Element, LinuxPlatform
 fn link(elements: &[&gst::Element]) -> Result<(), LinuxPlatformError> {
     gst::Element::link_many(elements)
         .map_err(|error| LinuxPlatformError::PersistentOutput(error.to_string()))
-}
-
-fn configure_queue(queue: &gst::Element) {
-    queue.set_property("max-size-buffers", OUTPUT_QUEUE_MAX_BUFFERS);
-    queue.set_property("max-size-bytes", 0u32);
-    queue.set_property("max-size-time", 0u64);
-    queue.set_property_from_str("leaky", "downstream");
 }
 
 fn output_caps() -> gst::Caps {

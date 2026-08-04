@@ -25,6 +25,7 @@ use crate::{validate_v4l2loopback, LinuxPlatformError};
 pub const DEMAND_ACTIVATION_DEBOUNCE: Duration = Duration::from_millis(200);
 pub const DEMAND_RELEASE_DEBOUNCE: Duration = Duration::from_millis(100);
 pub const DEMAND_POLL_INTERVAL: Duration = Duration::from_millis(100);
+pub const PERSISTENT_PRODUCER_BASELINE: u32 = 0;
 
 const V4L2_EVENT_PRIVATE_START: u32 = 0x0800_0000;
 const V4L2LOOPBACK_EVENT_OFFSET: u32 = 0x08e0_0000;

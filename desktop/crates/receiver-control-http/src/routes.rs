@@ -6,15 +6,19 @@ use axum::{
 use crate::state::ControlState;
 
 mod handlers {
+    use std::convert::Infallible;
+
     use axum::{
         extract::{Path, State},
         http::{header, HeaderMap, HeaderValue, StatusCode},
+        response::sse::{Event, KeepAlive, Sse},
         Json,
     };
     use receiver_protocol::{
-        CreateSessionRequest, CreateSessionResponse, HealthResponseV2, ReceiverCapabilitiesV2,
-        SessionStatusResponse,
+        CreateSessionRequest, CreateSessionResponse, DemandEventV2, HealthResponseV2,
+        ReceiverCapabilitiesV2, SessionStatusResponse,
     };
+    use tokio_stream::{wrappers::BroadcastStream, StreamExt};
 
     use crate::{
         error::{lock_service, HttpControlError},
@@ -23,6 +27,19 @@ mod handlers {
 
     pub async fn health_v2() -> Json<HealthResponseV2> {
         Json(HealthResponseV2::default())
+    }
+
+    pub async fn demand_subscribe_v2(
+        State(state): State<ControlState>,
+        headers: HeaderMap,
+    ) -> Result<Sse<impl tokio_stream::Stream<Item = Result<Event, Infallible>>>, HttpControlError>
+    {
+        authorize_v2(&state, &headers)?;
+        let (snapshot, receiver) = state.subscribe_demand();
+        let events = tokio_stream::once(snapshot)
+            .chain(BroadcastStream::new(receiver).map_while(Result::ok))
+            .map(|event| Ok::<Event, Infallible>(sse_event(event)));
+        Ok(Sse::new(events).keep_alive(KeepAlive::new().text(DEMAND_KEEPALIVE_TEXT)))
     }
 
     pub async fn capabilities_v2(
@@ -110,11 +127,20 @@ mod handlers {
             Err(HttpControlError::V2Unauthorized)
         }
     }
+
+    fn sse_event(event: DemandEventV2) -> Event {
+        let data = serde_json::to_string(&event).expect("demand event serialization cannot fail");
+        Event::default().event(DEMAND_EVENT_NAME).data(data)
+    }
+
+    const DEMAND_EVENT_NAME: &str = "demand";
+    const DEMAND_KEEPALIVE_TEXT: &str = "keep-alive";
 }
 
 pub fn router(state: ControlState) -> Router {
     Router::new()
         .route("/v2/health", get(handlers::health_v2))
+        .route("/v2/demand/subscribe", get(handlers::demand_subscribe_v2))
         .route("/v2/capabilities", get(handlers::capabilities_v2))
         .route("/v2/diagnostics/latest", get(handlers::latest_diagnostics_v2))
         .route("/v2/sessions", post(handlers::create_session_v2))

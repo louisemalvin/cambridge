@@ -58,6 +58,7 @@ mod tests {
     use axum::body::Body;
     use axum::http::StatusCode;
     use http_body_util::BodyExt;
+    use receiver_core::VirtualCameraDemand;
     use receiver_core::{
         DiagnosticPhase, FrameIntervalStatistics, MediaReceiver, MediaSessionConfig,
         QueueDiagnostics, ReceiverConfig, ReceiverDiagnostics, ReceiverError, ReceiverService,
@@ -182,6 +183,30 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(legacy.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn demand_subscription_starts_with_the_current_standby_snapshot() {
+        let state = ControlState::new(service());
+        let app = router(state.clone());
+        state.publish_demand(VirtualCameraDemand::Active { consumer_count: 1 });
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/v2/demand/subscribe")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers().get("content-type").unwrap(), "text/event-stream");
+        let frame = response.into_body().frame().await.unwrap().unwrap();
+        let data = frame.into_data().unwrap();
+        let event = String::from_utf8(data.to_vec()).unwrap();
+        assert!(event.contains("\"demand\":\"active\""));
+        assert!(event.contains("\"generation\":1"));
     }
 
     #[tokio::test]
