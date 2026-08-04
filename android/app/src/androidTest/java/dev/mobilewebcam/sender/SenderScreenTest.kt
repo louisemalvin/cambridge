@@ -32,7 +32,7 @@ class SenderScreenTest {
             }
         }
 
-        composeRule.onAllNodesWithText("Waiting for connection").get(0).assertIsDisplayed()
+        composeRule.onAllNodesWithText("Waiting for webcam use").get(0).assertIsDisplayed()
         composeRule.onNodeWithText("Allow camera access").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Dim screen").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Settings").assertIsDisplayed()

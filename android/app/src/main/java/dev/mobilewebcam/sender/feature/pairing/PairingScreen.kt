@@ -51,11 +51,11 @@ fun PairingScreen(
                         PairingUiState.Idle,
                         is PairingUiState.Searching -> {
                             Text(
-                                text = stringResource(R.string.waiting_for_connection),
+                                text = stringResource(R.string.waiting_for_pairing),
                                 style = MaterialTheme.typography.titleMedium,
                             )
                             Text(
-                                text = stringResource(R.string.waiting_for_connection_support),
+                                text = stringResource(R.string.waiting_for_pairing_support),
                                 style = MaterialTheme.typography.bodyMedium,
                             )
                         }

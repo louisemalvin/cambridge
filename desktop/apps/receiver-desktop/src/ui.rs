@@ -22,6 +22,8 @@ const WINDOW_CONTENT_SPACING: i32 = 12;
 const MAIN_WINDOW_MARGIN: i32 = 16;
 const STARTUP_WINDOW_MARGIN: i32 = 20;
 const UI_REFRESH_INTERVAL_MILLIS: u64 = 33;
+const SHOW_PREVIEW_LABEL: &str = "Show preview";
+const HIDE_PREVIEW_LABEL: &str = "Hide preview";
 
 pub fn run(cli: Cli) {
     let application = Application::builder().application_id("dev.mobilewebcam.receiver").build();
@@ -83,11 +85,16 @@ fn build_window(
     attach_button.set_visible(false);
     root.append(&attach_button);
 
+    let preview_button = Button::with_label(SHOW_PREVIEW_LABEL);
+    preview_button.set_halign(gtk::Align::Start);
+    root.append(&preview_button);
+
     let picture = Picture::new();
     picture.set_hexpand(true);
     picture.set_vexpand(true);
     picture.set_can_shrink(true);
     picture.set_content_fit(gtk::ContentFit::Contain);
+    picture.set_visible(false);
     root.append(&picture);
 
     let stop_button = Button::with_label("Close receiver");
@@ -103,6 +110,14 @@ fn build_window(
             if let Some(sender_id) = phone_selector.active_id() {
                 discovery.attach(sender_id.as_str());
             }
+        });
+    }
+    {
+        let picture = picture.clone();
+        preview_button.connect_clicked(move |button| {
+            let show_preview = !picture.is_visible();
+            picture.set_visible(show_preview);
+            button.set_label(if show_preview { HIDE_PREVIEW_LABEL } else { SHOW_PREVIEW_LABEL });
         });
     }
     {

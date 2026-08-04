@@ -1,7 +1,9 @@
 <resources>
     <string name="app_name">Mobile Webcam</string>
-    <string name="waiting_for_connection">Waiting for connection</string>
-    <string name="waiting_for_connection_support">Start the receiver on your desktop</string>
+    <string name="waiting_for_connection">Waiting for webcam use</string>
+    <string name="waiting_for_connection_support">The camera stays off until a desktop app requests video</string>
+    <string name="waiting_for_pairing">Waiting for receiver</string>
+    <string name="waiting_for_pairing_support">Start the desktop receiver to pair this phone</string>
     <string name="checking_receiver">Checking receiver</string>
     <string name="negotiating_codec">Negotiating codec</string>
     <string name="preparing_stream">Preparing %1$s</string>
@@ -9,7 +11,7 @@
     <string name="streaming_codec">Streaming %1$s</string>
     <string name="stopping_stream">Stopping</string>
     <string name="connected_to_receiver">Connected to %1$s</string>
-    <string name="not_connected">Not connected</string>
+    <string name="not_connected">Waiting for webcam use</string>
     <string name="settings">Settings</string>
     <string name="navigate_back">Back</string>
     <string name="dim_screen">Dim screen</string>
