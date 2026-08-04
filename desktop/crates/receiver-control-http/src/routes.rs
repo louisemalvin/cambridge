@@ -38,7 +38,7 @@ mod handlers {
         let (snapshot, receiver) = state.subscribe_demand();
         let events = tokio_stream::once(snapshot)
             .chain(BroadcastStream::new(receiver).map_while(Result::ok))
-            .map(|event| Ok::<Event, Infallible>(sse_event(event)));
+            .map(|event| Ok::<Event, Infallible>(sse_event(&event)));
         Ok(Sse::new(events).keep_alive(KeepAlive::new().text(DEMAND_KEEPALIVE_TEXT)))
     }
 
@@ -128,7 +128,7 @@ mod handlers {
         }
     }
 
-    fn sse_event(event: DemandEventV2) -> Event {
+    fn sse_event(event: &DemandEventV2) -> Event {
         let data = serde_json::to_string(&event).expect("demand event serialization cannot fail");
         Event::default().event(DEMAND_EVENT_NAME).data(data)
     }

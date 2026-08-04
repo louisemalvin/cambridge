@@ -32,8 +32,7 @@ impl DemandHub {
         let snapshot = self
             .state
             .lock()
-            .map(|state| state.snapshot())
-            .unwrap_or_else(|_| DemandCoordinator::new().snapshot());
+            .map_or_else(|_| DemandCoordinator::new().snapshot(), |state| state.snapshot());
         (snapshot, receiver)
     }
 }
