@@ -42,6 +42,7 @@ fn activate(application: &Application, cli: &Cli) {
     build_window(application, runtime, preview_store, discovery);
 }
 
+#[allow(clippy::too_many_lines)]
 fn build_window(
     application: &Application,
     runtime: ReceiverRuntime,
@@ -114,9 +115,11 @@ fn build_window(
     }
     {
         let picture = picture.clone();
+        let discovery = discovery.clone();
         preview_button.connect_clicked(move |button| {
             let show_preview = !picture.is_visible();
             picture.set_visible(show_preview);
+            discovery.set_preview_demand(show_preview);
             button.set_label(if show_preview { HIDE_PREVIEW_LABEL } else { SHOW_PREVIEW_LABEL });
         });
     }

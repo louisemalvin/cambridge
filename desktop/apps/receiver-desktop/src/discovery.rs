@@ -31,6 +31,7 @@ const RETRY_MAX_INTERVAL: Duration = Duration::from_secs(30);
 const BUSY_RETRY_INTERVAL: Duration = Duration::from_secs(15);
 const RETRY_BACKOFF_BASE_SECONDS: u64 = RETRY_MIN_INTERVAL.as_secs();
 const RETRY_BACKOFF_SHIFT_LIMIT: u32 = 4;
+const PREVIEW_CONSUMER_COUNT: u32 = 1;
 const SCAN_INTERVAL: Duration = Duration::from_secs(5);
 const PHONE_EXPIRY: Duration = Duration::from_secs(12);
 const PROBE_TIMEOUT: Duration = Duration::from_millis(120);
@@ -97,6 +98,10 @@ impl DiscoveryHandle {
         let _ = self.command_tx.send(DiscoveryCommand::Demand(demand));
     }
 
+    pub fn set_preview_demand(&self, active: bool) {
+        let _ = self.command_tx.send(DiscoveryCommand::PreviewDemand(active));
+    }
+
     pub fn drain(&self) -> Vec<DiscoverySnapshot> {
         let Ok(receiver) = self.event_rx.lock() else {
             return Vec::new();
@@ -140,6 +145,9 @@ impl DiscoveryService {
                     match command_rx.recv_timeout(COMMAND_POLL_INTERVAL) {
                         Ok(DiscoveryCommand::Attach(sender_id)) => worker.select(sender_id),
                         Ok(DiscoveryCommand::Demand(demand)) => worker.set_demand(demand),
+                        Ok(DiscoveryCommand::PreviewDemand(active)) => {
+                            worker.set_preview_demand(active);
+                        }
                         Ok(DiscoveryCommand::Shutdown)
                         | Err(mpsc::RecvTimeoutError::Disconnected) => {
                             worker.shutdown();
@@ -190,6 +198,7 @@ impl Drop for DiscoveryService {
 enum DiscoveryCommand {
     Attach(String),
     Demand(VirtualCameraDemand),
+    PreviewDemand(bool),
     Shutdown,
 }
 
@@ -218,6 +227,8 @@ struct DiscoveryWorker {
     selected_sender_id: Option<String>,
     connection: ConnectionState,
     demand: VirtualCameraDemand,
+    capture_demand: VirtualCameraDemand,
+    preview_demand: bool,
     media: MediaLifecycle,
     retry_allowed: bool,
     last_attempt: Option<Instant>,
@@ -242,6 +253,8 @@ impl DiscoveryWorker {
             selected_sender_id: None,
             connection: ConnectionState::Searching,
             demand: VirtualCameraDemand::Inactive,
+            capture_demand: VirtualCameraDemand::Inactive,
+            preview_demand: false,
             media: MediaLifecycle::Idle,
             retry_allowed: true,
             last_attempt: None,
@@ -373,6 +386,32 @@ impl DiscoveryWorker {
     }
 
     fn set_demand(&mut self, demand: VirtualCameraDemand) {
+        if self.capture_demand == demand {
+            return;
+        }
+        self.capture_demand = demand;
+        self.reconcile_demand();
+    }
+
+    fn set_preview_demand(&mut self, active: bool) {
+        if self.preview_demand == active {
+            return;
+        }
+        self.preview_demand = active;
+        self.reconcile_demand();
+    }
+
+    fn reconcile_demand(&mut self) {
+        let demand = if self.preview_demand {
+            VirtualCameraDemand::Active {
+                consumer_count: self
+                    .capture_demand
+                    .consumer_count()
+                    .saturating_add(PREVIEW_CONSUMER_COUNT),
+            }
+        } else {
+            self.capture_demand
+        };
         if self.demand == demand {
             return;
         }
@@ -858,6 +897,24 @@ mod tests {
         worker.maybe_connect();
         assert!(worker.active_stream.is_none());
         assert_eq!(worker.media, MediaLifecycle::Idle);
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn receiver_preview_is_an_explicit_demand_source() {
+        let directory =
+            std::env::temp_dir().join(format!("mobile-webcam-preview-demand-{}", Uuid::new_v4()));
+        let path = directory.join("pairings.json");
+        let pairings = PairingStore::load(path.clone()).unwrap();
+        let (event_tx, _event_rx) = mpsc::channel();
+        let mut worker = DiscoveryWorker::new(5_001, pairings, Arc::new(|| {}), event_tx);
+        worker.set_preview_demand(true);
+        assert_eq!(
+            worker.demand,
+            VirtualCameraDemand::Active { consumer_count: PREVIEW_CONSUMER_COUNT },
+        );
+        worker.set_preview_demand(false);
+        assert_eq!(worker.demand, VirtualCameraDemand::Inactive);
         fs::remove_dir_all(directory).unwrap();
     }
 
