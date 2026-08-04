@@ -5,20 +5,21 @@ low-latency, bounded-buffer path. Android is the active sender implementation;
 iOS currently provides a native development skeleton:
 
 ```text
-Android or iOS camera -> platform H.264/H.265 encoder -> MPEG-TS over UDP
-    -> Rust/GStreamer receiver -> v4l2loopback -> OBS or browser
+Android or iOS video source -> native H.264 encoder -> MPEG-TS over encrypted SRT
+    -> Rust/GStreamer receiver -> persistent v4l2loopback -> OBS or browser
 ```
 
 The local-network flow has three explicit boundaries:
 
-- Desktop-side discovery of the mobile sender's TCP control service.
+- Receiver discovery with sender-side manual-origin fallback.
 - HTTP/JSON receiver control on TCP port `5001`.
-- MPEG-TS media on a UDP port allocated from `50000-50099` for each session.
+- One receiver-owned SRT listener on port `5000` (SRT uses UDP transport), with
+  per-session stream IDs and AES-256 passphrases.
 
-H.264 is the compatibility codec. Auto mode prefers H.265 when both endpoints
-support the selected profile. The project is video-only and designed for a
-trusted local network. Control and media are intentionally unencrypted in
-Phase 1.
+H.264 is the compatibility codec. H.265 remains available only where the
+receiver and sender explicitly support it. The project is video-only and
+designed for a trusted local network. v2 control can require a bearer token;
+SRT media is encrypted per session.
 
 ## Repository
 
@@ -46,12 +47,11 @@ the desktop receiver each day with:
 mobile-webcam-desktop
 ```
 
-It opens the receiver window, shows a live preview, and writes the same decoded
-frames to the virtual camera. No device path or port arguments are required.
-The receiver automatically selects the first v4l2loopback device, discovers
-available mobile senders, and connects to the only sender automatically. The
-first connection requires approval on the sender. Approved pairs reconnect without
-entering an address.
+It opens the receiver window, shows a live preview, advertises itself on the
+local network, and writes the same decoded frames to the virtual camera. No
+device path is required. The receiver selects the first v4l2loopback device and
+waits for the phone to select it and create a v2 session. The Android app keeps
+manual receiver-origin entry as a fallback when local discovery is unavailable.
 
 The headless receiver is also available for servers or terminal-only sessions:
 
@@ -59,9 +59,9 @@ The headless receiver is also available for servers or terminal-only sessions:
 mobile-webcam-receiver
 ```
 
-Advanced users can pass `--device` or `--control-port` to the desktop app. Both
-receiver applications allocate a fresh UDP media port from `50000-50099` for
-each prepared session. The repository wrappers `./scripts/linux/start-desktop.sh` and
+Advanced users can pass `--device`, `--control-port`, `--srt-port`,
+`--receiver-name`, or
+`--advertise-host` to the receiver. The repository wrappers `./scripts/linux/start-desktop.sh` and
 `./scripts/linux/start-receiver.sh` are available before installation.
 
 The installer supports CachyOS/Arch and Ubuntu/Debian. See the matching
@@ -85,7 +85,8 @@ See [known limitations](docs/known-limitations.md) and [testing](docs/testing.md
 Key references:
 
 - [Architecture](docs/architecture.md)
-- [MPEG-TS/UDP media contract](docs/media-transport-v1.md)
+- [Reliable SRT streaming plan](docs/reliable-streaming-v2-plan.md)
+- [Control and media protocol](docs/protocol.md)
 - [Control protocol](docs/protocol.md)
 - [Codec behavior](docs/codecs.md)
 - [Latency testing](docs/latency-testing.md)

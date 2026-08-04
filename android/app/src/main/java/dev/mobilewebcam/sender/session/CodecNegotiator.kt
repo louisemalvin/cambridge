@@ -20,10 +20,13 @@ class CodecNegotiator {
             CodecPreference.FORCE_H264 -> listOf(VideoCodec.H264)
             CodecPreference.FORCE_H265 -> listOf(VideoCodec.H265)
         }
-        val allowKnownSoftware = preference != CodecPreference.AUTO_PREFER_H265 ||
-            profile.id == "1080p30"
         val selected = candidates.firstOrNull { codec ->
-            sender.supports(codec, profile.id, allowKnownSoftware) &&
+            sender.supports(
+                codec,
+                profile.id,
+                allowKnownSoftware = preference != CodecPreference.AUTO_PREFER_H265 ||
+                    codec == VideoCodec.H264,
+            ) &&
                 receiver.supports(codec)
         }
         return selected ?: throw StreamFailureException(

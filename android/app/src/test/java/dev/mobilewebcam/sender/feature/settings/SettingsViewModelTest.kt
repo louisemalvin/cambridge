@@ -19,7 +19,7 @@ class SettingsViewModelTest {
                 codecPreference = CodecPreference.FORCE_H264,
                 profile = VideoProfiles.PROFILE_1440P30,
             ),
-            hasApprovedReceiver = true,
+            hasConfiguredReceiver = true,
         )
 
         assertEquals(
@@ -36,7 +36,7 @@ class SettingsViewModelTest {
     fun settingsExposeConnectionStatusAndUnsupportedCameraCapabilities() {
         val state = SettingsUiStateMapper.map(
             snapshot = snapshot(streamState = StreamState.CheckingReceiver),
-            hasApprovedReceiver = false,
+            hasConfiguredReceiver = false,
         )
 
         assertTrue(state.connection is ConnectionUiState.Connecting)

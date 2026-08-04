@@ -29,18 +29,18 @@ mobile-webcam-receiver
 Do not run both binaries at the same time. Either one starts the control API and
 virtual-camera output.
 
-The receiver automatically discovers the loopback device and available phones.
-It listens on TCP `5001` for control and allocates a UDP media port from
-`50000-50099` for each session. Phone discovery probes TCP `53555` on bounded
-local IPv4 subnets. The installer adds trusted-subnet UFW rules when UFW is
-active.
-Permit these only on the trusted local interface.
+The receiver automatically discovers the loopback device, advertises itself as
+`_mobile-webcam._tcp.local.`, and waits for a sender-initiated v2 session. It
+listens on TCP `5001` for control and on SRT port `5000` for encrypted media.
+SRT uses UDP transport, so allow UDP `5000` when UFW is active. Set
+`MOBILE_WEBCAM_TRUSTED_SUBNET` before running the installer to add scoped TCP
+control and SRT media rules.
 
 For troubleshooting, inspect the devices and GStreamer elements directly:
 
 ```bash
 scripts/linux/inspect-video-devices.sh
-gst-inspect-1.0 udpsrc tsparse tsdemux h264parse h265parse decodebin v4l2sink appsink
+gst-inspect-1.0 srtsrc tsparse tsdemux h264parse h265parse decodebin v4l2sink appsink
 ```
 
 The receiver uses the upstream private client-usage event to distinguish real

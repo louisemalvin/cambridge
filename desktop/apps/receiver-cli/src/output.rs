@@ -1,10 +1,8 @@
 use receiver_core::{ReceiverConfig, DEFAULT_LISTEN_ADDRESS};
-use receiver_protocol::ReceiverCapabilities;
+use receiver_protocol::{ReceiverCapabilities, SRT_KEY_LENGTH_BYTES};
 use std::path::Path;
 
 use crate::report::PerformanceReport;
-
-const NANOSECONDS_PER_MILLISECOND: u64 = 1_000_000;
 
 pub fn print_banner(config: &ReceiverConfig, capabilities: &ReceiverCapabilities) {
     println!("Mobile Webcam Receiver");
@@ -14,7 +12,7 @@ pub fn print_banner(config: &ReceiverConfig, capabilities: &ReceiverCapabilities
         format_host(config.listen_addr),
         config.control_port
     );
-    println!("Media input:      per-session UDP port");
+    println!("Media input:      encrypted SRT listener on {}", config.srt.listen_port);
     println!("Virtual camera:   {}", config.device.display());
     println!("Codecs:           {}", supported_codecs(capabilities));
     println!("State:            Idle");
@@ -26,9 +24,13 @@ pub fn print_capabilities(capabilities: &ReceiverCapabilities) -> anyhow::Result
 }
 
 pub fn print_pipeline(config: &ReceiverConfig) {
-    let timeout_nanos = config.udp_timeout_ms.saturating_mul(NANOSECONDS_PER_MILLISECOND);
     println!(
-        "udpsrc address={DEFAULT_LISTEN_ADDRESS} port=<assigned-per-session> timeout={timeout_nanos}"
+        "srtsrc uri=\"srt://{DEFAULT_LISTEN_ADDRESS}:{}\" mode=listener localport={}",
+        config.srt.listen_port, config.srt.listen_port
+    );
+    println!(
+        "  streamid=<per-session> latency={} authentication=true pbkeylen={} keep-listening=true",
+        config.srt.latency_ms, SRT_KEY_LENGTH_BYTES,
     );
     println!("  -> tsparse -> tsdemux latency={}", config.latency.demux_latency_ms);
     println!("  -> h264parse or h265parse -> decodebin");

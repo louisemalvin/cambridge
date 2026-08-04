@@ -12,7 +12,6 @@ junit = "4.13.2"
 androidx-junit = "1.2.1"
 espresso = "3.6.1"
 rootencoder = "2.8.0"
-camerax = "1.6.1"
 navigation3 = "1.1.4"
 hilt-navigation-compose = "1.2.0"
 
@@ -45,11 +44,6 @@ ktor-serialization-kotlinx-json = { module = "io.ktor:ktor-serialization-kotlinx
 rootencoder-library = { module = "com.github.pedroSG94.RootEncoder:library", version.ref = "rootencoder" }
 rootencoder-common = { module = "com.github.pedroSG94.RootEncoder:common", version.ref = "rootencoder" }
 rootencoder-srt = { module = "com.github.pedroSG94.RootEncoder:srt", version.ref = "rootencoder" }
-rootencoder-extra-sources = { module = "com.github.pedroSG94.RootEncoder:extra-sources", version.ref = "rootencoder" }
-camerax-core = { module = "androidx.camera:camera-core", version.ref = "camerax" }
-camerax-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "camerax" }
-camerax-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camerax" }
-camerax-view = { module = "androidx.camera:camera-view", version.ref = "camerax" }
 junit = { module = "junit:junit", version.ref = "junit" }
 androidx-junit = { module = "androidx.test.ext:junit", version.ref = "androidx-junit" }
 androidx-espresso-core = { module = "androidx.test.espresso:espresso-core", version.ref = "espresso" }

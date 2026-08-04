@@ -1,17 +1,52 @@
 use std::net::{IpAddr, Ipv4Addr};
 use std::path::PathBuf;
 
+use receiver_protocol::VideoProfile;
+
 pub const DEFAULT_LISTEN_ADDRESS: IpAddr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
 pub const DEFAULT_CONTROL_PORT: u16 = 5_001;
-pub const PORT_UNASSIGNED: u16 = 0;
 pub const DEFAULT_DEMUX_LATENCY_MS: u32 = 0;
 pub const DEFAULT_OUTPUT_QUEUE_FRAMES: u32 = 2;
-pub const DEFAULT_UDP_TIMEOUT_MS: u64 = 2_000;
-pub const DEFAULT_SESSION_TIMEOUT_GRACE_MS: u64 = 30_000;
 pub const DEFAULT_VIDEO_DEVICE: &str = "/dev/video10";
-pub const MEDIA_PORT_RANGE_START: u16 = 50_000;
-pub const MEDIA_PORT_RANGE_END: u16 = 50_099;
-pub const MEDIA_PORT_RANGE_SIZE: u16 = MEDIA_PORT_RANGE_END - MEDIA_PORT_RANGE_START + 1;
+pub const DEFAULT_SRT_LISTEN_PORT: u16 = 5_000;
+pub const DEFAULT_SRT_LATENCY_MS: u32 = 120;
+pub const DEFAULT_SRT_INACTIVITY_TIMEOUT_MS: u64 = 2_000;
+pub const DEFAULT_SRT_CONNECT_DEADLINE_MS: u64 = 10_000;
+pub const DEFAULT_SRT_RECONNECT_GRACE_MS: u64 = 30_000;
+pub const DEFAULT_OUTPUT_WIDTH: u32 = 1_280;
+pub const DEFAULT_OUTPUT_HEIGHT: u32 = 720;
+pub const DEFAULT_OUTPUT_FPS: u32 = 30;
+pub const DEFAULT_H264_BITRATE_BPS: u32 = 4_000_000;
+pub const DEFAULT_H265_BITRATE_BPS: u32 = 7_000_000;
+pub const DEFAULT_ADVERTISED_HOST: &str = "127.0.0.1";
+pub const DEFAULT_RECEIVER_NAME: &str = "Mobile Webcam";
+
+pub const DEFAULT_OUTPUT_PROFILE: VideoProfile = VideoProfile {
+    width: DEFAULT_OUTPUT_WIDTH,
+    height: DEFAULT_OUTPUT_HEIGHT,
+    fps: DEFAULT_OUTPUT_FPS,
+};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SrtConfig {
+    pub listen_port: u16,
+    pub latency_ms: u32,
+    pub inactivity_timeout_ms: u64,
+    pub connect_deadline_ms: u64,
+    pub reconnect_grace_ms: u64,
+}
+
+impl Default for SrtConfig {
+    fn default() -> Self {
+        Self {
+            listen_port: DEFAULT_SRT_LISTEN_PORT,
+            latency_ms: DEFAULT_SRT_LATENCY_MS,
+            inactivity_timeout_ms: DEFAULT_SRT_INACTIVITY_TIMEOUT_MS,
+            connect_deadline_ms: DEFAULT_SRT_CONNECT_DEADLINE_MS,
+            reconnect_grace_ms: DEFAULT_SRT_RECONNECT_GRACE_MS,
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutputFormat {
@@ -51,12 +86,16 @@ impl Default for LatencyConfig {
 pub struct ReceiverConfig {
     pub listen_addr: IpAddr,
     pub control_port: u16,
-    pub media_port: u16,
     pub device: PathBuf,
     pub output_format: OutputFormat,
     pub latency: LatencyConfig,
-    pub udp_timeout_ms: u64,
-    pub session_timeout_grace_ms: u64,
+    pub output_profile: VideoProfile,
+    pub h264_bitrate_bps: u32,
+    pub h265_bitrate_bps: u32,
+    pub srt: SrtConfig,
+    pub advertised_host: String,
+    pub receiver_name: String,
+    pub control_token: Option<String>,
 }
 
 impl Default for ReceiverConfig {
@@ -64,12 +103,16 @@ impl Default for ReceiverConfig {
         Self {
             listen_addr: DEFAULT_LISTEN_ADDRESS,
             control_port: DEFAULT_CONTROL_PORT,
-            media_port: PORT_UNASSIGNED,
             device: PathBuf::from(DEFAULT_VIDEO_DEVICE),
             output_format: OutputFormat::Auto,
             latency: LatencyConfig::default(),
-            udp_timeout_ms: DEFAULT_UDP_TIMEOUT_MS,
-            session_timeout_grace_ms: DEFAULT_SESSION_TIMEOUT_GRACE_MS,
+            output_profile: DEFAULT_OUTPUT_PROFILE,
+            h264_bitrate_bps: DEFAULT_H264_BITRATE_BPS,
+            h265_bitrate_bps: DEFAULT_H265_BITRATE_BPS,
+            srt: SrtConfig::default(),
+            advertised_host: DEFAULT_ADVERTISED_HOST.to_owned(),
+            receiver_name: DEFAULT_RECEIVER_NAME.to_owned(),
+            control_token: None,
         }
     }
 }

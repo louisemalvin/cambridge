@@ -8,11 +8,12 @@ would complicate recovery and versioning.
 
 ## Decision
 
-Use versioned HTTP/JSON over TCP `5001` for health, capabilities, preparation,
-state, and stop. Use MPEG-TS over a session-specific UDP port for video only.
+Use versioned HTTP/JSON over TCP `5001` for health, capabilities, session
+creation, state, diagnostics, and stop. Use encrypted MPEG-TS over a
+receiver-owned SRT listener for video only.
 
 ## Consequences
 
 Negotiation and errors are inspectable without touching video bytes. Wi-Fi and
-USB tethering share the same implementation. Desktop subnet discovery and
-reverse control supply the receiver address without user entry.
+USB tethering share the same implementation. The sender discovers the receiver
+with Bonjour/NSD and keeps explicit origin entry as the fallback.

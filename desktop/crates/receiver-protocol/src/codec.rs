@@ -44,16 +44,3 @@ pub enum PixelFormat {
     #[serde(rename = "i420")]
     I420,
 }
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Transport {
-    #[serde(rename = "mpegts-udp")]
-    MpegTsUdp,
-}
-
-impl Transport {
-    #[must_use]
-    pub const fn protocol_id(self) -> &'static str {
-        "mpegts-udp"
-    }
-}

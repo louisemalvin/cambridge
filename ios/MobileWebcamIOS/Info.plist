@@ -6,6 +6,10 @@
 	<string>Camera access will be used by the iOS sender media engine.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Local network access is used to discover and stream to the trusted laptop receiver.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_mobile-webcam._tcp</string>
+	</array>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>

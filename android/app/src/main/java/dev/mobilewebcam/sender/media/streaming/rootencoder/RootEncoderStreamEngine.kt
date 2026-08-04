@@ -1,19 +1,22 @@
 package dev.mobilewebcam.sender.media.streaming.rootencoder
 
 import android.content.Context
+import android.os.Build
 import com.pedro.encoder.input.sources.audio.NoAudioSource
-import com.pedro.extrasources.CameraXSource
-import com.pedro.library.udp.UdpStream
+import com.pedro.encoder.input.sources.video.Camera2Source
+import com.pedro.library.srt.SrtStream
+import com.pedro.srt.srt.packets.control.handshake.EncryptionType
 import dev.mobilewebcam.sender.media.camera.CameraController
 import dev.mobilewebcam.sender.media.camera.CameraInteractionState
 import dev.mobilewebcam.sender.media.camera.CameraPreviewSurface
-import dev.mobilewebcam.sender.media.camera.PhysicalLensOption
 import dev.mobilewebcam.sender.media.camera.CameraZoom
+import dev.mobilewebcam.sender.media.camera.PhysicalLensOption
 import dev.mobilewebcam.sender.logging.AndroidAppLogger
 import dev.mobilewebcam.sender.logging.AppLogger
 import dev.mobilewebcam.sender.model.StreamConfiguration
 import dev.mobilewebcam.sender.model.StreamFailure
 import dev.mobilewebcam.sender.model.StreamFailureException
+import dev.mobilewebcam.sender.model.SrtTransportEndpoint
 import dev.mobilewebcam.sender.media.streaming.StreamEngine
 import dev.mobilewebcam.sender.media.streaming.StreamEngineEvent
 import kotlinx.coroutines.Dispatchers
@@ -31,13 +34,17 @@ class RootEncoderStreamEngine(
     private val logger: AppLogger = AndroidAppLogger,
 ) : StreamEngine, CameraController {
     private val applicationContext = context.applicationContext
+    private val cameraSourceFactory = RootEncoderCameraSourceFactory(applicationContext)
     private val eventFlow = MutableSharedFlow<StreamEngineEvent>(
         extraBufferCapacity = EVENT_BUFFER_CAPACITY,
     )
     private val cameraMutex = Mutex()
     private val cameraState = MutableStateFlow(CameraInteractionState())
-    private var stream: UdpStream? = null
-    private var cameraSource: CameraXSource? = null
+    private var stream: SrtStream? = null
+    private var cameraSource: Camera2Source? = null
+    private var cameraDescriptors: List<RootEncoderCameraDescriptor> = emptyList()
+    private var selectedLensId: String? = null
+    private var activeCameraDescriptor: RootEncoderCameraDescriptor? = null
     private var previewSurface: CameraPreviewSurface? = null
     private var diagnosticRunId: String? = null
     private var diagnosticSessionId: String? = null
@@ -47,13 +54,13 @@ class RootEncoderStreamEngine(
 
     override suspend fun prepare(configuration: StreamConfiguration): Result<Unit> =
         cameraMutex.withLock {
-            var encoder: UdpStream? = null
+            var encoder: SrtStream? = null
             return@withLock try {
                 check(stream == null) { "A stream is already prepared" }
                 diagnosticRunId = configuration.runId
                 diagnosticSessionId = configuration.sessionId
-                val source = RootEncoderCameraSourceFactory(applicationContext).createCameraXSource()
-                val createdEncoder = UdpStream(
+                val source = cameraSourceFactory.createCameraSource()
+                val createdEncoder = SrtStream(
                     applicationContext,
                     RootEncoderEventAdapter(eventFlow),
                     source,
@@ -61,6 +68,9 @@ class RootEncoderStreamEngine(
                 )
                 encoder = createdEncoder
                 cameraSource = source
+                cameraDescriptors = cameraSourceFactory.availableCameraDescriptors()
+                selectedLensId = null
+                activeCameraDescriptor = null
                 stream = createdEncoder
                 val video = configuration.toRootEncoderVideo()
                 createdEncoder.setVideoCodec(configuration.codec.toRootEncoder())
@@ -85,8 +95,8 @@ class RootEncoderStreamEngine(
                 diagnosticEvent(
                     "camera_configuration",
                     mapOf(
-                        "lensOptions" to emptyList<String>(),
-                        "selectedLens" to cameraState.value.selectedPhysicalLens?.label,
+                        "lensOptions" to cameraDescriptors.map { it.label },
+                        "selectedLens" to cameraDescriptors.firstOrNull { it.selectionId == null }?.label,
                         "stabilizationSupported" to false,
                     ),
                 )
@@ -109,6 +119,9 @@ class RootEncoderStreamEngine(
                 runCatching { stopEncoderOnMain(encoder) }
                 stream = null
                 cameraSource = null
+                cameraDescriptors = emptyList()
+                selectedLensId = null
+                activeCameraDescriptor = null
                 cameraState.value = CameraInteractionState.inactive()
                 Result.failure(
                     StreamFailureException(
@@ -120,15 +133,30 @@ class RootEncoderStreamEngine(
         }
 
     override suspend fun start(
-        receiverHost: String,
-        mediaPort: Int,
+        endpoint: SrtTransportEndpoint,
     ): Result<Unit> = cameraMutex.withLock {
         runCatching {
             val encoder = stream ?: error("Stream has not been prepared")
+            val client = encoder.getStreamClient()
+            client.setLatency(endpoint.rootEncoderLatencyMs())
+            client.setPassphrase(endpoint.passphrase, EncryptionType.AES256)
+            client.setReTries(DEFAULT_SRT_RETRY_ATTEMPTS)
+            client.setCheckServerAlive(true)
             withContext(Dispatchers.Main.immediate) {
-                encoder.startStream("udp://$receiverHost:$mediaPort")
+                encoder.startStream(endpoint.toRootEncoderUri())
+            }
+            activeCameraDescriptor = cameraDescriptors.firstOrNull { descriptor ->
+                descriptor.physicalCameraId == null && descriptor.selectionId == null
             }
             updateCameraStateLocked()
+            diagnosticEvent(
+                "camera_configuration",
+                mapOf(
+                    "lensOptions" to cameraState.value.physicalLensOptions.map { it.label },
+                    "selectedLens" to cameraState.value.selectedPhysicalLens?.label,
+                    "stabilizationSupported" to false,
+                ),
+            )
         }.recoverCatching { cause ->
             throw StreamFailureException(StreamFailure.StreamStartFailed(cause), cause)
         }
@@ -195,20 +223,82 @@ class RootEncoderStreamEngine(
             mapOf(
                 "requested" to enabled,
                 "applied" to false,
-                "reason" to "unsupported_by_rootencoder_camerax_source",
+                "reason" to "unsupported_by_rootencoder_camera2_source",
             ),
         )
     }
 
     override suspend fun selectPhysicalLens(lens: PhysicalLensOption) = cameraMutex.withLock {
-        diagnosticEvent(
-            "camera_lens_selection_failed",
-            mapOf("lens" to lens.label, "reason" to "unsupported_by_rootencoder_camerax_source"),
-        )
+        val source = cameraSource?.takeIf { it.isRunning() } ?: return@withLock
+        val descriptor = if (lens.cameraId == null) {
+            cameraDescriptors.firstOrNull { it.selectionId == null }
+        } else {
+            cameraDescriptors.firstOrNull { it.selectionId == lens.cameraId }
+        }
+        if (descriptor == null) {
+            diagnosticEvent(
+                "camera_lens_selection_failed",
+                mapOf("lens" to lens.label, "reason" to "camera_info_unavailable"),
+            )
+            return@withLock
+        }
+
+        runCatching {
+            withContext(Dispatchers.Main.immediate) {
+                rebindCamera(source, descriptor)
+            }
+        }.onSuccess {
+            activeCameraDescriptor = descriptor
+            selectedLensId = lens.cameraId
+            updateCameraStateLocked()
+            diagnosticEvent(
+                "camera_lens_selected",
+                mapOf(
+                    "lens" to lens.label,
+                    "selectionId" to lens.cameraId,
+                    "logicalCameraId" to descriptor.logicalCameraId,
+                    "physicalCameraId" to descriptor.physicalCameraId,
+                ),
+            )
+        }.onFailure { cause ->
+            diagnosticEvent(
+                "camera_lens_selection_failed",
+                mapOf(
+                    "lens" to lens.label,
+                    "selectionId" to lens.cameraId,
+                    "logicalCameraId" to descriptor.logicalCameraId,
+                    "physicalCameraId" to descriptor.physicalCameraId,
+                    "reason" to cause.message,
+                ),
+            )
+        }
+    }
+
+    private fun rebindCamera(
+        source: Camera2Source,
+        descriptor: RootEncoderCameraDescriptor,
+    ) {
+        check(Build.VERSION.SDK_INT >= Build.VERSION_CODES.P || descriptor.physicalCameraId == null) {
+            "Physical camera selection requires Android 9 or newer"
+        }
+        val current = activeCameraDescriptor
+        val logicalCameraChanged = current?.logicalCameraId != descriptor.logicalCameraId
+        val physicalCameraChanged = current?.physicalCameraId != descriptor.physicalCameraId
+        if (logicalCameraChanged) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                source.openPhysicalCamera(null)
+            }
+            source.openCameraId(descriptor.logicalCameraId)
+        }
+        val physicalCameraNeedsRebind = physicalCameraChanged &&
+            (descriptor.physicalCameraId != null || !logicalCameraChanged)
+        if (physicalCameraNeedsRebind && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            source.openPhysicalCamera(descriptor.physicalCameraId)
+        }
     }
 
     private fun attachPreviewLocked(
-        encoder: UdpStream,
+        encoder: SrtStream,
         target: CameraPreviewSurface,
     ) {
         val glInterface = encoder.getGlInterface()
@@ -220,7 +310,7 @@ class RootEncoderStreamEngine(
     }
 
     private suspend fun attachPreviewIfValidLocked(
-        encoder: UdpStream,
+        encoder: SrtStream,
         target: CameraPreviewSurface,
     ) {
         if (!target.surface.isValid) {
@@ -239,7 +329,7 @@ class RootEncoderStreamEngine(
         }
     }
 
-    private suspend fun stopEncoderOnMain(encoder: UdpStream?) {
+    private suspend fun stopEncoderOnMain(encoder: SrtStream?) {
         withContext(Dispatchers.Main.immediate) {
             encoder ?: return@withContext
             when {
@@ -269,6 +359,9 @@ class RootEncoderStreamEngine(
         }
         stream = null
         cameraSource = null
+        cameraDescriptors = emptyList()
+        selectedLensId = null
+        activeCameraDescriptor = null
         cameraState.value = CameraInteractionState.inactive()
         diagnosticRunId = null
         diagnosticSessionId = null
@@ -283,12 +376,21 @@ class RootEncoderStreamEngine(
         val range = source.getZoomRange()
         val currentZoom = source.getZoom().takeUnless { it <= NO_ZOOM_REPORTED }
             ?: CameraZoom.DEFAULT_ZOOM_RATIO
-        cameraState.value = cameraState.value.withCameraBounds(
+        val lensOptions = cameraDescriptors.map { descriptor ->
+            PhysicalLensOption(
+                label = descriptor.label,
+                cameraId = descriptor.selectionId,
+            )
+        }
+        val nextState = cameraState.value.withCameraBounds(
             minimum = range.lower,
             maximum = range.upper,
             current = currentZoom,
-        ).withPhysicalLensOptions(emptyList())
+        ).withPhysicalLensOptions(lensOptions)
             .withStabilizationSupport(supported = false)
+        val selectedLens = lensOptions.firstOrNull { it.cameraId == selectedLensId }
+            ?: lensOptions.firstOrNull()
+        cameraState.value = selectedLens?.let(nextState::withSelectedPhysicalLens) ?: nextState
     }
 
     private fun diagnosticEvent(name: String, fields: Map<String, Any?> = emptyMap()) {
@@ -305,6 +407,7 @@ class RootEncoderStreamEngine(
         const val AUDIO_BITRATE_BPS = 64_000
         const val MINIMUM_BITRATE_BPS = 0
         const val NO_ZOOM_REPORTED = 0.0f
+        const val DEFAULT_SRT_RETRY_ATTEMPTS = 6
 
     }
 }

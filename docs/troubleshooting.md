@@ -1,22 +1,24 @@
 # Troubleshooting
 
-## The desktop does not find the phone
+## The phone cannot discover or reach the receiver
 
-- Keep both apps open and confirm both devices are on the same local network.
-- Allow TCP `53555` to the phone on the trusted interface.
-- Check for access-point client isolation, which prevents local devices from
-  reaching each other.
-- Confirm the Linux interface has an IPv4 subnet no larger than 4096 addresses.
-- Restart either app to refresh discovery state.
-- The product has no manual IP fallback. A discovery failure should be fixed at
-  the network or advertisement boundary.
+- Confirm the receiver is running and visible on the same local network. It
+  advertises `_mobile-webcam._tcp.local.` for automatic discovery.
+- If multicast discovery is blocked, open the manual connection fallback and
+  enter the receiver's reachable host and HTTP control port.
+- Check that TCP `5001` and the SRT listener on port `5000` are allowed on the
+  trusted interface. SRT uses UDP transport.
+- If UFW is active, configure `MOBILE_WEBCAM_TRUSTED_SUBNET` before running the
+  installer instead of relying on automatic subnet detection.
+- For an emulator, advertise `10.0.2.2` and use the same host in the sender's
+  manual origin fallback.
 
 ## Control works but no video arrives
 
-- Allow UDP `50000:50099` to the receiver from the trusted subnet.
-- Read the session preparation response and confirm the phone uses its returned
-  UDP port in that range.
-- Inspect `udpsrc`, `tsparse`, `tsdemux`, and the selected parser with
+- Allow SRT port `5000` over UDP to the receiver from the trusted subnet.
+- Read the v2 session response and confirm the phone uses its returned SRT host,
+  stream ID, latency, key length, and passphrase.
+- Inspect `srtsrc`, `tsparse`, `tsdemux`, and the selected parser with
   `gst-inspect-1.0`.
 - Run the H.264 synthetic sender to separate Android camera issues from the
   receiver path.
@@ -25,15 +27,15 @@
 ## MPEG-TS continuity warnings or `not-negotiated`
 
 Continuity warnings identify missing, reordered, or mixed MPEG-TS packets. They
-are separate from raw-output caps negotiation. The receiver gives each session
-its own UDP port, so an old or unselected phone does not normally share the
-active media socket. PID `0x0020` is the normal first video PID used by the
-current sender.
+are separate from raw-output caps negotiation. SRT keeps one listener while
+per-session stream IDs prevent an old or unselected phone from feeding the
+active session. PID `0x0020` is the normal first video PID used by the current
+sender.
 
 - Prefer a stable Wi-Fi connection or USB tethering and avoid competing high-
   bandwidth traffic.
 - Restart the sender after the receiver has returned to `Idle` or
-  `TimedOut`.
+  `Reconnecting`.
 - Compare sender and receiver logs around the first discontinuity before
   changing socket or latency settings.
 
@@ -91,3 +93,9 @@ The app keeps a foreground notification and uses short-lived wake and Wi-Fi
 locks only while streaming. Sustained camera encoding produces heat and
 battery drain. Check the stability run metrics and stop the session before
 the device enters thermal throttling.
+
+The v2 receiver keeps the virtual camera open during SRT reconnects and sends
+standby frames after the inactivity timeout. Run
+`scripts/linux/test-srt-receiver.sh` for authentication and reconnect checks,
+`scripts/linux/test-srt-lifecycle.sh` for repeated cleanup, and
+`scripts/linux/test-srt-sustained.sh` for the sustained-run gate.

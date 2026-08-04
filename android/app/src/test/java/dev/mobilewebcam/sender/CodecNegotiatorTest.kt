@@ -58,6 +58,26 @@ class CodecNegotiatorTest {
         )
     }
 
+    @Test
+    fun autoUsesSoftwareH264WhenNoHardwareCodecIsAvailable() {
+        val softwareSender = SenderCapabilities(
+            listOf(
+                capability(VideoCodec.H264, supported = true, acceleration = EncoderAcceleration.SOFTWARE),
+                capability(VideoCodec.H265, supported = true, acceleration = EncoderAcceleration.SOFTWARE),
+            ),
+        )
+
+        assertEquals(
+            VideoCodec.H264,
+            CodecNegotiator().negotiate(
+                CodecPreference.AUTO_PREFER_H265,
+                softwareSender,
+                receiverBoth,
+                profile,
+            ),
+        )
+    }
+
     @Test(expected = IllegalStateException::class)
     fun forcedH265DoesNotSilentlyFallback() {
         CodecNegotiator().negotiate(
@@ -76,12 +96,16 @@ class CodecNegotiatorTest {
             ),
         )
 
-    private fun capability(codec: VideoCodec, supported: Boolean) =
+    private fun capability(
+        codec: VideoCodec,
+        supported: Boolean,
+        acceleration: EncoderAcceleration = EncoderAcceleration.HARDWARE,
+    ) =
         EncoderCapability(
             codec = codec,
             profileId = profile.id,
             supported = supported,
-            acceleration = EncoderAcceleration.HARDWARE,
+            acceleration = acceleration,
             encoderName = "test-$codec",
         )
 

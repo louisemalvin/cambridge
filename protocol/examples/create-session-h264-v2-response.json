@@ -1,0 +1,27 @@
+{
+  "protocolVersion": 2,
+  "sessionId": "d3ebda88-5e25-4a47-99e4-44029adf49ef",
+  "connectDeadlineMs": 10000,
+  "reconnectGraceMs": 30000,
+  "video": {
+    "codec": "h264",
+    "container": "mpegts",
+    "width": 1280,
+    "height": 720,
+    "fps": 30,
+    "bitrateBps": 4000000
+  },
+  "transport": {
+    "kind": "srt",
+    "mode": "caller",
+    "host": "10.0.2.2",
+    "port": 5000,
+    "streamId": "srt-stream-d3ebda88",
+    "latencyMs": 120,
+    "keyLengthBytes": 32,
+    "passphrase": "test-passphrase-for-fixture"
+  },
+  "output": {
+    "pixelFormat": "yuy2"
+  }
+}

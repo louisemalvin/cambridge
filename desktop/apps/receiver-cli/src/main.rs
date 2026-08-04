@@ -4,8 +4,9 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use receiver_control_http::{serve, ControlState};
 use receiver_core::{ReceiverService, StaticCapabilityProvider};
+use receiver_discovery::{DiscoveryConfig, ReceiverDiscoveryPublisher};
 use receiver_gstreamer::{probe_capabilities, GStreamerReceiver};
-use receiver_platform_linux::{resolve_v4l2loopback_device, LinuxVideoSinkFactory};
+use receiver_platform_linux::{resolve_v4l2loopback_device, PersistentVideoSinkFactory};
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
@@ -59,8 +60,9 @@ async fn main() -> Result<()> {
         return output::print_capabilities(&capabilities);
     }
 
-    let sink_factory = LinuxVideoSinkFactory::new(&config.device)
+    let sink_factory = PersistentVideoSinkFactory::new(&config.device)
         .context("validate Linux v4l2loopback output device")?;
+    let persistent_output = sink_factory.persistent_output();
     let provider = StaticCapabilityProvider::new(capabilities.clone());
     let media_receiver =
         GStreamerReceiver::new(sink_factory).context("initialise the GStreamer receiver")?;
@@ -68,11 +70,12 @@ async fn main() -> Result<()> {
         ReceiverService::new(config.clone(), Box::new(provider), Box::new(media_receiver))
             .context("create receiver service")?;
     let state = ControlState::new(service);
+    let _discovery = start_discovery(&config);
     let control_addr = SocketAddr::new(config.listen_addr, config.control_port);
     output::print_banner(&config, &capabilities);
     info!(
         control_port = config.control_port,
-        media_port_assignment = "per_session",
+        srt_listen_port = config.srt.listen_port,
         device = %config.device.display(),
         "receiver ready"
     );
@@ -86,7 +89,26 @@ async fn main() -> Result<()> {
         .await
         .context("run receiver control server")?;
     state.shutdown().context("stop active receiver session")?;
+    persistent_output
+        .stop()
+        .map_err(|error| anyhow::anyhow!(error))
+        .context("stop persistent virtual-camera output")?;
     Ok(())
+}
+
+fn start_discovery(config: &receiver_core::ReceiverConfig) -> Option<ReceiverDiscoveryPublisher> {
+    let discovery_config = DiscoveryConfig {
+        display_name: config.receiver_name.clone(),
+        control_port: config.control_port,
+        authentication_required: config.control_token.is_some(),
+    };
+    match ReceiverDiscoveryPublisher::start(&discovery_config) {
+        Ok(publisher) => Some(publisher),
+        Err(error) => {
+            tracing::warn!(%error, "receiver discovery is unavailable; manual origin remains available");
+            None
+        }
+    }
 }
 
 fn init_logging(level: &str, json_logs: bool) -> Result<()> {

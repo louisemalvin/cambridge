@@ -1,0 +1,19 @@
+{
+  "protocolVersion": 2,
+  "transport": {
+    "kind": "srt",
+    "modes": ["caller"],
+    "keyLengthBytes": 32
+  },
+  "videoCodecs": ["h264"],
+  "outputProfile": {
+    "width": 1280,
+    "height": 720,
+    "fps": 30
+  },
+  "output": {
+    "pixelFormat": "yuy2"
+  },
+  "maximumConcurrentSessions": 1,
+  "active": false
+}

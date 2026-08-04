@@ -13,6 +13,7 @@ use std::{
 use anyhow::{anyhow, Context, Result};
 use receiver_control_http::{serve_listener, ControlState};
 use receiver_core::{ReceiverService, StaticCapabilityProvider};
+use receiver_discovery::{DiscoveryConfig, ReceiverDiscoveryPublisher};
 use receiver_gstreamer::{probe_capabilities, GStreamerReceiver};
 use receiver_platform_linux::{
     resolve_v4l2loopback_device, PersistentVirtualCameraOutput, V4l2LoopbackDemandMonitor,
@@ -22,12 +23,7 @@ use tokio::net::TcpListener;
 use tokio::sync::oneshot;
 use tracing::error;
 
-use crate::{
-    cli::Cli,
-    discovery::{DiscoveryHandle, DiscoveryService},
-    output::DesktopSinkFactory,
-    preview::PreviewStore,
-};
+use crate::{cli::Cli, output::DesktopSinkFactory, preview::PreviewStore};
 
 const READY_CHANNEL_CAPACITY: usize = 1;
 const DEMAND_RELAY_TIMEOUT: Duration = DEMAND_POLL_INTERVAL;
@@ -36,8 +32,8 @@ pub struct ReceiverRuntime {
     state: ControlState,
     shutdown: Option<oneshot::Sender<()>>,
     thread: Option<JoinHandle<()>>,
-    discovery: Option<DiscoveryService>,
     persistent_output: PersistentVirtualCameraOutput,
+    discovery: Option<ReceiverDiscoveryPublisher>,
     demand_monitor: Option<V4l2LoopbackDemandMonitor>,
     demand_relay_shutdown: Arc<AtomicBool>,
     demand_relay_thread: Option<JoinHandle<()>>,
@@ -45,7 +41,7 @@ pub struct ReceiverRuntime {
 
 impl ReceiverRuntime {
     #[allow(clippy::too_many_lines)]
-    pub fn start(cli: &Cli) -> Result<(Self, PreviewStore, DiscoveryHandle)> {
+    pub fn start(cli: &Cli) -> Result<(Self, PreviewStore)> {
         let device = resolve_v4l2loopback_device(cli.device.as_deref()).with_context(|| {
             if cli.device.is_some() {
                 "validate the configured virtual-camera device"
@@ -118,30 +114,18 @@ impl ReceiverRuntime {
                 return Err(anyhow!("control server could not listen on {control_addr}: {error}"));
             }
         }
+        let discovery = start_discovery(&config);
         let mut receiver = Self {
             state,
             shutdown: Some(shutdown_tx),
             thread: Some(thread),
-            discovery: None,
             persistent_output,
+            discovery,
             demand_monitor: Some(demand_monitor),
             demand_relay_shutdown: Arc::new(AtomicBool::new(false)),
             demand_relay_thread: None,
         };
-        let pairing_path =
-            gtk4::glib::user_config_dir().join("mobile-webcam").join("pairings.json");
-        let local_cleanup_state = receiver.state.clone();
-        let local_cleanup: Arc<dyn Fn() + Send + Sync> = Arc::new(move || {
-            if let Err(error) = local_cleanup_state.stop_active_session() {
-                error!(%error, "local receiver cleanup failed after sender stop failure");
-            }
-        });
-        let (discovery, discovery_handle) =
-            DiscoveryService::start(config.control_port, pairing_path, local_cleanup)
-                .context("start automatic phone discovery")?;
-        receiver.discovery = Some(discovery);
         let relay_shutdown = receiver.demand_relay_shutdown.clone();
-        let relay_handle = discovery_handle.clone();
         let relay_output = receiver.persistent_output.clone();
         receiver.demand_relay_thread = Some(
             thread::Builder::new()
@@ -153,7 +137,6 @@ impl ReceiverRuntime {
                                 if !event.demand.is_active() {
                                     let _ = relay_output.set_standby();
                                 }
-                                relay_handle.set_demand(event.demand);
                             }
                             Err(RecvTimeoutError::Timeout) => {}
                             Err(RecvTimeoutError::Disconnected) => break,
@@ -162,15 +145,15 @@ impl ReceiverRuntime {
                 })
                 .context("start webcam demand relay thread")?,
         );
-        Ok((receiver, preview_store, discovery_handle))
+        Ok((receiver, preview_store))
     }
 
     fn stop(&mut self) {
+        self.discovery.take();
         self.demand_relay_shutdown.store(true, Ordering::Relaxed);
         if let Some(thread) = self.demand_relay_thread.take() {
             let _ = thread.join();
         }
-        self.discovery.take();
         self.demand_monitor.take();
         let _ = self.state.shutdown();
         let _ = self.persistent_output.set_standby();
@@ -180,6 +163,21 @@ impl ReceiverRuntime {
         }
         if let Some(thread) = self.thread.take() {
             let _ = thread.join();
+        }
+    }
+}
+
+fn start_discovery(config: &receiver_core::ReceiverConfig) -> Option<ReceiverDiscoveryPublisher> {
+    let discovery_config = DiscoveryConfig {
+        display_name: config.receiver_name.clone(),
+        control_port: config.control_port,
+        authentication_required: config.control_token.is_some(),
+    };
+    match ReceiverDiscoveryPublisher::start(&discovery_config) {
+        Ok(publisher) => Some(publisher),
+        Err(error) => {
+            tracing::warn!(%error, "receiver discovery is unavailable; manual origin remains available");
+            None
         }
     }
 }

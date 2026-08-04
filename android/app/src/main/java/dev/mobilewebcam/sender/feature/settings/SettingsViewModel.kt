@@ -6,7 +6,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.mobilewebcam.sender.app.model.SenderScreenAction
 import dev.mobilewebcam.sender.app.model.SenderUiEffect
 import dev.mobilewebcam.sender.app.model.StreamPresentationSnapshot
-import dev.mobilewebcam.sender.connection.discovery.SenderConnectionCoordinator
+import dev.mobilewebcam.sender.connection.SenderConnectionCoordinator
 import dev.mobilewebcam.sender.media.camera.CameraController
 import dev.mobilewebcam.sender.session.VideoProfiles
 import dev.mobilewebcam.sender.model.CodecPreference
@@ -49,15 +49,15 @@ class SettingsViewModel @Inject constructor(
                 activeReceiverName = receiverName,
                 validationMessage = validation,
             ),
-            hasApprovedReceiver = false,
+            hasConfiguredReceiver = false,
         )
     }
 
     val uiState: StateFlow<SettingsUiState> = combine(
         baseUiState,
-        coordinator.hasApprovedReceiver,
-    ) { state, hasApprovedReceiver ->
-        state.copy(hasApprovedReceiver = hasApprovedReceiver)
+        coordinator.hasConfiguredReceiver,
+    ) { state, hasConfiguredReceiver ->
+        state.copy(hasConfiguredReceiver = hasConfiguredReceiver)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.Eagerly,
@@ -75,7 +75,7 @@ class SettingsViewModel @Inject constructor(
             is SenderScreenAction.LensSelected -> selectPhysicalLens(action.key)
             is SenderScreenAction.StabilizationChanged -> setStabilizationEnabled(action.enabled)
             SenderScreenAction.StopStream -> stop()
-            SenderScreenAction.ForgetPairing -> forgetPairing()
+            SenderScreenAction.ForgetReceiver -> forgetReceiver()
             SenderScreenAction.CopyDiagnostics -> copyDiagnostics()
             else -> Unit
         }
@@ -124,14 +124,14 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { coordinator.stop() }
     }
 
-    private fun forgetPairing() {
+    private fun forgetReceiver() {
         viewModelScope.launch {
-            val result = coordinator.forgetPairing()
+            val result = coordinator.forgetReceiver()
             if (result.isSuccess) {
                 effectFlow.tryEmit(SenderUiEffect.NavigateToPairing)
             } else {
                 validationMessage.value = result.exceptionOrNull()?.message
-                    ?: "Could not forget the receiver pairing"
+                    ?: "Could not forget the receiver"
             }
         }
     }

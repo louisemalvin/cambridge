@@ -1,14 +1,10 @@
-use std::{
-    net::{Ipv4Addr, UdpSocket},
-    os::fd::OwnedFd,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
 use gst::prelude::*;
 use gstreamer as gst;
 use receiver_core::{
     MediaReceiver, MediaSessionConfig, ReceiverDiagnostics, ReceiverError, ReceiverState,
-    MEDIA_PORT_RANGE_END, MEDIA_PORT_RANGE_SIZE, MEDIA_PORT_RANGE_START, PORT_UNASSIGNED,
+    ReceiverTransportMetrics,
 };
 use receiver_protocol::PixelFormat;
 
@@ -21,8 +17,14 @@ use crate::{
     PipelineError,
 };
 
+const PIPELINE_STOP_TIMEOUT_SECONDS: u64 = 5;
+
 pub trait VideoSinkFactory: Send + Sync {
     fn create_sink(&self, format: PixelFormat) -> Result<gst::Element, PipelineError>;
+
+    fn set_standby(&self) -> Result<(), PipelineError> {
+        Ok(())
+    }
 
     fn create_preview_sink(&self) -> Result<Option<gst::Element>, PipelineError> {
         Ok(None)
@@ -97,23 +99,19 @@ where
             return;
         };
         if let Ok(mut metrics) = self.metrics.lock() {
-            let was_timed_out = observer.state() == ReceiverState::TimedOut;
-            let result = poll(&bus, observer, &mut metrics);
-            if result.timed_out && !was_timed_out {
-                recover_pipeline_after_timeout(pipeline);
+            poll(&bus, observer, &mut metrics);
+            if let Some(source) = pipeline.by_name("srt-source") {
+                let stats = source.property::<gst::Structure>("stats");
+                metrics.record_srt_stats(&stats);
+            }
+            if observer.state() == ReceiverState::Receiving && metrics.transport_timed_out() {
+                metrics.record_timeout();
+                observer.on_timeout(metrics.timeout_count());
             }
         }
-    }
-}
-
-fn recover_pipeline_after_timeout(pipeline: &gst::Pipeline) {
-    tracing::info!("resetting GStreamer pipeline after UDP timeout");
-    if let Err(error) = pipeline.set_state(gst::State::Ready) {
-        tracing::warn!(%error, "failed to reset GStreamer pipeline to Ready after UDP timeout");
-        return;
-    }
-    if let Err(error) = pipeline.set_state(gst::State::Playing) {
-        tracing::warn!(%error, "failed to resume GStreamer pipeline after UDP timeout");
+        if matches!(observer.state(), ReceiverState::TimedOut | ReceiverState::Failed) {
+            let _ = self.sink_factory.set_standby();
+        }
     }
 }
 
@@ -121,7 +119,7 @@ impl<F> MediaReceiver for GStreamerReceiver<F>
 where
     F: VideoSinkFactory + 'static,
 {
-    fn prepare(&mut self, config: MediaSessionConfig) -> Result<u16, ReceiverError> {
+    fn prepare(&mut self, config: MediaSessionConfig) -> Result<(), ReceiverError> {
         if self.pipeline.is_some() {
             return Err(ReceiverError::MediaPreparation(
                 "a GStreamer pipeline is already prepared".to_owned(),
@@ -136,14 +134,9 @@ where
                 target_bitrate_bps: config.bitrate_bps,
                 output_pixel_format: config.output_format,
                 output_queue_max_frames: config.latency.output_queue_frames,
-                udp_timeout_ms: config.udp_timeout_ms,
+                transport_timeout_ms: config.transport_timeout_ms,
             });
         }
-        let media_socket = if config.media_port == PORT_UNASSIGNED {
-            Some(bind_session_socket(config.session_id)?)
-        } else {
-            None
-        };
         let pipeline = build_pipeline(
             &config,
             &self.sink_factory,
@@ -152,34 +145,12 @@ where
             self.metrics.clone(),
         )
         .map_err(|error| ReceiverError::MediaPreparation(error.to_string()))?;
-        if let Some((socket, _port)) = media_socket.as_ref() {
-            let source = pipeline.by_name("udp-source").ok_or_else(|| {
-                ReceiverError::MediaPreparation("GStreamer UDP source is missing".to_owned())
-            })?;
-            source.set_property("socket", socket);
-            source.set_property("close-socket", true);
-        }
         pipeline
             .set_state(gst::State::Ready)
             .map_err(|error| ReceiverError::MediaPreparation(error.to_string()))?;
-        let media_port = media_socket.map_or_else(
-            || {
-                pipeline
-                    .by_name("udp-source")
-                    .map(|source| source.property::<i32>("port"))
-                    .and_then(|port| u16::try_from(port).ok())
-                    .filter(|port| *port != PORT_UNASSIGNED)
-                    .ok_or_else(|| {
-                        ReceiverError::MediaPreparation(
-                            "GStreamer did not bind the configured UDP media port".to_owned(),
-                        )
-                    })
-            },
-            |(_socket, port)| Ok(port),
-        )?;
         self.observer = Some(observer);
         self.pipeline = Some(pipeline);
-        Ok(media_port)
+        Ok(())
     }
 
     fn start(&mut self) -> Result<(), ReceiverError> {
@@ -196,10 +167,20 @@ where
     }
 
     fn stop(&mut self) -> Result<(), ReceiverError> {
+        self.sink_factory
+            .set_standby()
+            .map_err(|error| ReceiverError::MediaStop(error.to_string()))?;
         if let Some(pipeline) = self.pipeline.take() {
             pipeline
                 .set_state(gst::State::Null)
                 .map_err(|error| ReceiverError::MediaStop(error.to_string()))?;
+            let (success, state, _pending) =
+                pipeline.state(gst::ClockTime::from_seconds(PIPELINE_STOP_TIMEOUT_SECONDS));
+            if success.is_err() || state != gst::State::Null {
+                return Err(ReceiverError::MediaStop(format!(
+                    "pipeline did not reach Null: success={success:?} state={state:?}"
+                )));
+            }
         }
         if let Some(observer) = self.observer.as_ref() {
             observer.set_state(ReceiverState::Idle);
@@ -225,40 +206,22 @@ where
         self.metrics.lock().map_or(0, |metrics| metrics.timeout_count())
     }
 
+    fn transport_metrics(&self) -> Option<ReceiverTransportMetrics> {
+        self.poll_bus();
+        self.metrics.lock().ok().and_then(|metrics| metrics.transport_metrics())
+    }
+
+    fn transport_connected(&self) -> bool {
+        self.poll_bus();
+        self.observer.as_ref().is_some_and(|observer| observer.transport_connected())
+    }
+
     fn diagnostics(&self) -> Option<ReceiverDiagnostics> {
         self.poll_bus();
         let observer = self.observer.as_ref()?;
         let metrics = self.metrics.lock().ok()?;
         Some(metrics.snapshot(observer.state(), observer.diagnostics()))
     }
-}
-
-fn bind_session_socket(session_id: uuid::Uuid) -> Result<(gio::Socket, u16), ReceiverError> {
-    let port_count = MEDIA_PORT_RANGE_SIZE;
-    let id = session_id.as_bytes();
-    let first_offset = u16::from_be_bytes([id[0], id[1]]) % port_count;
-    for offset in 0..port_count {
-        let port = MEDIA_PORT_RANGE_START + (first_offset + offset) % port_count;
-        let socket = match UdpSocket::bind((Ipv4Addr::UNSPECIFIED, port)) {
-            Ok(socket) => socket,
-            Err(error) if error.kind() == std::io::ErrorKind::AddrInUse => continue,
-            Err(error) => {
-                return Err(ReceiverError::MediaPreparation(format!(
-                    "could not bind UDP media port {port}: {error}"
-                )));
-            }
-        };
-        let owned_fd: OwnedFd = socket.into();
-        let socket = gio::Socket::from_fd(owned_fd).map_err(|error| {
-            ReceiverError::MediaPreparation(format!(
-                "could not hand UDP media port {port} to GStreamer: {error}"
-            ))
-        })?;
-        return Ok((socket, port));
-    }
-    Err(ReceiverError::MediaPreparation(format!(
-        "no UDP media port is available in {MEDIA_PORT_RANGE_START}-{MEDIA_PORT_RANGE_END}"
-    )))
 }
 
 impl<F> Drop for GStreamerReceiver<F> {
@@ -275,8 +238,11 @@ mod tests {
     use super::*;
     use crate::CodecPipelineFactory;
     use receiver_core::LatencyConfig;
-    use receiver_protocol::{VideoCodec, VideoProfile};
+    use receiver_protocol::{SrtEndpoint, SrtMode, SrtTransportKind, VideoCodec, VideoProfile};
     use uuid::Uuid;
+
+    const TEST_SRT_PORT: u16 = 55_010;
+    const TEST_TRANSPORT_TIMEOUT_MS: u64 = 2_000;
 
     fn config(codec: VideoCodec) -> MediaSessionConfig {
         MediaSessionConfig {
@@ -284,18 +250,27 @@ mod tests {
             codec,
             profile: VideoProfile { width: 320, height: 240, fps: 30 },
             bitrate_bps: 500_000,
-            media_port: 55_010,
             output_format: PixelFormat::Yuy2,
             latency: LatencyConfig::default(),
-            udp_timeout_ms: 2_000,
+            transport_timeout_ms: TEST_TRANSPORT_TIMEOUT_MS,
+            srt_endpoint: SrtEndpoint {
+                kind: SrtTransportKind::Srt,
+                mode: SrtMode::Caller,
+                host: "127.0.0.1".to_owned(),
+                port: TEST_SRT_PORT,
+                stream_id: "test-stream".to_owned(),
+                latency_ms: 120,
+                key_length_bytes: 32,
+                passphrase: "test-passphrase-123".to_owned(),
+            },
         }
     }
 
     #[test]
     fn h264_pipeline_has_bounded_queue_and_can_start() {
         gst::init().unwrap();
-        if gst::ElementFactory::find("udpsrc").is_none() {
-            eprintln!("skipped: GStreamer UDP source plugin is unavailable");
+        if gst::ElementFactory::find("srtsrc").is_none() {
+            eprintln!("skipped: GStreamer SRT source plugin is unavailable");
             return;
         }
         let mut receiver = GStreamerReceiver::new(FakesinkFactory).unwrap();
@@ -310,6 +285,10 @@ mod tests {
     #[test]
     fn h265_pipeline_is_constructible_when_parser_is_installed() {
         gst::init().unwrap();
+        if gst::ElementFactory::find("srtsrc").is_none() {
+            eprintln!("skipped: GStreamer SRT source plugin is unavailable");
+            return;
+        }
         let factory = DefaultCodecPipelineFactory;
         if !factory.supports(VideoCodec::H265).supported {
             eprintln!("skipped: required GStreamer H.265 or shared input plugin is unavailable");
@@ -318,20 +297,5 @@ mod tests {
         let mut receiver = GStreamerReceiver::new(FakesinkFactory).unwrap();
         receiver.prepare(config(VideoCodec::H265)).unwrap();
         receiver.stop().unwrap();
-    }
-
-    #[test]
-    fn zero_media_port_allocates_a_session_specific_udp_port() {
-        gst::init().unwrap();
-        let mut receiver = GStreamerReceiver::new(FakesinkFactory).unwrap();
-        let mut config = config(VideoCodec::H264);
-        config.media_port = PORT_UNASSIGNED;
-
-        let allocated = receiver.prepare(config).unwrap();
-
-        assert!((MEDIA_PORT_RANGE_START..=MEDIA_PORT_RANGE_END).contains(&allocated));
-        assert!(UdpSocket::bind((Ipv4Addr::UNSPECIFIED, allocated)).is_err());
-        receiver.stop().unwrap();
-        assert!(UdpSocket::bind((Ipv4Addr::UNSPECIFIED, allocated)).is_ok());
     }
 }

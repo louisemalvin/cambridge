@@ -5,6 +5,7 @@ mod device;
 mod error;
 mod inspection;
 mod output_factory;
+mod persistent_sink_factory;
 mod v4l2loopback;
 mod virtual_camera_output;
 
@@ -16,6 +17,7 @@ pub use device::VideoDevice;
 pub use error::LinuxPlatformError;
 pub use inspection::inspect_video_devices;
 pub use output_factory::LinuxVideoSinkFactory;
+pub use persistent_sink_factory::PersistentVideoSinkFactory;
 pub use v4l2loopback::{
     find_v4l2loopback_device, resolve_v4l2loopback_device, validate_v4l2loopback,
 };

@@ -3,9 +3,10 @@ use std::{
     time::{Duration, Instant},
 };
 
+use gstreamer as gst;
 use receiver_core::{
     diagnostic_timestamp_ms, DiagnosticPhase, FrameIntervalStatistics, QueueDiagnostics,
-    ReceiverDiagnosticEvent, ReceiverDiagnostics, ReceiverState,
+    ReceiverDiagnosticEvent, ReceiverDiagnostics, ReceiverState, ReceiverTransportMetrics,
 };
 use receiver_protocol::{PixelFormat, VideoCodec, VideoProfile};
 use uuid::Uuid;
@@ -32,7 +33,7 @@ pub(crate) struct MetricsConfig {
     pub(crate) target_bitrate_bps: u32,
     pub(crate) output_pixel_format: PixelFormat,
     pub(crate) output_queue_max_frames: u32,
-    pub(crate) udp_timeout_ms: u64,
+    pub(crate) transport_timeout_ms: u64,
 }
 
 #[derive(Debug, Default)]
@@ -42,7 +43,7 @@ pub(crate) struct Metrics {
     profile: Option<VideoProfile>,
     target_bitrate_bps: u32,
     output_pixel_format: Option<PixelFormat>,
-    udp_timeout: Duration,
+    transport_timeout: Duration,
     output_queue_max_frames: u32,
     started_at: Option<Instant>,
     started_at_ms: u64,
@@ -63,6 +64,7 @@ pub(crate) struct Metrics {
     maximum_observed_queue_frames: u32,
     high_watermark_samples: u64,
     queue_pressure_active: bool,
+    srt_stats: Option<ReceiverTransportMetrics>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -85,7 +87,7 @@ impl Metrics {
             profile: Some(config.profile),
             target_bitrate_bps: config.target_bitrate_bps,
             output_pixel_format: Some(config.output_pixel_format),
-            udp_timeout: Duration::from_millis(config.udp_timeout_ms),
+            transport_timeout: Duration::from_millis(config.transport_timeout_ms),
             output_queue_max_frames: config.output_queue_max_frames,
             started_at: Some(Instant::now()),
             started_at_ms: diagnostic_timestamp_ms(),
@@ -108,6 +110,25 @@ impl Metrics {
                 self.network_samples.pop_front();
             }
         }
+    }
+
+    pub fn record_srt_stats(&mut self, stats: &gst::Structure) {
+        let bytes_received = first_u64(stats, &["bytes-received-total", "bytes-received"]);
+        if let Some(bytes_received) = bytes_received {
+            self.received_bytes = self.received_bytes.max(bytes_received);
+        }
+        self.srt_stats = Some(ReceiverTransportMetrics {
+            bytes_received,
+            packets_received: first_u64(stats, &["packets-received-total", "packets-received"]),
+            packets_lost: first_u64(stats, &["packets-lost-total", "packets-lost"]),
+            packets_retransmitted: first_u64(
+                stats,
+                &["packets-retransmitted-total", "packets-retransmitted"],
+            ),
+            packets_dropped: first_u64(stats, &["packets-dropped-total", "packets-dropped"]),
+            rtt_ms: first_u64(stats, &["rtt-ms", "rtt"])
+                .and_then(|value| u32::try_from(value).ok()),
+        });
     }
 
     pub fn record_decoded_frame(&mut self) -> bool {
@@ -169,8 +190,17 @@ impl Metrics {
         self.decoder.clone()
     }
 
+    pub fn transport_metrics(&self) -> Option<ReceiverTransportMetrics> {
+        self.srt_stats.clone()
+    }
+
     pub const fn timeout_count(&self) -> u64 {
         self.timeout_count
+    }
+
+    pub fn transport_timed_out(&self) -> bool {
+        self.last_network_at
+            .is_some_and(|last| Instant::now().duration_since(last) >= self.transport_timeout)
     }
 
     pub fn received_bitrate_bps(&self) -> u32 {
@@ -303,7 +333,9 @@ impl Metrics {
             return DiagnosticPhase::OutputBackpressure;
         }
         if state == ReceiverState::TimedOut
-            || self.last_network_at.is_some_and(|last| now.duration_since(last) >= self.udp_timeout)
+            || self
+                .last_network_at
+                .is_some_and(|last| now.duration_since(last) >= self.transport_timeout)
         {
             return DiagnosticPhase::PacketInterruption;
         }
@@ -313,7 +345,9 @@ impl Metrics {
                 _ => DiagnosticPhase::Starting,
             };
         }
-        if self.last_network_at.is_some_and(|last| now.duration_since(last) < self.udp_timeout)
+        if self
+            .last_network_at
+            .is_some_and(|last| now.duration_since(last) < self.transport_timeout)
             && self
                 .last_decoded_frame_at
                 .is_some_and(|last| now.duration_since(last) >= DECODER_STALL_GRACE)
@@ -346,6 +380,17 @@ fn observed_fps(statistics: &FrameIntervalStatistics) -> Option<f64> {
     statistics.mean_ms.filter(|mean| mean.is_normal()).map(|mean| MILLISECONDS_PER_SECOND / mean)
 }
 
+fn first_u64(stats: &gst::Structure, names: &[&str]) -> Option<u64> {
+    names.iter().find_map(|name| {
+        stats
+            .get::<u64>(*name)
+            .ok()
+            .or_else(|| stats.get::<u32>(*name).ok().map(u64::from))
+            .or_else(|| stats.get::<i64>(*name).ok().and_then(|value| u64::try_from(value).ok()))
+            .or_else(|| stats.get::<i32>(*name).ok().and_then(|value| u64::try_from(value).ok()))
+    })
+}
+
 fn percentile(values: &[f64], numerator: usize, denominator: usize) -> Option<f64> {
     let last_index = values.len().checked_sub(1)?;
     let index = last_index.saturating_mul(numerator) / denominator;
@@ -365,7 +410,7 @@ mod tests {
             target_bitrate_bps: 8_000_000,
             output_pixel_format: PixelFormat::Yuy2,
             output_queue_max_frames: 2,
-            udp_timeout_ms: 2_000,
+            transport_timeout_ms: 2_000,
         }
     }
 

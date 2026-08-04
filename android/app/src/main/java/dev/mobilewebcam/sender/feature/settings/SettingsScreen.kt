@@ -125,13 +125,13 @@ fun SettingsScreen(
             item {
                 SettingsConnectionDetails(state)
             }
-            if (state.hasApprovedReceiver) {
+            if (state.hasConfiguredReceiver) {
                 item {
                     TextButton(
-                        onClick = { onAction(SenderScreenAction.ForgetPairing) },
+                        onClick = { onAction(SenderScreenAction.ForgetReceiver) },
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Text(stringResource(R.string.forget_pairing))
+                        Text(stringResource(R.string.forget_receiver))
                     }
                 }
             }

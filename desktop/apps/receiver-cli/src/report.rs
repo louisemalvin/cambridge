@@ -257,7 +257,7 @@ fn warnings(observation: &ReceiverDiagnostics, categories: &[ReportCategory]) ->
                 "recent frame cadence exceeded the jitter warning threshold".to_owned()
             }
             ReportCategory::PacketInterruption => {
-                format!("receiver observed {} UDP timeout(s)", observation.timeout_count)
+                format!("receiver observed {} SRT timeout(s)", observation.timeout_count)
             }
             ReportCategory::DecoderStall => {
                 "network input continued while decoded frames stopped".to_owned()

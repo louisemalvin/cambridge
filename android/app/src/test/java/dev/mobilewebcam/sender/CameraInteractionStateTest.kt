@@ -3,7 +3,7 @@ package dev.mobilewebcam.sender
 import dev.mobilewebcam.sender.media.camera.CameraInteractionState
 import dev.mobilewebcam.sender.media.camera.CameraStabilizationMode
 import dev.mobilewebcam.sender.media.camera.CameraStabilizationSupport
-import dev.mobilewebcam.sender.media.camera.physicalLensOptionsFor
+import dev.mobilewebcam.sender.media.camera.PhysicalLensOption
 import dev.mobilewebcam.sender.media.camera.preferredStabilizationMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -40,18 +40,20 @@ class CameraInteractionStateTest {
     }
 
     @Test
-    fun physicalLensOptionsUseRuntimeIdsAndDefaultToAutomatic() {
-        val options = physicalLensOptionsFor(listOf("3", "2", "3"))
+    fun physicalLensOptionsKeepRuntimeLabelsAndDefaultToAutomatic() {
+        val options = listOf(
+            PhysicalLensOption("Auto (Rear ID 0)", null),
+            PhysicalLensOption("Physical (ID 2)", "2"),
+            PhysicalLensOption("Physical (ID 3)", "3"),
+        )
         val state = CameraInteractionState().withPhysicalLensOptions(options)
 
-        assertEquals(listOf("Auto", "Lens 3", "Lens 2"), options.map { it.label })
+        assertEquals(
+            listOf("Auto (Rear ID 0)", "Physical (ID 2)", "Physical (ID 3)"),
+            options.map { it.label },
+        )
         assertEquals(options.first(), state.selectedPhysicalLens)
         assertEquals(options[2], state.withSelectedPhysicalLens(options[2]).selectedPhysicalLens)
-    }
-
-    @Test
-    fun noPhysicalCameraIdsProduceNoLensControls() {
-        assertTrue(physicalLensOptionsFor(emptyList()).isEmpty())
     }
 
     @Test

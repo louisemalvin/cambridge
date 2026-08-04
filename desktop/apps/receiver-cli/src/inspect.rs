@@ -26,7 +26,11 @@ pub fn run(cli: &Cli) -> Result<()> {
     let started = Instant::now();
     let mut snapshots = Vec::new();
     loop {
-        snapshots.push(get_diagnostics(&cli.receiver_url, session_id)?);
+        snapshots.push(get_diagnostics(
+            &cli.receiver_url,
+            session_id,
+            cli.control_token.as_deref(),
+        )?);
         let elapsed = started.elapsed();
         if elapsed >= capture_duration {
             break;

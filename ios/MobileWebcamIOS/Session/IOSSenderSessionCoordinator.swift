@@ -131,8 +131,15 @@ final class IOSSenderSessionCoordinator: ObservableObject {
                 return .invalidConfiguration
             }
         }
-        if error is IOSReceiverControlError {
-            return .notImplemented
+        if let controlError = error as? IOSReceiverControlError {
+            switch controlError {
+            case .notImplemented:
+                return .notImplemented
+            case .transport, .httpStatus:
+                return .networkFailure
+            case .invalidEndpoint, .invalidResponse, .invalidSession, .unsupportedProtocol:
+                return .unknown
+            }
         }
         return .unknown
     }

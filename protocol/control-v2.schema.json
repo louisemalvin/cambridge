@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mobile-webcam.dev/protocol/control-v2.schema.json",
+  "title": "Mobile Webcam control protocol v2",
+  "type": "object",
+  "oneOf": [
+    { "$ref": "#/$defs/healthResponse" },
+    { "$ref": "#/$defs/capabilitiesResponse" },
+    { "$ref": "#/$defs/createSessionRequest" },
+    { "$ref": "#/$defs/createSessionResponse" },
+    { "$ref": "#/$defs/sessionStatusResponse" },
+    { "$ref": "#/$defs/problemDetails" }
+  ],
+  "$defs": {
+    "protocolVersion": { "const": 2 },
+    "codec": { "type": "string", "enum": ["h264", "h265"] },
+    "pixelFormat": { "type": "string", "enum": ["yuy2", "nv12", "i420"] },
+    "profile": {
+      "type": "object",
+      "required": ["width", "height", "fps"],
+      "properties": {
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 },
+        "fps": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": true
+    },
+    "bitrateByCodec": {
+      "type": "object",
+      "required": ["h264", "h265"],
+      "properties": {
+        "h264": { "type": "integer", "minimum": 1 },
+        "h265": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": true
+    },
+    "srtEndpoint": {
+      "type": "object",
+      "required": ["kind", "mode", "host", "port", "streamId", "latencyMs", "keyLengthBytes", "passphrase"],
+      "properties": {
+        "kind": { "const": "srt" },
+        "mode": { "const": "caller" },
+        "host": { "type": "string", "minLength": 1 },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "streamId": { "type": "string", "minLength": 1 },
+        "latencyMs": { "type": "integer", "minimum": 1 },
+        "keyLengthBytes": { "const": 32 },
+        "passphrase": { "type": "string", "minLength": 10, "maxLength": 79 }
+      },
+      "additionalProperties": true
+    },
+    "video": {
+      "type": "object",
+      "required": ["codec", "container", "width", "height", "fps", "bitrateBps"],
+      "properties": {
+        "codec": { "$ref": "#/$defs/codec" },
+        "container": { "const": "mpegts" },
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 },
+        "fps": { "type": "integer", "minimum": 1 },
+        "bitrateBps": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": true
+    },
+    "output": {
+      "type": "object",
+      "required": ["pixelFormat"],
+      "properties": { "pixelFormat": { "$ref": "#/$defs/pixelFormat" } },
+      "additionalProperties": true
+    },
+    "healthResponse": {
+      "type": "object",
+      "required": ["status", "protocolVersion"],
+      "properties": {
+        "status": { "const": "ready" },
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" }
+      },
+      "additionalProperties": true
+    },
+    "capabilitiesResponse": {
+      "type": "object",
+      "required": ["protocolVersion", "transport", "videoCodecs", "outputProfile", "output", "maximumConcurrentSessions", "active"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "transport": {
+          "type": "object",
+          "required": ["kind", "modes", "keyLengthBytes"],
+          "properties": {
+            "kind": { "const": "srt" },
+            "modes": { "type": "array", "contains": { "const": "caller" } },
+            "keyLengthBytes": { "const": 32 }
+          },
+          "additionalProperties": true
+        },
+        "videoCodecs": { "type": "array", "items": { "$ref": "#/$defs/codec" } },
+        "outputProfile": { "$ref": "#/$defs/profile" },
+        "output": { "$ref": "#/$defs/output" },
+        "maximumConcurrentSessions": { "const": 1 },
+        "active": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
+    "createSessionRequest": {
+      "type": "object",
+      "required": ["protocolVersion", "preferredCodecs", "profile", "bitrateByCodec"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "preferredCodecs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/codec" }
+        },
+        "profile": { "$ref": "#/$defs/profile" },
+        "bitrateByCodec": { "$ref": "#/$defs/bitrateByCodec" }
+      },
+      "additionalProperties": true
+    },
+    "createSessionResponse": {
+      "type": "object",
+      "required": ["protocolVersion", "sessionId", "connectDeadlineMs", "reconnectGraceMs", "video", "transport", "output"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "sessionId": { "type": "string", "format": "uuid" },
+        "connectDeadlineMs": { "type": "integer", "minimum": 1 },
+        "reconnectGraceMs": { "type": "integer", "minimum": 1 },
+        "video": { "$ref": "#/$defs/video" },
+        "transport": { "$ref": "#/$defs/srtEndpoint" },
+        "output": { "$ref": "#/$defs/output" }
+      },
+      "additionalProperties": true
+    },
+    "sessionStatusResponse": {
+      "type": "object",
+      "required": ["protocolVersion", "sessionId", "state", "metrics"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "sessionId": { "type": "string", "format": "uuid" },
+        "state": {
+          "type": "string",
+          "enum": ["idle", "allocating", "listening", "connected", "receiving", "reconnecting", "stopping", "failed", "expired"]
+        },
+        "decoder": { "type": ["string", "null"] },
+        "metrics": { "type": "object", "additionalProperties": true }
+      },
+      "additionalProperties": true
+    },
+    "problemDetails": {
+      "type": "object",
+      "required": ["code", "detail", "protocolVersion"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": ["unsupported_protocol_version", "unauthorized", "receiver_busy", "unsupported_codec", "unsupported_profile", "invalid_session", "session_expired", "transport_unavailable", "output_unavailable"]
+        },
+        "detail": { "type": "string" },
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" }
+      },
+      "additionalProperties": true
+    }
+  }
+}

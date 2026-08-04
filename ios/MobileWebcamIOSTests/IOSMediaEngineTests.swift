@@ -47,4 +47,34 @@ final class IOSMediaEngineTests: XCTestCase {
             XCTFail("Unexpected error: \(error)")
         }
     }
+
+    func testV2SRTEndpointBoundaryUsesAES256AndValidCredentials() throws {
+        let endpoint = IOSV2SRTEndpoint(
+            kind: .srt,
+            mode: .caller,
+            host: "127.0.0.1",
+            port: 5000,
+            streamId: "stream-1",
+            latencyMs: 120,
+            keyLengthBytes: 32,
+            passphrase: "test-passphrase"
+        )
+
+        XCTAssertNoThrow(try endpoint.validate())
+    }
+
+    func testV2SRTEndpointRejectsNonAES256Key() {
+        let endpoint = IOSV2SRTEndpoint(
+            kind: .srt,
+            mode: .caller,
+            host: "127.0.0.1",
+            port: 5000,
+            streamId: "stream-1",
+            latencyMs: 120,
+            keyLengthBytes: 16,
+            passphrase: "test-passphrase"
+        )
+
+        XCTAssertThrowsError(try endpoint.validate())
+    }
 }

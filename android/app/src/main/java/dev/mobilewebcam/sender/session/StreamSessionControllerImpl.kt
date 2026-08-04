@@ -50,7 +50,8 @@ class StreamSessionControllerImpl(
     private var activeSession: NegotiatedSession? = null
     private var activeRunId: String? = null
     private var receiverWatchdogJob: kotlinx.coroutines.Job? = null
-    private var lastLoggedBitrateAtMillis: Long = NO_BITRATE_SAMPLE_TIMESTAMP_MILLIS
+    private var lastLoggedBitrateAtMillis: Long = NO_SAMPLE_TIMESTAMP_MILLIS
+    private var lastLoggedTransportErrorAtMillis: Long = NO_SAMPLE_TIMESTAMP_MILLIS
 
     override val state: StateFlow<StreamState> = stateFlow.asStateFlow()
 
@@ -88,9 +89,9 @@ class StreamSessionControllerImpl(
         )
         stateFlow.value = StreamState.CheckingReceiver
         try {
-            receiver.health(endpoint).orReceiverFailure("Health check failed")
+            receiver.healthV2(endpoint).orReceiverFailure("Health check failed")
             diagnosticEvent("receiver_health_checked")
-            val receiverCapabilities = receiver.capabilities(endpoint)
+            val receiverCapabilities = receiver.capabilitiesV2(endpoint)
                 .orReceiverFailure("Capability request failed")
             diagnosticEvent(
                 "receiver_capabilities_received",
@@ -117,7 +118,7 @@ class StreamSessionControllerImpl(
                 profile = profile,
                 bitrateByCodec = VideoCodec.entries.associateWith(profile::bitrateFor),
             )
-            val session = receiver.prepareSession(endpoint, request)
+            val session = receiver.createSessionV2(endpoint, request)
                 .orPrepareFailure()
             activeSession = session
             diagnosticEvent(
@@ -156,7 +157,9 @@ class StreamSessionControllerImpl(
             )
             stateFlow.value = StreamState.Starting(session)
             diagnosticEvent("media_stream_starting", mapOf("mediaPort" to session.mediaPort))
-            streamEngine.start(endpoint.host, session.mediaPort).getOrThrow()
+            val transport = session.srtEndpoint
+                ?: error("Receiver did not return an SRT transport endpoint")
+            streamEngine.start(transport).getOrThrow()
             stateFlow.value = StreamState.Streaming(session, System.currentTimeMillis())
             startReceiverSessionWatchdog(session)
             diagnosticEvent(
@@ -216,15 +219,16 @@ class StreamSessionControllerImpl(
         lifecycleMutex.withLock {
             if (activeSession == null || stateFlow.value !is StreamState.Streaming) return@withLock
             logEngineEvent(event)
-            val failure = when (event) {
-                is StreamEngineEvent.ConnectionFailed ->
-                    StreamFailure.StreamStartFailed(IllegalStateException(event.reason))
-                StreamEngineEvent.Disconnected -> StreamFailure.NetworkDisconnected
-                else -> return@withLock
+            // A failed SRT connection attempt is recoverable while RootEncoder is
+            // retrying. Only an explicit disconnect ends the sender session.
+            when (event) {
+                StreamEngineEvent.Disconnected -> {
+                    diagnosticEvent("stream_failed", mapOf("failureType" to "NetworkDisconnected"))
+                    cleanupLocked(activeSession)
+                    stateFlow.value = StreamState.Failed(StreamFailure.NetworkDisconnected)
+                }
+                else -> Unit
             }
-            diagnosticEvent("stream_failed", mapOf("failureType" to failure::class.simpleName))
-            cleanupLocked(activeSession)
-            stateFlow.value = StreamState.Failed(failure)
         }
     }
 
@@ -235,7 +239,7 @@ class StreamSessionControllerImpl(
         runCatching { streamEngine.release() }
         foreground.stop()
         if (session != null) {
-            runCatching { receiver.stopSession(session.endpoint, session.sessionId) }
+            runCatching { receiver.stopSessionV2(session.endpoint, session.sessionId) }
         }
         activeSession = null
         activeRunId = null
@@ -247,7 +251,7 @@ class StreamSessionControllerImpl(
             var consecutiveFailures = 0
             while (isActive) {
                 delay(RECEIVER_SESSION_WATCHDOG_INTERVAL_MILLIS)
-                val check = receiver.sessionState(session.endpoint, session.sessionId)
+                val check = receiver.sessionStateV2(session.endpoint, session.sessionId)
                 if (check.isSuccess) {
                     consecutiveFailures = 0
                     continue
@@ -273,6 +277,7 @@ class StreamSessionControllerImpl(
             }
         }
     }
+
     private fun logEngineEvent(event: StreamEngineEvent) {
         when (event) {
             is StreamEngineEvent.ConnectionStarted -> diagnosticEvent(
@@ -280,10 +285,16 @@ class StreamSessionControllerImpl(
                 mapOf("endpoint" to event.endpoint),
             )
             StreamEngineEvent.Connected -> diagnosticEvent("encoder_connected")
-            is StreamEngineEvent.ConnectionFailed -> diagnosticEvent(
-                "encoder_connection_failed",
-                mapOf("reason" to event.reason),
-            )
+            is StreamEngineEvent.ConnectionFailed -> {
+                val now = System.currentTimeMillis()
+                if (now - lastLoggedTransportErrorAtMillis >= TRANSPORT_ERROR_LOG_INTERVAL_MILLIS) {
+                    lastLoggedTransportErrorAtMillis = now
+                    diagnosticEvent(
+                        "encoder_connection_failed",
+                        mapOf("reason" to event.reason),
+                    )
+                }
+            }
             StreamEngineEvent.Disconnected -> diagnosticEvent("encoder_disconnected")
             StreamEngineEvent.AuthenticationError -> diagnosticEvent("encoder_authentication_error")
             StreamEngineEvent.AuthenticationSucceeded -> diagnosticEvent("encoder_authentication_succeeded")
@@ -349,7 +360,8 @@ class StreamSessionControllerImpl(
     private companion object {
         const val RUN_ID_PREFIX = "run-"
         const val BITRATE_SAMPLE_INTERVAL_MILLIS = 5_000L
-        const val NO_BITRATE_SAMPLE_TIMESTAMP_MILLIS = 0L
+        const val TRANSPORT_ERROR_LOG_INTERVAL_MILLIS = 5_000L
+        const val NO_SAMPLE_TIMESTAMP_MILLIS = 0L
         const val RECEIVER_SESSION_WATCHDOG_INTERVAL_MILLIS = 2_000L
         const val RECEIVER_SESSION_WATCHDOG_FAILURE_THRESHOLD = 3
     }

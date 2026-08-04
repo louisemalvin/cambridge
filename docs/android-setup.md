@@ -10,7 +10,7 @@
 - A physical Android phone with a rear camera for streaming validation.
 - The phone and Linux receiver reachable on the same Wi-Fi or USB-tethered network.
 
-The project pins RootEncoder `2.8.0` and CameraX `1.6.1` in
+The project pins RootEncoder `2.8.0` in
 [`android/gradle/libs.versions.toml`](../android/gradle/libs.versions.toml).
 The RootEncoder dependency is isolated to `media/streaming/rootencoder/`; the
 rest of the app uses the project-owned `StreamEngine` interface. Compose
@@ -36,30 +36,32 @@ RootEncoder dependencies. No microphone permission is requested.
 
 ## Connect
 
-1. Open Mobile Webcam on the phone and grant camera permission.
-2. Start `mobile-webcam-desktop` on Linux.
-3. If this is the only available phone, the desktop selects it automatically.
-   If several phones are available, select one in the desktop window.
-4. Approve the desktop on the phone the first time.
-5. Leave Codec mode at Auto - prefer H.265 and start with `1080p30`.
-6. Confirm the selected codec in the streaming screen.
+1. Start `mobile-webcam-desktop` or `mobile-webcam-receiver` on Linux.
+2. Open Mobile Webcam on the phone and grant camera permission.
+3. Select the receiver discovered on the local network. The app verifies its
+   v2 HTTP origin and asks for a bearer token only when the receiver advertises
+   authentication. If discovery is unavailable, use the manual receiver-origin
+   fallback. The phone starts the v2 HTTP session and then calls the returned
+   encrypted SRT endpoint.
+4. Leave Codec mode at H.264 for the first compatibility check and start with
+   the receiver-owned `720p30` profile.
+5. Confirm the receiver reaches `receiving` and that OBS can open `Mobile Webcam`.
 
-The media stream is sent to the receiver's session-specific UDP port in
-`50000-50099`. The Android foreground notification has a Stop action. Camera,
-encoder, preview, notification, wake-lock, and Wi-Fi-lock resources are
-released when the session stops or fails.
+The receiver owns one stable SRT listener port and returns a per-session stream
+ID and AES-256 passphrase. The Android foreground notification has a Stop
+action. Camera, encoder, preview, notification, wake-lock, and Wi-Fi-lock
+resources are released when the session stops or fails.
 
 Codec and profile defaults are owned by the application-scoped
 `SenderSettingsRepository` and persisted in the sender settings store, so a
 settings change survives activity recreation and is used by the next
-negotiated session. Pending receiver approval is presented on the Pairing
-destination, including when a request arrives while the preview destination is
-visible. Settings also exposes an explicit Forget receiver pairing action that
-stops the session, clears the approved receiver, and returns to Pairing.
+negotiated session. The Pairing destination stores the selected receiver
+origin, and Settings exposes a Forget receiver action that stops the session,
+clears the configured origin, and returns to the connection form.
 
 The RootEncoder adapter serializes camera, preview, and stream teardown through
 the single session owner. Its stop path uses one ordered RootEncoder stop
-sequence before releasing the CameraX source; this avoids repeating the
+sequence before releasing the Camera2 source; this avoids repeating the
 upstream library's GL teardown sequence on the Android emulator.
 
 The preview uses the selected profile's aspect ratio. In portrait display
@@ -80,25 +82,26 @@ landscape bottom-sheet geometry.
 While streaming, pinch gestures and a compact zoom tray use a slider bounded by
 the active camera's reported zoom range. The settings screen also exposes the
 full slider and a reset action that returns to 1x. Zoom changes update the
-existing RootEncoder `CameraXSource` camera control and do not renegotiate or
+existing RootEncoder `Camera2Source` camera control and do not renegotiate or
 restart the stream. The screen dim action applies a reversible UI scrim and
 does not change Android window brightness.
 
-RootEncoder 2.8.0's public `CameraXSource` API does not expose logical
-multi-camera physical IDs or video stabilization controls. The app therefore
-keeps those settings in the presentation model but reports them as unsupported
-when running through the supported RootEncoder source. No direct Camera2
-fallback or second camera session is opened. A future physical-lens or
-stabilization implementation needs an explicit RootEncoder-compatible adapter
-decision and device validation.
+RootEncoder 2.8.0's `Camera2Source` exposes physical-camera binding through the
+existing `OutputConfiguration.setPhysicalCameraId` path. On Android 9 and
+newer, the adapter discovers a logical rear camera and its vendor-provided
+physical IDs, then keeps those IDs as the user-visible choices. The IDs are not
+portable lens names, so the UI intentionally labels them as physical IDs. The
+Vivo V2413 exposes rear logical ID `0` with physical IDs `2`, `3`, and `4`, plus
+front logical ID `1`. Stabilization remains unsupported by this adapter. No
+second camera session or parallel capture pipeline is opened.
 
 ## Permissions and background behavior
 
-The app requests camera permission only. It exposes a local sender-control
-service while the activity is open and uses a remembered pairing token to
-prevent automatic activation by an unapproved desktop. It keeps the setup
-screen awake so the process remains available. It uses the camera foreground-service
-type while streaming and keeps an ongoing notification. Activity recreation
+The app requests camera permission only. Normal v2 operation does not expose a
+phone-side control service. The receiver bearer token is encrypted with an
+Android Keystore AES-GCM key. It keeps the setup screen awake so the process
+remains available. It uses the camera foreground-service type while streaming
+and keeps an ongoing notification. Activity recreation
 uses the application-scoped session and camera controller, detaches the old
 preview surface, and attaches the new one without starting a second encoder.
 Minimizing or locking the app has the same behavior because preview surface
@@ -108,15 +111,11 @@ restart the stream after reopening the app.
 
 ## Emulator validation
 
-The API 35 `codex-phone-webcam-api35` emulator has been used to install and
-launch the exact debug APK, exercise paired reverse control, stream H.264
-through the Rust receiver, stop and restart the stream, and read the Linux
-`v4l2loopback` output. A full diagnostic snapshot reached `receiving`, decoded
-607 frames with a 1,211 ms first-frame delay, reported about 1.96 Mbps and
-zero receiver pipeline errors; an exact APK run completed two H.264 sessions
-and produced ten 1920x1080 YUY2 frames (41,472,000 bytes) after a stop/restart
-cycle. The final post-package-move APK also reached `receiving` for a fresh
-H.264 session and produced the same ten-frame v4l2 capture. The emulator run
-also showed queue-pressure and continuity warnings, so it is a functional
-smoke check rather than a latency or throughput baseline. Physical-device and
-latency comparison remain unverified.
+The deterministic harness is `scripts/android/test-emulator-srt.sh`. It creates
+a moving file with FFmpeg, starts `codex-phone-webcam-api35` with
+`-camera-back videofile:<path>`, launches the receiver with an emulator-reachable
+advertised host, installs the exact APK, configures the manual receiver-origin
+fallback,
+and checks decoded frames, v4l2 output, and redacted Android logs. Set
+`REQUIRE_V4L2_CAPTURE=1` when an OBS capture consumer is open. Physical-device,
+macOS/iOS, and long-duration latency evidence remain separate gates.

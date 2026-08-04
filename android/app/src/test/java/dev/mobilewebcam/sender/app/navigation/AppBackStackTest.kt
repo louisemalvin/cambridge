@@ -45,11 +45,11 @@ class AppBackStackTest {
     }
 
     @Test
-    fun pendingApprovalRoutesToPairingWithoutDuplicatingIt() {
+    fun pairingRouteDoesNotDuplicateIt() {
         val backStack = AppBackStack(AppDestination.Webcam)
 
-        backStack.showPairingForApproval()
-        backStack.showPairingForApproval()
+        backStack.navigateTo(AppDestination.Pairing)
+        backStack.navigateTo(AppDestination.Pairing)
 
         assertEquals(AppDestination.Pairing, backStack.current)
         assertEquals(2, backStack.elements.size)

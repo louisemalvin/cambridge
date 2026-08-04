@@ -4,17 +4,7 @@ use tracing::{debug, error, warn};
 
 use crate::{metrics::Metrics, pipeline_event::PipelineObserver};
 
-#[derive(Debug, Default, Clone, Copy)]
-pub(crate) struct BusPollResult {
-    pub(crate) timed_out: bool,
-}
-
-pub(crate) fn poll(
-    bus: &gst::Bus,
-    observer: &PipelineObserver,
-    metrics: &mut Metrics,
-) -> BusPollResult {
-    let mut result = BusPollResult::default();
+pub(crate) fn poll(bus: &gst::Bus, observer: &PipelineObserver, metrics: &mut Metrics) {
     while let Some(message) = bus.timed_pop(gst::ClockTime::ZERO) {
         match message.view() {
             gst::MessageView::Error(error_message) => {
@@ -45,14 +35,20 @@ pub(crate) fn poll(
                 let Some(structure) = element_message.structure() else {
                     continue;
                 };
-                if structure.name() == "GstUDPSrcTimeout" {
+                let transport_lost = (structure.name() == "connection-removed"
+                    || structure.name() == "caller-rejected")
+                    && !matches!(
+                        observer.state(),
+                        receiver_core::ReceiverState::Idle | receiver_core::ReceiverState::Failed
+                    );
+                if transport_lost {
                     metrics.record_timeout();
                     observer.on_timeout(metrics.timeout_count());
-                    result.timed_out = true;
+                } else if structure.name() == "connection-added" {
+                    observer.on_transport_connected();
                 }
             }
             _ => {}
         }
     }
-    result
 }

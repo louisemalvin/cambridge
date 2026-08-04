@@ -9,6 +9,9 @@ data class NegotiatedSession(
     val mediaPort: Int,
     val outputPixelFormat: OutputPixelFormat,
     val warnings: List<String>,
+    val srtEndpoint: SrtTransportEndpoint? = null,
+    val connectDeadlineMs: Long? = null,
+    val reconnectGraceMs: Long? = null,
 )
 
 data class StreamConfiguration(

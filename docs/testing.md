@@ -18,60 +18,51 @@ When the Android toolchain is installed, run:
 ```
 
 Rust tests cover JSON schema fixtures, protocol version and codec rejection,
-codec negotiation, output policy, HTTP routes, session conflicts, timeout
-cleanup, bounded pipeline construction, H.265 parser selection, discovery
-state, and Linux device inspection. Kotlin tests cover shared fixture decoding,
+codec negotiation, output policy, authenticated v2 HTTP routes, session
+conflicts, timeout cleanup, bounded pipeline construction, SRT stream identity,
+H.265 parser selection, and Linux device inspection. Kotlin tests cover shared fixture decoding,
 negotiation, session cleanup behavior, profile-driven preview geometry,
 orientation mapping, zoom clamping/reset, and RootEncoder output-dimension
 mapping. The Android instrumentation suite also checks that the Material 3
-zoom control exposes its slider and reset action, pairing persistence can be
-forgotten, and the coordinator clears its approved receiver state. The
-presentation mapper tests cover waiting, approval, streaming, failure
+zoom control exposes its slider and reset action, receiver-origin persistence
+can be forgotten, and the coordinator clears its configured receiver state.
+The presentation mapper tests cover waiting, streaming, failure
 diagnostics, and camera-control projection without exposing domain types to
 Compose. The preview viewport tests cover fitted landscape and portrait
 geometry.
 
-The MPEG-TS compatibility checks also assert 188-byte packet caps and the
-H.264/H.265 parser branches. Android transport tests assert the derived
-six-packet datagram limit. The iOS skeleton has source-level unit tests for
-configuration validation and stub media-engine boundaries; they do not require
-camera hardware or a completed media pipeline.
+The MPEG-TS compatibility checks assert the parser branches and SRT source
+properties. The iOS adapter has source-level unit tests for configuration,
+typed SRT destinations, and the non-functional media boundary; it does not
+claim camera hardware or a completed media pipeline.
 
-## Synthetic H.264
+## Synthetic SRT receiver gate
 
-With a receiver using a test sink or a configured virtual camera, prepare a
-session and send to the assigned UDP port:
+Run the host SRT gate against a configured virtual camera:
 
 ```bash
-PREPARED_SESSION=$(curl -fsS \
-  -H 'content-type: application/json' \
-  --data-binary @protocol/examples/prepare-h264-request.json \
-  http://127.0.0.1:5001/v1/sessions/prepare)
-MEDIA_PORT=$(jq -r '.media.port' <<<"$PREPARED_SESSION")
-scripts/linux/synthetic-h264-sender.sh 127.0.0.1 "$MEDIA_PORT"
+scripts/linux/test-srt-receiver.sh /dev/video10 55001 55000
+scripts/linux/test-srt-netns.sh 55041 55040 /dev/video10
+scripts/linux/test-srt-lifecycle.sh 20 55011 55010 /dev/video10
+SUSTAINED_SECONDS=1800 scripts/linux/test-srt-sustained.sh 55021 55020 /dev/video10
 ```
 
-The sender creates a live 1080p30 test pattern, uses `x264enc` with a one-second
-keyframe interval, packages H.264 in MPEG-TS, and sends UDP unicast. The
-receiver should report `receiving`, a decoder name, and a first-frame event.
+The gate creates a moving H.264 pattern, packages it in MPEG-TS, and sends it
+to the receiver's encrypted SRT endpoint. It checks wrong stream IDs and
+passphrases, decoded frames, reconnect, standby, idempotent cleanup, bounded
+RSS, and persistent output.
 
-## Synthetic H.265
+## Android emulator SRT gate
 
-Prepare an H.265 session and run:
+The emulator harness builds and installs the exact APK, uses the emulator's
+video-file camera, passes the manual receiver-origin fallback through the activity
+launcher, and waits for receiver `receiving` state:
 
 ```bash
-PREPARED_SESSION=$(curl -fsS \
-  -H 'content-type: application/json' \
-  --data-binary @protocol/examples/prepare-h265-request.json \
-  http://127.0.0.1:5001/v1/sessions/prepare)
-MEDIA_PORT=$(jq -r '.media.port' <<<"$PREPARED_SESSION")
-scripts/linux/synthetic-h265-sender.sh 127.0.0.1 "$MEDIA_PORT"
+scripts/android/test-emulator-srt.sh
 ```
 
-If `x265enc`, `udpsink`, or another required element is unavailable, install
-the GStreamer plugin package that provides it or mark the runtime test
-skipped. Parser, negotiation, and pipeline construction tests still provide
-useful coverage without a complete runtime sender path.
+Set `REQUIRE_V4L2_CAPTURE=1` when OBS is open and must be part of the gate.
 
 ## Virtual camera
 
@@ -104,21 +95,25 @@ desktop producer attaches. In OBS, add `Video Capture Device (V4L2)` and select
 starting preview or capture should start it, and releasing the final consumer
 should return the output to black standby.
 
+With OBS open and the Mobile Webcam source selected, run:
+
+```bash
+scripts/linux/test-obs-virtual-camera.sh /dev/video10
+```
+
 The desktop application can be used instead of the CLI:
 
 ```bash
 mobile-webcam-desktop
 ```
 
-It is the single receiver process for the control API, UDP media, decoded
+It is the single receiver process for the control API, SRT media, decoded
 preview, and v4l2loopback output. Do not start both receiver binaries on the
 same ports and virtual-camera device.
 
-During a physical Android lifecycle check, record the sender-control `streamId`
-for each demand activation. A repeated start retry must reuse the same ID, a
-later activation must use a new ID, and an old stop must not stop the newer
-activation. Killing the desktop while streaming should stop the Android camera
-after the bounded receiver-session watchdog window.
+During an Android lifecycle check, record the v2 `sessionId` and verify that a
+repeated DELETE is idempotent, a sender restart can create a fresh session, and
+killing the receiver leaves the sender with a bounded control failure.
 
 ## End-to-end matrix
 

@@ -1,8 +1,8 @@
 # Performance diagnostics
 
-The receiver automatically samples diagnostics while a session is active and
-retains a bounded timeline for the latest completed run. The existing session
-response and the MPEG-TS/UDP media contract are unchanged.
+The receiver automatically samples diagnostics while an SRT session is active
+and retains a bounded timeline for the latest completed run. The session
+status and MPEG-TS/SRT media contract remain separate.
 
 ## Assistant-driven capture
 
@@ -11,7 +11,7 @@ stop the stream. Then tell the assistant that the run is finished. The
 assistant can fetch:
 
 ```text
-GET /v1/diagnostics/latest
+GET /v2/diagnostics/latest
 ```
 
 The response contains the run/session identity, start and completion times,
@@ -25,7 +25,7 @@ The latest run is held in receiver memory and is lost if the receiver process
 restarts. Capture the run before restarting the receiver.
 
 The session-specific endpoint remains available for live troubleshooting:
-`GET /v1/sessions/{sessionId}/diagnostics`.
+`GET /v2/sessions/{sessionId}/diagnostics`.
 
 ## Diagnostic vocabulary
 
@@ -40,13 +40,13 @@ flat set of context fields:
 | `codec_negotiated` | Sender and receiver selected the codec and profile. |
 | `camera_configuration` | Camera capabilities, lens, and stabilization context were observed. |
 | `encoder_prepared` | RootEncoder accepted the negotiated video configuration. |
-| `media_stream_starting` | The sender is about to send MPEG-TS/UDP media. |
+| `media_stream_starting` | The sender is about to send MPEG-TS/SRT media. |
 | `stream_started` | Sender lifecycle reached streaming. |
 | `encoder_connected` / `encoder_connection_failed` | RootEncoder transport callbacks. |
 | `encoder_bitrate_changed` | A sampled encoder bitrate callback. |
 | `receiver_state_changed` | Receiver state transition. |
 | `receiver_first_frame` | First decoded frame reached the output queue. |
-| `receiver_stream_timed_out` / `receiver_stream_resumed` | UDP input interruption and recovery. |
+| `receiver_stream_timed_out` / `receiver_stream_resumed` | SRT input interruption and recovery. |
 | `receiver_decoder_selected` | GStreamer selected a video decoder. |
 | `receiver_continuity_warning` | MPEG-TS continuity warning observed on the bus. |
 | `receiver_pipeline_warning` / `receiver_pipeline_error` | Other GStreamer warning or error. |

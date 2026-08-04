@@ -38,4 +38,15 @@ impl ControlState {
             let _ = service.state();
         }
     }
+
+    pub(crate) fn v2_authorized(&self, bearer_token: Option<&str>) -> bool {
+        let Ok(service) = self.service.lock() else {
+            return false;
+        };
+        service
+            .config()
+            .control_token
+            .as_deref()
+            .map_or(true, |expected| bearer_token == Some(expected))
+    }
 }

@@ -7,13 +7,12 @@ import dev.mobilewebcam.sender.model.ReceiverEndpoint
 import dev.mobilewebcam.sender.model.ReceiverHealth
 
 interface ReceiverControlClient {
-    suspend fun health(endpoint: ReceiverEndpoint): Result<ReceiverHealth>
-    suspend fun capabilities(endpoint: ReceiverEndpoint): Result<ReceiverCapabilities>
-    suspend fun prepareSession(
+    suspend fun healthV2(endpoint: ReceiverEndpoint): Result<ReceiverHealth>
+    suspend fun capabilitiesV2(endpoint: ReceiverEndpoint): Result<ReceiverCapabilities>
+    suspend fun createSessionV2(
         endpoint: ReceiverEndpoint,
         request: PrepareSessionRequest,
     ): Result<NegotiatedSession>
-    suspend fun stopSession(endpoint: ReceiverEndpoint, sessionId: String): Result<Unit>
-
-    suspend fun sessionState(endpoint: ReceiverEndpoint, sessionId: String): Result<Unit>
+    suspend fun stopSessionV2(endpoint: ReceiverEndpoint, sessionId: String): Result<Unit>
+    suspend fun sessionStateV2(endpoint: ReceiverEndpoint, sessionId: String): Result<Unit>
 }

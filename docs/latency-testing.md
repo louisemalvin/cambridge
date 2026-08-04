@@ -22,7 +22,7 @@ OBS, or call application applies its own buffering.
 Query the session endpoint while testing:
 
 ```bash
-curl -s http://127.0.0.1:5001/v1/sessions/SESSION_ID | jq
+curl -s http://127.0.0.1:5001/v2/sessions/SESSION_ID | jq
 ```
 
 Record `receivedBitrateBps`, `timeoutCount`, `decoder`, and state transitions.
@@ -48,15 +48,14 @@ the desired condition, stop it, and tell the assistant the run is finished.
 The assistant reads the latest completed receiver run from:
 
 ```text
-http://127.0.0.1:5001/v1/diagnostics/latest
+http://127.0.0.1:5001/v2/diagnostics/latest
 ```
 
 When ADB is connected, the assistant also pulls the structured Android Logcat
 events directly. You do not need to find a session ID or export logs.
 
 The receiver-side inspector remains available for a bounded live capture. It
-polls the additive per-session diagnostics endpoint, so the existing session
-response and media contract remain unchanged:
+polls the v2 per-session diagnostics endpoint:
 
 ```bash
 mobile-webcam-receiver \

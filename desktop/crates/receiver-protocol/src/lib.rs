@@ -2,23 +2,25 @@
 
 mod capabilities;
 mod codec;
-mod error;
-mod health;
 mod session;
+mod v2;
 mod version;
 
 pub use capabilities::{
-    MediaCapabilities, MediaPortAssignment, OutputCapabilities, ReceiverCapabilities,
-    SessionCapabilities, VideoCodecCapability, MAXIMUM_CONCURRENT_SESSIONS,
+    OutputCapabilities, ReceiverCapabilities, SessionCapabilities, VideoCodecCapability,
+    MAXIMUM_CONCURRENT_SESSIONS,
 };
-pub use codec::{DecoderAcceleration, PixelFormat, Transport, VideoCodec};
-pub use error::ProtocolError;
-pub use health::HealthResponse;
-pub use session::{
-    BitrateByCodec, MediaResponse, NegotiatedProfile, OutputResponse, PrepareSessionRequest,
-    PrepareSessionResponse, ReceiverSessionState, SessionStateResponse, VideoProfile,
+pub use codec::{DecoderAcceleration, PixelFormat, VideoCodec};
+pub use session::VideoProfile;
+pub use v2::{
+    validate_v2_protocol_version, CreateSessionRequest, CreateSessionResponse, HealthResponseV2,
+    OutputConfiguration, ProblemDetails, ProtocolStatusV2, ReceiverCapabilitiesV2, SessionMetrics,
+    SessionStateV2, SessionStatusResponse, SrtEndpoint, SrtMode, SrtTransportCapabilities,
+    SrtTransportKind, V2BitrateByCodec, V2Container, V2ErrorCode, V2ProtocolError,
+    V2VideoConfiguration, V2VideoProfile, SRT_KEY_LENGTH_BYTES, SRT_PASSPHRASE_MAX_LENGTH,
+    SRT_PASSPHRASE_MIN_LENGTH, V2_PROTOCOL_VERSION,
 };
-pub use version::{validate_protocol_version, ProtocolStatus, ProtocolVersion, PROTOCOL_VERSION};
+pub use version::ProtocolVersion;
 
 #[cfg(test)]
 mod tests {
@@ -27,9 +29,6 @@ mod tests {
 
     const FIXTURE_ROOT: &str =
         concat!(env!("CARGO_MANIFEST_DIR"), "/../../../", "/protocol/examples/");
-    const SCHEMA: &str =
-        concat!(env!("CARGO_MANIFEST_DIR"), "/../../../", "/protocol/control-v1.schema.json");
-
     fn fixture(name: &str) -> Value {
         let path = format!("{FIXTURE_ROOT}{name}");
         let source = std::fs::read_to_string(&path).expect("fixture should be readable");
@@ -37,61 +36,51 @@ mod tests {
     }
 
     #[test]
-    fn every_example_matches_schema() {
+    fn v2_examples_match_schema_and_round_trip() {
+        let schema_path =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/../../../", "/protocol/control-v2.schema.json");
         let schema: Value = serde_json::from_str(
-            &std::fs::read_to_string(SCHEMA).expect("schema should be readable"),
+            &std::fs::read_to_string(schema_path).expect("v2 schema should be readable"),
         )
-        .expect("schema should be valid JSON");
-        let validator = jsonschema::validator_for(&schema).expect("schema should compile");
+        .expect("v2 schema should be valid JSON");
+        let validator = jsonschema::validator_for(&schema).expect("v2 schema should compile");
         for name in [
-            "health-response.json",
-            "capabilities-response.json",
-            "prepare-h264-request.json",
-            "prepare-h264-response.json",
-            "prepare-h265-request.json",
-            "prepare-h265-response.json",
-            "session-state-response.json",
+            "health-v2-response.json",
+            "capabilities-v2-response.json",
+            "create-session-h264-v2-request.json",
+            "create-session-h264-v2-response.json",
+            "session-state-v2-response.json",
         ] {
             let value = fixture(name);
-            assert!(validator.is_valid(&value), "fixture did not match schema: {name}");
+            assert!(validator.is_valid(&value), "v2 fixture did not match schema: {name}");
         }
+
+        let request: CreateSessionRequest = fixture_value("create-session-h264-v2-request.json");
+        let response: CreateSessionResponse = fixture_value("create-session-h264-v2-response.json");
+        let status: SessionStatusResponse = fixture_value("session-state-v2-response.json");
+        let _: ReceiverCapabilitiesV2 = fixture_value("capabilities-v2-response.json");
+        let _: HealthResponseV2 = fixture_value("health-v2-response.json");
+
+        assert_eq!(request.validate(), Ok(()));
+        assert_eq!(response.protocol_version, V2_PROTOCOL_VERSION);
+        assert_eq!(status.state, SessionStateV2::Receiving);
+        assert_eq!(response.transport.key_length_bytes, SRT_KEY_LENGTH_BYTES);
+        assert!(response.transport.validate().is_ok());
+    }
+
+    fn fixture_value<T: serde::de::DeserializeOwned>(name: &str) -> T {
+        serde_json::from_value(fixture(name)).expect("fixture should decode")
     }
 
     #[test]
-    fn rust_models_round_trip_all_examples() {
-        let _: HealthResponse = serde_json::from_value(fixture("health-response.json")).unwrap();
-        let _: ReceiverCapabilities =
-            serde_json::from_value(fixture("capabilities-response.json")).unwrap();
-        let h264_request: PrepareSessionRequest =
-            serde_json::from_value(fixture("prepare-h264-request.json")).unwrap();
-        let h265_request: PrepareSessionRequest =
-            serde_json::from_value(fixture("prepare-h265-request.json")).unwrap();
-        let _: PrepareSessionResponse =
-            serde_json::from_value(fixture("prepare-h264-response.json")).unwrap();
-        let _: PrepareSessionResponse =
-            serde_json::from_value(fixture("prepare-h265-response.json")).unwrap();
-        let _: SessionStateResponse =
-            serde_json::from_value(fixture("session-state-response.json")).unwrap();
-        assert_eq!(h264_request.validate(), Ok(()));
-        assert_eq!(h265_request.validate(), Ok(()));
-    }
+    fn v2_rejects_invalid_transport_credentials() {
+        let response: CreateSessionResponse = fixture_value("create-session-h264-v2-response.json");
+        let mut endpoint = response.transport;
+        endpoint.key_length_bytes = 16;
+        assert_eq!(endpoint.validate(), Err(V2ProtocolError::InvalidSrtKeyLength(16)));
 
-    #[test]
-    fn unknown_optional_fields_are_ignored() {
-        let mut value = fixture("health-response.json");
-        value["futureField"] = Value::String("ignored".to_owned());
-        let response: HealthResponse = serde_json::from_value(value).unwrap();
-        assert_eq!(response, HealthResponse::default());
-    }
-
-    #[test]
-    fn unknown_protocol_version_is_rejected() {
-        assert_eq!(validate_protocol_version(2), Err(ProtocolError::UnsupportedVersion(2)));
-    }
-
-    #[test]
-    fn unknown_codec_is_rejected() {
-        let result = serde_json::from_str::<VideoCodec>("\"av1\"");
-        assert!(result.is_err());
+        endpoint.key_length_bytes = SRT_KEY_LENGTH_BYTES;
+        endpoint.passphrase = "short".to_owned();
+        assert_eq!(endpoint.validate(), Err(V2ProtocolError::InvalidSrtPassphrase));
     }
 }

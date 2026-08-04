@@ -8,69 +8,120 @@ use crate::state::ControlState;
 mod handlers {
     use axum::{
         extract::{Path, State},
-        http::StatusCode,
+        http::{header, HeaderMap, HeaderValue, StatusCode},
         Json,
     };
-    use receiver_protocol::{HealthResponse, PrepareSessionRequest};
+    use receiver_protocol::{
+        CreateSessionRequest, CreateSessionResponse, HealthResponseV2, ReceiverCapabilitiesV2,
+        SessionStatusResponse,
+    };
 
     use crate::{
         error::{lock_service, HttpControlError},
         ControlState,
     };
 
-    pub async fn health() -> Json<HealthResponse> {
-        Json(HealthResponse::default())
+    pub async fn health_v2() -> Json<HealthResponseV2> {
+        Json(HealthResponseV2::default())
     }
 
-    pub async fn capabilities(
+    pub async fn capabilities_v2(
         State(state): State<ControlState>,
-    ) -> Result<Json<receiver_protocol::ReceiverCapabilities>, HttpControlError> {
-        Ok(Json(lock_service(&state)?.capabilities()))
+        headers: HeaderMap,
+    ) -> Result<Json<ReceiverCapabilitiesV2>, HttpControlError> {
+        authorize_v2(&state, &headers)?;
+        Ok(Json(lock_service(&state)?.capabilities_v2().map_err(HttpControlError::v2_receiver)?))
     }
 
-    pub async fn prepare_session(
+    pub async fn create_session_v2(
         State(state): State<ControlState>,
-        Json(request): Json<PrepareSessionRequest>,
-    ) -> Result<Json<receiver_protocol::PrepareSessionResponse>, HttpControlError> {
-        Ok(Json(lock_service(&state)?.prepare_session(&request)?))
+        headers: HeaderMap,
+        Json(request): Json<CreateSessionRequest>,
+    ) -> Result<(StatusCode, HeaderMap, Json<CreateSessionResponse>), HttpControlError> {
+        authorize_v2(&state, &headers)?;
+        let response = lock_service(&state)?
+            .create_session_v2(&request)
+            .map_err(HttpControlError::v2_receiver)?;
+        let location = format!("/v2/sessions/{}", response.session_id);
+        let mut response_headers = HeaderMap::new();
+        let location_value = HeaderValue::from_str(&location).map_err(|_| {
+            HttpControlError::V2Receiver(receiver_core::ReceiverError::InvalidConfiguration(
+                "session location could not be encoded".to_owned(),
+            ))
+        })?;
+        response_headers.insert(header::LOCATION, location_value);
+        Ok((StatusCode::CREATED, response_headers, Json(response)))
     }
 
-    pub async fn session(
+    pub async fn session_v2(
         State(state): State<ControlState>,
+        headers: HeaderMap,
         Path(session_id): Path<String>,
-    ) -> Result<Json<receiver_protocol::SessionStateResponse>, HttpControlError> {
-        Ok(Json(lock_service(&state)?.session(&session_id)?))
+    ) -> Result<Json<SessionStatusResponse>, HttpControlError> {
+        authorize_v2(&state, &headers)?;
+        Ok(Json(
+            lock_service(&state)?.session_v2(&session_id).map_err(HttpControlError::v2_receiver)?,
+        ))
     }
 
-    pub async fn diagnostics(
+    pub async fn stop_session_v2(
         State(state): State<ControlState>,
-        Path(session_id): Path<String>,
-    ) -> Result<Json<receiver_core::ReceiverDiagnostics>, HttpControlError> {
-        Ok(Json(lock_service(&state)?.diagnostics(&session_id)?))
-    }
-
-    pub async fn latest_diagnostics(
-        State(state): State<ControlState>,
-    ) -> Result<Json<receiver_core::ReceiverDiagnosticsRun>, HttpControlError> {
-        Ok(Json(lock_service(&state)?.latest_diagnostics()?))
-    }
-
-    pub async fn stop_session(
-        State(state): State<ControlState>,
+        headers: HeaderMap,
         Path(session_id): Path<String>,
     ) -> Result<StatusCode, HttpControlError> {
-        lock_service(&state)?.stop_session(&session_id)?;
+        authorize_v2(&state, &headers)?;
+        lock_service(&state)?
+            .stop_session_v2(&session_id)
+            .map_err(HttpControlError::v2_receiver)?;
         Ok(StatusCode::NO_CONTENT)
+    }
+
+    pub async fn diagnostics_v2(
+        State(state): State<ControlState>,
+        headers: HeaderMap,
+        Path(session_id): Path<String>,
+    ) -> Result<Json<receiver_core::ReceiverDiagnostics>, HttpControlError> {
+        authorize_v2(&state, &headers)?;
+        Ok(Json(
+            lock_service(&state)?
+                .diagnostics_v2(&session_id)
+                .map_err(HttpControlError::v2_receiver)?,
+        ))
+    }
+
+    pub async fn latest_diagnostics_v2(
+        State(state): State<ControlState>,
+        headers: HeaderMap,
+    ) -> Result<Json<receiver_core::ReceiverDiagnosticsRun>, HttpControlError> {
+        authorize_v2(&state, &headers)?;
+        Ok(Json(
+            lock_service(&state)?.latest_diagnostics_v2().map_err(HttpControlError::v2_receiver)?,
+        ))
+    }
+
+    fn authorize_v2(state: &ControlState, headers: &HeaderMap) -> Result<(), HttpControlError> {
+        let bearer = headers
+            .get(header::AUTHORIZATION)
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.strip_prefix("Bearer "));
+        if state.v2_authorized(bearer) {
+            Ok(())
+        } else {
+            Err(HttpControlError::V2Unauthorized)
+        }
     }
 }
 
 pub fn router(state: ControlState) -> Router {
     Router::new()
-        .route("/v1/health", get(handlers::health))
-        .route("/v1/capabilities", get(handlers::capabilities))
-        .route("/v1/sessions/prepare", post(handlers::prepare_session))
-        .route("/v1/diagnostics/latest", get(handlers::latest_diagnostics))
-        .route("/v1/sessions/{session_id}/diagnostics", get(handlers::diagnostics))
-        .route("/v1/sessions/{session_id}", get(handlers::session).delete(handlers::stop_session))
+        .route("/v2/health", get(handlers::health_v2))
+        .route("/v2/capabilities", get(handlers::capabilities_v2))
+        .route("/v2/diagnostics/latest", get(handlers::latest_diagnostics_v2))
+        .route("/v2/sessions", post(handlers::create_session_v2))
+        .route(
+            "/v2/sessions/{session_id}",
+            get(handlers::session_v2).delete(handlers::stop_session_v2),
+        )
+        .route("/v2/sessions/{session_id}/diagnostics", get(handlers::diagnostics_v2))
         .with_state(state)
 }

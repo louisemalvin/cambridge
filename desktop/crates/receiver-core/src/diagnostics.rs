@@ -7,6 +7,17 @@ use crate::ReceiverState;
 pub const DIAGNOSTICS_SCHEMA: &str = "mobile-webcam-diagnostics-v1";
 const UNAVAILABLE_TIMESTAMP_MS: u64 = 0;
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReceiverTransportMetrics {
+    pub bytes_received: Option<u64>,
+    pub packets_received: Option<u64>,
+    pub packets_lost: Option<u64>,
+    pub packets_retransmitted: Option<u64>,
+    pub packets_dropped: Option<u64>,
+    pub rtt_ms: Option<u32>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReceiverDiagnostics {

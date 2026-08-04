@@ -8,7 +8,7 @@ internal class RootEncoderEventAdapter(
     private val events: MutableSharedFlow<StreamEngineEvent>,
 ) : ConnectChecker {
     override fun onConnectionStarted(url: String) {
-        events.tryEmit(StreamEngineEvent.ConnectionStarted(url))
+        events.tryEmit(StreamEngineEvent.ConnectionStarted(url.substringBefore('?')))
     }
 
     override fun onConnectionSuccess() {

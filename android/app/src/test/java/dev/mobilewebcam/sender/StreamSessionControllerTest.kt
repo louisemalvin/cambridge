@@ -16,6 +16,7 @@ import dev.mobilewebcam.sender.model.ReceiverHealth
 import dev.mobilewebcam.sender.model.StreamConfiguration
 import dev.mobilewebcam.sender.model.StreamFailure
 import dev.mobilewebcam.sender.model.StreamState
+import dev.mobilewebcam.sender.model.SrtTransportEndpoint
 import dev.mobilewebcam.sender.model.VideoCodec
 import dev.mobilewebcam.sender.model.VideoProfile
 import dev.mobilewebcam.sender.logging.AppLogger
@@ -216,13 +217,13 @@ class StreamSessionControllerTest {
         var sessionStateChecks = 0
         var sessionStateFailuresRemaining = 0
         var lastPreferredCodecs: List<VideoCodec> = emptyList()
-        override suspend fun health(endpoint: ReceiverEndpoint): Result<ReceiverHealth> =
-            Result.success(ReceiverHealth("ready", 1))
+        override suspend fun healthV2(endpoint: ReceiverEndpoint): Result<ReceiverHealth> =
+            Result.success(ReceiverHealth("ready", 2))
 
-        override suspend fun capabilities(endpoint: ReceiverEndpoint): Result<ReceiverCapabilities> =
+        override suspend fun capabilitiesV2(endpoint: ReceiverEndpoint): Result<ReceiverCapabilities> =
             Result.success(receiverCapabilities())
 
-        override suspend fun prepareSession(
+        override suspend fun createSessionV2(
             endpoint: ReceiverEndpoint,
             request: PrepareSessionRequest,
         ): Result<NegotiatedSession> {
@@ -238,16 +239,24 @@ class StreamSessionControllerTest {
                     mediaPort = 5000,
                     outputPixelFormat = OutputPixelFormat.YUY2,
                     warnings = emptyList(),
+                    srtEndpoint = SrtTransportEndpoint(
+                        host = endpoint.host,
+                        port = 5000,
+                        streamId = "test-stream-id",
+                        latencyMs = 120,
+                        keyLengthBytes = 32,
+                        passphrase = "test-passphrase-0123456789",
+                    ),
                 ),
             )
         }
 
-        override suspend fun stopSession(endpoint: ReceiverEndpoint, sessionId: String): Result<Unit> {
+        override suspend fun stopSessionV2(endpoint: ReceiverEndpoint, sessionId: String): Result<Unit> {
             stopCount += 1
             return Result.success(Unit)
         }
 
-        override suspend fun sessionState(endpoint: ReceiverEndpoint, sessionId: String): Result<Unit> =
+        override suspend fun sessionStateV2(endpoint: ReceiverEndpoint, sessionId: String): Result<Unit> =
             if (sessionStateFailuresRemaining > 0) {
                 sessionStateFailuresRemaining -= 1
                 sessionStateChecks += 1
@@ -272,7 +281,7 @@ class StreamSessionControllerTest {
             return prepareFailure?.let { Result.failure(it) } ?: Result.success(Unit)
         }
 
-        override suspend fun start(receiverHost: String, mediaPort: Int): Result<Unit> = Result.success(Unit)
+        override suspend fun start(endpoint: SrtTransportEndpoint): Result<Unit> = Result.success(Unit)
 
         override suspend fun updateBitrate(bitrateBps: Int): Result<Unit> = Result.success(Unit)
 
@@ -297,7 +306,7 @@ class StreamSessionControllerTest {
             configuration: StreamConfiguration,
         ): Result<Unit> = Result.success(Unit)
 
-        override suspend fun start(receiverHost: String, mediaPort: Int): Result<Unit> = Result.success(Unit)
+        override suspend fun start(endpoint: SrtTransportEndpoint): Result<Unit> = Result.success(Unit)
 
         override suspend fun updateBitrate(bitrateBps: Int): Result<Unit> = Result.success(Unit)
 

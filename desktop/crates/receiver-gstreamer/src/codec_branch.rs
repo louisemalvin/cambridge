@@ -44,7 +44,7 @@ impl CodecPipelineFactory for DefaultCodecPipelineFactory {
             VideoCodec::H265 => "h265parse",
         };
         let shared_elements = [
-            "udpsrc",
+            "srtsrc",
             "tsparse",
             "tsdemux",
             "decodebin",

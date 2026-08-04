@@ -11,7 +11,7 @@ data class SettingsUiState(
     val profileOptions: List<SelectOptionUi> = emptyList(),
     val receiverName: UiText? = null,
     val connectionStatus: UiText? = null,
-    val hasApprovedReceiver: Boolean = false,
+    val hasConfiguredReceiver: Boolean = false,
     val camera: CameraControlsUiState = CameraControlsUiState(),
     val validationMessage: UiText? = null,
     val failureDiagnostics: String? = null,

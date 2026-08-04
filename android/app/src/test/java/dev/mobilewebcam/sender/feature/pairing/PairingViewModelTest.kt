@@ -14,54 +14,36 @@ class PairingViewModelTest {
     fun idleStateMapsToSearching() {
         val state = PairingUiStateMapper.map(
             PairingDomainSnapshot(
-                pendingApprovalName = null,
                 streamState = StreamState.Idle,
                 activeReceiverName = null,
             ),
         )
 
-        assertEquals(PairingUiState.Searching(UiText.Plain("Searching for receivers...")), state)
-    }
-
-    @Test
-    fun pendingApprovalTakesPriorityOverStreamState() {
-        val state = PairingUiStateMapper.map(
-            PairingDomainSnapshot(
-                pendingApprovalName = "Desktop PC",
-                streamState = StreamState.Idle,
-                activeReceiverName = null,
-            ),
-        )
-
-        assertEquals(PairingUiState.AwaitingApproval(UiText.Plain("Desktop PC")), state)
+        assertEquals(PairingUiState.Searching(UiText.Plain("Looking for a nearby receiver")), state)
     }
 
     @Test
     fun checkingNegotiatingPreparingAndStartingStatesMapToConnecting() {
         val checking = PairingUiStateMapper.map(
             PairingDomainSnapshot(
-                pendingApprovalName = null,
                 streamState = StreamState.CheckingReceiver,
                 activeReceiverName = null,
             ),
         )
         val negotiating = PairingUiStateMapper.map(
             PairingDomainSnapshot(
-                pendingApprovalName = null,
                 streamState = StreamState.Negotiating,
                 activeReceiverName = null,
             ),
         )
         val preparing = PairingUiStateMapper.map(
             PairingDomainSnapshot(
-                pendingApprovalName = null,
                 streamState = StreamState.Preparing(VideoCodec.H264, VideoProfiles.default),
                 activeReceiverName = null,
             ),
         )
         val starting = PairingUiStateMapper.map(
             PairingDomainSnapshot(
-                pendingApprovalName = null,
                 streamState = StreamState.Starting(
                     session = dev.mobilewebcam.sender.model.NegotiatedSession(
                         sessionId = "session",
@@ -88,7 +70,6 @@ class PairingViewModelTest {
     fun streamingStateMapsToConnected() {
         val state = PairingUiStateMapper.map(
             PairingDomainSnapshot(
-                pendingApprovalName = null,
                 streamState = StreamState.Streaming(
                     session = dev.mobilewebcam.sender.model.NegotiatedSession(
                         sessionId = "session",
@@ -113,7 +94,6 @@ class PairingViewModelTest {
     fun failureStateMapsToFailureMessage() {
         val state = PairingUiStateMapper.map(
             PairingDomainSnapshot(
-                pendingApprovalName = null,
                 streamState = StreamState.Failed(StreamFailure.NetworkDisconnected),
                 activeReceiverName = null,
             ),

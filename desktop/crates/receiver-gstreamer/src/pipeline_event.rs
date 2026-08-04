@@ -1,7 +1,7 @@
 use std::{
     collections::VecDeque,
     sync::{
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         Arc, Mutex,
     },
     time::Instant,
@@ -34,6 +34,7 @@ pub(crate) struct PipelineObserver {
     started_at: Instant,
     diagnostics: Mutex<VecDeque<ReceiverDiagnosticEvent>>,
     next_sequence: AtomicU64,
+    transport_connected: AtomicBool,
 }
 
 impl PipelineObserver {
@@ -46,6 +47,7 @@ impl PipelineObserver {
             started_at: Instant::now(),
             diagnostics: Mutex::new(VecDeque::new()),
             next_sequence: AtomicU64::new(FIRST_DIAGNOSTIC_SEQUENCE),
+            transport_connected: AtomicBool::new(false),
         });
         observer.set_state(ReceiverState::Prepared);
         observer
@@ -71,6 +73,7 @@ impl PipelineObserver {
     }
 
     pub(crate) fn on_timeout(&self, timeout_count: u64) {
+        self.transport_connected.store(false, Ordering::Relaxed);
         self.set_state(ReceiverState::TimedOut);
         if let Ok(mut events) = self.events.lock() {
             events.push(ReceiverEvent::StreamTimedOut {
@@ -87,7 +90,25 @@ impl PipelineObserver {
         self.record_diagnostic(ReceiverDiagnosticEventKind::StreamTimedOut { timeout_count });
     }
 
+    pub(crate) fn on_transport_connected(&self) {
+        self.transport_connected.store(true, Ordering::Relaxed);
+        tracing::info!(
+            event = "receiver_transport_connected",
+            session_id = %self.session_id,
+            "receiver accepted an SRT caller"
+        );
+    }
+
+    pub(crate) fn on_transport_rejected(&self) {
+        tracing::warn!(
+            event = "receiver_transport_rejected",
+            session_id = %self.session_id,
+            "receiver rejected an SRT caller"
+        );
+    }
+
     pub(crate) fn on_frame(&self, resumed: bool) {
+        self.transport_connected.store(true, Ordering::Relaxed);
         let was_timed_out = self.state() == ReceiverState::TimedOut;
         let was_receiving = self.state() == ReceiverState::Receiving;
         if !was_receiving {
@@ -123,6 +144,7 @@ impl PipelineObserver {
     }
 
     pub(crate) fn on_wrong_codec(&self, received: VideoCodec) {
+        self.transport_connected.store(false, Ordering::Relaxed);
         self.set_state(ReceiverState::Failed);
         if let Ok(mut events) = self.events.lock() {
             events.push(ReceiverEvent::WrongStreamCodec {
@@ -203,6 +225,10 @@ impl PipelineObserver {
 
     pub(crate) fn state(&self) -> ReceiverState {
         self.state.lock().map_or(ReceiverState::Failed, |state| *state)
+    }
+
+    pub(crate) fn transport_connected(&self) -> bool {
+        self.transport_connected.load(Ordering::Relaxed)
     }
 
     pub(crate) fn take_events(&self) -> Vec<ReceiverEvent> {

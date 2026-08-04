@@ -1,6 +1,6 @@
 # Android preview-first UI rehaul
 
-Status: complete. The feature-oriented presentation architecture, Navigation 3, destination ViewModels, destination-owned immutable state and mappers, Hilt DI, grouped infrastructure packages, persisted sender settings, Pairing-owned approval presentation, and RootEncoder CameraXSource migration are implemented and verified.
+Status: complete. The feature-oriented presentation architecture, Navigation 3, destination ViewModels, destination-owned immutable state and mappers, Hilt DI, grouped infrastructure packages, persisted sender settings, discovered/manual receiver-origin presentation, and RootEncoder Camera2Source migration are implemented and verified.
 
 ## Direction
 
@@ -8,13 +8,13 @@ Make the Android app a preview-first surface:
 
 - Keep one full-screen preview shell for every app state.
 - Show `Waiting for connection` in the shell while no receiver session exists.
-- Keep connection approval, stream defaults, lens selection, stabilization, and diagnostics out of the main surface.
+- Keep receiver-origin entry, stream defaults, lens selection, stabilization, and diagnostics out of the main surface.
 - Expose a small set of overlay actions using Material 3 components: screen dim, zoom, and settings.
 - Keep the action toolbar horizontal in portrait and vertically aligned on the
   right in landscape.
 - Preserve the existing RootEncoder camera boundary, negotiated profile dimensions, rotation handling, and stable Compose BOM.
 
-The implemented RootEncoder engine creates one `CameraXSource` during session preparation and keeps its lifecycle operations on the main dispatcher. Therefore the UI shows a waiting surface before a receiver starts a session rather than adding a second local-preview camera lifecycle. A pre-connection live camera preview remains a separate media-lifecycle change.
+The implemented RootEncoder engine creates one `Camera2Source` during session preparation and keeps its lifecycle operations on the main dispatcher. Therefore the UI shows a waiting surface before a receiver starts a session rather than adding a second local-preview camera lifecycle. A pre-connection live camera preview remains a separate media-lifecycle change.
 
 ## Proposed Material 3 composition
 
@@ -27,14 +27,14 @@ The implemented RootEncoder engine creates one `CameraXSource` during session pr
 - A full-screen settings destination uses `TopAppBar`, `ListItem`, `Switch`,
   `Slider`, `DropdownMenu`, and standard dividers/typography. This keeps the
   settings list usable in landscape without a modal bottom-sheet constraint.
-- `AlertDialog` handles a pending receiver approval and a camera-permission block. A `SnackbarHost` handles transient failures; the existing copy-diagnostics action remains available from the failure surface.
+- `AlertDialog` handles camera permission when required. A `SnackbarHost` handles transient failures; the existing copy-diagnostics action remains available from the failure surface.
 
 ## Main surface states
 
 | State | Main surface | Secondary surface |
 | --- | --- | --- |
 | Idle or no receiver | Black fitted stage with `Waiting for connection` | Settings button; permission dialog only when needed |
-| Receiver approval pending | Waiting stage remains visible | Material 3 approval dialog with approve/reject |
+| Receiver origin missing | Waiting stage remains visible | Material 3 connection form |
 | Checking, negotiating, preparing, starting | Fitted preview shell or neutral waiting stage with progress/status | Settings remains available where safe |
 | Streaming | Fitted live preview with minimal status and adaptive action toolbar | Zoom tray, settings screen, snackbar |
 | Failed | Fitted stage with concise error state | Snackbar or dialog with copy diagnostics |
@@ -74,9 +74,8 @@ all destinations, and feature mappers consume an immutable
 ### Model and service state
 
 - Keep `StreamState`, `NegotiatedSession`, `VideoProfile`, `CodecPreference`,
-  `CameraInteractionState`, `PendingApproval`, and controller interfaces below
-  the UI package.
-- These types describe streaming, camera, discovery, and negotiation behavior.
+  `CameraInteractionState`, and controller interfaces below the UI package.
+- These types describe streaming, camera, and negotiation behavior.
   They must not gain Compose annotations, UI labels, modal visibility, or
   Android view references.
 - The coordinator and camera controller remain the sources of truth for their
@@ -89,17 +88,17 @@ can render. `WebcamUiState` contains, for example:
 
 - `preview`: fitted aspect ratio, orientation, and whether a live surface is
   expected;
-- `connection`: waiting, approval, connecting, streaming, stopping, or failed
+- `connection`: waiting, origin entry, connecting, streaming, stopping, or failed
   presentation state with display-ready text/resource IDs;
 - `camera`: zoom display/range, lens options with display labels, and
   stabilization availability/state;
 - `dialog`: camera-permission dialog state when one is active; receiver
-  approval is owned by the Pairing destination;
+  receiver-origin entry is owned by the Pairing destination;
 - `isScreenDimmed`: the screen preference for this activity/session;
 - `isZoomTrayOpen`: main-surface presentation state.
 
 `SettingsUiState` owns codec/profile options, connection details, diagnostics,
-and camera controls. `PairingUiState` owns receiver approval and pairing status.
+and camera controls. `PairingUiState` owns receiver-origin entry and connection status.
 Shared display values such as connection states, camera controls, and actions
 remain in `app/model` because they are consumed by more than one destination.
 
@@ -115,7 +114,7 @@ tested independently of Compose.
   coordinator or camera controller. The Navigation 3 entry decorators own the
   destination-scoped ViewModel lifecycles.
 - Expose a small `SenderScreenAction` surface for settings, dimming, zoom,
-  lens, stabilization, permission, approval, stop, and diagnostics actions.
+  lens, stabilization, permission, receiver-origin, stop, and diagnostics actions.
 - Expose one-shot `SenderUiEffect` values only for events the UI must perform,
   such as copying diagnostics or showing a transient message. The ViewModel
   does not access `Context`, `ClipboardManager`, `Toast`, or Compose APIs.
@@ -142,7 +141,7 @@ ephemeral interaction state.
 - The app has one preview-first screen composition instead of separate connect and streaming columns.
 - Portrait and landscape preview geometry preserve the selected profile aspect ratio without stretching or nested unbounded scrolling.
 - The main surface contains only the preview, waiting/status treatment, dim action, zoom affordance, and settings action.
-- Codec, profile, diagnostics, and connection details are reachable from Material 3 surfaces without being permanently visible. Physical lens and stabilization rows are capability-gated because RootEncoder 2.8.0's public `CameraXSource` does not expose those controls.
+- Codec, profile, diagnostics, and connection details are reachable from Material 3 surfaces without being permanently visible. Physical lens choices are capability-gated by Android logical multi-camera metadata, while stabilization remains capability-gated because the RootEncoder `Camera2Source` adapter does not expose a supported control for it.
 - Compose receives only destination-owned immutable state; domain state is translated by pure ViewModel mappers and is not passed directly into screen composables.
 - Existing camera interaction and session contracts remain unchanged unless an explicit pre-connection preview decision is made.
 - Compose tests cover waiting, streaming, settings visibility, dim state, rotation/aspect-ratio layout, and the existing zoom bounds/reset behavior.

@@ -33,4 +33,6 @@ pub enum ReceiverError {
     PermissionDenied(String),
     #[error("GStreamer pipeline failure: {0}")]
     GStreamer(String),
+    #[error("invalid v2 protocol request: {0}")]
+    V2Protocol(String),
 }

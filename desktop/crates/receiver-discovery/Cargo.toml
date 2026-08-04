@@ -1,0 +1,15 @@
+[package]
+name = "receiver-discovery"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+hostname = "0.4.2"
+mdns-sd = "0.20.3"
+receiver-protocol = { path = "../receiver-protocol" }
+thiserror = "2.0"
+tracing = "0.1"
+
+[lints]
+workspace = true

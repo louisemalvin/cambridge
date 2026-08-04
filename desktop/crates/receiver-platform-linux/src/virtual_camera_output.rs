@@ -1,4 +1,11 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex, RwLock,
+    },
+    thread,
+    time::Duration,
+};
 
 use gst::prelude::*;
 use gstreamer as gst;
@@ -6,12 +13,18 @@ use gstreamer_app as gst_app;
 
 use crate::{validate_v4l2loopback, LinuxPlatformError};
 
-pub const VIRTUAL_CAMERA_WIDTH: i32 = 1_920;
-pub const VIRTUAL_CAMERA_HEIGHT: i32 = 1_080;
+pub const VIRTUAL_CAMERA_WIDTH: i32 = 1_280;
+pub const VIRTUAL_CAMERA_HEIGHT: i32 = 720;
 pub const VIRTUAL_CAMERA_FRAME_RATE: i32 = 30;
 pub const STANDBY_FRAME_RATE: i32 = 5;
 const OUTPUT_QUEUE_MAX_BUFFERS: u32 = 2;
 const APP_SOURCE_MAX_BUFFERS: u32 = 2;
+const LIVE_FRAME_INTERVAL_MILLIS: u64 = 1_000 / VIRTUAL_CAMERA_FRAME_RATE as u64;
+const STANDBY_FRAME_INTERVAL_MILLIS: u64 = 1_000 / STANDBY_FRAME_RATE as u64;
+const BLACK_Y: u8 = 16;
+const BLACK_CHROMA: u8 = 128;
+const YUY2_BYTES_PER_PIXEL: usize = 2;
+const PIPELINE_START_TIMEOUT_SECONDS: u64 = 5;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VirtualCameraOutputMode {
@@ -21,16 +34,21 @@ pub enum VirtualCameraOutputMode {
 
 #[derive(Clone)]
 pub struct PersistentVirtualCameraOutput {
-    state: Arc<Mutex<OutputState>>,
+    shared: Arc<SharedOutput>,
+}
+
+struct SharedOutput {
+    state: Mutex<OutputState>,
+    live: AtomicBool,
+    running: AtomicBool,
+    latest_sample: RwLock<Option<gst::Sample>>,
+    pusher: Mutex<Option<thread::JoinHandle<()>>>,
 }
 
 struct OutputState {
     pipeline: gst::Pipeline,
     appsrc: gst_app::AppSrc,
-    selector: gst::Element,
-    standby_pad: gst::Pad,
-    live_pad: gst::Pad,
-    mode: VirtualCameraOutputMode,
+    standby_sample: gst::Sample,
 }
 
 #[allow(clippy::too_many_lines)]
@@ -41,89 +59,45 @@ impl PersistentVirtualCameraOutput {
         gst::init().map_err(|error| LinuxPlatformError::PersistentOutput(error.to_string()))?;
 
         let pipeline = gst::Pipeline::with_name("mobile-webcam-virtual-camera");
-        let standby_source = make_element("videotestsrc", "standby-source")?;
-        let standby_convert = make_element("videoconvert", "standby-convert")?;
-        let standby_scale = make_element("videoscale", "standby-scale")?;
-        let standby_rate = make_element("videorate", "standby-rate")?;
-        let standby_input_filter = make_element("capsfilter", "standby-input-caps")?;
-        let standby_output_caps = make_element("capsfilter", "standby-output-caps")?;
-        let standby_queue = make_element("queue", "standby-queue")?;
-        let appsrc_element = make_element("appsrc", "live-source")?;
+        let appsrc_element = make_element("appsrc", "virtual-camera-source")?;
         let appsrc = appsrc_element.clone().downcast::<gst_app::AppSrc>().map_err(|_| {
             LinuxPlatformError::PersistentOutput(
                 "GStreamer appsrc element has the wrong type".to_owned(),
             )
         })?;
-        let live_convert = make_element("videoconvert", "live-convert")?;
-        let live_scale = make_element("videoscale", "live-scale")?;
-        let live_rate = make_element("videorate", "live-rate")?;
-        let live_caps = make_element("capsfilter", "live-caps")?;
-        let live_queue = make_element("queue", "live-queue")?;
-        let selector = make_element("input-selector", "virtual-camera-selector")?;
+        let convert = make_element("videoconvert", "virtual-camera-convert")?;
+        let scale = make_element("videoscale", "virtual-camera-scale")?;
+        let rate = make_element("videorate", "virtual-camera-rate")?;
+        let output_caps_filter = make_element("capsfilter", "virtual-camera-caps")?;
+        let queue = make_element("queue", "virtual-camera-queue")?;
         let sink = make_element("v4l2sink", "persistent-virtual-camera-sink")?;
 
-        standby_source.set_property("is-live", true);
-        standby_source.set_property_from_str("pattern", "black");
-        standby_input_filter.set_property("caps", standby_input_caps());
-        standby_output_caps.set_property("caps", output_caps());
-        configure_queue(&standby_queue);
-
         appsrc.set_property("is-live", true);
-        appsrc.set_property("format", gst::Format::Time);
+        appsrc.set_property("do-timestamp", true);
         appsrc.set_property("block", false);
         appsrc.set_property("max-buffers", u64::from(APP_SOURCE_MAX_BUFFERS));
         appsrc.set_property("max-bytes", 0u64);
         appsrc.set_property_from_str("leaky-type", "downstream");
-        live_caps.set_property("caps", output_caps());
-        configure_queue(&live_queue);
+        output_caps_filter.set_property("caps", output_caps());
+        configure_queue(&queue);
 
         sink.set_property("device", device.to_string_lossy().as_ref());
         sink.set_property("sync", false);
-        selector.set_property("sync-streams", false);
 
         pipeline
             .add_many([
-                &standby_source,
-                &standby_convert,
-                &standby_scale,
-                &standby_rate,
-                &standby_input_filter,
-                &standby_output_caps,
-                &standby_queue,
                 &appsrc_element,
-                &live_convert,
-                &live_scale,
-                &live_rate,
-                &live_caps,
-                &live_queue,
-                &selector,
+                &convert,
+                &scale,
+                &rate,
+                &output_caps_filter,
+                &queue,
                 &sink,
             ])
             .map_err(|error| LinuxPlatformError::PersistentOutput(error.to_string()))?;
+        link(&[&appsrc_element, &convert, &scale, &rate, &output_caps_filter, &queue])?;
+        link(&[&queue, &sink])?;
 
-        link(&[
-            &standby_source,
-            &standby_input_filter,
-            &standby_convert,
-            &standby_scale,
-            &standby_rate,
-            &standby_output_caps,
-            &standby_queue,
-        ])?;
-        link(&[&appsrc_element, &live_convert, &live_scale, &live_rate, &live_caps, &live_queue])?;
-
-        let standby_pad = request_selector_pad(&selector, &standby_queue)?;
-        let live_pad = request_selector_pad(&selector, &live_queue)?;
-        let selector_src = selector.static_pad("src").ok_or_else(|| {
-            LinuxPlatformError::PersistentOutput("input-selector has no source pad".to_owned())
-        })?;
-        let sink_pad = sink.static_pad("sink").ok_or_else(|| {
-            LinuxPlatformError::PersistentOutput("v4l2sink has no sink pad".to_owned())
-        })?;
-        selector_src.link(&sink_pad).map_err(|error| {
-            LinuxPlatformError::PersistentOutput(format!("link persistent v4l2sink: {error}"))
-        })?;
-        selector.set_property("active-pad", &standby_pad);
         let bus = pipeline.bus().ok_or_else(|| {
             LinuxPlatformError::PersistentOutput("persistent pipeline has no bus".to_owned())
         })?;
@@ -147,58 +121,115 @@ impl PersistentVirtualCameraOutput {
         pipeline
             .set_state(gst::State::Playing)
             .map_err(|error| LinuxPlatformError::PersistentOutput(error.to_string()))?;
+        let (success, state, _pending) =
+            pipeline.state(gst::ClockTime::from_seconds(PIPELINE_START_TIMEOUT_SECONDS));
+        let state_is_startable = matches!(state, gst::State::Paused | gst::State::Playing);
+        if success.is_err() || !state_is_startable {
+            return Err(LinuxPlatformError::PersistentOutput(format!(
+                "persistent pipeline did not reach Playing: success={success:?} state={state:?}"
+            )));
+        }
 
-        Ok(Self {
-            state: Arc::new(Mutex::new(OutputState {
-                pipeline,
-                appsrc,
-                selector,
-                standby_pad,
-                live_pad,
-                mode: VirtualCameraOutputMode::Standby,
-            })),
-        })
+        let shared = Arc::new(SharedOutput {
+            state: Mutex::new(OutputState { pipeline, appsrc, standby_sample: black_sample() }),
+            live: AtomicBool::new(false),
+            running: AtomicBool::new(true),
+            latest_sample: RwLock::new(None),
+            pusher: Mutex::new(None),
+        });
+        let pusher_shared = shared.clone();
+        let pusher = thread::Builder::new()
+            .name("mobile-webcam-output".to_owned())
+            .spawn(move || pusher_loop(&pusher_shared))
+            .map_err(|error| LinuxPlatformError::PersistentOutput(error.to_string()))?;
+        *shared.pusher.lock().map_err(|_| {
+            LinuxPlatformError::PersistentOutput("persistent output lock poisoned".to_owned())
+        })? = Some(pusher);
+
+        Ok(Self { shared })
     }
 
     pub fn push_live_sample(&self, sample: &gst::Sample) -> Result<(), String> {
-        let mut state =
-            self.state.lock().map_err(|_| "persistent output lock poisoned".to_owned())?;
-        if state.mode != VirtualCameraOutputMode::Live {
-            state.selector.set_property("active-pad", &state.live_pad);
-            state.mode = VirtualCameraOutputMode::Live;
+        if sample.buffer().is_none() {
+            return Err("live sample has no buffer".to_owned());
         }
-        state.appsrc.push_sample(sample).map(|_| ()).map_err(|error| error.to_string())
+        *self
+            .shared
+            .latest_sample
+            .write()
+            .map_err(|_| "persistent output lock poisoned".to_owned())? = Some(sample.clone());
+        self.shared.live.store(true, Ordering::Relaxed);
+        Ok(())
     }
 
     pub fn set_standby(&self) -> Result<(), String> {
-        let mut state =
-            self.state.lock().map_err(|_| "persistent output lock poisoned".to_owned())?;
-        if state.mode == VirtualCameraOutputMode::Standby {
-            return Ok(());
-        }
-        state.selector.set_property("active-pad", &state.standby_pad);
-        state.mode = VirtualCameraOutputMode::Standby;
+        self.shared.live.store(false, Ordering::Relaxed);
+        *self
+            .shared
+            .latest_sample
+            .write()
+            .map_err(|_| "persistent output lock poisoned".to_owned())? = None;
         Ok(())
     }
 
     pub fn mode(&self) -> Result<VirtualCameraOutputMode, String> {
-        self.state
-            .lock()
-            .map(|state| state.mode)
-            .map_err(|_| "persistent output lock poisoned".to_owned())
+        if self.shared.live.load(Ordering::Relaxed) {
+            Ok(VirtualCameraOutputMode::Live)
+        } else {
+            Ok(VirtualCameraOutputMode::Standby)
+        }
     }
 
     pub fn stop(&self) -> Result<(), String> {
-        let state = self.state.lock().map_err(|_| "persistent output lock poisoned".to_owned())?;
+        self.shared.running.store(false, Ordering::Relaxed);
+        if let Some(pusher) = self
+            .shared
+            .pusher
+            .lock()
+            .map_err(|_| "persistent output lock poisoned".to_owned())?
+            .take()
+        {
+            let _ = pusher.join();
+        }
+        let state =
+            self.shared.state.lock().map_err(|_| "persistent output lock poisoned".to_owned())?;
         state.pipeline.set_state(gst::State::Null).map_err(|error| error.to_string())?;
         Ok(())
     }
 }
 
-impl Drop for OutputState {
-    fn drop(&mut self) {
-        let _ = self.pipeline.set_state(gst::State::Null);
+fn pusher_loop(shared: &Arc<SharedOutput>) {
+    loop {
+        if !shared.running.load(Ordering::Relaxed) {
+            break;
+        }
+        let live = shared.live.load(Ordering::Relaxed);
+        let sample = if live {
+            shared.latest_sample.read().ok().and_then(|sample| sample.clone())
+        } else {
+            shared.state.lock().ok().map(|state| state.standby_sample.clone())
+        };
+        if let Some(sample) = sample {
+            if let Ok(state) = shared.state.lock() {
+                let _ = state.appsrc.push_sample(&sample);
+            }
+        }
+        let interval =
+            if live { LIVE_FRAME_INTERVAL_MILLIS } else { STANDBY_FRAME_INTERVAL_MILLIS };
+        thread::sleep(Duration::from_millis(interval));
     }
+}
+
+fn black_sample() -> gst::Sample {
+    let size = usize::try_from(VIRTUAL_CAMERA_WIDTH).unwrap()
+        * usize::try_from(VIRTUAL_CAMERA_HEIGHT).unwrap()
+        * YUY2_BYTES_PER_PIXEL;
+    let mut pixels = vec![BLACK_CHROMA; size];
+    for byte in pixels.iter_mut().step_by(2) {
+        *byte = BLACK_Y;
+    }
+    let buffer = gst::Buffer::from_mut_slice(pixels);
+    gst::Sample::builder().caps(&output_caps()).buffer(&buffer).build()
 }
 
 fn make_element(factory: &str, name: &str) -> Result<gst::Element, LinuxPlatformError> {
@@ -220,32 +251,6 @@ fn configure_queue(queue: &gst::Element) {
     queue.set_property_from_str("leaky", "downstream");
 }
 
-fn request_selector_pad(
-    selector: &gst::Element,
-    branch: &gst::Element,
-) -> Result<gst::Pad, LinuxPlatformError> {
-    let pad = selector.request_pad_simple("sink_%u").ok_or_else(|| {
-        LinuxPlatformError::PersistentOutput(
-            "input-selector could not allocate a sink pad".to_owned(),
-        )
-    })?;
-    let branch_pad = branch.static_pad("src").ok_or_else(|| {
-        LinuxPlatformError::PersistentOutput(format!("{} has no source pad", branch.name()))
-    })?;
-    branch_pad.link(&pad).map_err(|error| {
-        LinuxPlatformError::PersistentOutput(format!("link input-selector branch: {error}"))
-    })?;
-    Ok(pad)
-}
-
-fn standby_input_caps() -> gst::Caps {
-    gst::Caps::builder("video/x-raw")
-        .field("width", VIRTUAL_CAMERA_WIDTH)
-        .field("height", VIRTUAL_CAMERA_HEIGHT)
-        .field("framerate", gst::Fraction::new(STANDBY_FRAME_RATE, 1))
-        .build()
-}
-
 fn output_caps() -> gst::Caps {
     gst::Caps::builder("video/x-raw")
         .field("format", "YUY2")
@@ -253,6 +258,12 @@ fn output_caps() -> gst::Caps {
         .field("height", VIRTUAL_CAMERA_HEIGHT)
         .field("framerate", gst::Fraction::new(VIRTUAL_CAMERA_FRAME_RATE, 1))
         .build()
+}
+
+impl Drop for PersistentVirtualCameraOutput {
+    fn drop(&mut self) {
+        let _ = self.stop();
+    }
 }
 
 #[cfg(test)]
@@ -276,5 +287,28 @@ mod tests {
     #[test]
     fn output_mode_has_explicit_standby_and_live_states() {
         assert_ne!(VirtualCameraOutputMode::Standby, VirtualCameraOutputMode::Live);
+    }
+
+    #[test]
+    fn standby_frame_is_yuy2_black() {
+        let sample = black_sample();
+        let frame = sample.buffer().unwrap();
+        let mapped = frame.map_readable().unwrap();
+        let bytes = mapped.as_slice();
+        let expected_bytes = usize::try_from(VIRTUAL_CAMERA_WIDTH).unwrap()
+            * usize::try_from(VIRTUAL_CAMERA_HEIGHT).unwrap()
+            * YUY2_BYTES_PER_PIXEL;
+        assert_eq!(bytes.len(), expected_bytes);
+        for (index, byte) in bytes.iter().enumerate() {
+            let expected = if index % 2 == 0 { BLACK_Y } else { BLACK_CHROMA };
+            assert_eq!(*byte, expected, "byte {index} is not black");
+        }
+        assert!(sample.caps().is_some());
+    }
+
+    #[test]
+    fn frame_intervals_are_derived_from_the_named_frame_rates() {
+        assert_eq!(LIVE_FRAME_INTERVAL_MILLIS, 33);
+        assert_eq!(STANDBY_FRAME_INTERVAL_MILLIS, 200);
     }
 }

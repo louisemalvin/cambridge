@@ -1,9 +1,8 @@
 use gstreamer as gst;
 use receiver_core::ReceiverError;
 use receiver_protocol::{
-    DecoderAcceleration, MediaCapabilities, MediaPortAssignment, OutputCapabilities,
-    ReceiverCapabilities, SessionCapabilities, Transport, VideoCodec, VideoCodecCapability,
-    MAXIMUM_CONCURRENT_SESSIONS, PROTOCOL_VERSION,
+    DecoderAcceleration, OutputCapabilities, ReceiverCapabilities, SessionCapabilities, VideoCodec,
+    VideoCodecCapability, MAXIMUM_CONCURRENT_SESSIONS,
 };
 
 use crate::{CodecPipelineFactory, DefaultCodecPipelineFactory};
@@ -26,11 +25,6 @@ pub fn probe_capabilities(
         })
         .collect();
     Ok(ReceiverCapabilities {
-        protocol_version: PROTOCOL_VERSION,
-        media: MediaCapabilities {
-            transport: Transport::MpegTsUdp,
-            port_assignment: MediaPortAssignment::PerSession,
-        },
         video_codecs,
         output: OutputCapabilities { device: device.into(), pixel_formats },
         session: SessionCapabilities {

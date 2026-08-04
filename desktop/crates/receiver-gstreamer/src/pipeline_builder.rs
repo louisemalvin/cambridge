@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use gst::prelude::*;
 use gstreamer as gst;
 use receiver_core::{MediaSessionConfig, DEFAULT_LISTEN_ADDRESS};
-use receiver_protocol::{PixelFormat, VideoCodec};
+use receiver_protocol::{PixelFormat, VideoCodec, SRT_KEY_LENGTH_BYTES};
 use tracing::{debug, warn};
 
 use crate::{
@@ -15,10 +15,6 @@ use crate::{
     pipeline_event::PipelineObserver,
     PipelineError,
 };
-
-const UDP_RECEIVE_BUFFER_SIZE_BYTES: i32 = 1_000_000;
-const MPEG_TS_PACKET_SIZE_BYTES: i32 = 188;
-const NANOSECONDS_PER_MILLISECOND: u64 = 1_000_000;
 
 pub(crate) fn build_pipeline<F: VideoSinkFactory>(
     config: &MediaSessionConfig,
@@ -32,7 +28,7 @@ pub(crate) fn build_pipeline<F: VideoSinkFactory>(
         return Err(PipelineError::NoDecoder(config.codec));
     }
     let pipeline = gst::Pipeline::with_name("mobile-webcam-receiver");
-    let source = make("udpsrc", "udp-source")?;
+    let source = make("srtsrc", "srt-source")?;
     let tsparse = make("tsparse", "mpegts-parse")?;
     let demux = make("tsdemux", "mpegts-demux")?;
     let parser = codec_factory.create_parser(config.codec)?;
@@ -45,12 +41,8 @@ pub(crate) fn build_pipeline<F: VideoSinkFactory>(
     let sink = sink_factory.create_sink(config.output_format)?;
     let preview_sink = sink_factory.create_preview_sink()?;
 
-    source.set_property("address", DEFAULT_LISTEN_ADDRESS.to_string());
-    source.set_property("port", i32::from(config.media_port));
-    source.set_property("caps", mpeg_ts_caps());
-    source.set_property("buffer-size", UDP_RECEIVE_BUFFER_SIZE_BYTES);
-    source
-        .set_property("timeout", config.udp_timeout_ms.saturating_mul(NANOSECONDS_PER_MILLISECOND));
+    configure_media_source(&source, config);
+    connect_srt_stream_validation(&source, config.srt_endpoint.stream_id.clone(), observer.clone());
     let demux_latency_ms = i32::try_from(config.latency.demux_latency_ms).unwrap_or(i32::MAX);
     demux.set_property("latency", demux_latency_ms);
     configure_bounded_queue(&output_queue, config.latency.output_queue_frames);
@@ -209,7 +201,7 @@ fn add_source_probe(
     metrics: Arc<Mutex<Metrics>>,
 ) -> Result<(), PipelineError> {
     let Some(src_pad) = source.static_pad("src") else {
-        return Err(PipelineError::MissingElement("udpsrc src pad".to_owned()));
+        return Err(PipelineError::MissingElement("media source src pad".to_owned()));
     };
     src_pad.add_probe(gst::PadProbeType::BUFFER, move |_pad, info| {
         if let Some(gst::PadProbeData::Buffer(buffer)) = info.data.as_ref() {
@@ -220,6 +212,66 @@ fn add_source_probe(
         gst::PadProbeReturn::Ok
     });
     Ok(())
+}
+
+fn configure_media_source(source: &gst::Element, config: &MediaSessionConfig) {
+    let endpoint = &config.srt_endpoint;
+    let port = endpoint.port;
+    let uri = format!("srt://{DEFAULT_LISTEN_ADDRESS}:{port}");
+    source.set_property("uri", uri);
+    source.set_property_from_str("mode", "listener");
+    source.set_property("localaddress", DEFAULT_LISTEN_ADDRESS.to_string());
+    source.set_property("localport", u32::from(port));
+    source.set_property("streamid", endpoint.stream_id.as_str());
+    source.set_property("latency", i32::try_from(endpoint.latency_ms).unwrap_or(i32::MAX));
+    source.set_property("passphrase", endpoint.passphrase.as_str());
+    source.set_property_from_str("pbkeylen", &SRT_KEY_LENGTH_BYTES.to_string());
+    source.set_property("authentication", true);
+    source.set_property("auto-reconnect", true);
+    source.set_property("keep-listening", true);
+    source.set_property("wait-for-connection", true);
+}
+
+fn connect_srt_stream_validation(
+    source: &gst::Element,
+    expected_stream_id: String,
+    observer: Arc<PipelineObserver>,
+) {
+    let accepted_observer = observer.clone();
+    source.connect_closure(
+        "caller-added",
+        false,
+        gst::glib::closure!(move |_source: gst::Element,
+                                  _unused: i32,
+                                  _address: gio::SocketAddress| {
+            accepted_observer.on_transport_connected();
+        }),
+    );
+    let rejected_observer = observer.clone();
+    source.connect_closure(
+        "caller-rejected",
+        false,
+        gst::glib::closure!(move |_source: gst::Element,
+                                  _address: gio::SocketAddress,
+                                  _stream_id: String| {
+            rejected_observer.on_transport_rejected();
+        }),
+    );
+    source.connect_closure(
+        "caller-connecting",
+        false,
+        gst::glib::closure!(move |_source: gst::Element,
+                                  _address: gio::SocketAddress,
+                                  stream_id: String|
+              -> bool {
+            if stream_id == expected_stream_id {
+                true
+            } else {
+                observer.on_transport_rejected();
+                false
+            }
+        }),
+    );
 }
 
 fn add_output_probe(
@@ -273,13 +325,6 @@ fn pad_caps(pad: &gst::Pad) -> Option<gst::Caps> {
     }
 }
 
-fn mpeg_ts_caps() -> gst::Caps {
-    gst::Caps::builder("video/mpegts")
-        .field("systemstream", true)
-        .field("packetsize", MPEG_TS_PACKET_SIZE_BYTES)
-        .build()
-}
-
 fn raw_caps(config: &MediaSessionConfig) -> gst::Caps {
     let width = i32::try_from(config.profile.width).unwrap_or(i32::MAX);
     let height = i32::try_from(config.profile.height).unwrap_or(i32::MAX);
@@ -309,8 +354,12 @@ mod tests {
     use super::*;
     use crate::{DefaultCodecPipelineFactory, FakesinkFactory};
     use receiver_core::LatencyConfig;
-    use receiver_protocol::{VideoCodec, VideoProfile};
+    use receiver_protocol::{SrtEndpoint, SrtMode, SrtTransportKind, VideoCodec, VideoProfile};
     use uuid::Uuid;
+
+    const TEST_SRT_PORT: u16 = 5_000;
+    const TEST_SRT_LATENCY_MS: u32 = 120;
+    const TEST_SRT_KEY_LENGTH_BYTES: u16 = 32;
 
     fn config() -> MediaSessionConfig {
         MediaSessionConfig {
@@ -318,22 +367,49 @@ mod tests {
             codec: VideoCodec::H264,
             profile: VideoProfile { width: 1_920, height: 1_080, fps: 30 },
             bitrate_bps: 8_000_000,
-            media_port: 55_011,
             output_format: PixelFormat::Yuy2,
             latency: LatencyConfig::default(),
-            udp_timeout_ms: 2_000,
+            transport_timeout_ms: 2_000,
+            srt_endpoint: SrtEndpoint {
+                kind: SrtTransportKind::Srt,
+                mode: SrtMode::Caller,
+                host: "127.0.0.1".to_owned(),
+                port: TEST_SRT_PORT,
+                stream_id: "stream-test".to_owned(),
+                latency_ms: TEST_SRT_LATENCY_MS,
+                key_length_bytes: TEST_SRT_KEY_LENGTH_BYTES,
+                passphrase: "test-passphrase".to_owned(),
+            },
         }
     }
 
     #[test]
-    fn source_caps_describe_standard_mpeg_ts_packets() {
+    fn srt_pipeline_uses_a_listener_with_encrypted_stream_identity() {
         gst::init().unwrap();
-        let caps = mpeg_ts_caps();
-        let structure = caps.structure(0).unwrap();
+        if gst::ElementFactory::find("srtsrc").is_none() {
+            eprintln!("skipped: GStreamer SRT source plugin is unavailable");
+            return;
+        }
+        let config = config();
+        let observer = PipelineObserver::new(config.session_id, config.codec);
+        let metrics = Arc::new(Mutex::new(Metrics::default()));
+        let pipeline = build_pipeline(
+            &config,
+            &FakesinkFactory,
+            &DefaultCodecPipelineFactory,
+            observer,
+            metrics,
+        )
+        .unwrap();
 
-        assert_eq!(structure.name(), "video/mpegts");
-        assert_eq!(structure.get::<bool>("systemstream"), Ok(true));
-        assert_eq!(structure.get::<i32>("packetsize"), Ok(MPEG_TS_PACKET_SIZE_BYTES),);
+        let source = pipeline.by_name("srt-source").expect("SRT source must be present");
+        assert_eq!(source.property::<String>("uri"), "srt://0.0.0.0:5000");
+        assert_eq!(source.property::<u32>("localport"), u32::from(TEST_SRT_PORT));
+        assert_eq!(source.property::<String>("streamid"), "stream-test");
+        assert_eq!(source.property::<i32>("latency"), i32::try_from(TEST_SRT_LATENCY_MS).unwrap(),);
+        assert_eq!(source.property_value("pbkeylen").type_().name(), "GstSRTKeyLength");
+        assert!(source.property::<bool>("authentication"));
+        assert!(source.property::<bool>("keep-listening"));
     }
 
     #[test]

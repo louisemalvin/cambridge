@@ -19,28 +19,31 @@ import dev.mobilewebcam.sender.app.navigation.AppDestination
 import dev.mobilewebcam.sender.app.navigation.AppNavigation
 import dev.mobilewebcam.sender.app.navigation.rememberAppBackStack
 import dev.mobilewebcam.sender.app.startup.StartupStateResolver
-import dev.mobilewebcam.sender.connection.discovery.PairingStore
-import dev.mobilewebcam.sender.connection.discovery.SenderConnectionCoordinator
+import dev.mobilewebcam.sender.connection.SenderConnectionCoordinator
+import dev.mobilewebcam.sender.model.SenderSettingsRepository
+import dev.mobilewebcam.sender.model.StreamState
 
 @Composable
 fun SenderApp(
-    pairings: PairingStore,
     coordinator: SenderConnectionCoordinator,
+    settings: SenderSettingsRepository,
 ) {
     val context = LocalContext.current
-    val initialDestination = remember(pairings) {
-        StartupStateResolver(pairings.hasApprovedReceivers()).resolveInitialDestination()
-    }
-    val backStack = rememberAppBackStack(initialDestination)
-    val pendingApproval by coordinator.pendingApproval.collectAsState()
-    val diagnosticsClipboardLabel = stringResource(R.string.diagnostics_clipboard_label)
-    val errorDetailsCopiedMessage = stringResource(R.string.error_details_copied)
-
-    LaunchedEffect(pendingApproval) {
-        if (pendingApproval != null && backStack.current != AppDestination.Pairing) {
-            backStack.showPairingForApproval()
+    val senderSettings by settings.state.collectAsState()
+    LaunchedEffect(senderSettings.receiverEndpoint) {
+        val endpoint = senderSettings.receiverEndpoint
+        if (endpoint != null && coordinator.streamState.value is StreamState.Idle) {
+            coordinator.connectToReceiver(endpoint)
         }
     }
+    val initialDestination = remember(senderSettings.receiverEndpoint) {
+        StartupStateResolver(
+            hasConfiguredReceiver = senderSettings.receiverEndpoint != null,
+        ).resolveInitialDestination()
+    }
+    val backStack = rememberAppBackStack(initialDestination)
+    val diagnosticsClipboardLabel = stringResource(R.string.diagnostics_clipboard_label)
+    val errorDetailsCopiedMessage = stringResource(R.string.error_details_copied)
 
     dev.mobilewebcam.sender.app.theme.MobileWebcamTheme {
         Surface(modifier = Modifier.fillMaxSize()) {

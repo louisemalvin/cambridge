@@ -112,18 +112,3 @@ internal fun preferredStabilizationMode(
     support.electronicSupported -> CameraStabilizationMode.ELECTRONIC
     else -> null
 }
-
-internal fun physicalLensOptionsFor(cameraIds: List<String>): List<PhysicalLensOption> {
-    if (cameraIds.isEmpty()) return emptyList()
-
-    val options = buildList {
-        add(PhysicalLensOption(AUTOMATIC_LENS_LABEL, null))
-        cameraIds.distinct().forEach { cameraId ->
-            add(PhysicalLensOption("$PHYSICAL_LENS_LABEL_PREFIX$cameraId", cameraId))
-        }
-    }
-    return options
-}
-
-private const val AUTOMATIC_LENS_LABEL = "Auto"
-private const val PHYSICAL_LENS_LABEL_PREFIX = "Lens "

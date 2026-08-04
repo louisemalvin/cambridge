@@ -1,52 +1,48 @@
 # Architecture
 
-Phase 1 has an Android sender, an iOS development skeleton, and one reusable
+The project has an Android sender, an iOS protocol adapter, and one reusable
 Rust receiver. Media production is platform-specific, while the encoded media
 transport is platform-agnostic:
 
 ```text
-Android camera/encoder ─┐
-                        ├─> MPEG-TS over UDP unicast
-iOS camera/encoder ────┘
-  -> GStreamer udpsrc, tsparse, tsdemux, codec parser, decodebin
+Android or iOS H.264 encoder ─> MPEG-TS over encrypted SRT caller
+  -> GStreamer srtsrc listener, tsparse, tsdemux, codec parser, decodebin
   -> videoconvert -> tee
        -> videoscale -> videorate -> fixed output caps -> bounded queue
           -> Linux v4l2sink -> v4l2loopback -> OBS, browser, or video-call app
        -> bounded queue -> RGBA conversion -> desktop preview window
 ```
 
-The sender exposes a versioned control service on TCP port `53555`. The desktop
-probes bounded local IPv4 subnets with a side-effect-free describe request,
-then uses the selected sender for paired reverse control. The sender infers the
-desktop address from the TCP peer and calls the receiver's HTTP/JSON API on TCP
-port `5001`. Session preparation allocates a new UDP media port from the
-application-owned range `50000-50099`. Only the selected sender receives that
-port, which keeps host firewall policy narrow without returning to a shared
-fixed media socket.
+The sender calls the receiver's versioned HTTP/JSON API on TCP port `5001` using
+an automatically discovered receiver origin or the manual-origin fallback. Session
+creation returns the receiver-owned SRT listener on port `5000` (SRT uses UDP
+transport), an opaque stream ID, and a per-session AES-256 passphrase. The
+receiver never infers the sender address and does not need a phone-hosted
+control listener.
 
-The normative media contract is
-[`media-transport-v1.md`](media-transport-v1.md). It defines MPEG-TS packet
-alignment, H.264/H.265 compatibility, timestamp and restart semantics, and
-stream epochs. The receiver does not inspect whether a stream was produced by
-Android or iOS.
+The normative media contract is the encrypted SRT section of
+[`docs/protocol.md`](protocol.md) and the typed v2 schema. It defines MPEG-TS
+alignment, H.264/H.265 compatibility, per-session credentials, timestamp and
+restart semantics. The receiver does not inspect whether a stream was produced
+by Android or iOS.
 
 ## Android boundaries
 
 The app is organized into feature presentation packages and grouped infrastructure modules:
 
 ```text
-feature/ (pairing, webcam, settings)
+feature/ (connection, webcam, settings)
   <- UiState / SenderUiEffect
   -> SenderScreenAction
 destination ViewModels (PairingViewModel, WebcamViewModel, SettingsViewModel)
   -> pure state mappers
-  -> connection/discovery/ (SenderConnectionCoordinator, PairingStore, SenderControlServer)
+  -> connection/ (receiver discovery, manual fallback, and control)
   -> session/ (StreamSessionController, CodecNegotiator, VideoProfiles)
        -> connection/control/http/ (HttpReceiverControlClient)
        -> media/capabilities/ (MediaCodecCapabilityProbe)
        -> media/streaming/ (StreamEngine, CodecNegotiator)
             -> media/streaming/rootencoder/ (RootEncoderStreamEngine,
-                 RootEncoderCameraSourceFactory -> one CameraXSource)
+                 RootEncoderCameraSourceFactory -> one Camera2Source)
   -> platform/ (service, notification, power)
   -> platform/preferences/ (SenderSettingsStore)
 ```
@@ -69,22 +65,24 @@ coordinator, RootEncoder, or camera controller directly. Navigation 3 entry
 decorators scope each destination ViewModel to its back-stack entry while the
 application-scoped session and stream owner remains shared.
 
-`SenderSettingsRepository` is the single source for codec and profile defaults.
-The Android preferences adapter persists those values while the coordinator
-reads one settings snapshot when a receiver session starts. Receiver approval
-is owned by the pairing presentation model; the application routes a pending
-approval to that destination without duplicating the back-stack entry.
+`SenderSettingsRepository` is the single source for codec, profile, and
+receiver connection defaults. The Android preferences adapter persists those
+values and encrypts the receiver bearer token with an Android Keystore AES-GCM
+key. The coordinator reads one settings snapshot when a receiver session
+starts. The connection layer first browses for the receiver's
+`_mobile-webcam._tcp` service, stores the selected origin, and keeps manual
+origin entry available when local-network discovery cannot operate.
 
 ## iOS development boundary
 
-`ios/` contains a native SwiftUI/Xcode application skeleton. Its
-`IOSMediaEngine` boundary owns the future AVFoundation, VideoToolbox, MPEG-TS,
-and UDP implementation, while the session, discovery, pairing, and receiver
-control files expose only coarse models and integration points. The current
-stub deliberately stops before camera capture or per-frame processing.
+`ios/` contains a native SwiftUI/Xcode application skeleton. Its receiver
+client implements the v2 HTTP DTO and transport boundary, while
+`IOSMediaEngine` still stops before camera capture, MPEG-TS packetization, and
+native SRT integration. Runtime iOS support is not claimed until the adapter
+builds and passes the same file-source conformance suite on macOS.
 
 Kotlin Multiplatform is optional future infrastructure for low-throughput
-control/session behavior such as DTOs, pairing, negotiation, retries,
+control/session behavior such as DTOs, receiver-origin handling, negotiation, retries,
 configuration, and coarse events. It must not sit in the per-frame media path
 or carry native camera frames, encoded buffers, MPEG-TS packets, or platform
 media objects.
@@ -99,7 +97,7 @@ The Android camera interaction boundary is separate from session negotiation:
 Compose preview and zoom controls
   -> CameraController state/events
   -> RootEncoderStreamEngine
-       -> one RootEncoder CameraXSource
+       -> one RootEncoder Camera2Source
        -> attach/detach preview surface without stream restart
 ```
 
@@ -111,18 +109,16 @@ surface dimensions and orientation independently, while the encoder keeps the
 negotiated profile dimensions so the receiver's fixed output caps preserve the
 same aspect ratio.
 
-Zoom is applied through RootEncoder `CameraXSource.setZoom(Float)` using the
-camera-reported `getZoomRange()`. CameraX lifecycle operations are dispatched
-to the Android main dispatcher because RootEncoder's `CameraXSource` owns a
-`LifecycleRegistry` and binds its single preview use case there. The zoom state
-and reset action are coarse UI state; camera frames and Android camera objects
-do not cross the session or wire contracts. A destroyed preview surface
-detaches only the GL preview. The foreground service and application-scoped
-stream engine continue the media session, and a later surface can attach to the
-existing camera source. RootEncoder's supported CameraX API currently does not
-provide physical-camera selection or video stabilization controls, so those
-capabilities remain explicitly unsupported rather than using a second capture
-path.
+Zoom is applied through RootEncoder `Camera2Source.setZoom(Float)` using the
+camera-reported `getZoomRange()`. Camera2 lifecycle operations are dispatched
+to the Android main dispatcher because RootEncoder's `Camera2Source` owns the
+camera manager and capture session. The zoom state and reset action are coarse
+UI state; camera frames and Android camera objects do not cross the session or
+wire contracts. A destroyed preview surface detaches only the GL preview. The
+foreground service and application-scoped stream engine continue the media
+session, and a later surface can attach to the existing camera source. Physical
+lens selection reopens that same source with the selected vendor physical ID,
+so it does not create a second capture pipeline or renegotiate the session.
 
 ## Rust crate boundaries
 
@@ -133,7 +129,6 @@ path.
 | `receiver-control-http` | Axum routes, request mapping, JSON errors, watchdog |
 | `receiver-gstreamer` | GStreamer initialization, pipeline construction, bus and pad handling |
 | `receiver-platform-linux` | v4l2loopback validation and `v4l2sink` creation |
-| `sender-control-protocol` | Phone discovery and paired reverse-control DTOs |
 | `receiver-cli` | Arguments, logging, composition, shutdown, status output |
 | `receiver-desktop` | GTK desktop composition, preview window, and Linux runtime |
 
@@ -152,17 +147,16 @@ downstream leaky behavior. When output is slower than the
 incoming stream, older frames are discarded and the newest frames remain
 available. No application channel is unbounded.
 
-`udpsrc` reports a timeout after two seconds without packets. The receiver
-changes the session to `timed_out`, keeps the process and pipeline alive, and
-can return to `receiving` when frames arrive again. A longer configurable
-grace period releases an abandoned session so a later sender can prepare a
-new one. The HTTP server runs a small watchdog to poll the GStreamer bus and
-apply this policy without requiring a status request.
+`srtsrc` reports transport loss after the configured inactivity timeout. The
+receiver changes the session to `reconnecting`, keeps the persistent v4l2 writer
+alive in standby, and returns to `receiving` when the same caller reconnects.
+A longer configurable grace period releases an abandoned session so a later
+sender can prepare a new one. The HTTP server polls the GStreamer bus and
+applies this policy without requiring a status request.
 
 ## Security and deferred work
 
-Phase 1 is for a trusted local network. First use requires approval on the
-mobile sender, and the sender stores a token scoped to stable sender and
-desktop IDs. HTTP
-receiver control and UDP media remain unencrypted. Audio, cloud relays, WebRTC,
-SRT, Tauri, and non-Linux virtual-camera backends are deferred.
+The initial release is for a trusted local network. v2 control supports an
+optional bearer token and SRT media uses a per-session passphrase and stream ID.
+Audio, cloud relays, WebRTC, adaptive bitrate, and non-Linux virtual-camera
+backends remain deferred.

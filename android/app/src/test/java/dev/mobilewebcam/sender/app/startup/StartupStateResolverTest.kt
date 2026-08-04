@@ -6,18 +6,18 @@ import org.junit.Test
 
 class StartupStateResolverTest {
     @Test
-    fun approvedReceiverRestoresWebcamDestination() {
+    fun configuredReceiverRestoresWebcamDestination() {
         assertEquals(
             AppDestination.Webcam,
-            StartupStateResolver(hasApprovedReceivers = true).resolveInitialDestination(),
+            StartupStateResolver(hasConfiguredReceiver = true).resolveInitialDestination(),
         )
     }
 
     @Test
-    fun missingApprovedReceiverStartsPairingDestination() {
+    fun missingReceiverStartsPairingDestination() {
         assertEquals(
             AppDestination.Pairing,
-            StartupStateResolver(hasApprovedReceivers = false).resolveInitialDestination(),
+            StartupStateResolver(hasConfiguredReceiver = false).resolveInitialDestination(),
         )
     }
 }

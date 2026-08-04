@@ -62,14 +62,8 @@ dependencies {
     implementation(libs.hilt.android)
     implementation(libs.androidx.hilt.navigation.compose)
     ksp(libs.hilt.compiler)
-    implementation(libs.rootencoder.library)
     implementation(libs.rootencoder.common)
     implementation(libs.rootencoder.srt)
-    implementation(libs.rootencoder.extra.sources)
-    implementation(libs.camerax.core)
-    implementation(libs.camerax.camera2)
-    implementation(libs.camerax.lifecycle)
-    implementation(libs.camerax.view)
     implementation(libs.ktor.client.core)
     implementation(libs.ktor.client.cio)
     implementation(libs.ktor.client.content.negotiation)
@@ -77,7 +71,6 @@ dependencies {
     implementation(libs.rootencoder.library) {
         exclude(group = "com.github.pedroSG94.RootEncoder", module = "udp")
     }
-    implementation(project(":rootencoder-udp"))
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)

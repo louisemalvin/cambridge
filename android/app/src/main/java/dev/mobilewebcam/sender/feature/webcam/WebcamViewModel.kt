@@ -6,7 +6,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.mobilewebcam.sender.app.model.SenderScreenAction
 import dev.mobilewebcam.sender.app.model.SenderUiEffect
 import dev.mobilewebcam.sender.app.model.StreamPresentationSnapshot
-import dev.mobilewebcam.sender.connection.discovery.SenderConnectionCoordinator
+import dev.mobilewebcam.sender.connection.SenderConnectionCoordinator
 import dev.mobilewebcam.sender.media.camera.CameraController
 import dev.mobilewebcam.sender.media.camera.CameraPreviewSurface
 import dev.mobilewebcam.sender.model.SenderSettingsRepository

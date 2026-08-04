@@ -11,7 +11,9 @@ MODULE_OPTIONS="options ${MODULE_NAME} devices=1 video_nr=${VIDEO_NUMBER} card_l
 INSTALLED_BINARY="/usr/local/bin/mobile-webcam-receiver"
 INSTALLED_DESKTOP_BINARY="/usr/local/bin/mobile-webcam-desktop"
 DESKTOP_ENTRY_TARGET="/usr/local/share/applications/mobile-webcam.desktop"
-MEDIA_PORT_RANGE="50000:50099"
+CONTROL_PORT="${MOBILE_WEBCAM_CONTROL_PORT:-5001}"
+SRT_PORT="${MOBILE_WEBCAM_SRT_PORT:-5000}"
+TRUSTED_SUBNET="${MOBILE_WEBCAM_TRUSTED_SUBNET:-}"
 MIN_SUPPORTED_V4L2LOOPBACK_VERSION="0.15.0"
 
 declare -a PRIVILEGE=()
@@ -129,7 +131,7 @@ verify_gstreamer() {
 
   local missing=()
   local element
-  for element in udpsrc tsparse tsdemux h264parse h265parse decodebin videorate v4l2sink appsink; do
+  for element in srtsrc tsparse tsdemux h264parse h265parse decodebin videorate v4l2sink appsink; do
     if ! gst-inspect-1.0 "${element}" >/dev/null 2>&1; then
       missing+=("${element}")
     fi
@@ -143,15 +145,13 @@ configure_firewall() {
   command -v ufw >/dev/null 2>&1 || return
   "${PRIVILEGE[@]}" ufw status | grep -q '^Status: active' || return
 
-  local default_interface
-  local trusted_subnet
-  default_interface="$(ip -4 route show default | awk '{ for (field = 1; field <= NF; field++) if ($field == "dev") { print $(field + 1); exit } }')"
-  [[ -n "${default_interface}" ]] || fail "UFW is active but the default network interface could not be identified."
-  trusted_subnet="$(ip -4 route show dev "${default_interface}" scope link | awk '$1 ~ /^[0-9]+\./ && $1 ~ /\// { print $1; exit }')"
-  [[ -n "${trusted_subnet}" ]] || fail "UFW is active but the trusted local subnet could not be identified."
+  if [[ -z "${TRUSTED_SUBNET}" ]]; then
+    echo "UFW is active; set MOBILE_WEBCAM_TRUSTED_SUBNET to add scoped receiver rules." >&2
+    return
+  fi
 
-  "${PRIVILEGE[@]}" ufw allow from "${trusted_subnet}" to any port 5001 proto tcp comment 'Mobile Webcam control'
-  "${PRIVILEGE[@]}" ufw allow from "${trusted_subnet}" to any port "${MEDIA_PORT_RANGE}" proto udp comment 'Mobile Webcam media'
+  "${PRIVILEGE[@]}" ufw allow from "${TRUSTED_SUBNET}" to any port "${CONTROL_PORT}" proto tcp comment 'Mobile Webcam control'
+  "${PRIVILEGE[@]}" ufw allow from "${TRUSTED_SUBNET}" to any port "${SRT_PORT}" proto udp comment 'Mobile Webcam SRT media'
 }
 
 install_packages
@@ -215,7 +215,8 @@ The headless receiver is also available with:
 The repository wrapper remains available for local development:
   ${REPO_ROOT}/scripts/linux/start-receiver.sh
 
-The receiver automatically selects the first v4l2loopback device and discovers
-Android phones through their local control service. It listens on TCP 5001 for
-control and allocates a new UDP media port in 50000-50099 for each session.
+The receiver automatically selects the first v4l2loopback device. A phone
+connects to the receiver's explicit HTTP origin on TCP ${CONTROL_PORT}, then
+receives a per-session encrypted SRT endpoint on port ${SRT_PORT}; SRT uses UDP
+transport.
 EOF

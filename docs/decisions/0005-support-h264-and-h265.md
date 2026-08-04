@@ -9,7 +9,7 @@ would produce fragile behavior.
 ## Decision
 
 Use a project-owned codec enum and capability negotiation. H.264 maps to
-`h264parse`, H.265 maps to `h265parse`, and both use the same MPEG-TS/UDP
+`h264parse`, H.265 maps to `h265parse`, and both use the same MPEG-TS/SRT
 session lifecycle and output backend.
 
 ## Consequences

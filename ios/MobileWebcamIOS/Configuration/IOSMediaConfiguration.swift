@@ -38,8 +38,27 @@ struct IOSMediaDestination: Equatable {
     let sessionID: UUID
     let host: String
     let port: UInt16
+    let srtEndpoint: IOSV2SRTEndpoint?
+
+    init(sessionID: UUID, host: String, port: UInt16) {
+        self.sessionID = sessionID
+        self.host = host
+        self.port = port
+        self.srtEndpoint = nil
+    }
+
+    init(sessionID: UUID, srtEndpoint: IOSV2SRTEndpoint) {
+        self.sessionID = sessionID
+        self.host = srtEndpoint.host
+        self.port = srtEndpoint.port
+        self.srtEndpoint = srtEndpoint
+    }
 
     func validate() throws {
+        if let srtEndpoint {
+            try srtEndpoint.validate()
+            return
+        }
         guard !host.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               port != IOSMediaConfigurationLimits.unassignedPort else {
             throw IOSMediaConfigurationError.invalidDestination

@@ -1,7 +1,6 @@
 package dev.mobilewebcam.sender.app.di
 
 import android.content.Context
-import android.os.Build
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -10,10 +9,9 @@ import dagger.hilt.components.SingletonComponent
 import dev.mobilewebcam.sender.connection.control.ReceiverControlClient
 import dev.mobilewebcam.sender.connection.control.http.HttpReceiverControlClient
 import dev.mobilewebcam.sender.connection.control.http.ProtocolJson
-import dev.mobilewebcam.sender.connection.discovery.PairingStore
-import dev.mobilewebcam.sender.connection.discovery.SenderConnectionCoordinator
-import dev.mobilewebcam.sender.connection.discovery.SenderControlServer
-import dev.mobilewebcam.sender.logging.AppLogger
+import dev.mobilewebcam.sender.connection.SenderConnectionCoordinator
+import dev.mobilewebcam.sender.connection.discovery.AndroidReceiverDiscovery
+import dev.mobilewebcam.sender.connection.discovery.ReceiverDiscovery
 import dev.mobilewebcam.sender.session.StreamSessionController
 import dev.mobilewebcam.sender.model.SenderSettingsRepository
 import io.ktor.client.HttpClient
@@ -44,25 +42,16 @@ object ConnectionModule {
     fun provideSenderConnectionCoordinator(
         @ApplicationContext context: Context,
         sessionController: StreamSessionController,
-        pairings: PairingStore,
         settings: SenderSettingsRepository,
     ): SenderConnectionCoordinator = SenderConnectionCoordinator(
         context = context,
         controller = sessionController,
-        pairings = pairings,
         settings = settings,
     )
 
     @Provides
     @Singleton
-    fun provideSenderControlServer(
-        coordinator: SenderConnectionCoordinator,
-        pairings: PairingStore,
-        logger: AppLogger,
-    ): SenderControlServer = SenderControlServer(
-        coordinator = coordinator,
-        senderId = pairings.senderId,
-        displayName = Build.MODEL.takeIf { it.isNotBlank() } ?: "Android phone",
-        logger = logger,
-    )
+    fun provideReceiverDiscovery(
+        @ApplicationContext context: Context,
+    ): ReceiverDiscovery = AndroidReceiverDiscovery(context)
 }

@@ -1,30 +1,15 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{DecoderAcceleration, PixelFormat, ProtocolVersion, Transport, VideoCodec};
+use crate::{DecoderAcceleration, PixelFormat, VideoCodec};
 
 pub const MAXIMUM_CONCURRENT_SESSIONS: u8 = 1;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReceiverCapabilities {
-    pub protocol_version: ProtocolVersion,
-    pub media: MediaCapabilities,
     pub video_codecs: Vec<VideoCodecCapability>,
     pub output: OutputCapabilities,
     pub session: SessionCapabilities,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MediaCapabilities {
-    pub transport: Transport,
-    pub port_assignment: MediaPortAssignment,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum MediaPortAssignment {
-    PerSession,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -4,14 +4,14 @@ Keep these terms separate:
 
 - H.264 and H.265 are video codecs.
 - MPEG-TS is the media container that packages the compressed video.
-- UDP is the network transport used to send the MPEG-TS stream to one receiver.
+- SRT is the network transport used to send the MPEG-TS stream to one receiver.
 
-The Phase 1 data path is MPEG-TS over UDP unicast. It is not raw H.264, raw
-H.265, RTP, or UDP broadcast.
+The v2 data path is H.264 in MPEG-TS over encrypted SRT unicast. It is not raw
+H.264, raw H.265, RTP, or UDP broadcast.
 
-The complete packet, timestamp, restart, and parameter-set rules are in
-[`media-transport-v1.md`](media-transport-v1.md). H.264 is the required
-interoperability baseline; H.265 is an optional negotiated capability.
+The receiver-owned v2 contract defines the packet, timestamp, restart, and
+parameter-set boundary. H.264 is the required interoperability baseline; H.265
+is an optional negotiated capability.
 
 ## Selection policy
 
@@ -44,7 +44,8 @@ fields rather than Android- or iOS-specific configuration.
 
 | Profile | Size | FPS | H.264 starting bitrate | H.265 starting bitrate | Support level |
 | --- | ---: | ---: | ---: | ---: | --- |
-| `1080p30` | 1920 x 1080 | 30 | 10 Mbps | 7 Mbps | Required and default |
+| `720p30` | 1280 x 720 | 30 | 4 Mbps | 7 Mbps | Required and default |
+| `1080p30` | 1920 x 1080 | 30 | 10 Mbps | 7 Mbps | Optional |
 | `1440p30` | 2560 x 1440 | 30 | 18 Mbps | 12 Mbps | Optional |
 | `4k30` | 3840 x 2160 | 30 | 32 Mbps | 20 Mbps | Experimental |
 

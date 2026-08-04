@@ -1,47 +1,39 @@
 # Control protocols
 
-The receiver control plane is HTTP/JSON over TCP. All paths are versioned
-under `/v1/`. The control plane negotiates a session and reports the UDP media
-port allocated for that session. It never carries video bytes.
+The receiver control plane is HTTP/JSON over TCP. The active contract is v2.
+The sender creates sessions and receives a receiver-owned encrypted SRT
+endpoint. The control plane never carries video bytes.
 
-Media uses MPEG-TS over UDP unicast. The normative media-plane contract is
-[`docs/media-transport-v1.md`](../docs/media-transport-v1.md). The stable
-protocol identifiers are:
+Media uses H.264 in MPEG-TS over SRT unicast. The stable protocol identifiers
+are:
 
 - Codecs: `h264`, `h265`.
-- Transport: `mpegts-udp`.
+- Transport kind: `srt`.
 - Output formats: `yuy2`, `nv12`, `i420`.
 
-The JSON schema is in `control-v1.schema.json`. Examples are executable test
-fixtures and are shared by Rust and Kotlin tests without code generation.
+The active JSON schema is `control-v2.schema.json`. Examples are executable
+test fixtures and are shared by Rust, Kotlin, and Swift adapters without code
+generation.
 
-## Endpoints
+## v2 endpoints
 
-- `GET /v1/health`
-- `GET /v1/capabilities`
-- `POST /v1/sessions/prepare`
-- `GET /v1/sessions/{sessionId}`
-- `DELETE /v1/sessions/{sessionId}`
+- `GET /v2/health`
+- `GET /v2/capabilities`
+- `POST /v2/sessions`
+- `GET /v2/sessions/{sessionId}`
+- `DELETE /v2/sessions/{sessionId}`
+- `GET /v2/sessions/{sessionId}/diagnostics`
+- `GET /v2/diagnostics/latest`
 
 Unknown optional fields must be ignored. Unknown protocol versions and unknown
 required enum values must be rejected with a typed error.
 
-## Sender discovery and reverse control v2
+## Receiver origin and authentication
 
-Mobile senders listen on TCP port `53555`. The desktop probes bounded local
-IPv4 subnets with the side-effect-free `describe` request and receives a
-versioned `describe_result` advertisement. The same service accepts one
-newline-delimited `start` or `stop` request and returns one response using
-`sender-control-v2.schema.json`.
-The sender infers the receiver address from the TCP peer, so users never enter
-an IP address.
-
-The first request requires approval on Android. Approval creates a token scoped
-to the stable sender and receiver IDs. Later start and stop requests with that
-token authenticate automatically.
-
-Every demand activation carries a UUID `streamId`. Retries and approval
-retries reuse the same ID, and the corresponding stop must echo it. The
-receiver HTTP session ID is a separate identifier. The old
-`sender-control-v1.schema.json` is retained as a historical contract only;
-implemented desktop and Android code use v2.
+The sender discovers the receiver with platform Bonjour/NSD and uses the
+resolved origin. Manual origin entry remains the fallback when multicast
+discovery cannot operate. Subnet probing and a phone-side TCP listener are not
+part of v2. Protected routes use the receiver's bearer token. Health is
+intentionally public so a sender can distinguish an offline receiver from a
+rejected credential. See [`discovery.md`](discovery.md) for the DNS-SD
+contract.

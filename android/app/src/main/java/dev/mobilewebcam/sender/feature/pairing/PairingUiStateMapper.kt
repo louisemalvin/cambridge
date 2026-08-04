@@ -6,9 +6,6 @@ import dev.mobilewebcam.sender.model.StreamState
 
 object PairingUiStateMapper {
     fun map(snapshot: PairingDomainSnapshot): PairingUiState = when {
-        snapshot.pendingApprovalName != null -> PairingUiState.AwaitingApproval(
-            UiText.Plain(snapshot.pendingApprovalName),
-        )
         snapshot.streamState is StreamState.Streaming -> PairingUiState.Connected(
             snapshot.activeReceiverName?.let(UiText::Plain) ?: UiText.Plain(DEFAULT_RECEIVER_NAME),
         )
@@ -21,12 +18,12 @@ object PairingUiStateMapper {
             snapshot.streamState is StreamState.Starting -> PairingUiState.Connecting(
                 UiText.Plain(CONNECTING_MESSAGE),
             )
-        else -> PairingUiState.Searching(UiText.Plain(SEARCHING_MESSAGE))
+        else -> PairingUiState.Searching(UiText.Plain(CONNECTION_MESSAGE))
     }
 
     private const val DEFAULT_RECEIVER_NAME = "Receiver"
     private const val CONNECTING_MESSAGE = "Connecting..."
-    private const val SEARCHING_MESSAGE = "Searching for receivers..."
+    private const val CONNECTION_MESSAGE = "Looking for a nearby receiver"
 }
 
 sealed interface PairingUiEffect {

@@ -10,9 +10,10 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0"
-clap = { version = "4.5", features = ["derive"] }
+clap = { version = "4.5", features = ["derive", "env"] }
 receiver-control-http = { path = "../../crates/receiver-control-http" }
 receiver-core = { path = "../../crates/receiver-core" }
+receiver-discovery = { path = "../../crates/receiver-discovery" }
 receiver-gstreamer = { path = "../../crates/receiver-gstreamer" }
 receiver-platform-linux = { path = "../../crates/receiver-platform-linux" }
 receiver-protocol = { path = "../../crates/receiver-protocol" }

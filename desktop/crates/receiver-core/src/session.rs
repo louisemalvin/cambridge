@@ -1,7 +1,10 @@
-use receiver_protocol::{PixelFormat, VideoCodec, VideoProfile};
+use receiver_protocol::{
+    PixelFormat, SessionStateV2, SrtEndpoint, V2VideoConfiguration, VideoCodec, VideoProfile,
+};
+use std::time::Instant;
 use uuid::Uuid;
 
-use crate::{LatencyConfig, ReceiverState};
+use crate::LatencyConfig;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MediaSessionConfig {
@@ -9,37 +12,44 @@ pub struct MediaSessionConfig {
     pub codec: VideoCodec,
     pub profile: VideoProfile,
     pub bitrate_bps: u32,
-    pub media_port: u16,
     pub output_format: PixelFormat,
     pub latency: LatencyConfig,
-    pub udp_timeout_ms: u64,
+    pub transport_timeout_ms: u64,
+    pub srt_endpoint: SrtEndpoint,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ReceiverSession {
+#[derive(Debug, Clone)]
+pub struct ReceiverSessionV2 {
     pub id: Uuid,
     pub codec: VideoCodec,
-    pub profile: VideoProfile,
-    pub bitrate_bps: u32,
+    pub video: V2VideoConfiguration,
     pub output_format: PixelFormat,
-    pub state: ReceiverState,
+    pub transport: SrtEndpoint,
+    pub state: SessionStateV2,
     pub decoder: Option<String>,
-    pub received_bitrate_bps: u32,
-    pub timeout_count: u64,
+    pub created_at: Instant,
+    pub last_receiving_at: Option<Instant>,
+    pub reconnect_count: u32,
 }
 
-impl ReceiverSession {
-    pub fn new(config: &MediaSessionConfig) -> Self {
+impl ReceiverSessionV2 {
+    pub fn new(
+        id: Uuid,
+        video: V2VideoConfiguration,
+        output_format: PixelFormat,
+        transport: SrtEndpoint,
+    ) -> Self {
         Self {
-            id: config.session_id,
-            codec: config.codec,
-            profile: config.profile.clone(),
-            bitrate_bps: config.bitrate_bps,
-            output_format: config.output_format,
-            state: ReceiverState::Prepared,
+            id,
+            codec: video.codec,
+            video,
+            output_format,
+            transport,
+            state: SessionStateV2::Allocating,
             decoder: None,
-            received_bitrate_bps: 0,
-            timeout_count: 0,
+            created_at: Instant::now(),
+            last_receiving_at: None,
+            reconnect_count: 0,
         }
     }
 }

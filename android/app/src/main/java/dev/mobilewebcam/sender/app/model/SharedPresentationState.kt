@@ -1,6 +1,7 @@
 package dev.mobilewebcam.sender.app.model
 
 import dev.mobilewebcam.sender.media.camera.CameraZoom
+import dev.mobilewebcam.sender.model.ReceiverEndpoint
 
 data class PreviewUiState(
     val landscapeAspectRatio: Float = DEFAULT_PREVIEW_ASPECT_RATIO,
@@ -103,10 +104,14 @@ sealed interface SenderScreenAction {
     data object OpenPermissionDialog : SenderScreenAction
     data object DismissPermissionDialog : SenderScreenAction
     data object RequestCameraPermission : SenderScreenAction
-    data object ApprovePending : SenderScreenAction
-    data object RejectPending : SenderScreenAction
+    data class ReceiverNameChanged(val name: String) : SenderScreenAction
+    data class ReceiverHostChanged(val host: String) : SenderScreenAction
+    data class ReceiverControlPortChanged(val port: String) : SenderScreenAction
+    data class ReceiverTokenChanged(val token: String) : SenderScreenAction
+    data class DiscoveredReceiverSelected(val endpoint: ReceiverEndpoint) : SenderScreenAction
+    data object ConnectReceiver : SenderScreenAction
     data object StopStream : SenderScreenAction
-    data object ForgetPairing : SenderScreenAction
+    data object ForgetReceiver : SenderScreenAction
     data object CopyDiagnostics : SenderScreenAction
 }
 

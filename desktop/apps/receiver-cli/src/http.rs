@@ -13,7 +13,11 @@ const DEFAULT_HTTP_PORT: u16 = 80;
 const HTTP_TIMEOUT: Duration = Duration::from_secs(5);
 const RESPONSE_HEADER_SEPARATOR: &[u8] = b"\r\n\r\n";
 
-pub fn get_diagnostics(base_url: &str, session_id: &str) -> Result<ReceiverDiagnostics> {
+pub fn get_diagnostics(
+    base_url: &str,
+    session_id: &str,
+    bearer_token: Option<&str>,
+) -> Result<ReceiverDiagnostics> {
     if session_id.is_empty()
         || session_id.contains('/')
         || session_id.chars().any(char::is_whitespace)
@@ -21,8 +25,8 @@ pub fn get_diagnostics(base_url: &str, session_id: &str) -> Result<ReceiverDiagn
         bail!("session ID contains an invalid path character");
     }
     let endpoint = HttpEndpoint::parse(base_url)?;
-    let path = format!("/v1/sessions/{session_id}/diagnostics");
-    get_json(&endpoint, &path)
+    let path = format!("/v2/sessions/{session_id}/diagnostics");
+    get_json(&endpoint, &path, bearer_token)
 }
 
 #[derive(Debug)]
@@ -80,7 +84,11 @@ fn parse_port(port: &str) -> Result<u16> {
     port.parse().context("receiver URL port is not a valid number")
 }
 
-fn get_json<T: DeserializeOwned>(endpoint: &HttpEndpoint, path: &str) -> Result<T> {
+fn get_json<T: DeserializeOwned>(
+    endpoint: &HttpEndpoint,
+    path: &str,
+    bearer_token: Option<&str>,
+) -> Result<T> {
     let address = endpoint
         .socket_addresses()?
         .next()
@@ -89,8 +97,10 @@ fn get_json<T: DeserializeOwned>(endpoint: &HttpEndpoint, path: &str) -> Result<
         .with_context(|| format!("connect to receiver at {address}"))?;
     stream.set_read_timeout(Some(HTTP_TIMEOUT)).context("configure receiver response timeout")?;
     stream.set_write_timeout(Some(HTTP_TIMEOUT)).context("configure receiver request timeout")?;
+    let authorization =
+        bearer_token.map_or_else(String::new, |token| format!("Authorization: Bearer {token}\r\n"));
     let request = format!(
-        "GET {path} HTTP/1.1\r\nHost: {}\r\nConnection: close\r\nAccept: application/json\r\n\r\n",
+        "GET {path} HTTP/1.1\r\nHost: {}\r\nConnection: close\r\nAccept: application/json\r\n{authorization}\r\n",
         endpoint.host
     );
     stream.write_all(request.as_bytes()).context("send diagnostics request")?;

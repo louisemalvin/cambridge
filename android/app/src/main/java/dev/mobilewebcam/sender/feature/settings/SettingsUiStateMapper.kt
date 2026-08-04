@@ -13,7 +13,7 @@ import dev.mobilewebcam.sender.session.VideoProfiles
 object SettingsUiStateMapper {
     fun map(
         snapshot: StreamPresentationSnapshot,
-        hasApprovedReceiver: Boolean,
+        hasConfiguredReceiver: Boolean,
     ): SettingsUiState {
         return SettingsUiState(
             connection = StreamPresentationMapper.connection(snapshot),
@@ -33,7 +33,7 @@ object SettingsUiStateMapper {
             },
             receiverName = snapshot.activeReceiverName?.let(UiText::Plain),
             connectionStatus = StreamPresentationMapper.connectionStatus(snapshot.streamState),
-            hasApprovedReceiver = hasApprovedReceiver,
+            hasConfiguredReceiver = hasConfiguredReceiver,
             camera = CameraControlsUiStateMapper.map(snapshot.cameraInteraction),
             validationMessage = snapshot.validationMessage?.let(UiText::Plain),
             failureDiagnostics = (snapshot.streamState as? StreamState.Failed)?.let { failed ->

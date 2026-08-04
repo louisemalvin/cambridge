@@ -2,8 +2,11 @@ use std::{net::IpAddr, path::PathBuf};
 
 use clap::{Parser, ValueEnum};
 use receiver_core::{
-    LatencyConfig, OutputFormat, ReceiverConfig, DEFAULT_CONTROL_PORT, DEFAULT_DEMUX_LATENCY_MS,
-    DEFAULT_LISTEN_ADDRESS, DEFAULT_OUTPUT_QUEUE_FRAMES,
+    LatencyConfig, OutputFormat, ReceiverConfig, SrtConfig, DEFAULT_ADVERTISED_HOST,
+    DEFAULT_CONTROL_PORT, DEFAULT_DEMUX_LATENCY_MS, DEFAULT_LISTEN_ADDRESS,
+    DEFAULT_OUTPUT_QUEUE_FRAMES, DEFAULT_RECEIVER_NAME, DEFAULT_SRT_CONNECT_DEADLINE_MS,
+    DEFAULT_SRT_INACTIVITY_TIMEOUT_MS, DEFAULT_SRT_LATENCY_MS, DEFAULT_SRT_LISTEN_PORT,
+    DEFAULT_SRT_RECONNECT_GRACE_MS,
 };
 
 #[derive(Debug, Clone, Parser)]
@@ -14,6 +17,30 @@ pub struct Cli {
 
     #[arg(long, default_value_t = DEFAULT_CONTROL_PORT)]
     pub control_port: u16,
+
+    #[arg(long, default_value_t = DEFAULT_SRT_LISTEN_PORT)]
+    pub srt_port: u16,
+
+    #[arg(long, default_value_t = DEFAULT_SRT_LATENCY_MS)]
+    pub srt_latency_ms: u32,
+
+    #[arg(long, default_value_t = DEFAULT_SRT_INACTIVITY_TIMEOUT_MS)]
+    pub srt_inactivity_timeout_ms: u64,
+
+    #[arg(long, default_value_t = DEFAULT_SRT_CONNECT_DEADLINE_MS)]
+    pub srt_connect_deadline_ms: u64,
+
+    #[arg(long, default_value_t = DEFAULT_SRT_RECONNECT_GRACE_MS)]
+    pub srt_reconnect_grace_ms: u64,
+
+    #[arg(long, default_value = DEFAULT_ADVERTISED_HOST)]
+    pub advertise_host: String,
+
+    #[arg(long, default_value = DEFAULT_RECEIVER_NAME)]
+    pub receiver_name: String,
+
+    #[arg(long, env = "MOBILE_WEBCAM_CONTROL_TOKEN")]
+    pub control_token: Option<String>,
 
     /// Use a specific v4l2loopback device. If omitted, the first loopback
     /// device is selected automatically.
@@ -57,6 +84,16 @@ impl Cli {
         ReceiverConfig {
             listen_addr: self.listen,
             control_port: self.control_port,
+            srt: SrtConfig {
+                listen_port: self.srt_port,
+                latency_ms: self.srt_latency_ms,
+                inactivity_timeout_ms: self.srt_inactivity_timeout_ms,
+                connect_deadline_ms: self.srt_connect_deadline_ms,
+                reconnect_grace_ms: self.srt_reconnect_grace_ms,
+            },
+            advertised_host: self.advertise_host.clone(),
+            receiver_name: self.receiver_name.clone(),
+            control_token: self.control_token.clone(),
             device,
             output_format: self.output_format.to_core(),
             latency: LatencyConfig {

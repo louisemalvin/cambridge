@@ -66,6 +66,13 @@ impl VideoSinkFactory for DesktopSinkFactory {
         Ok(appsink.upcast())
     }
 
+    fn set_standby(&self) -> Result<(), PipelineError> {
+        self.persistent_output.set_standby().map_err(|error| PipelineError::ElementConfiguration {
+            name: "persistent-output".to_owned(),
+            reason: error,
+        })
+    }
+
     fn create_preview_sink(&self) -> Result<Option<gst::Element>, PipelineError> {
         Ok(Some(self.preview.create_sink()?))
     }

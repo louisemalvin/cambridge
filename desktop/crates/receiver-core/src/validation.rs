@@ -1,18 +1,14 @@
 use receiver_protocol::{PixelFormat, VideoProfile};
 
-use crate::{OutputFormat, ReceiverCapabilities, ReceiverConfig, ReceiverError, PORT_UNASSIGNED};
+use crate::{OutputFormat, ReceiverCapabilities, ReceiverConfig, ReceiverError};
 
 const YUY2_PREFERRED_MAX_WIDTH: u32 = 1_920;
+const INVALID_PORT: u16 = 0;
 
 pub fn validate_config(config: &ReceiverConfig) -> Result<(), ReceiverError> {
-    if config.control_port == PORT_UNASSIGNED {
+    if config.control_port == INVALID_PORT {
         return Err(ReceiverError::InvalidConfiguration(
             "control port must be non-zero".to_owned(),
-        ));
-    }
-    if config.media_port != PORT_UNASSIGNED && config.control_port == config.media_port {
-        return Err(ReceiverError::InvalidConfiguration(
-            "control and media ports must be different".to_owned(),
         ));
     }
     if config.latency.output_queue_frames == 0 {
@@ -20,12 +16,42 @@ pub fn validate_config(config: &ReceiverConfig) -> Result<(), ReceiverError> {
             "output queue must contain at least one frame".to_owned(),
         ));
     }
-    if config.udp_timeout_ms == 0 {
-        return Err(ReceiverError::InvalidConfiguration("UDP timeout must be non-zero".to_owned()));
-    }
-    if config.session_timeout_grace_ms < config.udp_timeout_ms {
+    if config.srt.listen_port == INVALID_PORT {
         return Err(ReceiverError::InvalidConfiguration(
-            "session timeout grace must be at least the UDP timeout".to_owned(),
+            "SRT listener port must be non-zero".to_owned(),
+        ));
+    }
+    if config.control_port == config.srt.listen_port {
+        return Err(ReceiverError::InvalidConfiguration(
+            "control and SRT listener ports must be different".to_owned(),
+        ));
+    }
+    if config.srt.latency_ms == 0 {
+        return Err(ReceiverError::InvalidConfiguration("SRT latency must be non-zero".to_owned()));
+    }
+    if config.srt.inactivity_timeout_ms == 0 {
+        return Err(ReceiverError::InvalidConfiguration(
+            "SRT inactivity timeout must be non-zero".to_owned(),
+        ));
+    }
+    if config.srt.reconnect_grace_ms < config.srt.connect_deadline_ms {
+        return Err(ReceiverError::InvalidConfiguration(
+            "SRT reconnect grace must be at least the connect deadline".to_owned(),
+        ));
+    }
+    if !config.output_profile.is_valid() {
+        return Err(ReceiverError::InvalidConfiguration(
+            "output profile dimensions and FPS must be positive".to_owned(),
+        ));
+    }
+    if config.h264_bitrate_bps == 0 || config.h265_bitrate_bps == 0 {
+        return Err(ReceiverError::InvalidConfiguration(
+            "receiver codec bitrates must be non-zero".to_owned(),
+        ));
+    }
+    if config.advertised_host.trim().is_empty() {
+        return Err(ReceiverError::InvalidConfiguration(
+            "advertised host must be non-empty".to_owned(),
         ));
     }
     Ok(())

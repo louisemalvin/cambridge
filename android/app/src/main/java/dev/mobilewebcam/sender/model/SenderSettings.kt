@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.StateFlow
 data class SenderSettings(
     val codecPreference: CodecPreference,
     val profile: VideoProfile,
+    val receiverEndpoint: ReceiverEndpoint? = null,
 )
 
 interface SenderSettingsRepository {
@@ -13,4 +14,6 @@ interface SenderSettingsRepository {
     fun updateCodecPreference(preference: CodecPreference)
 
     fun updateProfile(profile: VideoProfile)
+
+    fun updateReceiverEndpoint(endpoint: ReceiverEndpoint?) = Unit
 }

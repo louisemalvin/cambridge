@@ -12,6 +12,7 @@
 .idea/
 
 # Generated and local files
+.artifacts/
 .DS_Store
 *.log
 *.swp
