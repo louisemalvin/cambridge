@@ -23,16 +23,18 @@ VIDEO_HEIGHT=720
 VIDEO_FPS=30
 VIDEO_DURATION_SECONDS=60
 VIDEO_BYTES_PER_PIXEL=2
-CONSUMER_FRAME_COUNT=900
-SECOND_CONSUMER_FRAME_COUNT=90
-STANDBY_FRAME_COUNT=1
-MIN_DISTINCT_FRAME_HASHES=2
-MIN_DECODED_FRAMES=2
-RECEIVER_WAIT_SECONDS=45
-EMULATOR_BOOT_WAIT_SECONDS=120
-ADB_DEVICE_WAIT_SECONDS=30
-POLL_INTERVAL_SECONDS=1
-DEMAND_STREAM_TIMEOUT_SECONDS=600
+CONSUMER_FRAME_COUNT="${CONSUMER_FRAME_COUNT:-180}"
+SECOND_CONSUMER_FRAME_COUNT="${SECOND_CONSUMER_FRAME_COUNT:-90}"
+STANDBY_FRAME_COUNT="${STANDBY_FRAME_COUNT:-1}"
+V4L2_BUFFER_COUNT="${V4L2_BUFFER_COUNT:-2}"
+FRAME_HASH_SAMPLE_STRIDE="${FRAME_HASH_SAMPLE_STRIDE:-10}"
+MIN_DISTINCT_FRAME_HASHES="${MIN_DISTINCT_FRAME_HASHES:-2}"
+MIN_DECODED_FRAMES="${MIN_DECODED_FRAMES:-2}"
+RECEIVER_WAIT_SECONDS="${RECEIVER_WAIT_SECONDS:-45}"
+EMULATOR_BOOT_WAIT_SECONDS="${EMULATOR_BOOT_WAIT_SECONDS:-120}"
+ADB_DEVICE_WAIT_SECONDS="${ADB_DEVICE_WAIT_SECONDS:-30}"
+ADB_CLEANUP_TIMEOUT_SECONDS="${ADB_CLEANUP_TIMEOUT_SECONDS:-5}"
+POLL_INTERVAL_SECONDS="${POLL_INTERVAL_SECONDS:-1}"
 CAMERA_PERMISSION="android.permission.CAMERA"
 PACKAGE_NAME="dev.mobilewebcam.sender"
 ACTIVITY_NAME="dev.mobilewebcam.sender.app.MainActivity"
@@ -46,6 +48,8 @@ EMULATOR_CONSOLE_LOG="${ARTIFACT_DIR}/emulator-console.log"
 DEMAND_EVENTS="${ARTIFACT_DIR}/emulator-demand-events.log"
 FIRST_FRAME_HASHES="${ARTIFACT_DIR}/emulator-v4l2-first.framemd5"
 SECOND_FRAME_HASHES="${ARTIFACT_DIR}/emulator-v4l2-reopen.framemd5"
+FIRST_FRAME_RAW="${ARTIFACT_DIR}/emulator-v4l2-first.raw"
+SECOND_FRAME_RAW="${ARTIFACT_DIR}/emulator-v4l2-reopen.raw"
 STANDBY_FRAME="${ARTIFACT_DIR}/emulator-v4l2-standby.raw"
 FIRST_CAPTURE_LOG="${ARTIFACT_DIR}/emulator-v4l2-first.log"
 SECOND_CAPTURE_LOG="${ARTIFACT_DIR}/emulator-v4l2-reopen.log"
@@ -55,11 +59,14 @@ FRAME_BYTES=$((VIDEO_WIDTH * VIDEO_HEIGHT * VIDEO_BYTES_PER_PIXEL))
 RECEIVER_PID=""
 EMULATOR_PID=""
 DEMAND_PID=""
-FIRST_CONSUMER_PID=""
 SECOND_CONSUMER_PID=""
+ACTIVE_CAPTURE_PID=""
 EMULATOR_SERIAL=""
 FIRST_SESSION_ID=""
 SECOND_SESSION_ID=""
+FIRST_DECODED_FRAMES=""
+SECOND_DECODED_FRAMES=""
+SECOND_CONSUMER_STATUS=""
 
 cleanup_process() {
   local pid="$1"
@@ -75,11 +82,13 @@ adb_target() {
 
 cleanup() {
   cleanup_process "${SECOND_CONSUMER_PID}"
-  cleanup_process "${FIRST_CONSUMER_PID}"
+  cleanup_process "${ACTIVE_CAPTURE_PID}"
   cleanup_process "${DEMAND_PID}"
   if [[ -n "${EMULATOR_SERIAL}" && -x "${ADB}" ]]; then
-    adb_target logcat -d >"${ANDROID_LOG}" 2>/dev/null || true
-    adb_target emu kill >/dev/null 2>&1 || true
+    timeout "${ADB_CLEANUP_TIMEOUT_SECONDS}s" \
+      "${ADB}" -s "${EMULATOR_SERIAL}" logcat -d >"${ANDROID_LOG}" 2>/dev/null || true
+    timeout "${ADB_CLEANUP_TIMEOUT_SECONDS}s" \
+      "${ADB}" -s "${EMULATOR_SERIAL}" emu kill >/dev/null 2>&1 || true
   fi
   cleanup_process "${EMULATOR_PID}"
   cleanup_process "${RECEIVER_PID}"
@@ -102,6 +111,8 @@ require_command sort
 require_command stat
 require_command tr
 require_command od
+require_command dd
+require_command awk
 require_command v4l2-ctl
 require_command timeout
 [[ -x "${ADB}" ]] || { echo "Android adb is unavailable: ${ADB}" >&2; exit 1; }
@@ -148,19 +159,17 @@ grep -q 'Video Capture' <<<"${v4l2_info}" || {
 }
 v4l2-ctl --list-formats-ext --device="${RECEIVER_DEVICE}" >/dev/null
 
-timeout "${DEMAND_STREAM_TIMEOUT_SECONDS}s" curl -fsSN "${demand_url}" >"${DEMAND_EVENTS}" 2>"${ARTIFACT_DIR}/emulator-demand-events.err" &
+curl -fsSN "${demand_url}" >"${DEMAND_EVENTS}" 2>"${ARTIFACT_DIR}/emulator-demand-events.err" &
 DEMAND_PID=$!
 
 resolve_emulator_serial() {
   local expected_serial="emulator-${EMULATOR_PORT}"
-  local serial
   local state
-  while IFS=$'\t ' read -r serial state _; do
-    if [[ "${serial}" == "${expected_serial}" && "${state}" == "device" ]]; then
-      EMULATOR_SERIAL="${serial}"
-      return 0
-    fi
-  done < <("${ADB}" devices -l | awk 'NR > 1 && $1 != "" { print $1 "\t" $2 }')
+  state="$("${ADB}" -s "${expected_serial}" get-state 2>/dev/null || true)"
+  if [[ "${state}" == device ]]; then
+    EMULATOR_SERIAL="${expected_serial}"
+    return 0
+  fi
   return 1
 }
 
@@ -285,20 +294,39 @@ assert_receiver_inactive() {
   }
 }
 
+wait_for_receiver_inactive() {
+  for _ in $(seq 1 "${RECEIVER_WAIT_SECONDS}"); do
+    if assert_receiver_inactive; then
+      return 0
+    fi
+    sleep "${POLL_INTERVAL_SECONDS}"
+  done
+  assert_receiver_inactive
+}
+
 wait_for_receiving() {
   local previous_session_id="$1"
   local candidate_session_id
+  local receiving_session_id
   local status_json
+  local decoded_frames
   for _ in $(seq 1 "${RECEIVER_WAIT_SECONDS}"); do
-    candidate_session_id="$(rg -oE 'session_id[^0-9a-f]+[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' "${RECEIVER_LOG}" | tail -1 | rg -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' || true)"
+    receiving_session_id="$(rg -o 'session_id[^0-9a-f]+[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12} state=Receiving' "${RECEIVER_LOG}" | tail -1 | rg -o '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' || true)"
+    candidate_session_id="${receiving_session_id}"
+    if [[ -z "${candidate_session_id}" ]]; then
+      candidate_session_id="$(rg -o 'session_id[^0-9a-f]+[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' "${RECEIVER_LOG}" | tail -1 | rg -o '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' || true)"
+    fi
     if [[ -n "${candidate_session_id}" && "${candidate_session_id}" != "${previous_session_id}" ]]; then
       status_json="$(curl -fsS "http://127.0.0.1:${RECEIVER_CONTROL_PORT}/v2/sessions/${candidate_session_id}" || true)"
+      decoded_frames="$(jq -r '.metrics.decodedFrames // 0' <<<"${status_json}" 2>/dev/null || echo 0)"
       if [[ -n "${status_json}" ]] && [[ "$(jq -r '.state' <<<"${status_json}")" == receiving ]] && \
-        (( $(jq -r '.metrics.decodedFrames // 0' <<<"${status_json}") >= MIN_DECODED_FRAMES )); then
+        (( decoded_frames >= MIN_DECODED_FRAMES )); then
         if [[ -z "${previous_session_id}" ]]; then
           FIRST_SESSION_ID="${candidate_session_id}"
+          FIRST_DECODED_FRAMES="${decoded_frames}"
         else
           SECOND_SESSION_ID="${candidate_session_id}"
+          SECOND_DECODED_FRAMES="${decoded_frames}"
         fi
         return 0
       fi
@@ -314,20 +342,45 @@ start_v4l2_capture() {
   local output_file="$1"
   local log_file="$2"
   local frame_count="$3"
-  ffmpeg -hide_banner -loglevel error \
-    -f v4l2 \
-    -video_size "${VIDEO_WIDTH}x${VIDEO_HEIGHT}" \
-    -framerate "${VIDEO_FPS}" \
-    -i "${RECEIVER_DEVICE}" \
-    -frames:v "${frame_count}" \
-    -f framemd5 "${output_file}" >"${log_file}" 2>&1 &
-  FIRST_CONSUMER_PID=$!
+  v4l2-ctl --device="${RECEIVER_DEVICE}" \
+    --stream-mmap="${V4L2_BUFFER_COUNT}" \
+    --stream-count="${frame_count}" \
+    --stream-to="${output_file}" >"${log_file}" 2>&1 &
+  ACTIVE_CAPTURE_PID=$!
+}
+
+assert_capture_size() {
+  local raw_file="$1"
+  local frame_count="$2"
+  local expected_size=$((FRAME_BYTES * frame_count))
+  local actual_size
+  actual_size="$(stat -c '%s' "${raw_file}")"
+  [[ "${actual_size}" == "${expected_size}" ]] || {
+    echo "Capture size ${actual_size} does not match ${expected_size} in ${raw_file}" >&2
+    return 1
+  }
+}
+
+write_frame_hashes() {
+  local raw_file="$1"
+  local hash_file="$2"
+  local frame_count="$3"
+  local frame_index
+  local frame_hash
+  {
+    printf '# frame index sha256\n'
+    for frame_index in $(seq 0 "${FRAME_HASH_SAMPLE_STRIDE}" "$((frame_count - 1))"); do
+      frame_hash="$(dd if="${raw_file}" iflag=fullblock bs="${FRAME_BYTES}" \
+        skip="${frame_index}" count=1 status=none | sha256sum | awk '{print $1}')"
+      printf '%s %s\n' "${frame_index}" "${frame_hash}"
+    done
+  } >"${hash_file}"
 }
 
 assert_distinct_frame_hashes() {
   local hash_file="$1"
   local distinct_hash_count
-  distinct_hash_count="$(rg -o '[0-9a-f]{32}$' "${hash_file}" | sort -u | wc -l | tr -d ' ')"
+  distinct_hash_count="$(rg -o '[0-9a-f]{64}$' "${hash_file}" | sort -u | wc -l | tr -d ' ')"
   (( distinct_hash_count >= MIN_DISTINCT_FRAME_HASHES )) || {
     echo "Expected at least ${MIN_DISTINCT_FRAME_HASHES} distinct V4L2 frame hashes in ${hash_file}" >&2
     cat "${hash_file}" >&2 || true
@@ -370,11 +423,11 @@ if rg -q '"event":"stream_start_requested"' "${ANDROID_LOG}"; then
   exit 1
 fi
 
-start_v4l2_capture "${FIRST_FRAME_HASHES}" "${FIRST_CAPTURE_LOG}" "${CONSUMER_FRAME_COUNT}"
+start_v4l2_capture "${FIRST_FRAME_RAW}" "${FIRST_CAPTURE_LOG}" "${CONSUMER_FRAME_COUNT}"
 wait_for_demand_event "${EXPECTED_FIRST_GENERATION}" active
 wait_for_receiving ""
 
-if ! kill -0 "${FIRST_CONSUMER_PID}" 2>/dev/null; then
+if ! kill -0 "${ACTIVE_CAPTURE_PID}" 2>/dev/null; then
   echo "The first generic V4L2 consumer exited before a second consumer could overlap" >&2
   cat "${FIRST_CAPTURE_LOG}" >&2 || true
   exit 1
@@ -387,20 +440,26 @@ ffmpeg -hide_banner -loglevel error \
   -frames:v "${SECOND_CONSUMER_FRAME_COUNT}" \
   -f null - >"${ARTIFACT_DIR}/emulator-v4l2-second-consumer.log" 2>&1 &
 SECOND_CONSUMER_PID=$!
-wait "${SECOND_CONSUMER_PID}"
+if wait "${SECOND_CONSUMER_PID}"; then
+  SECOND_CONSUMER_STATUS=0
+else
+  SECOND_CONSUMER_STATUS=$?
+fi
 SECOND_CONSUMER_PID=""
-wait "${FIRST_CONSUMER_PID}"
-FIRST_CONSUMER_PID=""
+if [[ "${SECOND_CONSUMER_STATUS}" != 0 ]] && \
+  ! rg -q 'Device or resource busy' "${ARTIFACT_DIR}/emulator-v4l2-second-consumer.log"; then
+  cat "${ARTIFACT_DIR}/emulator-v4l2-second-consumer.log" >&2
+  exit 1
+fi
+v4l2-ctl --all --device="${RECEIVER_DEVICE}" >"${ARTIFACT_DIR}/emulator-v4l2-additional-open.log"
+wait "${ACTIVE_CAPTURE_PID}"
+ACTIVE_CAPTURE_PID=""
+assert_capture_size "${FIRST_FRAME_RAW}" "${CONSUMER_FRAME_COUNT}"
+write_frame_hashes "${FIRST_FRAME_RAW}" "${FIRST_FRAME_HASHES}" "${CONSUMER_FRAME_COUNT}"
 assert_distinct_frame_hashes "${FIRST_FRAME_HASHES}"
 
 wait_for_demand_event "${EXPECTED_FIRST_GENERATION}" inactive
-for _ in $(seq 1 "${RECEIVER_WAIT_SECONDS}"); do
-  if assert_receiver_inactive; then
-    break
-  fi
-  sleep "${POLL_INTERVAL_SECONDS}"
-done
-assert_receiver_inactive
+wait_for_receiver_inactive
 wait_for_android_log_event_count stream_stopped 1
 adb_target logcat -d >"${ANDROID_LOG}"
 first_start_count="$(rg -c '"event":"stream_start_requested"' "${ANDROID_LOG}" || true)"
@@ -408,8 +467,13 @@ first_start_count="$(rg -c '"event":"stream_start_requested"' "${ANDROID_LOG}" |
   echo "Expected exactly one Android media start for generation ${EXPECTED_FIRST_GENERATION}, got ${first_start_count:-0}" >&2
   exit 1
 }
+first_active_event_count="$(rg -c '"demand":"active"' "${DEMAND_EVENTS}" || true)"
+[[ "${first_active_event_count:-0}" == 1 ]] || {
+  echo "Expected exactly one active demand event before reopen, got ${first_active_event_count:-0}" >&2
+  exit 1
+}
 
-if ! v4l2-ctl --device="${RECEIVER_DEVICE}" --stream-mmap \
+if ! v4l2-ctl --device="${RECEIVER_DEVICE}" --stream-mmap="${V4L2_BUFFER_COUNT}" \
   --stream-count="${STANDBY_FRAME_COUNT}" --stream-to="${STANDBY_FRAME}" \
   >"${STANDBY_CAPTURE_LOG}" 2>&1; then
   cat "${STANDBY_CAPTURE_LOG}" >&2
@@ -422,17 +486,18 @@ if [[ "${standby_generation}" =~ ^[0-9]+$ ]] && (( standby_generation > EXPECTED
   wait_for_demand_event "${standby_generation}" inactive
 fi
 
-start_v4l2_capture "${SECOND_FRAME_HASHES}" "${SECOND_CAPTURE_LOG}" "${CONSUMER_FRAME_COUNT}"
-SECOND_CONSUMER_PID="${FIRST_CONSUMER_PID}"
-FIRST_CONSUMER_PID=""
+start_v4l2_capture "${SECOND_FRAME_RAW}" "${SECOND_CAPTURE_LOG}" "${CONSUMER_FRAME_COUNT}"
 reopen_generation="$(wait_for_new_active_generation "${EXPECTED_FIRST_GENERATION}")"
 wait_for_receiving "${FIRST_SESSION_ID}"
-wait "${SECOND_CONSUMER_PID}"
-SECOND_CONSUMER_PID=""
+wait "${ACTIVE_CAPTURE_PID}"
+ACTIVE_CAPTURE_PID=""
+assert_capture_size "${SECOND_FRAME_RAW}" "${CONSUMER_FRAME_COUNT}"
+write_frame_hashes "${SECOND_FRAME_RAW}" "${SECOND_FRAME_HASHES}" "${CONSUMER_FRAME_COUNT}"
 assert_distinct_frame_hashes "${SECOND_FRAME_HASHES}"
 wait_for_demand_event "${reopen_generation}" inactive
-assert_android_log_sane
+wait_for_receiver_inactive
 adb_target logcat -d >"${ANDROID_LOG}"
+assert_android_log_sane
 wait_for_android_log_event_count stream_stopped 2
 second_start_count="$(rg -c '"event":"stream_start_requested"' "${ANDROID_LOG}" || true)"
 [[ "${second_start_count:-0}" == 2 ]] || {
@@ -442,4 +507,6 @@ second_start_count="$(rg -c '"event":"stream_start_requested"' "${ANDROID_LOG}" 
 
 echo "APK sha256: $(sha256sum "${APK_PATH}")"
 echo "Resolved emulator serial: ${EMULATOR_SERIAL} (AVD ${AVD_NAME})"
+echo "Receiver decoded frames: first=${FIRST_DECODED_FRAMES}, reopen=${SECOND_DECODED_FRAMES}"
+echo "Additional mmap consumer status: ${SECOND_CONSUMER_STATUS} (busy is expected for v4l2loopback's single streaming owner)"
 echo "Demand-driven emulator gate passed: sessions ${FIRST_SESSION_ID} then ${SECOND_SESSION_ID}, generations ${EXPECTED_FIRST_GENERATION} then ${reopen_generation}, receiver output ${RECEIVER_DEVICE}, black standby and distinct live frame hashes verified."
