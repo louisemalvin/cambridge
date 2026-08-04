@@ -54,15 +54,20 @@ RSS, and persistent output.
 
 ## Android emulator SRT gate
 
-The emulator harness builds and installs the exact APK, uses the emulator's
-video-file camera, passes the manual receiver-origin fallback through the activity
-launcher, and waits for receiver `receiving` state:
+The emulator harness builds and installs the exact APK, uses the
+`codex-phone-webcam-api35` video-file camera, resolves that emulator's ADB serial,
+passes the manual receiver-origin fallback through the activity launcher, and
+proves connected standby before opening a generic V4L2 consumer:
 
 ```bash
 scripts/android/test-emulator-srt.sh
 ```
 
-Set `REQUIRE_V4L2_CAPTURE=1` when OBS is open and must be part of the gate.
+The gate records the APK hash, resolved emulator serial, demand generations,
+receiver session IDs, black standby bytes, and distinct live frame hashes. It
+also overlaps a second generic consumer to verify that it does not duplicate the
+first media start, then closes and reopens the consumer without restarting the
+app, receiver, or virtual-camera device.
 
 ## Virtual camera
 
@@ -92,8 +97,9 @@ explicit device path only when testing a non-default loopback configuration.
 Open the device in OBS, Firefox, Chromium, or a browser after the persistent
 desktop producer attaches. In OBS, add `Video Capture Device (V4L2)` and select
 `Mobile Webcam`. Capability enumeration alone must leave the phone camera off;
-starting preview or capture should start it, and releasing the final consumer
-should return the output to black standby.
+the first sustained preview or capture should start one demand generation, and
+releasing the final consumer should return the output to black standby without
+disconnecting the sender.
 
 With OBS open and the Mobile Webcam source selected, run:
 

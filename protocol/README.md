@@ -1,8 +1,10 @@
 # Control protocols
 
 The receiver control plane is HTTP/JSON over TCP. The active contract is v2.
-The sender creates sessions and receives a receiver-owned encrypted SRT
-endpoint. The control plane never carries video bytes.
+The sender keeps a receiver-authoritative demand subscription open while
+connected, creates sessions only for active demand generations, and receives a
+receiver-owned encrypted SRT endpoint. The control plane never carries video
+bytes.
 
 Media uses H.264 in MPEG-TS over SRT unicast. The stable protocol identifiers
 are:

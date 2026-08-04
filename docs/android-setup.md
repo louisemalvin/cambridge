@@ -41,11 +41,14 @@ RootEncoder dependencies. No microphone permission is requested.
 3. Select the receiver discovered on the local network. The app verifies its
    v2 HTTP origin and asks for a bearer token only when the receiver advertises
    authentication. If discovery is unavailable, use the manual receiver-origin
-   fallback. The phone starts the v2 HTTP session and then calls the returned
-   encrypted SRT endpoint.
+   fallback. The phone enters connected standby and keeps the authenticated
+   demand subscription open; it creates the v2 media session only after a
+   sustained consumer opens `Mobile Webcam`.
 4. Leave Codec mode at H.264 for the first compatibility check and start with
    the receiver-owned `720p30` profile.
-5. Confirm the receiver reaches `receiving` and that OBS can open `Mobile Webcam`.
+5. Open `Mobile Webcam` in OBS or another generic V4L2 consumer. Confirm the
+   receiver reaches `receiving`; closing the final consumer returns the sender
+   and device to connected standby.
 
 The receiver owns one stable SRT listener port and returns a per-session stream
 ID and AES-256 passphrase. The Android foreground notification has a Stop
@@ -70,8 +73,8 @@ surface, while the encoded stream keeps the negotiated profile width and
 height. The receiver therefore receives the same profile aspect ratio instead
 of a stretched portrait surface.
 
-The Android screen is preview-first. Before a receiver starts a negotiated
-session, it shows a waiting state. During a session, the preview is fitted into
+The Android screen is preview-first. Before a consumer starts a negotiated
+session, it shows connected standby. During a session, the preview is fitted into
 the available portrait or landscape window with black letterbox space instead
 of stretching or creating a screen-level scroll container. Settings open in a
 Material 3 settings screen with a top app bar and list rows, so codec/profile
@@ -116,6 +119,6 @@ a moving file with FFmpeg, starts `codex-phone-webcam-api35` with
 `-camera-back videofile:<path>`, launches the receiver with an emulator-reachable
 advertised host, installs the exact APK, configures the manual receiver-origin
 fallback,
-and checks decoded frames, v4l2 output, and redacted Android logs. Set
-`REQUIRE_V4L2_CAPTURE=1` when an OBS capture consumer is open. Physical-device,
+and checks connected standby, demand generations, decoded frames, black standby,
+reopen behavior, v4l2 output, and redacted Android logs. Physical-device,
 macOS/iOS, and long-duration latency evidence remain separate gates.

@@ -1,7 +1,8 @@
 # Control protocol
 
 The active versioned control API is HTTP/JSON on TCP port `5001`. v2 routes use
-sender-initiated session creation. Video is not sent over this connection.
+sender-initiated session creation after a receiver-authoritative demand event.
+Video is not sent over this connection.
 
 The media plane is H.264 in MPEG-TS over an encrypted SRT caller/listener
 session. It applies equally to Android and iOS adapters and deliberately does
@@ -34,6 +35,11 @@ authentication.
 profile, SRT listener configuration, output pixel format, and the one-session
 limit. Protected v2 routes require the configured bearer token.
 
+`GET /v2/demand/subscribe` is an authenticated, phone-originated SSE stream.
+It starts with the current demand snapshot and then reports debounced active or
+inactive transitions. An active transition has a new generation; consumer
+count changes within one active generation do not repeat the transition.
+
 `POST /v2/sessions` accepts an ordered codec preference, the fixed receiver
 profile, and bitrate values for both codecs. The receiver selects the first
 compatible codec, prepares the SRT listener, and returns a session ID plus a
@@ -59,16 +65,23 @@ Unknown optional JSON fields are ignored for forward compatibility.
 ```text
 Sender -> GET health
 Sender -> GET capabilities
+Sender -> GET demand/subscribe
+Receiver -> inactive snapshot
+V4L2 consumer -> sustained open
+Receiver -> active demand generation
 Sender -> POST sessions
 Receiver -> selected codec, fixed profile, SRT listener, output format
 Sender -> prepare local encoder
 Sender -> start encrypted MPEG-TS/SRT to the returned endpoint
+V4L2 consumer -> final close
+Receiver -> inactive demand generation
 Sender -> DELETE session on stop
 ```
 
-The receiver may keep its input pipeline waiting for packets while the sender
-prepares its encoder. A temporary packet interruption is a recoverable state,
-not an instruction to terminate the receiver process.
+The receiver keeps its persistent virtual-camera writer attached and emits black
+standby frames while no consumer demand or media session exists. A temporary
+packet interruption is a recoverable state, not an instruction to terminate the
+receiver process.
 
 ## Automatic receiver discovery
 

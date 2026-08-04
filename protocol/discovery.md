@@ -33,8 +33,9 @@ authenticated v2 session creation.
 1. Browse for _mobile-webcam._tcp.local.
 2. Resolve each service and discard unsupported protocol versions.
 3. Probe /v2/health and /v2/capabilities.
-4. Let the user select a receiver, then create a v2 session.
-5. Keep manual receiver-origin entry available when multicast discovery is
+4. Let the user select a receiver and subscribe to authenticated demand events.
+5. Create a v2 session only after an active demand generation is received.
+6. Keep manual receiver-origin entry available when multicast discovery is
    blocked, such as restricted Wi-Fi, some USB-tethering configurations, or
    emulators.
 

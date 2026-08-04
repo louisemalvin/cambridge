@@ -14,7 +14,7 @@ Make the Android app a preview-first surface:
   right in landscape.
 - Preserve the existing RootEncoder camera boundary, negotiated profile dimensions, rotation handling, and stable Compose BOM.
 
-The implemented RootEncoder engine creates one `Camera2Source` during session preparation and keeps its lifecycle operations on the main dispatcher. Therefore the UI shows a waiting surface before a receiver starts a session rather than adding a second local-preview camera lifecycle. A pre-connection live camera preview remains a separate media-lifecycle change.
+The implemented RootEncoder engine creates one `Camera2Source` during session preparation and keeps its lifecycle operations on the main dispatcher. Therefore the UI shows connected standby before demand starts a session rather than adding a second local-preview camera lifecycle. A pre-connection live camera preview remains a separate media-lifecycle change.
 
 ## Proposed Material 3 composition
 

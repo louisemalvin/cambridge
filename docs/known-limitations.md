@@ -3,10 +3,10 @@
 - Physical Android hardware validation is required for camera permission,
   MediaCodec support, RootEncoder preparation, background streaming, thermal
   behavior, and actual H.264/H.265 output.
-- The API 35 emulator covers installation, launch with the manual receiver
-  origin fallback, encrypted SRT H.264 receiver decoding, stop/restart teardown, and
-  receiver-side output. The current environment has no open v4l2 capture
-  consumer, so OBS and changing virtual-camera frames remain unverified.
+- The API 35 emulator gate covers installation, launch with the manual receiver
+  origin fallback, connected standby, generation-driven encrypted SRT H.264
+  receiver decoding, black standby, clean release, reopen, and changing generic
+  V4L2 frame hashes. OBS-specific behavior remains a separate application gate.
 - H.265 support depends on the phone encoder, requested profile, installed
   receiver parser, decoder, and output consumer.
 - 1440p30 is optional. 4K30 is experimental and may be rejected by the phone,
