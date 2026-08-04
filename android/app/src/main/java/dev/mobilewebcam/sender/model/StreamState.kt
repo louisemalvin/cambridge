@@ -2,6 +2,7 @@ package dev.mobilewebcam.sender.model
 
 sealed interface StreamState {
     data object Idle : StreamState
+    data object ConnectedStandby : StreamState
     data object CheckingReceiver : StreamState
     data object Negotiating : StreamState
     data class Preparing(val codec: VideoCodec, val profile: VideoProfile) : StreamState

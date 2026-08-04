@@ -6,7 +6,8 @@ import dev.mobilewebcam.sender.model.StreamState
 
 object PairingUiStateMapper {
     fun map(snapshot: PairingDomainSnapshot): PairingUiState = when {
-        snapshot.streamState is StreamState.Streaming -> PairingUiState.Connected(
+        snapshot.streamState is StreamState.Streaming ||
+            snapshot.streamState == StreamState.ConnectedStandby -> PairingUiState.Connected(
             snapshot.activeReceiverName?.let(UiText::Plain) ?: UiText.Plain(DEFAULT_RECEIVER_NAME),
         )
         snapshot.streamState is StreamState.Failed -> PairingUiState.Failed(

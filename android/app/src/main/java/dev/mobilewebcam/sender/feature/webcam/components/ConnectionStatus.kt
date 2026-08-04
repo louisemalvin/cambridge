@@ -13,6 +13,9 @@ fun ConnectionStatus(state: ConnectionUiState) {
             ConnectionUiState.Waiting -> androidx.compose.ui.res.stringResource(
                 R.string.waiting_for_connection,
             )
+            is ConnectionUiState.ConnectedStandby -> androidx.compose.ui.res.stringResource(
+                R.string.connected_standby,
+            )
             is ConnectionUiState.Connecting -> state.status.value()
             is ConnectionUiState.Streaming -> state.codec.value()
             ConnectionUiState.Stopping -> androidx.compose.ui.res.stringResource(

@@ -10,6 +10,7 @@ import dev.mobilewebcam.sender.model.ReceiverCapabilities
 import dev.mobilewebcam.sender.model.ReceiverCodecCapability
 import dev.mobilewebcam.sender.model.ReceiverEndpoint
 import dev.mobilewebcam.sender.model.ReceiverHealth
+import dev.mobilewebcam.sender.model.ReceiverDemandEvent
 import dev.mobilewebcam.sender.model.SrtTransportEndpoint
 import dev.mobilewebcam.sender.model.VideoCodec
 import io.ktor.client.HttpClient
@@ -20,12 +21,19 @@ import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
+import io.ktor.client.request.prepareGet
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
+import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
+import io.ktor.utils.io.readUTF8Line
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.serialization.decodeFromString
 
 class HttpReceiverControlClient(
     private val client: HttpClient = defaultClient(),
@@ -150,6 +158,41 @@ class HttpReceiverControlClient(
         Unit
     }
 
+    override fun demandEventsV2(endpoint: ReceiverEndpoint): Flow<ReceiverDemandEvent> = flow {
+        try {
+            client.prepareGet(endpoint.v2Path("demand/subscribe")) {
+                authorizeV2(endpoint)
+                header(HttpHeaders.Accept, SSE_CONTENT_TYPE)
+            }.execute { response ->
+                response.requireSuccess()
+                val channel = response.bodyAsChannel()
+                while (!channel.isClosedForRead) {
+                    val line = channel.readUTF8Line() ?: break
+                    if (!line.startsWith(SSE_DATA_PREFIX)) continue
+                    val data = line.removePrefix(SSE_DATA_PREFIX).trim()
+                    if (data.isEmpty()) continue
+                    val dto = ProtocolJson.instance.decodeFromString<DemandEventV2Dto>(data)
+                    checkVersion(dto.protocolVersion, CONTROL_V2_PROTOCOL_VERSION)
+                    require(dto.consumerCount >= 0) { "Demand consumer count must not be negative" }
+                    if (dto.demand == DemandStateV2Dto.ACTIVE) {
+                        require(dto.consumerCount > 0) { "Active demand requires a consumer" }
+                    } else {
+                        require(dto.consumerCount == 0) { "Inactive demand must have no consumers" }
+                    }
+                    emit(dto.toDomain())
+                }
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            if (error is ReceiverControlException) throw error
+            throw ReceiverControlException(
+                ReceiverControlError.Network(error.message ?: "Demand subscription failed"),
+                error,
+            )
+        }
+    }
+
     private suspend fun <T> executeRequest(
         endpoint: ReceiverEndpoint,
         block: suspend () -> T,
@@ -195,6 +238,8 @@ class HttpReceiverControlClient(
         const val HTTP_SUCCESS_STATUS_MIN = 200
         const val HTTP_SUCCESS_STATUS_MAX = 299
         const val RECEIVER_OWNED_OUTPUT = "receiver-owned-output"
+        const val SSE_CONTENT_TYPE = "text/event-stream"
+        const val SSE_DATA_PREFIX = "data:"
 
         fun defaultClient(): HttpClient = HttpClient(CIO) {
             install(ContentNegotiation) {

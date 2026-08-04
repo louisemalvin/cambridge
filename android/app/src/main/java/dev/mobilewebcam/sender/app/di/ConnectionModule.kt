@@ -40,12 +40,12 @@ object ConnectionModule {
     @Provides
     @Singleton
     fun provideSenderConnectionCoordinator(
-        @ApplicationContext context: Context,
         sessionController: StreamSessionController,
+        receiverControlClient: ReceiverControlClient,
         settings: SenderSettingsRepository,
     ): SenderConnectionCoordinator = SenderConnectionCoordinator(
-        context = context,
         controller = sessionController,
+        receiver = receiverControlClient,
         settings = settings,
     )
 

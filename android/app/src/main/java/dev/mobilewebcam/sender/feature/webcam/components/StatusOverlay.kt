@@ -43,6 +43,7 @@ fun PreviewStatusOverlay(
                 onAction = onAction,
                 modifier = Modifier.align(Alignment.Center),
             )
+            is ConnectionUiState.ConnectedStandby -> Unit
             is ConnectionUiState.Connecting -> StatusCard(
                 message = connection.status,
                 modifier = Modifier.align(Alignment.Center),
@@ -68,6 +69,8 @@ private fun ConnectionChip(
 ) {
     val label = when (state) {
         ConnectionUiState.Waiting -> UiText.Resource(R.string.waiting_for_connection)
+        is ConnectionUiState.ConnectedStandby -> state.receiverName
+            ?: UiText.Resource(R.string.connected_standby)
         is ConnectionUiState.Connecting -> state.status
         is ConnectionUiState.Streaming -> state.receiverName
             ?: UiText.Resource(R.string.connected_to_receiver, listOf("receiver"))

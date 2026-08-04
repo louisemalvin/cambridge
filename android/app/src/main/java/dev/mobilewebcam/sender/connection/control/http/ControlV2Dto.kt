@@ -131,6 +131,23 @@ data class ReceiverCapabilitiesV2Dto(
 )
 
 @Serializable
+enum class DemandStateV2Dto {
+    @SerialName("inactive")
+    INACTIVE,
+
+    @SerialName("active")
+    ACTIVE,
+}
+
+@Serializable
+data class DemandEventV2Dto(
+    @SerialName("protocolVersion") val protocolVersion: Int,
+    val generation: Long,
+    val demand: DemandStateV2Dto,
+    @SerialName("consumerCount") val consumerCount: Int,
+)
+
+@Serializable
 data class CreateSessionRequestV2Dto(
     @SerialName("protocolVersion") val protocolVersion: Int,
     @SerialName("preferredCodecs") val preferredCodecs: List<ControlCodec>,
@@ -217,3 +234,12 @@ internal fun ControlPixelFormat.toDomain() = when (this) {
     ControlPixelFormat.NV12 -> dev.mobilewebcam.sender.model.OutputPixelFormat.NV12
     ControlPixelFormat.I420 -> dev.mobilewebcam.sender.model.OutputPixelFormat.I420
 }
+
+internal fun DemandEventV2Dto.toDomain() = dev.mobilewebcam.sender.model.ReceiverDemandEvent(
+    generation = generation,
+    demand = when (demand) {
+        DemandStateV2Dto.INACTIVE -> dev.mobilewebcam.sender.model.ReceiverDemand.INACTIVE
+        DemandStateV2Dto.ACTIVE -> dev.mobilewebcam.sender.model.ReceiverDemand.ACTIVE
+    },
+    consumerCount = consumerCount,
+)

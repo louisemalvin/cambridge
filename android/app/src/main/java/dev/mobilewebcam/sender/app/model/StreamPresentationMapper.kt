@@ -13,6 +13,9 @@ object StreamPresentationMapper {
         val streamState = snapshot.streamState
     ) {
         StreamState.Idle -> ConnectionUiState.Waiting
+        StreamState.ConnectedStandby -> ConnectionUiState.ConnectedStandby(
+            snapshot.activeReceiverName?.let(UiText::Plain),
+        )
         StreamState.CheckingReceiver -> ConnectionUiState.Connecting(
             UiText.Resource(R.string.checking_receiver),
         )
@@ -41,6 +44,7 @@ object StreamPresentationMapper {
 
     fun connectionStatus(streamState: StreamState): UiText? = when (streamState) {
         StreamState.Idle -> UiText.Resource(R.string.not_connected)
+        StreamState.ConnectedStandby -> UiText.Resource(R.string.connected_standby)
         StreamState.CheckingReceiver -> UiText.Resource(R.string.checking_receiver)
         StreamState.Negotiating -> UiText.Resource(R.string.negotiating_codec)
         is StreamState.Preparing -> UiText.Resource(

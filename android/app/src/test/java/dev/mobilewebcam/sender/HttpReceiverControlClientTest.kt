@@ -2,6 +2,8 @@ package dev.mobilewebcam.sender
 
 import dev.mobilewebcam.sender.connection.control.http.HttpReceiverControlClient
 import dev.mobilewebcam.sender.model.PrepareSessionRequest
+import dev.mobilewebcam.sender.model.ReceiverDemand
+import dev.mobilewebcam.sender.model.ReceiverDemandEvent
 import dev.mobilewebcam.sender.model.ReceiverEndpoint
 import dev.mobilewebcam.sender.model.VideoCodec
 import dev.mobilewebcam.sender.model.VideoProfile
@@ -14,6 +16,7 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.TextContent
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -21,6 +24,49 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class HttpReceiverControlClientTest {
+    @Test
+    fun demandSubscriptionUsesBearerAuthAndDecodesGenerationEvents() = runTest {
+        val endpoint = ReceiverEndpoint(
+            host = "127.0.0.1",
+            controlPort = 5_001,
+            controlToken = "receiver-token",
+        )
+        val engine = MockEngine { request ->
+            assertEquals("/v2/demand/subscribe", request.url.encodedPath)
+            assertEquals("Bearer receiver-token", request.headers[HttpHeaders.Authorization])
+            respond(
+                content = """
+                    event: demand
+                    data: {"protocolVersion":2,"generation":4,"demand":"active","consumerCount":1}
+
+                    event: demand
+                    data: {"protocolVersion":2,"generation":4,"demand":"inactive","consumerCount":0}
+
+                """.trimIndent(),
+                status = HttpStatusCode.OK,
+                headers = io.ktor.http.headersOf(
+                    HttpHeaders.ContentType,
+                    "text/event-stream",
+                ),
+            )
+        }
+        val client = HttpClient(engine)
+
+        try {
+            val events = HttpReceiverControlClient(client).demandEventsV2(endpoint).toList()
+
+            assertEquals(
+                listOf(
+                    ReceiverDemandEvent(4L, ReceiverDemand.ACTIVE, 1),
+                    ReceiverDemandEvent(4L, ReceiverDemand.INACTIVE, 0),
+                ),
+                events,
+            )
+        } finally {
+            client.close()
+        }
+    }
+
     @Test
     fun v2SessionUsesTheEndpointBearerTokenAndReturnsTypedSrtTransport() = runTest {
         val engine = MockEngine { request ->

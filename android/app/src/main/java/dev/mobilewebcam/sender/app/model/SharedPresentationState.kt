@@ -24,6 +24,8 @@ enum class PreviewOrientation(
 sealed interface ConnectionUiState {
     data object Waiting : ConnectionUiState
 
+    data class ConnectedStandby(val receiverName: UiText?) : ConnectionUiState
+
     data class Connecting(val status: UiText) : ConnectionUiState
 
     data class Streaming(

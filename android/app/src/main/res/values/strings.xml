@@ -26,6 +26,7 @@
     <string name="streaming_codec">Streaming %1$s</string>
     <string name="stopping_stream">Stopping</string>
     <string name="connected_to_receiver">Connected to %1$s</string>
+    <string name="connected_standby">Connected - waiting for webcam use</string>
     <string name="not_connected">Waiting for webcam use</string>
     <string name="settings">Settings</string>
     <string name="navigate_back">Back</string>
