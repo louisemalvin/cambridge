@@ -30,6 +30,7 @@ const FRAME_DURATION_NANOSECONDS: u64 = NANOSECONDS_PER_SECOND / VIRTUAL_CAMERA_
 const BLACK_Y: u8 = 16;
 const BLACK_CHROMA: u8 = 128;
 const YUY2_BYTES_PER_PIXEL: usize = 2;
+const APP_SOURCE_MAX_BYTES_UNBOUNDED: u64 = 0;
 const PIPELINE_START_TIMEOUT_SECONDS: u64 = 5;
 const V4L2_IOCTL_TYPE: u8 = b'V';
 const V4L2_IOCTL_SET_CONTROL: u8 = 28;
@@ -90,7 +91,7 @@ impl PersistentVirtualCameraOutput {
         appsrc.set_property("block", false);
         appsrc.set_property("format", gst::Format::Time);
         appsrc.set_property("max-buffers", u64::from(APP_SOURCE_MAX_BUFFERS));
-        appsrc.set_property("max-bytes", 0u64);
+        appsrc.set_property("max-bytes", APP_SOURCE_MAX_BYTES_UNBOUNDED);
         appsrc.set_property("caps", output_caps());
         appsrc.set_property_from_str("leaky-type", "downstream");
         output_caps_filter.set_property("caps", output_caps());
@@ -261,7 +262,7 @@ fn black_sample() -> gst::Sample {
         * usize::try_from(VIRTUAL_CAMERA_HEIGHT).unwrap()
         * YUY2_BYTES_PER_PIXEL;
     let mut pixels = vec![BLACK_CHROMA; size];
-    for byte in pixels.iter_mut().step_by(2) {
+    for byte in pixels.iter_mut().step_by(YUY2_BYTES_PER_PIXEL) {
         *byte = BLACK_Y;
     }
     let mut buffer = gst::Buffer::from_mut_slice(pixels);
