@@ -208,6 +208,7 @@ class SenderConnectionCoordinator(
 
     private companion object {
         const val RECONNECT_DELAY_MILLIS = 1_000L
+        // RootEncoder closes its SRT socket asynchronously during release.
         const val MEDIA_RESTART_COOLDOWN_MILLIS = 1_000L
     }
 }
