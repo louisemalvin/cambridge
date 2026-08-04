@@ -63,7 +63,7 @@ Safe corrective command to inspect the current module configuration:
 
 If no loopback device was created, run this explicit command after reviewing
 your current devices:
-  sudo modprobe v4l2loopback devices=1 video_nr=${VIDEO_NUMBER} card_label="Mobile Webcam" exclusive_caps=1
+  sudo modprobe v4l2loopback devices=1 video_nr=${VIDEO_NUMBER} card_label="Mobile Webcam" exclusive_caps=1 max_openers=32
 
 This script never unloads a module that may be in use.
 EOF
@@ -74,7 +74,7 @@ cat >&2 <<EOF
 v4l2loopback is installed but not loaded.
 
 Run this manual command:
-  sudo modprobe v4l2loopback devices=1 video_nr=${VIDEO_NUMBER} card_label="Mobile Webcam" exclusive_caps=1
+  sudo modprobe v4l2loopback devices=1 video_nr=${VIDEO_NUMBER} card_label="Mobile Webcam" exclusive_caps=1 max_openers=32
 
 If modprobe reports a signing or Secure Boot error, install a distribution
 signed module or enroll the required signing key. The receiver will not load
