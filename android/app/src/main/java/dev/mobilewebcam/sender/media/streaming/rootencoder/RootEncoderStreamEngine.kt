@@ -332,23 +332,7 @@ class RootEncoderStreamEngine(
     private suspend fun stopEncoderOnMain(encoder: SrtStream?) {
         withContext(Dispatchers.Main.immediate) {
             encoder ?: return@withContext
-            when {
-                encoder.isStreaming -> {
-                    encoder.stopStream()
-                    if (encoder.isOnPreview) {
-                        encoder.stopPreview()
-                    }
-                    encoder.videoSource.release()
-                    encoder.audioSource.release()
-                }
-                encoder.isOnPreview -> {
-                    encoder.stopPreview()
-                    encoder.audioSource.stop()
-                    encoder.videoSource.release()
-                    encoder.audioSource.release()
-                }
-                else -> encoder.release()
-            }
+            encoder.release()
         }
     }
 

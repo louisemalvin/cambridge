@@ -38,6 +38,7 @@ class SenderConnectionCoordinator(
     private var activeEndpoint: ReceiverEndpoint? = null
     private var demandJob: Job? = null
     private var lastDemand: ReceiverDemandEvent? = null
+    private var lastMediaStoppedAtMillis: Long? = null
 
     val streamState: StateFlow<StreamState> = stateFlow.asStateFlow()
     val activeReceiverName: StateFlow<String?> = activeReceiverNameFlow.asStateFlow()
@@ -129,6 +130,7 @@ class SenderConnectionCoordinator(
     }
 
     private suspend fun startForDemandLocked(endpoint: ReceiverEndpoint) {
+        waitForMediaRestartCooldown()
         val configuredSettings = settings.state.value
         if (controller.state.value !is StreamState.Idle) {
             controller.stop()
@@ -146,7 +148,16 @@ class SenderConnectionCoordinator(
 
     private suspend fun stopForDemandLocked() {
         controller.stop()
+        lastMediaStoppedAtMillis = System.currentTimeMillis()
         stateFlow.value = if (activeEndpoint == null) StreamState.Idle else StreamState.ConnectedStandby
+    }
+
+    private suspend fun waitForMediaRestartCooldown() {
+        val stoppedAtMillis = lastMediaStoppedAtMillis ?: return
+        val elapsedMillis = System.currentTimeMillis() - stoppedAtMillis
+        val remainingMillis = MEDIA_RESTART_COOLDOWN_MILLIS - elapsedMillis
+        if (remainingMillis > 0) delay(remainingMillis)
+        lastMediaStoppedAtMillis = null
     }
 
     private suspend fun handleSubscriptionLost(endpoint: ReceiverEndpoint) {
@@ -188,6 +199,7 @@ class SenderConnectionCoordinator(
         if (stopped.isFailure) return stopped
         activeEndpoint = null
         lastDemand = null
+        lastMediaStoppedAtMillis = null
         activeReceiverNameFlow.value = null
         stateFlow.value = StreamState.Idle
         if (clearSettings) settings.updateReceiverEndpoint(null)
@@ -196,5 +208,6 @@ class SenderConnectionCoordinator(
 
     private companion object {
         const val RECONNECT_DELAY_MILLIS = 1_000L
+        const val MEDIA_RESTART_COOLDOWN_MILLIS = 1_000L
     }
 }

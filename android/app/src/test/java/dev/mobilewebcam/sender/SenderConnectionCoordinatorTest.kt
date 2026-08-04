@@ -78,6 +78,8 @@ class SenderConnectionCoordinatorTest {
         harness.emit(activeDemand(generation = FIRST_GENERATION))
         harness.emit(inactiveDemand(generation = FIRST_GENERATION))
         harness.emit(activeDemand(generation = SECOND_GENERATION))
+        testScheduler.advanceTimeBy(RESTART_SETTLE_TIME_MILLIS)
+        testScheduler.runCurrent()
         assertEquals(2, harness.controller.startCount)
 
         harness.emit(activeDemand(generation = FIRST_GENERATION, consumerCount = SECOND_CONSUMER_COUNT))
@@ -265,6 +267,7 @@ class SenderConnectionCoordinatorTest {
         const val SECOND_CONSUMER_COUNT = 2
         const val DEMAND_BUFFER_CAPACITY = 1
         const val STREAM_START_TIME = 100L
+        const val RESTART_SETTLE_TIME_MILLIS = 2_000L
 
         fun activeDemand(generation: Long, consumerCount: Int = FIRST_CONSUMER_COUNT) =
             ReceiverDemandEvent(generation, ReceiverDemand.ACTIVE, consumerCount)
