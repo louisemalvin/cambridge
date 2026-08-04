@@ -1,4 +1,9 @@
+#![allow(unsafe_code)]
+
 use std::{
+    fs::OpenOptions,
+    os::{fd::AsRawFd, unix::fs::OpenOptionsExt},
+    path::Path,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc, Mutex, RwLock,
@@ -26,6 +31,13 @@ const BLACK_Y: u8 = 16;
 const BLACK_CHROMA: u8 = 128;
 const YUY2_BYTES_PER_PIXEL: usize = 2;
 const PIPELINE_START_TIMEOUT_SECONDS: u64 = 5;
+const V4L2_IOCTL_TYPE: u8 = b'V';
+const V4L2_IOCTL_SET_CONTROL: u8 = 28;
+const V4L2_USER_CONTROL_BASE: u32 = 0x0098_0900;
+const V4L2LOOPBACK_CONTROL_BASE: u32 = V4L2_USER_CONTROL_BASE | 0xf000;
+const V4L2_KEEP_FORMAT_CONTROL_ID: u32 = V4L2LOOPBACK_CONTROL_BASE;
+const V4L2_KEEP_FORMAT_DISABLED: i32 = 0;
+const V4L2_KEEP_FORMAT_ENABLED: i32 = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VirtualCameraOutputMode {
@@ -70,6 +82,8 @@ impl PersistentVirtualCameraOutput {
         let scale = make_element("videoscale", "virtual-camera-scale")?;
         let output_caps_filter = make_element("capsfilter", "virtual-camera-caps")?;
         let sink = make_element("v4l2sink", "persistent-virtual-camera-sink")?;
+
+        set_keep_format(device, V4L2_KEEP_FORMAT_DISABLED)?;
 
         appsrc.set_property("is-live", true);
         appsrc.set_property("do-timestamp", true);
@@ -148,6 +162,12 @@ impl PersistentVirtualCameraOutput {
             )));
         }
 
+        if let Err(error) = set_keep_format(device, V4L2_KEEP_FORMAT_ENABLED) {
+            let output = Self { shared };
+            let _ = output.stop();
+            return Err(error);
+        }
+
         Ok(Self { shared })
     }
 
@@ -213,7 +233,21 @@ fn pusher_loop(shared: &Arc<SharedOutput>) {
         };
         if let Some(sample) = sample {
             if let Ok(state) = shared.state.lock() {
-                let _ = state.appsrc.push_sample(&sample);
+                if live {
+                    if let Some(buffer) = sample.buffer() {
+                        let mut live_buffer = buffer.to_owned();
+                        if let Some(buffer) = live_buffer.get_mut() {
+                            buffer.set_pts(gst::ClockTime::NONE);
+                            buffer.set_dts(gst::ClockTime::NONE);
+                            buffer.set_duration(gst::ClockTime::from_nseconds(
+                                FRAME_DURATION_NANOSECONDS,
+                            ));
+                        }
+                        let _ = state.appsrc.push_buffer(live_buffer);
+                    }
+                } else {
+                    let _ = state.appsrc.push_sample(&sample);
+                }
             }
         }
         let interval =
@@ -259,11 +293,37 @@ fn output_caps() -> gst::Caps {
         .build()
 }
 
-impl Drop for PersistentVirtualCameraOutput {
-    fn drop(&mut self) {
-        let _ = self.stop();
-    }
+fn set_keep_format(device: &Path, value: i32) -> Result<(), LinuxPlatformError> {
+    let file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .custom_flags(libc::O_NONBLOCK)
+        .open(device)
+        .map_err(|error| {
+            LinuxPlatformError::PersistentOutput(format!(
+                "open {} to set v4l2loopback keep_format: {error}",
+                device.display()
+            ))
+        })?;
+    let mut control = V4l2Control { id: V4L2_KEEP_FORMAT_CONTROL_ID, value };
+    // Safety: the file descriptor is open and the ioctl receives a fixed-size
+    // repr(C) control structure defined by the V4L2 userspace ABI.
+    unsafe { vidioc_set_control(file.as_raw_fd(), &mut control) }.map_err(|error| {
+        LinuxPlatformError::PersistentOutput(format!(
+            "set v4l2loopback keep_format on {}: {error}",
+            device.display()
+        ))
+    })?;
+    Ok(())
 }
+
+#[repr(C)]
+struct V4l2Control {
+    id: u32,
+    value: i32,
+}
+
+nix::ioctl_readwrite!(vidioc_set_control, V4L2_IOCTL_TYPE, V4L2_IOCTL_SET_CONTROL, V4l2Control);
 
 #[cfg(test)]
 mod tests {
