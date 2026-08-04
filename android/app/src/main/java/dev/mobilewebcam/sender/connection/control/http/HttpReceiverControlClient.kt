@@ -29,7 +29,7 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
-import io.ktor.utils.io.readUTF8Line
+import io.ktor.utils.io.readLine
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -167,7 +167,7 @@ class HttpReceiverControlClient(
                 response.requireSuccess()
                 val channel = response.bodyAsChannel()
                 while (!channel.isClosedForRead) {
-                    val line = channel.readUTF8Line() ?: break
+                    val line = channel.readLine() ?: break
                     if (!line.startsWith(SSE_DATA_PREFIX)) continue
                     val data = line.removePrefix(SSE_DATA_PREFIX).trim()
                     if (data.isEmpty()) continue
