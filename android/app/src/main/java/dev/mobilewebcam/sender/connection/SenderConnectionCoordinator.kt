@@ -79,6 +79,10 @@ class SenderConnectionCoordinator(
         activeReceiverNameFlow.value = endpoint.displayName
         lastDemand = null
         stateFlow.value = StreamState.ConnectedStandby
+        logger.event(
+            "connected_standby",
+            mapOf("receiverName" to endpoint.displayName),
+        )
         demandJob?.cancel()
         demandJob = scope.launch { runDemandSubscription(endpoint) }
         Result.success(Unit)
