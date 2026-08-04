@@ -20,7 +20,7 @@ pub use config::{
     DEFAULT_SRT_LATENCY_MS, DEFAULT_SRT_LISTEN_PORT, DEFAULT_SRT_RECONNECT_GRACE_MS,
     DEFAULT_VIDEO_DEVICE,
 };
-pub use demand::VirtualCameraDemand;
+pub use demand::{DemandCoordinator, VirtualCameraDemand};
 pub use diagnostics::{
     diagnostic_timestamp_ms, DiagnosticPhase, FrameIntervalStatistics, QueueDiagnostics,
     ReceiverDiagnosticEvent, ReceiverDiagnosticEventKind, ReceiverDiagnostics,

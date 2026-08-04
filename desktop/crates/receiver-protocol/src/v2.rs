@@ -6,6 +6,7 @@ pub const V2_PROTOCOL_VERSION: ProtocolVersion = 2;
 pub const SRT_KEY_LENGTH_BYTES: u16 = 32;
 pub const SRT_PASSPHRASE_MIN_LENGTH: usize = 10;
 pub const SRT_PASSPHRASE_MAX_LENGTH: usize = 79;
+pub const INITIAL_DEMAND_GENERATION: u64 = 0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -128,6 +129,37 @@ pub struct ReceiverCapabilitiesV2 {
     pub output: OutputConfiguration,
     pub maximum_concurrent_sessions: u8,
     pub active: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DemandStateV2 {
+    Inactive,
+    Active,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DemandEventV2 {
+    pub protocol_version: ProtocolVersion,
+    pub generation: u64,
+    pub demand: DemandStateV2,
+    pub consumer_count: u32,
+}
+
+impl DemandEventV2 {
+    pub fn validate(&self) -> Result<(), V2ProtocolError> {
+        validate_v2_protocol_version(self.protocol_version)?;
+        match self.demand {
+            DemandStateV2::Inactive if self.consumer_count != 0 => {
+                Err(V2ProtocolError::InactiveDemandHasConsumers)
+            }
+            DemandStateV2::Active if self.consumer_count == 0 => {
+                Err(V2ProtocolError::ActiveDemandHasNoConsumers)
+            }
+            DemandStateV2::Inactive | DemandStateV2::Active => Ok(()),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -277,6 +309,10 @@ pub enum V2ProtocolError {
     InvalidSrtPassphrase,
     #[error("SRT latency must be greater than zero")]
     InvalidSrtLatency,
+    #[error("inactive demand must not report consumers")]
+    InactiveDemandHasConsumers,
+    #[error("active demand must report at least one consumer")]
+    ActiveDemandHasNoConsumers,
 }
 
 pub fn validate_v2_protocol_version(version: ProtocolVersion) -> Result<(), V2ProtocolError> {

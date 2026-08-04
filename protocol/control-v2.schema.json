@@ -9,6 +9,7 @@
     { "$ref": "#/$defs/createSessionRequest" },
     { "$ref": "#/$defs/createSessionResponse" },
     { "$ref": "#/$defs/sessionStatusResponse" },
+    { "$ref": "#/$defs/demandEvent" },
     { "$ref": "#/$defs/problemDetails" }
   ],
   "$defs": {
@@ -143,6 +144,27 @@
         "decoder": { "type": ["string", "null"] },
         "metrics": { "type": "object", "additionalProperties": true }
       },
+      "additionalProperties": true
+    },
+    "demandEvent": {
+      "type": "object",
+      "required": ["protocolVersion", "generation", "demand", "consumerCount"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "generation": { "type": "integer", "minimum": 0 },
+        "demand": { "type": "string", "enum": ["inactive", "active"] },
+        "consumerCount": { "type": "integer", "minimum": 0 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "demand": { "const": "active" } } },
+          "then": { "properties": { "consumerCount": { "minimum": 1 } } }
+        },
+        {
+          "if": { "properties": { "demand": { "const": "inactive" } } },
+          "then": { "properties": { "consumerCount": { "const": 0 } } }
+        }
+      ],
       "additionalProperties": true
     },
     "problemDetails": {

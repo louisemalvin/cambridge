@@ -24,6 +24,9 @@ generation.
 - `DELETE /v2/sessions/{sessionId}`
 - `GET /v2/sessions/{sessionId}/diagnostics`
 - `GET /v2/diagnostics/latest`
+- `GET /v2/demand/subscribe` - authenticated server-sent demand events for a
+  connected sender. Events carry a generation, effective consumer count, and
+  `active` or `inactive` demand state.
 
 Unknown optional fields must be ignored. Unknown protocol versions and unknown
 required enum values must be rejected with a typed error.
