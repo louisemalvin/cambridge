@@ -17,6 +17,8 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.plugins.HttpTimeoutConfig
+import io.ktor.client.plugins.timeout
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
@@ -163,6 +165,10 @@ class HttpReceiverControlClient(
             client.prepareGet(endpoint.v2Path("demand/subscribe")) {
                 authorizeV2(endpoint)
                 header(HttpHeaders.Accept, SSE_CONTENT_TYPE)
+                timeout {
+                    requestTimeoutMillis = SSE_TIMEOUT_MILLIS
+                    socketTimeoutMillis = SSE_TIMEOUT_MILLIS
+                }
             }.execute { response ->
                 response.requireSuccess()
                 val channel = response.bodyAsChannel()
@@ -240,6 +246,7 @@ class HttpReceiverControlClient(
         const val RECEIVER_OWNED_OUTPUT = "receiver-owned-output"
         const val SSE_CONTENT_TYPE = "text/event-stream"
         const val SSE_DATA_PREFIX = "data:"
+        const val SSE_TIMEOUT_MILLIS = HttpTimeoutConfig.INFINITE_TIMEOUT_MS
 
         fun defaultClient(): HttpClient = HttpClient(CIO) {
             install(ContentNegotiation) {
