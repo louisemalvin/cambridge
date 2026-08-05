@@ -127,6 +127,10 @@ mod tests {
     }
 
     fn service() -> ReceiverService {
+        service_with_advertised_host(None)
+    }
+
+    fn service_with_advertised_host(host: Option<&str>) -> ReceiverService {
         let capabilities = ReceiverCapabilities {
             video_codecs: vec![
                 VideoCodecCapability {
@@ -150,8 +154,11 @@ mod tests {
             },
         };
         let provider = StaticCapabilityProvider::new(capabilities);
-        ReceiverService::new(ReceiverConfig::default(), Box::new(provider), Box::new(FakeReceiver))
-            .unwrap()
+        let config = ReceiverConfig {
+            advertised_host: host.map(str::to_owned),
+            ..ReceiverConfig::default()
+        };
+        ReceiverService::new(config, Box::new(provider), Box::new(FakeReceiver)).unwrap()
     }
 
     fn create_request() -> receiver_protocol::CreateSessionRequest {
@@ -220,6 +227,7 @@ mod tests {
                     .method("POST")
                     .uri("/v2/sessions")
                     .header("content-type", "application/json")
+                    .header("host", "receiver.example:55031")
                     .body(Body::from(serde_json::to_vec(&request).unwrap()))
                     .unwrap(),
             )
@@ -231,6 +239,7 @@ mod tests {
         let response: receiver_protocol::CreateSessionResponse =
             serde_json::from_slice(&body).unwrap();
         assert_eq!(location, format!("/v2/sessions/{}", response.session_id));
+        assert_eq!(response.transport.host, "receiver.example");
 
         let capabilities = app
             .clone()
@@ -296,5 +305,88 @@ mod tests {
         let report: receiver_core::ReceiverDiagnosticsRun = serde_json::from_slice(&body).unwrap();
         assert_eq!(report.schema, DIAGNOSTICS_SCHEMA);
         assert!(!report.snapshots.is_empty());
+    }
+
+    #[tokio::test]
+    async fn explicit_advertised_host_overrides_the_control_origin() {
+        let app = router(ControlState::new(service_with_advertised_host(Some("media.example"))));
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .method("POST")
+                    .uri("/v2/sessions")
+                    .header("content-type", "application/json")
+                    .header("host", "receiver.example:55031")
+                    .body(Body::from(serde_json::to_vec(&create_request()).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let response: receiver_protocol::CreateSessionResponse =
+            serde_json::from_slice(&body).unwrap();
+        assert_eq!(response.transport.host, "media.example");
+    }
+
+    #[tokio::test]
+    async fn control_origin_preserves_an_ipv6_literal() {
+        let app = router(ControlState::new(service()));
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .method("POST")
+                    .uri("/v2/sessions")
+                    .header("content-type", "application/json")
+                    .header("host", "[2001:db8::42]:55031")
+                    .body(Body::from(serde_json::to_vec(&create_request()).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let response: receiver_protocol::CreateSessionResponse =
+            serde_json::from_slice(&body).unwrap();
+        assert_eq!(response.transport.host, "[2001:db8::42]");
+    }
+
+    #[tokio::test]
+    async fn session_creation_rejects_an_invalid_control_origin() {
+        let app = router(ControlState::new(service()));
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .method("POST")
+                    .uri("/v2/sessions")
+                    .header("content-type", "application/json")
+                    .header("host", "https://receiver.example")
+                    .body(Body::from(serde_json::to_vec(&create_request()).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn session_creation_requires_a_control_origin() {
+        let app = router(ControlState::new(service()));
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .method("POST")
+                    .uri("/v2/sessions")
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_vec(&create_request()).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
 }

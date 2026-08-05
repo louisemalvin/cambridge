@@ -10,7 +10,7 @@ mod handlers {
 
     use axum::{
         extract::{Path, State},
-        http::{header, HeaderMap, HeaderValue, StatusCode},
+        http::{header, uri::Authority, HeaderMap, HeaderValue, StatusCode},
         response::sse::{Event, KeepAlive, Sse},
         Json,
     };
@@ -56,8 +56,9 @@ mod handlers {
         Json(request): Json<CreateSessionRequest>,
     ) -> Result<(StatusCode, HeaderMap, Json<CreateSessionResponse>), HttpControlError> {
         authorize_v2(&state, &headers)?;
+        let control_host = request_origin_host(&headers)?;
         let response = lock_service(&state)?
-            .create_session_v2(&request)
+            .create_session_v2_from_control_origin(&request, &control_host)
             .map_err(HttpControlError::v2_receiver)?;
         let location = format!("/v2/sessions/{}", response.session_id);
         let mut response_headers = HeaderMap::new();
@@ -126,6 +127,29 @@ mod handlers {
         } else {
             Err(HttpControlError::V2Unauthorized)
         }
+    }
+
+    fn request_origin_host(headers: &HeaderMap) -> Result<String, HttpControlError> {
+        let value = headers
+            .get(header::HOST)
+            .ok_or_else(|| invalid_control_origin("Host header is required"))?;
+        let raw_host = value
+            .to_str()
+            .map_err(|_| invalid_control_origin("Host header must be valid ASCII"))?;
+        let authority = raw_host
+            .parse::<Authority>()
+            .map_err(|_| invalid_control_origin("Host header must contain a valid authority"))?;
+        let host = authority.host();
+        if host.trim().is_empty() {
+            return Err(invalid_control_origin("Host header must contain a host"));
+        }
+        Ok(host.to_owned())
+    }
+
+    fn invalid_control_origin(reason: &str) -> HttpControlError {
+        HttpControlError::V2Receiver(receiver_core::ReceiverError::InvalidConfiguration(format!(
+            "SRT host could not be derived from the control origin: {reason}"
+        )))
     }
 
     fn sse_event(event: &DemandEventV2) -> Event {

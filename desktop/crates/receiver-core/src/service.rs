@@ -129,6 +129,22 @@ impl ReceiverService {
         &mut self,
         request: &CreateSessionRequest,
     ) -> Result<CreateSessionResponse, ReceiverError> {
+        self.create_session_v2_internal(request, None)
+    }
+
+    pub fn create_session_v2_from_control_origin(
+        &mut self,
+        request: &CreateSessionRequest,
+        control_host: &str,
+    ) -> Result<CreateSessionResponse, ReceiverError> {
+        self.create_session_v2_internal(request, Some(control_host))
+    }
+
+    fn create_session_v2_internal(
+        &mut self,
+        request: &CreateSessionRequest,
+        control_host: Option<&str>,
+    ) -> Result<CreateSessionResponse, ReceiverError> {
         self.refresh_v2_session();
         if self.v2_session.is_some() {
             return Err(ReceiverError::SessionConflict);
@@ -155,11 +171,12 @@ impl ReceiverService {
             &self.config.output_profile,
             &self.capabilities,
         )?;
+        let advertised_host = self.resolve_advertised_host(control_host)?;
         let session_id = Uuid::new_v4();
         let endpoint = SrtEndpoint {
             kind: SrtTransportKind::Srt,
             mode: SrtMode::Caller,
-            host: self.config.advertised_host.clone(),
+            host: advertised_host,
             port: self.config.srt.listen_port,
             stream_id: format!("srt-{}", Uuid::new_v4().simple()),
             latency_ms: self.config.srt.latency_ms,
@@ -211,6 +228,21 @@ impl ReceiverService {
             transport: endpoint,
             output: OutputConfiguration { pixel_format: output_format },
         })
+    }
+
+    fn resolve_advertised_host(&self, control_host: Option<&str>) -> Result<String, ReceiverError> {
+        self.config
+            .advertised_host
+            .as_deref()
+            .or(control_host)
+            .filter(|host| !host.trim().is_empty())
+            .map(str::to_owned)
+            .ok_or_else(|| {
+                ReceiverError::InvalidConfiguration(
+                    "SRT host requires a control request origin or an explicit advertised-host override"
+                        .to_owned(),
+                )
+            })
     }
 
     pub fn session_v2(&mut self, session_id: &str) -> Result<SessionStatusResponse, ReceiverError> {

@@ -49,9 +49,9 @@ pub fn validate_config(config: &ReceiverConfig) -> Result<(), ReceiverError> {
             "receiver codec bitrates must be non-zero".to_owned(),
         ));
     }
-    if config.advertised_host.trim().is_empty() {
+    if config.advertised_host.as_deref().is_some_and(|host| host.trim().is_empty()) {
         return Err(ReceiverError::InvalidConfiguration(
-            "advertised host must be non-empty".to_owned(),
+            "advertised host override must be non-empty".to_owned(),
         ));
     }
     Ok(())

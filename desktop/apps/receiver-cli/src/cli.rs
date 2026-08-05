@@ -2,11 +2,10 @@ use std::{net::IpAddr, path::PathBuf};
 
 use clap::{Parser, ValueEnum};
 use receiver_core::{
-    LatencyConfig, OutputFormat, ReceiverConfig, SrtConfig, DEFAULT_ADVERTISED_HOST,
-    DEFAULT_CONTROL_PORT, DEFAULT_DEMUX_LATENCY_MS, DEFAULT_LISTEN_ADDRESS,
-    DEFAULT_OUTPUT_QUEUE_FRAMES, DEFAULT_RECEIVER_NAME, DEFAULT_SRT_CONNECT_DEADLINE_MS,
-    DEFAULT_SRT_INACTIVITY_TIMEOUT_MS, DEFAULT_SRT_LATENCY_MS, DEFAULT_SRT_LISTEN_PORT,
-    DEFAULT_SRT_RECONNECT_GRACE_MS,
+    LatencyConfig, OutputFormat, ReceiverConfig, SrtConfig, DEFAULT_CONTROL_PORT,
+    DEFAULT_DEMUX_LATENCY_MS, DEFAULT_LISTEN_ADDRESS, DEFAULT_OUTPUT_QUEUE_FRAMES,
+    DEFAULT_RECEIVER_NAME, DEFAULT_SRT_CONNECT_DEADLINE_MS, DEFAULT_SRT_INACTIVITY_TIMEOUT_MS,
+    DEFAULT_SRT_LATENCY_MS, DEFAULT_SRT_LISTEN_PORT, DEFAULT_SRT_RECONNECT_GRACE_MS,
 };
 
 #[derive(Debug, Parser)]
@@ -33,8 +32,10 @@ pub struct Cli {
     #[arg(long, default_value_t = DEFAULT_SRT_RECONNECT_GRACE_MS)]
     pub srt_reconnect_grace_ms: u64,
 
-    #[arg(long, default_value = DEFAULT_ADVERTISED_HOST)]
-    pub advertise_host: String,
+    /// Override the SRT host returned to the sender. By default the control
+    /// request origin is used.
+    #[arg(long)]
+    pub advertise_host: Option<String>,
 
     #[arg(long, default_value = DEFAULT_RECEIVER_NAME)]
     pub receiver_name: String,
@@ -162,6 +163,7 @@ mod tests {
         assert!(cli.device.is_none());
         let config = cli.receiver_config(PathBuf::from("/dev/video10"));
         assert_eq!(config.srt.listen_port, DEFAULT_SRT_LISTEN_PORT);
+        assert!(config.advertised_host.is_none());
     }
 
     #[test]

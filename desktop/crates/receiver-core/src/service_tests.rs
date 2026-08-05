@@ -18,6 +18,7 @@ use std::{
 use uuid::Uuid;
 
 const TEST_BITRATE_BPS: u32 = 4_000_000;
+const TEST_ADVERTISED_HOST: &str = "receiver.test";
 
 #[derive(Default)]
 struct FakeReceiver {
@@ -119,9 +120,21 @@ fn v2_request(preferred_codecs: Vec<VideoCodec>) -> receiver_protocol::CreateSes
 }
 
 fn service(h264: bool, h265: bool) -> ReceiverService {
+    service_with_advertised_host(h264, h265, Some(TEST_ADVERTISED_HOST))
+}
+
+fn service_with_advertised_host(
+    h264: bool,
+    h265: bool,
+    advertised_host: Option<&str>,
+) -> ReceiverService {
     let provider = StaticCapabilityProvider::new(capabilities(h264, h265));
     ReceiverService::new(
-        ReceiverConfig { device: PathBuf::from("/dev/video10"), ..ReceiverConfig::default() },
+        ReceiverConfig {
+            device: PathBuf::from("/dev/video10"),
+            advertised_host: advertised_host.map(str::to_owned),
+            ..ReceiverConfig::default()
+        },
         Box::new(provider),
         Box::new(FakeReceiver::default()),
     )
@@ -244,12 +257,34 @@ fn v2_rejects_a_profile_that_would_change_the_persistent_output() {
 }
 
 #[test]
+fn control_origin_supplies_the_srt_host_without_an_override() {
+    let mut receiver = service_with_advertised_host(true, false, None);
+    let created = receiver
+        .create_session_v2_from_control_origin(&v2_request(vec![VideoCodec::H264]), "phone.example")
+        .unwrap();
+
+    assert_eq!(created.transport.host, "phone.example");
+}
+
+#[test]
+fn session_creation_without_an_override_or_control_origin_is_rejected() {
+    let mut receiver = service_with_advertised_host(true, false, None);
+
+    assert!(matches!(
+        receiver.create_session_v2(&v2_request(vec![VideoCodec::H264])),
+        Err(ReceiverError::InvalidConfiguration(message))
+            if message.contains("control request origin")
+    ));
+}
+
+#[test]
 fn expired_srt_connection_releases_the_session_without_stopping_the_service() {
     let state = Arc::new(Mutex::new(ReceiverState::Idle));
     let receiver = SharedStateReceiver { state: state.clone() };
     let provider = StaticCapabilityProvider::new(capabilities(true, true));
     let config = ReceiverConfig {
         device: PathBuf::from("/dev/video10"),
+        advertised_host: Some(TEST_ADVERTISED_HOST.to_owned()),
         srt: SrtConfig { connect_deadline_ms: 1, reconnect_grace_ms: 1, ..SrtConfig::default() },
         ..ReceiverConfig::default()
     };

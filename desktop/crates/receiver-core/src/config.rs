@@ -18,7 +18,6 @@ pub const DEFAULT_OUTPUT_HEIGHT: u32 = 720;
 pub const DEFAULT_OUTPUT_FPS: u32 = 30;
 pub const DEFAULT_H264_BITRATE_BPS: u32 = 4_000_000;
 pub const DEFAULT_H265_BITRATE_BPS: u32 = 7_000_000;
-pub const DEFAULT_ADVERTISED_HOST: &str = "127.0.0.1";
 pub const DEFAULT_RECEIVER_NAME: &str = "Mobile Webcam";
 
 pub const DEFAULT_OUTPUT_PROFILE: VideoProfile = VideoProfile {
@@ -93,7 +92,7 @@ pub struct ReceiverConfig {
     pub h264_bitrate_bps: u32,
     pub h265_bitrate_bps: u32,
     pub srt: SrtConfig,
-    pub advertised_host: String,
+    pub advertised_host: Option<String>,
     pub receiver_name: String,
     pub control_token: Option<String>,
 }
@@ -110,7 +109,7 @@ impl Default for ReceiverConfig {
             h264_bitrate_bps: DEFAULT_H264_BITRATE_BPS,
             h265_bitrate_bps: DEFAULT_H265_BITRATE_BPS,
             srt: SrtConfig::default(),
-            advertised_host: DEFAULT_ADVERTISED_HOST.to_owned(),
+            advertised_host: None,
             receiver_name: DEFAULT_RECEIVER_NAME.to_owned(),
             control_token: None,
         }
