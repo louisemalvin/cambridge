@@ -90,16 +90,31 @@ for emulator, NAT, and multi-homed overrides.
 
 ## Status
 
-Ready for implementation.
+Implemented and verified. Code, gates, and documentation were committed in
+`6ee1425` and `93d87a4`; this artifact update remains to be committed.
 
 ## Handoff Notes
 
-- Next exact step: inspect the HTTP route/service boundaries and implement host
-  derivation without touching the completed streaming task.
-- Files changed: this follow-up artifact only.
-- Commands run: `task-init`; repository inspection; `work-context` for the
-  completed task was already run before this follow-up.
-- Errors encountered: none.
-- Verification evidence: current source confirms mDNS address auto-selection,
-  but the v2 session response still uses `DEFAULT_ADVERTISED_HOST` set to
-  `127.0.0.1` unless the CLI override is supplied.
+- Next exact step: no further work is required for this follow-up; the final
+  implementation and handoff are committed.
+- Files changed: receiver configuration and service, HTTP route extraction and
+  tests, both receiver CLIs, emulator and synthetic gates, README, setup,
+  troubleshooting, and lifecycle-plan documentation.
+- Commands run: `task-ready`, `work-context`, Rust focused and workspace
+  format/tests/Clippy, Android unit tests/lint/debug assembly, shell syntax
+  checks, and `scripts/android/test-emulator-srt.sh` without a receiver
+  `--advertise-host` argument.
+- Errors encountered: the first no-override E2E attempt reached receiving on
+  generation 1 but hit the known asynchronous RootEncoder/SRT reopen failure;
+  the immediate rerun passed both generations. No host-resolution failure was
+  observed.
+- Verification evidence: final E2E used AVD `codex-phone-webcam-api35`, serial
+  `emulator-5554`, and APK SHA-256
+  `49f2644e9014eefdd35548ad39280de906f8a93e6fadd94e1b99fbf01d05b8f4`.
+  Android connected to SRT `10.0.2.2:55030` with no receiver host override.
+  Sessions `0132d015-a7c7-41f3-a90e-5685648955e7` and
+  `7256a611-951d-4d0e-b55d-46fcabf77f37` reached `Receiving`; generations 1
+  and 2 completed and returned to `Idle`. Both raw captures were 331776000
+  bytes, each hash set had 17 distinct hashes, and standby began with YUY2
+  black bytes `16,128,16,128`. The second consumer returned the expected
+  v4l2loopback busy status without duplicating media demand.
