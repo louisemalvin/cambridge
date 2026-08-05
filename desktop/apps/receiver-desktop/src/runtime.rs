@@ -126,6 +126,7 @@ impl ReceiverRuntime {
             demand_relay_thread: None,
         };
         let relay_shutdown = receiver.demand_relay_shutdown.clone();
+        let relay_state = receiver.state.clone();
         let relay_output = receiver.persistent_output.clone();
         receiver.demand_relay_thread = Some(
             thread::Builder::new()
@@ -137,6 +138,7 @@ impl ReceiverRuntime {
                                 if !event.demand.is_active() {
                                     let _ = relay_output.set_standby();
                                 }
+                                relay_state.publish_demand(event.demand);
                             }
                             Err(RecvTimeoutError::Timeout) => {}
                             Err(RecvTimeoutError::Disconnected) => break,
