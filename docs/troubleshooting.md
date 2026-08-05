@@ -10,8 +10,8 @@
   trusted interface. SRT uses UDP transport.
 - If UFW is active, configure `MOBILE_WEBCAM_TRUSTED_SUBNET` before running the
   installer instead of relying on automatic subnet detection.
-- For an emulator, advertise `10.0.2.2` and use the same host in the sender's
-  manual origin fallback.
+- For an emulator, use `10.0.2.2` in the sender's manual origin fallback. The
+  receiver derives the SRT host from that control origin automatically.
 
 ## Control works but no video arrives
 

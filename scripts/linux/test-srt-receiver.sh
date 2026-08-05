@@ -63,7 +63,6 @@ fi
 "${RECEIVER_BINARY}" \
   --control-port "${CONTROL_PORT}" \
   --srt-port "${SRT_PORT}" \
-  --advertise-host 127.0.0.1 \
   --srt-connect-deadline-ms "${SRT_CONNECT_DEADLINE_MS}" \
   --srt-reconnect-grace-ms "${SRT_RECONNECT_GRACE_MS}" \
   --device "${DEVICE}" \

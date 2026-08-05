@@ -117,7 +117,7 @@ restart the stream after reopening the app.
 The deterministic harness is `scripts/android/test-emulator-srt.sh`. It creates
 a moving file with FFmpeg, starts `codex-phone-webcam-api35` with
 `-camera-back videofile:<path>`, launches the receiver with an emulator-reachable
-advertised host, installs the exact APK, configures the manual receiver-origin
+control origin, installs the exact APK, configures the manual receiver-origin
 fallback,
 and checks connected standby, demand generations, decoded frames, black standby,
 reopen behavior, v4l2 output, and redacted Android logs. Physical-device,

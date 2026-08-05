@@ -136,7 +136,6 @@ fi
 "${RECEIVER_BINARY}" \
   --control-port "${RECEIVER_CONTROL_PORT}" \
   --srt-port "${RECEIVER_SRT_PORT}" \
-  --advertise-host 10.0.2.2 \
   --device "${RECEIVER_DEVICE}" \
   --log-level info >"${RECEIVER_LOG}" 2>&1 &
 RECEIVER_PID=$!

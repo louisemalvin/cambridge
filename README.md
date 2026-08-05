@@ -59,10 +59,12 @@ The headless receiver is also available for servers or terminal-only sessions:
 mobile-webcam-receiver
 ```
 
-Advanced users can pass `--device`, `--control-port`, `--srt-port`,
-`--receiver-name`, or
-`--advertise-host` to the receiver. The repository wrappers `./scripts/linux/start-desktop.sh` and
-`./scripts/linux/start-receiver.sh` are available before installation.
+Advanced users can pass `--device`, `--control-port`, `--srt-port`, or
+`--receiver-name` to the receiver. The SRT host is derived from the control
+origin automatically. `--advertise-host` remains an explicit override for
+emulators, NAT, and multi-homed hosts. The repository wrappers
+`./scripts/linux/start-desktop.sh` and `./scripts/linux/start-receiver.sh` are
+available before installation.
 
 The installer supports CachyOS/Arch and Ubuntu/Debian. See the matching
 [Arch Linux guide](docs/linux-arch-setup.md) or

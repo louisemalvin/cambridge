@@ -58,7 +58,6 @@ fi
 "${RECEIVER_BINARY}" \
   --control-port "${CONTROL_PORT}" \
   --srt-port "${SRT_PORT}" \
-  --advertise-host 127.0.0.1 \
   --device "${DEVICE}" \
   --log-level warn >"${RECEIVER_LOG}" 2>&1 &
 RECEIVER_PID=$!

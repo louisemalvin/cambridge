@@ -512,10 +512,11 @@ device.
 1. Implement `/v2` routes using one receiver-owned session service.
 2. Generate per-session credentials and construct the SRT listener before
    returning `201 Created`.
-3. Add optional bearer authentication and explicit advertised-host configuration.
+3. Add optional bearer authentication and an optional advertised-host override.
 4. Make session deletion idempotent and session expiry deterministic.
-5. Add explicit advertised-host configuration. For the Android emulator use
-   `10.0.2.2`; never infer a usable media address from the TCP peer.
+5. Derive the SRT host from the authenticated control origin by default. Keep
+   explicit advertised-host configuration for the Android emulator and other
+   deployments that intentionally publish a different media address.
 
 Gate: a control contract test creates a session, observes listening, rejects a
 second session, reports receiver-derived state, deletes twice safely, and leaves
@@ -551,8 +552,8 @@ encrypted handshake, stop, and reconnect.
 4. Build and install the exact debug APK, grant camera permission, and configure
    the receiver origin through a debug-only bootstrap or the normal diagnostic
    endpoint entry.
-5. Start the receiver with `--advertise-host 10.0.2.2` and the reference output
-   profile.
+5. Start the receiver without an advertised-host override and use `10.0.2.2`
+   only as the emulator's manual control origin.
 6. Start streaming and record the exact APK hash, session ID, state transitions,
    decoder, SRT stats, frame count, and v4l2 capture.
 7. When a capture consumer is available, open OBS, add `Mobile Webcam` as a
@@ -686,7 +687,7 @@ directory:
 | iOS library behavior differs | Conformance fixtures and file-source spike before camera work. Keep wire contract library-neutral. |
 | SRT retransmission increases latency under heavy loss | Fixed latency budget, too-late packet drop, bounded queues, explicit degraded state, measured impairment tests. |
 | HTTP exposes session secret on an untrusted LAN | Trusted-LAN scope only for v2 initial release. Bearer authentication and SRT encryption are still required. Add HTTPS with receiver certificate pinning before untrusted-network support. |
-| Emulator networking advertises an unusable host | Explicit `--advertise-host 10.0.2.2`; never infer media host from peer address. |
+| Emulator networking advertises an unusable host | Use `10.0.2.2` as the emulator control origin; derive the media host from that origin and retain an explicit override for exceptional deployments. |
 | OBS sees format churn | Receiver output profile is fixed for process lifetime and the persistent writer never restarts per session. |
 | Existing dirty work overlaps transport files | Preserve user changes, inspect diffs before editing, integrate in coherent commits, never reset the worktree. |
 | Removing reverse control changes demand-driven behavior | Sender-controlled start is the portable v2 contract. Persistent standby keeps OBS usable without requiring the desktop to wake a phone. |
