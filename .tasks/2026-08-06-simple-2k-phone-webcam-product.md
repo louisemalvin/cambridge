@@ -133,20 +133,20 @@ receiver negotiation.
 
 ## Implementation Plan
 
-1. Make `protocol/direct-stream-contract.json` and its parity checks authoritative
+1. [x] Make `protocol/direct-stream-contract.json` and its parity checks authoritative
    for the single control/media session and fixed 2K30 profile.
-2. Replace the Android route/probe/capability/session-preparation chain with one
+2. [x] Replace the Android route/probe/capability/session-preparation chain with one
    endpoint, one connection lifecycle, one hello/accepted handshake, and one
    reconnect owner.
-3. Keep session generation, orientation snapshot, capability checks, and
+3. [x] Keep session generation, orientation snapshot, capability checks, and
    resource cleanup, but keep them behind the single Connect action.
-4. Update the native control server to enforce the one-session contract and
+4. [x] Update the native control server to enforce the one-session contract and
    retain the existing RTP receiver, decoder, renderer, and mailbox boundaries.
-5. Simplify the normal Android UI and make automated interaction target semantic
+5. [x] Simplify the normal Android UI and make automated interaction target semantic
    controls rather than screen coordinates.
-6. Update the OBS template, setup guidance, diagnostics, tests, and deployment
+6. [x] Update the OBS template, setup guidance, diagnostics, tests, and deployment
    checks to describe one endpoint and one logical session.
-7. Inspect changed production files for unexplained numeric literals and
+7. [x] Inspect changed production files for unexplained numeric literals and
    duplicated contract values before completion.
 
 ## Task Contract
@@ -187,22 +187,26 @@ receiver negotiation.
 
 ## Status
 
-- Contract ready for implementation.
-- The existing native RTP/H.264, decoder, renderer, and isolated 2K fixture
-  work is reusable.
-- The existing Android multi-phase and multi-route connection behavior does not
-  yet satisfy this contract and must be simplified before completion.
-- No runtime systems were launched or changed while defining this contract.
+- Product contract implemented and verified in incremental commits.
+- Android now has one configured endpoint, one hello/accepted handshake, fixed
+  normal 2K30, explicit Connect/Stop, bounded same-endpoint reconnect, and no
+  legacy route, discovery, health, standby, or codec-selection flow.
+- Native verification passed for 2K30 landscape VAAPI/DRM PRIME direct DMA-BUF
+  and 2K30 portrait CPU NV12 presentation.
+- The named AVD smoke passed with isolated OBS, a fresh generation after OBS
+  restart, native frame publication, and final resource release.
+- No physical Android device, live UFW rules, or live OBS scene were changed.
 
 ## Handoff Notes
 
-- Next exact step: update the Android direct control/session path to use one
-  configured endpoint and one hello/accepted handshake, then update its unit
-  tests before any runtime smoke.
 - Authoritative artifact: `.tasks/2026-08-06-simple-2k-phone-webcam-product.md`.
 - Superseded artifact: removed
   `.tasks/2026-08-06-lan-first-resilient-2k-portrait-and-landscape-phone-webcam.md`.
-- Commands run: repository inspection with `rg`, `sed`, `cat`, `wc`, and
-  read-only `git status`; no emulator, OBS, firewall, or physical device run.
-- Errors encountered: `task-init` and `task-ready` are not installed, so the
-  artifact was created directly with the task-artifact template sections.
+- Verification: `./scripts/development/check-all.sh` passed; contract parity,
+  JSON validation, native CTest, `ldd -r`, Android unit tests/lint/APK, and
+  isolated 2K native fixtures passed. The AVD smoke passed on
+  `codex-phone-webcam-api35` with serial `emulator-5556` and isolated OBS.
+- Android CLI layout and screenshot inspection passed on the same named AVD;
+  the semantic `Start camera` action was present and visually confirmed.
+- `task-init` and `task-ready` are not installed, so this artifact was created
+  directly with the task-artifact template sections.
