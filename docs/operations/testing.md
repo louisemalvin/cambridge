@@ -1,4 +1,6 @@
-# Testing
+# Testing and verification
+
+The supported product contract is documented in [the baseline contract](../contract.md).
 
 ## Fast checks
 

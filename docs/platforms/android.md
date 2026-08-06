@@ -1,4 +1,7 @@
-# Android setup
+# Android sender setup
+
+This document covers the current Android platform adapter. The portable
+session and wire contract is documented in [the baseline contract](../contract.md).
 
 Install Android Studio or an equivalent JDK 17 Android build environment. The
 project compiles against Android API 37 and targets API 35.
@@ -17,7 +20,7 @@ android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
 The sender presents one configured OBS computer from
-[`protocol/direct-stream-deployment.json`](../protocol/direct-stream-deployment.json).
+[`protocol/direct-stream-deployment.json`](../../protocol/direct-stream-deployment.json).
 If no computer is configured, the pairing screen leads to Stream setup. The
 setup screen lets the user choose the supported quality and Portrait or
 Landscape axis before pressing Start stream. The setup screen stays in the

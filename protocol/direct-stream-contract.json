@@ -1,5 +1,5 @@
 {
-  "name": "android-rtp-obs",
+  "name": "direct-webcam",
   "protocolVersion": 3,
   "control": {
     "framing": "uint32-be-length-prefixed-json",

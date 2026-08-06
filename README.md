@@ -1,8 +1,8 @@
 # Mobile Webcam
 
-Mobile Webcam sends Android camera video to a native Linux OBS source through
-one bounded, low-latency path. The phone connects to one configured OBS
-computer and lets the operating system route the connection:
+Mobile Webcam sends camera video through one bounded, low-latency direct stream
+to a configured receiver. The current product is an Android sender and a
+native Linux OBS host:
 
 ```text
 Camera2 -> MediaCodec H.264 -> RTP/H.264 over UDP -> FFmpeg H.264 decoder
@@ -18,7 +18,7 @@ test.
 ## Repository
 
 - `android/`: Kotlin/Compose phone app with a setup-first stream flow
-- `desktop/plugins/direct-webcam-source/`: native C++ OBS source
+- `desktop/hosts/obs/direct-webcam-source/`: current native OBS host adapter
 - `protocol/`: versioned TCP control and RTP contract
 - `docs/`: setup, architecture, verification, diagnostics, and limitations
 - `scripts/`: native build, emulator smoke, and repository checks
@@ -60,17 +60,18 @@ Build and stage the plugin with:
 ```
 
 Install the staged plugin using the OBS plugin directory layout documented in
-[Linux setup](docs/linux-setup.md), then add the `Phone Webcam` source in OBS.
+[Linux/OBS setup](docs/platforms/linux-obs.md), then add the `Phone Webcam`
+source in OBS.
 Its normal settings are already configured. Open the Phone Webcam app on the
 phone, choose the stream quality and orientation, and press Start stream. No
 OBS transport or decoder settings need to be changed.
 
 ## Documentation
 
+- [Baseline contract](docs/contract.md)
 - [Architecture](docs/architecture.md)
-- [Protocol](docs/protocol.md)
-- [Android setup](docs/android-setup.md)
-- [Linux setup](docs/linux-setup.md)
-- [Testing](docs/testing.md)
-- [Diagnostics](docs/diagnostics.md)
-- [Known limitations](docs/known-limitations.md)
+- [Android setup](docs/platforms/android.md)
+- [Linux/OBS setup](docs/platforms/linux-obs.md)
+- [Testing](docs/operations/testing.md)
+- [Diagnostics](docs/operations/diagnostics.md)
+- [Known limitations](docs/operations/known-limitations.md)

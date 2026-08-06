@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://mobile-webcam.invalid/protocol/direct-stream.schema.json",
-  "title": "Android RTP OBS direct stream control messages v3",
+  "title": "Direct Webcam control messages v3",
   "type": "object",
   "required": ["protocolVersion", "type"],
   "properties": {

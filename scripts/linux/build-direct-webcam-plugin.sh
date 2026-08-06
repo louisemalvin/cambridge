@@ -10,7 +10,7 @@ if [[ -n "$(git -C "${repo_root}" status --porcelain --untracked-files=all)" ]];
     git_commit="${git_commit}-dirty"
 fi
 
-cmake -S "${repo_root}/desktop/plugins/direct-webcam-source" -B "${build_dir}" \
+cmake -S "${repo_root}/desktop/hosts/obs/direct-webcam-source" -B "${build_dir}" \
     -DCMAKE_BUILD_TYPE=RelWithDebInfo \
     -DDIRECT_WEBCAM_GIT_COMMIT="${git_commit}" \
     -DCMAKE_INSTALL_PREFIX="${staging_dir}"

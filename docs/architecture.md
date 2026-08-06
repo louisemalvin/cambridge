@@ -1,86 +1,119 @@
 # Architecture
 
-The supported path has one sender, one logical computer, one native OBS source,
-one active session, and two sockets:
+The current product has one Android sender, one configured receiver, one
+active session, and one direct OBS host. The connection is deliberately boring
+and remains frozen while the implementation is organized around reusable
+boundaries.
+
+## Frozen connection
 
 ```text
-Camera2
-  -> MediaCodec H.264 input Surface
-  -> bounded encoded-access-unit queue
-  -> RFC 6184 RTP packetizer
-  -> UDP unicast
-  -> bounded RTP reorder and access-unit assembler
-  -> FFmpeg/libavcodec H.264 decoder
-  -> VAAPI DRM PRIME frame or software NV12 frame
-  -> one-slot newest-frame mailbox
-  -> finite OBS texture pool
+Android camera
+  -> H.264 encoder
+  -> RTP/H.264 over UDP
+  -> portable receiver responsibilities
+  -> Linux/OBS presentation
 ```
 
-The TCP control socket uses length-prefixed JSON. It validates the protocol
-version, session ID, generation, H.264 geometry, and media port before
-accepting RTP.
-The UDP receiver validates the source address learned from the control
-connection and ignores packets from other senders.
+The control plane is length-prefixed JSON over TCP. The media plane is
+best-effort RFC 6184 H.264 RTP over UDP. The sender makes one explicit
+connection attempt after the user confirms the session contract. A lagging
+pipeline drops work; it does not reconnect or request recovery.
 
-The Android app stores one configured computer endpoint. It opens that endpoint
-and leaves route selection to the operating system. The endpoint lives in the
-deployment JSON and the media port derives from the protocol contract.
+This goal does not replace TCP, UDP, RTP, H.264, the manual endpoint, or the
+direct OBS source.
 
 ## Ownership boundaries
 
-- Android `Camera2Capture` owns camera devices, capture sessions, and the
-  encoder input surface.
-- `DirectRtpStreamEngine` owns MediaCodec, RTP packetization, the UDP socket,
-  and stream lifecycle.
-- The native control server owns session identity and control messages.
-- The native media receiver owns UDP reads, RTP ordering, and access-unit
-  assembly.
-- The decoder owns FFmpeg and the VAAPI device. It exposes complete decoded
-  frames only.
-- The renderer owns libobs graphics objects. It imports DRM PRIME DMA-BUF
-  descriptors directly when possible and otherwise uploads NV12 through one
-  dynamic texture.
+### Session coordinator
 
-The sender always encodes the selected coded profile dimensions. For portrait,
-the native source reports the swapped display dimensions and rotates texture
-coordinates in one NV12 shader for both Y and UV sampling. The OBS scene uses
-centered aspect-fit bounds on the 2560x1440 verification canvas, so source
-geometry can change without a fixed scale assumption.
+The session coordinator is the only application component that composes the
+camera, encoder, and transport ports. It owns the explicit lifecycle and the
+immutable session contract. UI code observes typed state and events; it does
+not call sockets, codecs, or camera devices directly.
 
-No Android framework object crosses into native code. No libobs object crosses
-into the decoder or network code.
+### Camera port
 
-## Bounded work
+The camera boundary owns camera discovery, capture surfaces, preview surfaces,
+camera capabilities, and live controls such as lens selection, zoom,
+stabilization, focus, and exposure.
 
-- Android retains at most `MAXIMUM_ENCODED_QUEUE` newest access units.
-- RTP reordering has a packet-count bound and a deadline.
-- Access-unit bytes and access-unit count are capped before decode.
-- Decoder input drops the oldest queued unit when full.
-- The frame mailbox replaces an unpublished frame with the newest one.
-- OBS presentation uses a finite texture pool and renders a placeholder when
-  the newest frame is stale.
+It does not know about RTP, UDP, receiver addresses, session IDs, or OBS. A
+capture-format change is a new session contract; live camera controls remain
+independent of transport.
 
-When a bound is hit, the source drops media and reports the event. It does not
-request retransmission or an IDR, allocate a larger queue, or block the
-graphics thread.
+### Encoder port
 
-## Lifecycle
+The encoder boundary accepts a locked capture configuration and publishes
+encoded H.264 access units. It owns codec configuration, keyframe policy, and
+bounded access-unit production. It does not own receiver addressing or host
+presentation.
 
-1. The user opens Stream setup for the configured OBS computer.
-2. The user selects the supported quality and portrait or landscape axis. The
-   setup screen remains in the phone's current orientation.
-3. On Start stream, Android snapshots the camera transform, creates one
-   session ID and generation, validates the selected profile, and sends
-   protocol v3 `hello` over TCP.
-4. The native source accepts the matching hello, starts the decoder, and
-   returns the media port.
-5. Android starts Camera2 and MediaCodec, then sends RTP/H.264. Once the
-   session is streaming, the activity locks to the selected axis and permits a
-   180-degree reverse.
-6. Stop, control disconnect, or invalid generation ends the session and clears
-   the mailbox. A lost session releases stale media resources and waits for a
-   new explicit Start stream. Removing the Android app task also stops the
-   active session through the foreground service.
+### Transport port
 
-The source never creates a virtual camera device. OBS consumes the source
-directly as a native texture source.
+The transport boundary consumes encoded access units and the session endpoint.
+It owns control framing, the TCP handshake, RTP packetization, UDP I/O, and
+transport events. It does not own Camera2, AVFoundation, UI state, or OBS.
+
+### Receiver core
+
+The receiver core is the reusable part of a receiver implementation:
+
+- control message validation and session identity
+- RTP parsing, ordering, and H.264 access-unit assembly
+- decoder coordination and frame metadata
+- bounded queues and newest-frame presentation mailbox
+- terminal lifecycle and diagnostics
+
+The current native plugin contains these responsibilities in one build target.
+The next structural step is to extract them without changing the wire
+behavior.
+
+### Host adapter
+
+The host adapter turns decoded frames into a platform output. The current
+adapter owns libobs graphics objects, VAAPI/DRM PRIME import, CPU NV12 upload,
+texture lifetime, and OBS properties. Those details must not leak into the
+receiver core.
+
+## Data flow and backpressure
+
+```text
+camera -> encoder input surface -> bounded encoded queue -> RTP sender
+                                                |
+                                                v
+receiver UDP -> bounded reorder -> decoder queue -> newest-frame mailbox
+                                                        |
+                                                        v
+                                                   host adapter
+```
+
+Every queue has a contract-backed bound. The media path is asynchronous and
+uses background workers. Camera controls, UI rendering, and diagnostics must
+remain responsive when transport or decoding is slow.
+
+## Cross-platform reuse
+
+Reusable artifacts are the protocol schema, typed session/profile models,
+capability rules, RTP/H.264 test vectors, lifecycle semantics, frame metadata,
+drop policy, and diagnostics events.
+
+Platform adapters provide Android Camera2/MediaCodec, future iOS
+AVFoundation/VideoToolbox, Linux VAAPI/DRM/libobs, and future host outputs.
+No iOS implementation is part of the current baseline work.
+
+## Repository direction
+
+The repository is organized around four roles:
+
+```text
+protocol/              machine-readable wire contract and fixtures
+android/               Android sender and platform adapters
+desktop/receiver-core/ portable receiver responsibilities
+desktop/hosts/          OBS and future presentation adapters
+docs/                  contract, architecture, platform, and operations docs
+```
+
+The current native source remains buildable at
+`desktop/hosts/obs/direct-webcam-source/` while receiver-core extraction is
+carried out behind contract and integration tests.

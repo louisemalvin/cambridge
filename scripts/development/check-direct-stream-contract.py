@@ -19,7 +19,7 @@ KOTLIN_CONTRACT_PATH = (
     / "android/app/src/main/java/dev/mobilewebcam/sender/connection/control/direct/DirectStreamContract.kt"
 )
 KOTLIN_PROFILES_PATH = REPOSITORY_ROOT / "android/app/src/main/java/dev/mobilewebcam/sender/session/VideoProfiles.kt"
-CPP_CONTRACT_PATH = REPOSITORY_ROOT / "desktop/plugins/direct-webcam-source/src/protocol_contract.hpp"
+CPP_CONTRACT_PATH = REPOSITORY_ROOT / "desktop/hosts/obs/direct-webcam-source/src/protocol_contract.hpp"
 FIXTURE_PATH = REPOSITORY_ROOT / "scripts/linux/direct-webcam-fixture.py"
 ANDROID_SMOKE_PATH = REPOSITORY_ROOT / "scripts/android/test-emulator-direct-webcam.sh"
 NATIVE_FIXTURE_PATH = REPOSITORY_ROOT / "scripts/linux/test-direct-webcam-fixture.sh"

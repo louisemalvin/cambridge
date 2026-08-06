@@ -1,4 +1,7 @@
-# Linux setup
+# Linux/OBS host setup
+
+This document covers the current Linux/OBS host adapter. The receiver protocol
+it implements is documented in [the baseline contract](../contract.md).
 
 The native source requires:
 

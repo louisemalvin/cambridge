@@ -1,5 +1,8 @@
 # Known limitations
 
+These limitations apply to the current baseline described in
+[the contract](../contract.md); they are not alternate product architectures.
+
 - The canonical Android runtime gate uses the named Android API 35 AVD with an
   explicit test-only 720p30 profile. The normal product profile is 2K30, but
   the AVD does not advertise the required 2560x1440 encoder size.

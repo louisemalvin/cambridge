@@ -1,5 +1,8 @@
 # Diagnostics
 
+Diagnostics describe the baseline session and receiver behavior documented in
+[the baseline contract](../contract.md).
+
 Android writes structured `MobileWebcam` events with schema
 `mobile-webcam-diagnostics-v1`. Useful events include:
 
