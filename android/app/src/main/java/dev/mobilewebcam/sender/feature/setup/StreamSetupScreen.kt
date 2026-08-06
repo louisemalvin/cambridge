@@ -17,6 +17,7 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -85,6 +86,12 @@ fun StreamSetupScreen(
                 )
             }
             item {
+                ReceiverReadiness(
+                    state = state.receiverReadiness,
+                    onCheckAgain = { onAction(SenderScreenAction.CheckReceiver) },
+                )
+            }
+            item {
                 SettingsChoiceRow(
                     titleResourceId = R.string.video_quality,
                     options = state.profileOptions,
@@ -114,6 +121,15 @@ fun StreamSetupScreen(
             }
             item {
                 SessionContractSummary(state)
+            }
+            if (!state.selectedProfileSupported && state.receiverReadiness is ReceiverReadinessUiState.Ready) {
+                item {
+                    Text(
+                        text = stringResource(R.string.receiver_profile_not_supported),
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
             }
             if (state.connection is ConnectionUiState.Failed) {
                 item {
@@ -147,6 +163,36 @@ fun StreamSetupScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ReceiverReadiness(
+    state: ReceiverReadinessUiState,
+    onCheckAgain: () -> Unit,
+) {
+    when (state) {
+        ReceiverReadinessUiState.Checking -> ListItem(
+            headlineContent = { Text(stringResource(R.string.receiver_status)) },
+            supportingContent = { Text(stringResource(R.string.receiver_checking)) },
+        )
+        is ReceiverReadinessUiState.Ready -> ListItem(
+            headlineContent = { Text(stringResource(R.string.receiver_found)) },
+            supportingContent = {
+                Text(
+                    state.receiverName.value() + " · " + state.address.value(),
+                )
+            },
+        )
+        is ReceiverReadinessUiState.Unavailable -> ListItem(
+            headlineContent = { Text(stringResource(R.string.receiver_not_found)) },
+            supportingContent = { Text(state.message.value()) },
+            trailingContent = {
+                TextButton(onClick = onCheckAgain) {
+                    Text(stringResource(R.string.receiver_check_again))
+                }
+            },
+        )
     }
 }
 

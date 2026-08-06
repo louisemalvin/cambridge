@@ -13,6 +13,7 @@ import dev.mobilewebcam.sender.connection.SenderConnectionCoordinator
 import dev.mobilewebcam.sender.model.StreamOrientation
 import dev.mobilewebcam.sender.model.StreamState
 import dev.mobilewebcam.sender.model.SenderSettingsRepository
+import dev.mobilewebcam.sender.model.ReceiverProbeState
 import dev.mobilewebcam.sender.session.VideoProfiles
 import dev.mobilewebcam.sender.media.camera.CameraInteractionState
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -40,7 +41,12 @@ class StreamSetupViewModel @Inject constructor(
         coordinator.activeReceiverName,
         settings.state,
         validationMessage,
-    ) { streamState, receiverName, configuredSettings, validation ->
+        coordinator.receiverProbeState,
+    ) { streamState, receiverName, configuredSettings, validation, receiverProbeState ->
+        val selectedProfileSupported = (receiverProbeState as? ReceiverProbeState.Available)
+            ?.capabilities
+            ?.supports(configuredSettings.profile)
+            ?: false
         StreamSetupUiState(
             connection = StreamPresentationMapper.connection(
                 StreamPresentationSnapshot(
@@ -51,6 +57,7 @@ class StreamSetupViewModel @Inject constructor(
                     validationMessage = validation,
                 ),
             ),
+            receiverReadiness = receiverReadiness(receiverProbeState),
             receiverName = receiverName?.let(UiText::Plain),
             profileOptions = VideoProfiles.normal.map { profile ->
                 SelectOptionUi(
@@ -70,6 +77,7 @@ class StreamSetupViewModel @Inject constructor(
             },
             selectedProfile = configuredSettings.profile,
             selectedOrientation = configuredSettings.streamOrientation,
+            selectedProfileSupported = selectedProfileSupported,
             validationMessage = validation?.let(UiText::Plain),
         )
     }.stateIn(
@@ -84,6 +92,9 @@ class StreamSetupViewModel @Inject constructor(
     val effects = effectFlow.asSharedFlow()
 
     init {
+        viewModelScope.launch {
+            coordinator.probeReceiver()
+        }
         viewModelScope.launch {
             var previousState = coordinator.streamState.value
             coordinator.streamState.drop(FIRST_STATE_TO_SKIP).collect { currentState ->
@@ -103,6 +114,7 @@ class StreamSetupViewModel @Inject constructor(
         when (action) {
             is SenderScreenAction.ProfileSelected -> selectProfile(action.profileId)
             is SenderScreenAction.StreamOrientationSelected -> settings.updateStreamOrientation(action.orientation)
+            SenderScreenAction.CheckReceiver -> checkReceiver()
             SenderScreenAction.StartStream -> startStream()
             else -> Unit
         }
@@ -120,6 +132,26 @@ class StreamSetupViewModel @Inject constructor(
                 validationMessage.value = failure.message
             }
         }
+    }
+
+    private fun checkReceiver() {
+        validationMessage.value = null
+        viewModelScope.launch {
+            coordinator.probeReceiver()
+        }
+    }
+
+    private fun receiverReadiness(state: ReceiverProbeState): ReceiverReadinessUiState = when (state) {
+        ReceiverProbeState.Idle,
+        ReceiverProbeState.Checking,
+        -> ReceiverReadinessUiState.Checking
+        is ReceiverProbeState.Available -> ReceiverReadinessUiState.Ready(
+            receiverName = UiText.Plain(state.capabilities.displayName),
+            address = UiText.Plain(state.endpoint.host),
+        )
+        is ReceiverProbeState.Unavailable -> ReceiverReadinessUiState.Unavailable(
+            message = UiText.Resource(R.string.receiver_not_found_support),
+        )
     }
 
     private companion object {

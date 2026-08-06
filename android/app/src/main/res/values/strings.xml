@@ -33,6 +33,13 @@
     <string name="stream_plan_summary">%1$s · %2$s · %3$d fps</string>
     <string name="orientation_support">The selected axis is locked while streaming. The phone may flip 180°.</string>
     <string name="setup_computer">Computer</string>
+    <string name="receiver_status">Receiver status</string>
+    <string name="receiver_checking">Checking for an OBS receiver…</string>
+    <string name="receiver_found">OBS receiver found</string>
+    <string name="receiver_not_found">OBS receiver not found</string>
+    <string name="receiver_not_found_support">Check that OBS is running on the configured computer and try again.</string>
+    <string name="receiver_check_again">Check again</string>
+    <string name="receiver_profile_not_supported">The receiver cannot use the selected video quality.</string>
     <string name="setup_start_stream">Start stream</string>
     <string name="portrait">Portrait</string>
     <string name="landscape">Landscape</string>
