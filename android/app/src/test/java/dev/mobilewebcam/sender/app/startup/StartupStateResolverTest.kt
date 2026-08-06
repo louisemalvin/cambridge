@@ -14,6 +14,17 @@ class StartupStateResolverTest {
     }
 
     @Test
+    fun activeStreamRestoresWebcamDestination() {
+        assertEquals(
+            AppDestination.Webcam,
+            StartupStateResolver(
+                hasConfiguredReceiver = true,
+                hasActiveStream = true,
+            ).resolveInitialDestination(),
+        )
+    }
+
+    @Test
     fun missingReceiverStartsPairingDestination() {
         assertEquals(
             AppDestination.Pairing,

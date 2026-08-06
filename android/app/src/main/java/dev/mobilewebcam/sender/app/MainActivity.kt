@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import dagger.hilt.android.AndroidEntryPoint
+import dev.mobilewebcam.sender.connection.SenderConnectionCoordinator
 import dev.mobilewebcam.sender.model.ReceiverEndpoint
 import dev.mobilewebcam.sender.model.SenderSettingsRepository
 import dev.mobilewebcam.sender.model.StreamOrientation
@@ -17,6 +18,9 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var settings: SenderSettingsRepository
 
+    @Inject
+    lateinit var connectionCoordinator: SenderConnectionCoordinator
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
@@ -24,7 +28,7 @@ class MainActivity : ComponentActivity() {
         configureProfileFromIntent()
         configureReceiverOriginFromIntent()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        setContent { SenderApp(settings) }
+        setContent { SenderApp(settings, connectionCoordinator) }
     }
 
     private fun configureProfileFromIntent() {

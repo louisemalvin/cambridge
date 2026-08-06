@@ -18,17 +18,23 @@ import dev.mobilewebcam.sender.app.navigation.AppDestination
 import dev.mobilewebcam.sender.app.navigation.AppNavigation
 import dev.mobilewebcam.sender.app.navigation.rememberAppBackStack
 import dev.mobilewebcam.sender.app.startup.StartupStateResolver
+import dev.mobilewebcam.sender.connection.SenderConnectionCoordinator
 import dev.mobilewebcam.sender.model.SenderSettingsRepository
+import dev.mobilewebcam.sender.model.StreamState
 
 @Composable
 fun SenderApp(
     settings: SenderSettingsRepository,
+    connectionCoordinator: SenderConnectionCoordinator,
 ) {
     val context = LocalContext.current
     val senderSettings by settings.state.collectAsState()
-    val initialDestination = remember(senderSettings.receiverEndpoint) {
+    val streamState by connectionCoordinator.streamState.collectAsState()
+    val isStreaming = streamState is StreamState.Streaming
+    val initialDestination = remember(senderSettings.receiverEndpoint, isStreaming) {
         StartupStateResolver(
             hasConfiguredReceiver = senderSettings.receiverEndpoint != null,
+            hasActiveStream = isStreaming,
         ).resolveInitialDestination()
     }
     val backStack = rememberAppBackStack(initialDestination)
