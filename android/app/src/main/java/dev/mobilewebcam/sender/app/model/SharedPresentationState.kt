@@ -2,6 +2,7 @@ package dev.mobilewebcam.sender.app.model
 
 import androidx.compose.runtime.Immutable
 import dev.mobilewebcam.sender.media.camera.CameraZoom
+import dev.mobilewebcam.sender.model.StreamOrientation
 
 @Immutable
 data class PreviewUiState(
@@ -107,6 +108,8 @@ sealed interface SenderScreenAction {
     data object ResetZoom : SenderScreenAction
     data class LensSelected(val key: String) : SenderScreenAction
     data class StabilizationChanged(val enabled: Boolean) : SenderScreenAction
+    data class ProfileSelected(val profileId: String) : SenderScreenAction
+    data class StreamOrientationSelected(val orientation: StreamOrientation) : SenderScreenAction
     data object OpenPermissionDialog : SenderScreenAction
     data object DismissPermissionDialog : SenderScreenAction
     data object RequestCameraPermission : SenderScreenAction

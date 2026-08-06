@@ -103,7 +103,12 @@ class SenderConnectionCoordinator(
 
     private suspend fun startControllerOnce(receiverEndpoint: ReceiverEndpoint): Result<Unit> {
         val result = controllerOperationMutex.withLock {
-            controller.start(endpoint = receiverEndpoint, profile = settings.state.value.profile)
+            val configured = settings.state.value
+            controller.start(
+                endpoint = receiverEndpoint,
+                profile = configured.profile,
+                orientation = configured.streamOrientation,
+            )
         }
         mutex.withLock { stateFlow.value = controller.state.value }
         logger.debug(

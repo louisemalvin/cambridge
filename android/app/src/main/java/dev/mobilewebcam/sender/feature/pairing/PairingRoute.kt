@@ -10,14 +10,14 @@ import androidx.compose.ui.res.stringResource
 
 @Composable
 fun PairingRoute(
-    onNavigateToWebcam: () -> Unit,
+    onNavigateToStreamSetup: () -> Unit,
 ) {
     val viewModel: PairingViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsState()
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
             when (effect) {
-                PairingUiEffect.NavigateToWebcam -> onNavigateToWebcam()
+                PairingUiEffect.NavigateToStreamSetup -> onNavigateToStreamSetup()
             }
         }
     }
@@ -25,6 +25,12 @@ fun PairingRoute(
     PairingScreen(
         state = state,
         computerName = stringResource(R.string.computer_name),
-        onAction = viewModel::onAction,
+        onAction = { action ->
+            if (action == dev.mobilewebcam.sender.app.model.SenderScreenAction.ConnectReceiver) {
+                onNavigateToStreamSetup()
+            } else {
+                viewModel.onAction(action)
+            }
+        },
     )
 }

@@ -4,6 +4,7 @@ import android.content.Context
 import dev.mobilewebcam.sender.model.ReceiverEndpoint
 import dev.mobilewebcam.sender.model.SenderSettings
 import dev.mobilewebcam.sender.model.SenderSettingsRepository
+import dev.mobilewebcam.sender.model.StreamOrientation
 import dev.mobilewebcam.sender.model.VideoProfile
 import dev.mobilewebcam.sender.session.VideoProfiles
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,6 +28,11 @@ class SenderSettingsStore(
     }
 
     @Synchronized
+    override fun updateStreamOrientation(orientation: StreamOrientation) {
+        persist(settingsFlow.value.copy(streamOrientation = orientation))
+    }
+
+    @Synchronized
     override fun updateReceiverEndpoint(endpoint: ReceiverEndpoint?) {
         persist(settingsFlow.value.copy(receiverEndpoint = endpoint))
     }
@@ -37,6 +43,9 @@ class SenderSettingsStore(
             ?: VideoProfiles.default
         return SenderSettings(
             profile = profile,
+            streamOrientation = preferences.getString(ORIENTATION_KEY, null)
+                ?.let { stored -> runCatching { StreamOrientation.valueOf(stored) }.getOrNull() }
+                ?: StreamOrientation.LANDSCAPE,
             receiverEndpoint = loadReceiverEndpoint(),
         )
     }
@@ -44,6 +53,7 @@ class SenderSettingsStore(
     private fun persist(settings: SenderSettings) {
         val editor = preferences.edit()
             .putString(PROFILE_KEY, settings.profile.id)
+            .putString(ORIENTATION_KEY, settings.streamOrientation.name)
         val endpoint = settings.receiverEndpoint
         if (endpoint == null) {
             editor.remove(RECEIVER_HOST_KEY)
@@ -73,6 +83,7 @@ class SenderSettingsStore(
     private companion object {
         const val PREFERENCES_NAME = "sender-settings"
         const val PROFILE_KEY = "profile"
+        const val ORIENTATION_KEY = "stream-orientation"
         const val RECEIVER_HOST_KEY = "receiver-host"
         const val RECEIVER_PORT_KEY = "receiver-port"
         const val RECEIVER_NAME_KEY = "receiver-name"

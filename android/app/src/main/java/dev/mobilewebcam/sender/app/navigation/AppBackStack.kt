@@ -35,6 +35,11 @@ class AppBackStack(
         elements.clear()
         elements.add(AppDestination.Webcam)
     }
+
+    fun replaceWithStreamSetup() {
+        elements.clear()
+        elements.add(AppDestination.StreamSetup)
+    }
 }
 
 @Composable

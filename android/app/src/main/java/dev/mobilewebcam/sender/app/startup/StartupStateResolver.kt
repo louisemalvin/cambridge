@@ -7,7 +7,7 @@ class StartupStateResolver(
 ) {
     fun resolveInitialDestination(): AppDestination {
         return if (hasConfiguredReceiver) {
-            AppDestination.Webcam
+            AppDestination.StreamSetup
         } else {
             AppDestination.Pairing
         }

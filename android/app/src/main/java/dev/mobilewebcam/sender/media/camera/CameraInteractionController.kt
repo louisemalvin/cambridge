@@ -1,6 +1,7 @@
 package dev.mobilewebcam.sender.media.camera
 
 import kotlinx.coroutines.flow.StateFlow
+import dev.mobilewebcam.sender.model.StreamOrientation
 
 /** Camera controls that can be consumed by platform-neutral UI state. */
 interface CameraInteractionController {
@@ -22,5 +23,9 @@ interface CameraPreviewSurfaceController {
 
 interface CameraController : CameraInteractionController, CameraPreviewSurfaceController
 {
-    suspend fun snapshotSessionTransform(codedWidth: Int, codedHeight: Int): SessionTransform
+    suspend fun snapshotSessionTransform(
+        codedWidth: Int,
+        codedHeight: Int,
+        orientation: StreamOrientation,
+    ): SessionTransform
 }

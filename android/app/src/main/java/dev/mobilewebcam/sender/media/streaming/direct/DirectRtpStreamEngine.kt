@@ -26,6 +26,7 @@ import dev.mobilewebcam.sender.media.streaming.StreamEngine
 import dev.mobilewebcam.sender.media.streaming.StreamEngineEvent
 import dev.mobilewebcam.sender.model.DirectStreamEndpoint
 import dev.mobilewebcam.sender.model.StreamConfiguration
+import dev.mobilewebcam.sender.model.StreamOrientation
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -93,9 +94,13 @@ class DirectRtpStreamEngine(
     override val events: Flow<StreamEngineEvent> = eventFlow
     override val state: StateFlow<CameraInteractionState> = stateFlow.asStateFlow()
 
-    override suspend fun snapshotSessionTransform(codedWidth: Int, codedHeight: Int): SessionTransform =
+    override suspend fun snapshotSessionTransform(
+        codedWidth: Int,
+        codedHeight: Int,
+        orientation: StreamOrientation,
+    ): SessionTransform =
         lifecycleMutex.withLock {
-            camera.snapshotSessionTransform(codedWidth, codedHeight)
+            camera.snapshotSessionTransform(codedWidth, codedHeight, orientation)
         }
 
     init {

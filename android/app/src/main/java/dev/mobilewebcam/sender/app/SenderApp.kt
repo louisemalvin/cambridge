@@ -40,6 +40,7 @@ fun SenderApp(
             AppNavigation(
                 backStack = backStack,
                 onNavigateToWebcam = { backStack.replaceWithWebcam() },
+                onNavigateToStreamSetup = { backStack.replaceWithStreamSetup() },
                 onNavigateToSettings = { backStack.navigateTo(AppDestination.Settings) },
                 onNavigateToPairing = { backStack.popToPairing() },
                 onNavigateBack = { backStack.pop() },

@@ -40,10 +40,9 @@ debug APK is written to `android/app/build/outputs/apk/debug/app-debug.apk`.
 The only supported automated Android runtime target is the AVD
 `codex-phone-webcam-api35`. The harness creates a deterministic camera video,
 starts an isolated OBS instance, installs the debug APK, supplies the AVD host
-endpoint `10.0.2.2`, presses the semantic Start camera action, restarts
-isolated OBS while streaming, and verifies fresh-session recovery, native
-decode, first-frame publication, and either direct DMA-BUF or CPU NV12
-presentation:
+endpoint `10.0.2.2`, opens the stream setup screen, presses the semantic Start
+camera action, and verifies native decode, first-frame
+publication, and either direct DMA-BUF or CPU NV12 presentation:
 
 ```bash
 ./scripts/android/test-emulator-direct-webcam.sh

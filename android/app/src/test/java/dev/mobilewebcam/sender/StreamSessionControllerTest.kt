@@ -10,6 +10,7 @@ import dev.mobilewebcam.sender.model.EncoderCapability
 import dev.mobilewebcam.sender.model.ReceiverEndpoint
 import dev.mobilewebcam.sender.model.StreamConfiguration
 import dev.mobilewebcam.sender.model.StreamFailure
+import dev.mobilewebcam.sender.model.StreamOrientation
 import dev.mobilewebcam.sender.model.StreamState
 import dev.mobilewebcam.sender.model.VideoCodec
 import dev.mobilewebcam.sender.model.VideoProfile
@@ -33,8 +34,8 @@ class StreamSessionControllerTest {
         val foreground = FakeForeground()
         val controller = controller(engine, foreground, backgroundScope)
 
-        assertTrue(controller.start(endpoint, profile).isSuccess)
-        assertTrue(controller.start(endpoint, profile).isFailure)
+        assertTrue(controller.start(endpoint, profile, StreamOrientation.LANDSCAPE).isSuccess)
+        assertTrue(controller.start(endpoint, profile, StreamOrientation.LANDSCAPE).isFailure)
         assertEquals(1, engine.prepareCount)
         assertTrue(controller.state.value is StreamState.Streaming)
 
@@ -50,7 +51,7 @@ class StreamSessionControllerTest {
         val foreground = FakeForeground()
         val controller = controller(engine, foreground, backgroundScope)
 
-        assertTrue(controller.start(endpoint, profile).isFailure)
+        assertTrue(controller.start(endpoint, profile, StreamOrientation.LANDSCAPE).isFailure)
         assertEquals(1, engine.stopCount)
         assertEquals(1, foreground.stopCount)
         assertTrue(controller.state.value is StreamState.Failed)
@@ -62,7 +63,7 @@ class StreamSessionControllerTest {
         val foreground = FakeForeground()
         val controller = controller(engine, foreground, backgroundScope)
 
-        assertTrue(controller.start(endpoint, profile).isSuccess)
+        assertTrue(controller.start(endpoint, profile, StreamOrientation.LANDSCAPE).isSuccess)
         testScheduler.runCurrent()
         engine.emit(StreamEngineEvent.Disconnected)
         testScheduler.runCurrent()

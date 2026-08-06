@@ -62,4 +62,12 @@ class AppBackStackTest {
         assertEquals(AppDestination.Webcam, backStack.current)
         assertEquals(1, backStack.elements.size)
     }
+
+    @Test
+    fun replaceWithStreamSetupResetsToSetup() {
+        val backStack = AppBackStack(AppDestination.Webcam)
+        backStack.replaceWithStreamSetup()
+        assertEquals(AppDestination.StreamSetup, backStack.current)
+        assertEquals(1, backStack.elements.size)
+    }
 }

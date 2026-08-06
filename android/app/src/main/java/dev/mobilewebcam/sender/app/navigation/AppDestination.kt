@@ -7,6 +7,9 @@ sealed interface AppDestination {
     data object Pairing : AppDestination
 
     @Serializable
+    data object StreamSetup : AppDestination
+
+    @Serializable
     data object Webcam : AppDestination
 
     @Serializable

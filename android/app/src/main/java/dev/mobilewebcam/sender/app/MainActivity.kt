@@ -9,6 +9,7 @@ import androidx.activity.enableEdgeToEdge
 import dagger.hilt.android.AndroidEntryPoint
 import dev.mobilewebcam.sender.model.ReceiverEndpoint
 import dev.mobilewebcam.sender.model.SenderSettingsRepository
+import dev.mobilewebcam.sender.model.StreamOrientation
 import dev.mobilewebcam.sender.session.VideoProfiles
 import javax.inject.Inject
 
@@ -35,6 +36,16 @@ class MainActivity : ComponentActivity() {
 
     private fun configureTestOrientationFromIntent() {
         val rotationDegrees = intent.getIntExtra(EXTRA_ROTATION_DEGREES, INVALID_ROTATION)
+        val streamOrientation = when (rotationDegrees) {
+            PORTRAIT_ROTATION_DEGREES,
+            REVERSE_PORTRAIT_ROTATION_DEGREES,
+            -> StreamOrientation.PORTRAIT
+            LANDSCAPE_ROTATION_DEGREES,
+            REVERSE_LANDSCAPE_ROTATION_DEGREES,
+            -> StreamOrientation.LANDSCAPE
+            else -> null
+        }
+        streamOrientation?.let(settings::updateStreamOrientation)
         requestedOrientation = when (rotationDegrees) {
             PORTRAIT_ROTATION_DEGREES,
             REVERSE_PORTRAIT_ROTATION_DEGREES,

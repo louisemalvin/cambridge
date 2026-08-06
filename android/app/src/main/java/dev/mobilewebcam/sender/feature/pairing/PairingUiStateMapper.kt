@@ -24,13 +24,13 @@ object PairingUiStateMapper {
 }
 
 sealed interface PairingUiEffect {
-    data object NavigateToWebcam : PairingUiEffect
+    data object NavigateToStreamSetup : PairingUiEffect
 }
 
 object PairingUiEffectMapper {
     fun map(previous: StreamState, current: StreamState): PairingUiEffect? =
         if (current is StreamState.Streaming && previous !is StreamState.Streaming) {
-            PairingUiEffect.NavigateToWebcam
+            PairingUiEffect.NavigateToStreamSetup
         } else {
             null
         }

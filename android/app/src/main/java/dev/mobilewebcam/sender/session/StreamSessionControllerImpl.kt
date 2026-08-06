@@ -7,6 +7,7 @@ import dev.mobilewebcam.sender.logging.AppLogger
 import dev.mobilewebcam.sender.media.capabilities.EncoderCapabilityProbe
 import dev.mobilewebcam.sender.media.camera.CameraController
 import dev.mobilewebcam.sender.media.camera.SessionTransform
+import dev.mobilewebcam.sender.media.camera.DisplayOrientation
 import dev.mobilewebcam.sender.media.streaming.StreamEngine
 import dev.mobilewebcam.sender.media.streaming.StreamEngineEvent
 import dev.mobilewebcam.sender.model.DirectStreamEndpoint
@@ -15,6 +16,7 @@ import dev.mobilewebcam.sender.model.ReceiverEndpoint
 import dev.mobilewebcam.sender.model.StreamConfiguration
 import dev.mobilewebcam.sender.model.StreamFailure
 import dev.mobilewebcam.sender.model.StreamFailureException
+import dev.mobilewebcam.sender.model.StreamOrientation
 import dev.mobilewebcam.sender.model.StreamSession
 import dev.mobilewebcam.sender.model.StreamState
 import dev.mobilewebcam.sender.model.VideoCodec
@@ -60,6 +62,7 @@ class StreamSessionControllerImpl(
     override suspend fun start(
         endpoint: ReceiverEndpoint,
         profile: VideoProfile,
+        orientation: StreamOrientation,
     ): Result<Unit> = lifecycleMutex.withLock {
         if (activeSession != null) {
             return@withLock failure(StreamFailure.StreamStartFailed(IllegalStateException("A stream is already active")))
@@ -68,8 +71,13 @@ class StreamSessionControllerImpl(
         activeRunId = runId
         stateFlow.value = StreamState.Connecting
         val sessionTransform = runCatching {
-            cameraController?.snapshotSessionTransform(profile.width, profile.height)
+            cameraController?.snapshotSessionTransform(profile.width, profile.height, orientation)
                 ?: SessionTransform.forProfile(
+                    displayOrientation = if (orientation.isPortrait) {
+                        DisplayOrientation.PORTRAIT
+                    } else {
+                        DisplayOrientation.LANDSCAPE
+                    },
                     codedWidth = profile.width,
                     codedHeight = profile.height,
                 )

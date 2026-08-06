@@ -9,6 +9,7 @@ import dev.mobilewebcam.sender.model.SenderSettings
 import dev.mobilewebcam.sender.model.SenderSettingsRepository
 import dev.mobilewebcam.sender.model.StreamFailure
 import dev.mobilewebcam.sender.model.StreamFailureException
+import dev.mobilewebcam.sender.model.StreamOrientation
 import dev.mobilewebcam.sender.model.StreamSession
 import dev.mobilewebcam.sender.model.StreamState
 import dev.mobilewebcam.sender.model.VideoCodec
@@ -102,7 +103,11 @@ class SenderConnectionCoordinatorTest {
         var stopCount = 0
         private var nextGeneration = DirectStreamContract.FIRST_STREAM_GENERATION
 
-        override suspend fun start(endpoint: ReceiverEndpoint, profile: VideoProfile): Result<Unit> {
+        override suspend fun start(
+            endpoint: ReceiverEndpoint,
+            profile: VideoProfile,
+            orientation: StreamOrientation,
+        ): Result<Unit> {
             attemptedEndpoints += endpoint
             startCount += 1
             if (alwaysUnavailable) {
@@ -142,6 +147,10 @@ class SenderConnectionCoordinatorTest {
 
         override fun updateProfile(profile: VideoProfile) {
             stateFlow.value = stateFlow.value.copy(profile = profile)
+        }
+
+        override fun updateStreamOrientation(orientation: StreamOrientation) {
+            stateFlow.value = stateFlow.value.copy(streamOrientation = orientation)
         }
 
         override fun updateReceiverEndpoint(endpoint: ReceiverEndpoint?) {

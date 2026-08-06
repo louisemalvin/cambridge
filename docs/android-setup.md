@@ -18,10 +18,11 @@ android/app/build/outputs/apk/debug/app-debug.apk
 
 The sender presents one configured OBS computer from
 [`protocol/direct-stream-deployment.json`](../protocol/direct-stream-deployment.json).
-Press Connect to start the fixed 2K30 stream. The operating system owns route
-selection. The session captures the current Portrait or Landscape orientation;
-rotate the phone only between sessions. Stop releases the camera and keeps the
-configured computer for the next Connect.
+The stream setup screen lets the user choose the supported quality and
+Portrait or Landscape axis before pressing Start stream. The operating system
+owns route selection. The selected axis is locked for the session and may
+reverse 180 degrees. Stop releases the camera and keeps the configured
+computer for the next setup.
 
 ## Required runtime test target
 
@@ -36,6 +37,6 @@ explicit serial `emulator-5556`:
 The harness uses `10.0.2.2` as the emulator host endpoint and explicitly
 selects the test-only `720p30` profile because this AVD does not advertise the
 normal 2K encoder size. It can exercise a portrait or landscape session with
-`DIRECT_WEBCAM_ROTATION_DEGREES=0` or `90`, and checks an OBS restart by
-default. Do not run the test against a physical phone. Physical camera and
-glass-to-glass validation is a separate deferred gate.
+`DIRECT_WEBCAM_ROTATION_DEGREES=0` or `90`. Do not run the test against a
+physical phone. Physical camera and glass-to-glass validation is a separate
+deferred gate.

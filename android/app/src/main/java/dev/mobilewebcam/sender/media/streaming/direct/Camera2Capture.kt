@@ -25,6 +25,7 @@ import dev.mobilewebcam.sender.media.camera.PhysicalLensOption
 import dev.mobilewebcam.sender.media.camera.CameraLensFacing
 import dev.mobilewebcam.sender.media.camera.DisplayOrientation
 import dev.mobilewebcam.sender.media.camera.SessionTransform
+import dev.mobilewebcam.sender.model.StreamOrientation
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -64,7 +65,11 @@ internal class Camera2Capture(
         updateCameraState()
     }
 
-    suspend fun snapshotSessionTransform(codedWidth: Int, codedHeight: Int): SessionTransform {
+    suspend fun snapshotSessionTransform(
+        codedWidth: Int,
+        codedHeight: Int,
+        orientation: StreamOrientation,
+    ): SessionTransform {
         check(ContextCompat.checkSelfPermission(applicationContext, Manifest.permission.CAMERA) ==
             PackageManager.PERMISSION_GRANTED) {
             "Camera permission is required before selecting video quality"
@@ -77,7 +82,10 @@ internal class Camera2Capture(
             updateCameraState()
         }
         val characteristics = cameraCharacteristics ?: error("Camera characteristics are unavailable")
-        val displayOrientation = previewSurface?.orientation ?: DisplayOrientation.PORTRAIT
+        val selectedOrientation = DisplayOrientation.fromPortraitFlag(orientation.isPortrait)
+        val displayOrientation = previewSurface?.orientation
+            ?.takeIf { it.isPortrait == orientation.isPortrait }
+            ?: selectedOrientation
         return SessionTransform.calculate(
             displayOrientation = displayOrientation,
             sensorOrientationDegrees = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION)

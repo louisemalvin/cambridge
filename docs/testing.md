@@ -45,10 +45,10 @@ It verifies Android `stream_started`, RTP access-unit transmission, native
 session acceptance, FFmpeg decoder readiness, first-frame publication, and
 `dma_buf_direct` or `cpu_nv12_upload` rendering. Logs are retained under a
 temporary `build/direct-webcam-avd.*` directory printed by the script.
-The harness explicitly injects `720p30` for this AVD, exercises the selected
-display orientation, restarts isolated OBS while Start remains desired, and
-then checks a fresh native session and lifecycle release. Set
-`DIRECT_WEBCAM_RESTART_OBS=0` when only the basic lifecycle is needed.
+The harness explicitly injects `720p30` for this AVD, opens the stream setup
+screen, exercises the selected display orientation, starts one explicit
+session, and checks lifecycle release. A lost OBS connection is not retried by
+the app; the next session requires another explicit start.
 
 ## Native receiver checks
 

@@ -24,7 +24,6 @@ adb_wait_seconds=90
 boot_wait_seconds=120
 stream_wait_seconds="${DIRECT_WEBCAM_HOLD_SECONDS:-20}"
 lifecycle_cycles="${DIRECT_WEBCAM_LIFECYCLE_CYCLES:-1}"
-restart_obs_enabled="${DIRECT_WEBCAM_RESTART_OBS:-1}"
 app_event_wait_seconds=30
 obs_shutdown_wait_seconds=5
 
@@ -94,7 +93,6 @@ camera_duration_seconds="${DIRECT_WEBCAM_CAMERA_ASSET_SECONDS:-${camera_duration
 [[ "${stream_wait_seconds}" =~ ^[1-9][0-9]*$ ]] || fail "stream hold duration must be a positive integer"
 [[ "${lifecycle_cycles}" =~ ^[1-9][0-9]*$ ]] || fail "lifecycle cycles must be a positive integer"
 [[ "${rotation_degrees}" =~ ^(0|90|180|270)$ ]] || fail "rotation must be 0, 90, 180, or 270 degrees"
-[[ "${restart_obs_enabled}" =~ ^[01]$ ]] || fail "OBS restart flag must be 0 or 1"
 "${repo_root}/scripts/linux/build-direct-webcam-plugin.sh" >"${artifact_dir}/plugin-build.log"
 JAVA_HOME="${JAVA_HOME:-/opt/android-studio/jbr}" "${android_root}/gradlew" -p "${android_root}" assembleDebug --console=plain >"${artifact_dir}/android-build.log"
 
@@ -157,11 +155,6 @@ stop_obs() {
     fi
     wait "${obs_pid}" >/dev/null 2>&1 || true
     obs_pid=""
-}
-
-restart_obs() {
-    stop_obs
-    start_obs
 }
 
 : >"${obs_log}"
@@ -245,11 +238,6 @@ for ((cycle = 1; cycle <= lifecycle_cycles; cycle += 1)); do
     click_camera_action "Start camera"
     stream_started_count=$((stream_started_count + 1))
     wait_for_event_count "stream_started" "${stream_started_count}"
-    if [[ "${restart_obs_enabled}" == "1" ]]; then
-        restart_obs
-        stream_started_count=$((stream_started_count + 1))
-        wait_for_event_count "stream_started" "${stream_started_count}"
-    fi
     sleep "${stream_wait_seconds}"
     click_camera_action "Stop camera"
     stream_released_count=$((stream_released_count + 1))
@@ -267,11 +255,6 @@ rg -q 'render_mode=(dma_buf_direct|cpu_nv12_upload)' "${obs_log}" || fail "OBS t
 if rg -q 'NetworkOnMainThreadException|failureType":"Unexpected|failureType":"CameraUnavailable|failureType":"CameraPermissionDenied' "${app_log}"; then
     fail "Android reported a stream runtime failure; see ${app_log}"
 fi
-if [[ "${restart_obs_enabled}" == "1" ]]; then
-    [[ "$(rg -c 'session_accepted:' "${obs_log}" || true)" -ge 2 ]] \
-        || fail "OBS restart did not produce a fresh native session"
-fi
-
 printf 'avd=%s\n' "${avd_name}"
 printf 'serial=%s\n' "${emulator_serial}"
 printf 'profile=%s (%sx%s@%s)\n' "${profile_id}" "${profile_width}" "${profile_height}" "${profile_fps}"
@@ -281,7 +264,6 @@ printf 'control=%s:%s\n' "${receiver_host}" "${receiver_control_port}"
 printf 'media_port=%s\n' "${receiver_media_port}"
 printf 'hold_seconds=%s\n' "${stream_wait_seconds}"
 printf 'lifecycle_cycles=%s\n' "${lifecycle_cycles}"
-printf 'obs_restarts=%s\n' "${restart_obs_enabled}"
 printf 'apk_sha256='; sha256sum "${apk}" | awk '{print $1}'
 printf 'plugin_sha256='; sha256sum "${plugin_so}" | awk '{print $1}'
 printf 'artifacts=%s\n' "${artifact_dir}"

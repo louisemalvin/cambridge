@@ -32,13 +32,13 @@ class PairingViewModelTest {
             PairingDomainSnapshot(StreamState.Failed(StreamFailure.NetworkDisconnected), null),
         )
 
-        assertEquals(PairingUiState.Failed(UiText.Plain("Connection lost. Press Connect to start again")), state)
+        assertEquals(PairingUiState.Failed(UiText.Plain("Connection lost. Press Start stream to try again")), state)
     }
 
     @Test
     fun streamingTransitionEmitsNavigationOnlyOnce() {
         assertEquals(
-            PairingUiEffect.NavigateToWebcam,
+            PairingUiEffect.NavigateToStreamSetup,
             PairingUiEffectMapper.map(StreamState.Connecting, streamingState()),
         )
         assertEquals(

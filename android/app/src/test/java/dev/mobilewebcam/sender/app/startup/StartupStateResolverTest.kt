@@ -6,9 +6,9 @@ import org.junit.Test
 
 class StartupStateResolverTest {
     @Test
-    fun configuredReceiverRestoresWebcamDestination() {
+    fun configuredReceiverRestoresStreamSetupDestination() {
         assertEquals(
-            AppDestination.Webcam,
+            AppDestination.StreamSetup,
             StartupStateResolver(hasConfiguredReceiver = true).resolveInitialDestination(),
         )
     }
