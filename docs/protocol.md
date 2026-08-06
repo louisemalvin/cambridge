@@ -11,10 +11,11 @@ bounded transport values.
 
 Control is a TCP stream of big-endian 32-bit length-prefixed UTF-8 JSON
 messages. A frame must be positive and within the configured control-message
-limit.
+limit. The control connection is opened only after the user confirms Stream
+setup with Start stream.
 
 Protocol v3 is the only accepted direct control version. The sender sends
-one `hello` as the first frame after Connect with:
+one `hello` as the first frame after opening control with:
 
 - protocol version
 - session ID and generation
@@ -25,8 +26,8 @@ one `hello` as the first frame after Connect with:
 
 The receiver derives presentation dimensions from the coded dimensions and
 rotation. Rotations `0` and `180` present landscape; rotations `90` and `270`
-present portrait. The sender resolves this transform once before Connect and
-does not change it during the session.
+present portrait. The sender resolves this transform once before opening
+control and does not change the session contract during the session.
 
 The source replies with `accepted`, the same identity, the media port, and
 long-edge and short-edge limits. Width and height are deliberately not used as
@@ -53,14 +54,16 @@ Every media packet belongs to exactly one `(sessionId, generation)` selected by
 the current control connection. A new hello invalidates all older media. Media
 loss never changes the session identity or starts a reconnect.
 
-Before Connect, Android builds one immutable session contract containing the
-profile, orientation, exact rotation, frame rate, bitrate, and camera metadata.
-The activity is locked to the selected portrait or landscape axis while still
-allowing its 180-degree reverse. The native NV12 shader applies the resolved
-rotation to luma and chroma. A rotation during an active session does not
-renegotiate; Stop and Connect creates a new generation.
+After the user confirms setup and before opening control, Android builds one
+immutable session contract containing the profile, orientation, exact rotation,
+frame rate, bitrate, and camera metadata. The setup screen itself is not
+rotated. Once the session is streaming, the activity is locked to the selected
+portrait or landscape axis while still allowing its 180-degree reverse. The
+native NV12 shader applies the resolved rotation to luma and chroma. A rotation
+during an active session does not renegotiate; Stop and Start stream creates a
+new generation.
 
-The sender performs one connection attempt for each explicit Connect. A
+The sender performs one connection attempt for each explicit Start stream. A
 control disconnect ends the session and reports failure. The sender does not
 retry in the background.
 

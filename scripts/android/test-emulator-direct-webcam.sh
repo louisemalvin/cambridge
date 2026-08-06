@@ -216,7 +216,7 @@ wait_for_event_count() {
     fail "Android did not report event ${event_name} count ${expected_count}"
 }
 
-click_camera_action() {
+click_stream_action() {
     local content_description="$1"
     local ui_dump="${artifact_dir}/ui.xml"
     "${adb}" -s "${emulator_serial}" shell uiautomator dump /sdcard/direct-webcam-ui.xml >/dev/null 2>&1
@@ -235,11 +235,11 @@ click_camera_action() {
 stream_started_count=0
 stream_released_count=0
 for ((cycle = 1; cycle <= lifecycle_cycles; cycle += 1)); do
-    click_camera_action "Start camera"
+    click_stream_action "Start stream"
     stream_started_count=$((stream_started_count + 1))
     wait_for_event_count "stream_started" "${stream_started_count}"
     sleep "${stream_wait_seconds}"
-    click_camera_action "Stop camera"
+    click_stream_action "Stop camera"
     stream_released_count=$((stream_released_count + 1))
     wait_for_event_count "stream_resources_released" "${stream_released_count}"
 done

@@ -66,16 +66,20 @@ graphics thread.
 
 ## Lifecycle
 
-1. The user presses Connect for the configured OBS computer.
-2. The Android sender locks the selected portrait or landscape axis, snapshots
-   the camera transform, creates one session ID and generation, validates the
-   fixed 2K30 profile, and sends protocol v3 `hello` over TCP.
-3. The native source accepts the matching hello, starts the decoder, and
+1. The user opens Stream setup for the configured OBS computer.
+2. The user selects the supported quality and portrait or landscape axis. The
+   setup screen remains in the phone's current orientation.
+3. On Start stream, Android snapshots the camera transform, creates one
+   session ID and generation, validates the selected profile, and sends
+   protocol v3 `hello` over TCP.
+4. The native source accepts the matching hello, starts the decoder, and
    returns the media port.
-4. Android starts Camera2 and MediaCodec, then sends RTP/H.264.
-5. Stop, control disconnect, or invalid generation ends the session and clears
+5. Android starts Camera2 and MediaCodec, then sends RTP/H.264. Once the
+   session is streaming, the activity locks to the selected axis and permits a
+   180-degree reverse.
+6. Stop, control disconnect, or invalid generation ends the session and clears
    the mailbox. A lost session releases stale media resources and waits for a
-   new explicit Connect.
+   new explicit Start stream.
 
 The source never creates a virtual camera device. OBS consumes the source
 directly as a native texture source.

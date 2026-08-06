@@ -30,9 +30,9 @@ JAVA_HOME=/opt/android-studio/jbr ./gradlew \
 ```
 
 The unit suite covers direct control framing, RTP packetization, the fixed 2K
-normal profile, same-endpoint retry bounds, network wakeup, generation
-changes, cancellation, Connect/Stop transitions, camera orientation, and
-failure diagnostics.
+normal profile, single-attempt connection behavior, network wakeup, generation
+changes, cancellation, explicit start/stop transitions, camera orientation,
+and failure diagnostics.
 
 ## End-to-end emulator check
 
@@ -46,9 +46,9 @@ session acceptance, FFmpeg decoder readiness, first-frame publication, and
 `dma_buf_direct` or `cpu_nv12_upload` rendering. Logs are retained under a
 temporary `build/direct-webcam-avd.*` directory printed by the script.
 The harness explicitly injects `720p30` for this AVD, opens the stream setup
-screen, exercises the selected display orientation, starts one explicit
-session, and checks lifecycle release. A lost OBS connection is not retried by
-the app; the next session requires another explicit start.
+screen, exercises the selected display orientation, presses Start stream once,
+and checks lifecycle release. A lost OBS connection is not retried by the app;
+the next session requires another explicit Start stream action.
 
 ## Native receiver checks
 

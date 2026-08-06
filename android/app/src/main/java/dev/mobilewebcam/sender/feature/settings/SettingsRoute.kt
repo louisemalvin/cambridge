@@ -33,8 +33,6 @@ fun SettingsRoute(
         onAction = { action ->
             if (action == SenderScreenAction.CloseSettings) {
                 onNavigateBack()
-            } else if (action == SenderScreenAction.StartStream) {
-                onNavigateToStreamSetup()
             } else if (action == SenderScreenAction.StopStream) {
                 viewModel.onAction(action)
                 onNavigateToStreamSetup()

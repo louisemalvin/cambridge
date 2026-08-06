@@ -77,11 +77,11 @@ fun PairingScreen(
                         )
                     }
                     Button(
-                        onClick = { onAction(SenderScreenAction.ConnectReceiver) },
+                        onClick = { onAction(SenderScreenAction.OpenStreamSetup) },
                         enabled = state !is PairingUiState.Connecting,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Text(stringResource(R.string.connect_computer))
+                        Text(stringResource(R.string.setup_stream))
                     }
                 }
             }

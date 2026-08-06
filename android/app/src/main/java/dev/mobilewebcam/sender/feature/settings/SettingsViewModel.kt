@@ -69,7 +69,6 @@ class SettingsViewModel @Inject constructor(
             SenderScreenAction.ResetZoom -> resetZoom()
             is SenderScreenAction.LensSelected -> selectPhysicalLens(action.key)
             is SenderScreenAction.StabilizationChanged -> setStabilizationEnabled(action.enabled)
-            SenderScreenAction.StartStream -> start()
             SenderScreenAction.StopStream -> stop()
             SenderScreenAction.ForgetReceiver -> forgetReceiver()
             SenderScreenAction.CopyDiagnostics -> copyDiagnostics()
@@ -106,10 +105,6 @@ class SettingsViewModel @Inject constructor(
 
     private fun stop() {
         viewModelScope.launch { coordinator.stop() }
-    }
-
-    private fun start() {
-        viewModelScope.launch { coordinator.startStream() }
     }
 
     private fun forgetReceiver() {

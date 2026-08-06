@@ -39,7 +39,7 @@ fun StreamSetupScreen(
     onAction: (SenderScreenAction) -> Unit,
     onNavigateBack: () -> Unit,
 ) {
-    val startDescription = stringResource(R.string.start_stream)
+    val startDescription = stringResource(R.string.setup_start_stream)
     Scaffold(
         topBar = {
             TopAppBar(

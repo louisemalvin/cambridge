@@ -116,7 +116,7 @@ sealed interface SenderScreenAction {
     data class ReceiverNameChanged(val name: String) : SenderScreenAction
     data class ReceiverHostChanged(val host: String) : SenderScreenAction
     data class ReceiverControlPortChanged(val port: String) : SenderScreenAction
-    data object ConnectReceiver : SenderScreenAction
+    data object OpenStreamSetup : SenderScreenAction
     data object StartStream : SenderScreenAction
     data object StopStream : SenderScreenAction
     data object ForgetReceiver : SenderScreenAction

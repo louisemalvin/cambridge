@@ -55,7 +55,7 @@ object StreamPresentationMapper {
         is StreamFailure.ReceiverRejectedProfile -> "The computer cannot use the selected video quality"
         is StreamFailure.EncoderPreparationFailed -> "This phone cannot use the selected video quality"
         is StreamFailure.StreamStartFailed -> "OBS is not available"
-        StreamFailure.NetworkDisconnected -> "Connection lost. Press Start stream to try again"
+        StreamFailure.NetworkDisconnected -> "Connection lost. Open stream setup to try again"
         is StreamFailure.Unexpected -> "The camera could not start"
     }
 

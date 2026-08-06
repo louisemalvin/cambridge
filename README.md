@@ -17,7 +17,7 @@ test.
 
 ## Repository
 
-- `android/`: Kotlin/Compose phone app with a simple computer connection flow
+- `android/`: Kotlin/Compose phone app with a setup-first stream flow
 - `desktop/plugins/direct-webcam-source/`: native C++ OBS source
 - `protocol/`: versioned TCP control and RTP contract
 - `docs/`: setup, architecture, verification, diagnostics, and limitations
@@ -41,7 +41,7 @@ The only supported automated Android runtime target is the AVD
 `codex-phone-webcam-api35`. The harness creates a deterministic camera video,
 starts an isolated OBS instance, installs the debug APK, supplies the AVD host
 endpoint `10.0.2.2`, opens the stream setup screen, presses the semantic Start
-camera action, and verifies native decode, first-frame
+stream action, and verifies native decode, first-frame
 publication, and either direct DMA-BUF or CPU NV12 presentation:
 
 ```bash
@@ -62,8 +62,8 @@ Build and stage the plugin with:
 Install the staged plugin using the OBS plugin directory layout documented in
 [Linux setup](docs/linux-setup.md), then add the `Phone Webcam` source in OBS.
 Its normal settings are already configured. Open the Phone Webcam app on the
-phone, follow its computer connection screen, and press Connect. No OBS
-transport or decoder settings need to be changed.
+phone, choose the stream quality and orientation, and press Start stream. No
+OBS transport or decoder settings need to be changed.
 
 ## Documentation
 

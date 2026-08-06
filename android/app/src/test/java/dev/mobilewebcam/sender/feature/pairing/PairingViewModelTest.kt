@@ -14,7 +14,7 @@ class PairingViewModelTest {
             PairingDomainSnapshot(StreamState.Idle, null),
         )
 
-        assertEquals(PairingUiState.Searching(UiText.Plain("Connect to your OBS computer")), state)
+        assertEquals(PairingUiState.Searching(UiText.Plain("Choose stream settings before starting")), state)
     }
 
     @Test
@@ -32,32 +32,7 @@ class PairingViewModelTest {
             PairingDomainSnapshot(StreamState.Failed(StreamFailure.NetworkDisconnected), null),
         )
 
-        assertEquals(PairingUiState.Failed(UiText.Plain("Connection lost. Press Start stream to try again")), state)
+        assertEquals(PairingUiState.Failed(UiText.Plain("Connection lost. Open stream setup to try again")), state)
     }
 
-    @Test
-    fun streamingTransitionEmitsNavigationOnlyOnce() {
-        assertEquals(
-            PairingUiEffect.NavigateToStreamSetup,
-            PairingUiEffectMapper.map(StreamState.Connecting, streamingState()),
-        )
-        assertEquals(
-            null,
-            PairingUiEffectMapper.map(streamingState(), streamingState()),
-        )
-    }
-
-    private fun streamingState() = StreamState.Streaming(
-        session = dev.mobilewebcam.sender.model.StreamSession(
-            sessionId = "session",
-            endpoint = dev.mobilewebcam.sender.model.ReceiverEndpoint("127.0.0.1", 50_000),
-            selectedCodec = dev.mobilewebcam.sender.model.VideoCodec.H264,
-            profile = dev.mobilewebcam.sender.session.VideoProfiles.default,
-            bitrateBps = dev.mobilewebcam.sender.session.VideoProfiles.default.h264BitrateBps,
-            mediaPort = 50_001,
-            outputPixelFormat = dev.mobilewebcam.sender.model.OutputPixelFormat.NV12,
-            warnings = emptyList(),
-        ),
-        startedAtMillis = 1L,
-    )
 }

@@ -1,13 +1,11 @@
 <resources>
     <string name="app_name">Mobile Webcam</string>
     <string name="waiting_for_connection">Waiting for webcam use</string>
-    <string name="waiting_for_connection_support">Connect to the computer, then start the camera when you are ready</string>
-    <string name="waiting_for_receiver">Ready to connect</string>
-    <string name="waiting_for_receiver_support">Connect to the configured OBS computer when you are ready.</string>
+    <string name="waiting_for_connection_support">Open stream setup to choose the plan and start streaming.</string>
     <string name="computer_name">OBS computer</string>
-    <string name="computer_ready">Ready to connect</string>
+    <string name="computer_ready">Ready to set up</string>
     <string name="computer_connected">Connected and ready</string>
-    <string name="connect_computer">Set up stream</string>
+    <string name="setup_stream">Set up stream</string>
     <string name="connecting_to_computer">Connecting to computer</string>
     <string name="camera_is_on">Camera is on</string>
     <string name="stopping_stream">Stopping camera</string>
@@ -19,9 +17,7 @@
     <string name="dim_screen">Dim screen</string>
     <string name="brighten_screen">Brighten screen</string>
     <string name="zoom">Zoom</string>
-    <string name="zoom_level">%1$.1fx</string>
     <string name="camera_zoom_level">Camera zoom level</string>
-    <string name="zoom_unavailable">1x only</string>
     <string name="reset">Reset</string>
     <string name="camera">Camera</string>
     <string name="physical_lens">Physical lens</string>
@@ -33,15 +29,11 @@
     <string name="stream_status">Stream status</string>
     <string name="orientation">Orientation</string>
     <string name="video_quality">Video quality</string>
-    <string name="frame_rate">Frame rate</string>
     <string name="session_contract">Session contract</string>
     <string name="stream_plan_summary">%1$s · %2$s · %3$d fps</string>
-    <string name="quality_2k30_summary">2560×1440</string>
     <string name="orientation_support">The selected axis is locked while streaming. The phone may flip 180°.</string>
     <string name="setup_computer">Computer</string>
-    <string name="setup_ready">Ready to start</string>
     <string name="setup_start_stream">Start stream</string>
-    <string name="setup_camera_permission_required">Camera access is required before streaming.</string>
     <string name="portrait">Portrait</string>
     <string name="landscape">Landscape</string>
     <string name="forget_receiver">Forget receiver</string>
@@ -55,7 +47,6 @@
     <string name="allow_camera_access">Allow camera access</string>
     <string name="cancel">Cancel</string>
     <string name="stop_stream">Stop camera</string>
-    <string name="start_stream">Start camera</string>
     <string name="profile_2k30">2K</string>
     <string name="profile_720p30">720p test mode</string>
 </resources>

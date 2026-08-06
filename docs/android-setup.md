@@ -18,11 +18,12 @@ android/app/build/outputs/apk/debug/app-debug.apk
 
 The sender presents one configured OBS computer from
 [`protocol/direct-stream-deployment.json`](../protocol/direct-stream-deployment.json).
-The stream setup screen lets the user choose the supported quality and
-Portrait or Landscape axis before pressing Start stream. The operating system
-owns route selection. The selected axis is locked for the session and may
-reverse 180 degrees. Stop releases the camera and keeps the configured
-computer for the next setup.
+If no computer is configured, the pairing screen leads to Stream setup. The
+setup screen lets the user choose the supported quality and Portrait or
+Landscape axis before pressing Start stream. The setup screen stays in the
+phone's current orientation while these choices are made. Once streaming
+starts, the selected axis is locked and may reverse 180 degrees. Stop releases
+the camera and keeps the configured computer for the next setup.
 
 ## Required runtime test target
 

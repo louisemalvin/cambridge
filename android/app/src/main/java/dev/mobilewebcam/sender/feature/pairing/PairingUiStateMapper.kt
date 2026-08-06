@@ -20,18 +20,5 @@ object PairingUiStateMapper {
 
     private const val DEFAULT_RECEIVER_NAME = "Receiver"
     private const val CONNECTING_MESSAGE = "Connecting..."
-    private const val CONNECTION_MESSAGE = "Connect to your OBS computer"
-}
-
-sealed interface PairingUiEffect {
-    data object NavigateToStreamSetup : PairingUiEffect
-}
-
-object PairingUiEffectMapper {
-    fun map(previous: StreamState, current: StreamState): PairingUiEffect? =
-        if (current is StreamState.Streaming && previous !is StreamState.Streaming) {
-            PairingUiEffect.NavigateToStreamSetup
-        } else {
-            null
-        }
+    private const val CONNECTION_MESSAGE = "Choose stream settings before starting"
 }
