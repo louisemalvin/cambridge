@@ -1,5 +1,7 @@
 package dev.mobilewebcam.sender.app.model
 
+import dev.mobilewebcam.sender.R
+import dev.mobilewebcam.sender.media.camera.AntiFlickerMode
 import dev.mobilewebcam.sender.media.camera.CameraInteractionState
 
 object CameraControlsUiStateMapper {
@@ -22,5 +24,20 @@ object CameraControlsUiStateMapper {
                 isSupported = cameraInteraction.isStabilizationSupported,
                 isEnabled = cameraInteraction.isStabilizationEnabled,
             ),
+            antiFlicker = AntiFlickerUiState(
+                options = cameraInteraction.supportedAntiFlickerModes.map { mode ->
+                    SelectOptionUi(
+                        key = mode.name,
+                        label = UiText.Resource(antiFlickerLabel(mode)),
+                        isSelected = mode == cameraInteraction.antiFlickerMode,
+                    )
+                },
+            ),
         )
+
+    private fun antiFlickerLabel(mode: AntiFlickerMode): Int = when (mode) {
+        AntiFlickerMode.AUTO -> R.string.anti_flicker_auto
+        AntiFlickerMode.HZ_50 -> R.string.anti_flicker_50hz
+        AntiFlickerMode.HZ_60 -> R.string.anti_flicker_60hz
+    }
 }

@@ -33,6 +33,7 @@ import dev.mobilewebcam.sender.app.model.StreamPresentationMapper
 import dev.mobilewebcam.sender.app.model.UiText
 import dev.mobilewebcam.sender.app.model.value
 import dev.mobilewebcam.sender.feature.settings.components.SettingsChoiceRow
+import dev.mobilewebcam.sender.feature.webcam.components.CameraAntiFlickerControls
 import dev.mobilewebcam.sender.feature.webcam.components.CameraStabilizationControls
 
 @Composable
@@ -102,7 +103,7 @@ fun StreamSetupScreen(
                     },
                 )
             }
-            if (state.stabilization.isSupported) {
+            if (state.stabilization.isSupported || state.antiFlicker.options.isNotEmpty()) {
                 item {
                     Text(
                         text = stringResource(R.string.camera),
@@ -114,6 +115,14 @@ fun StreamSetupScreen(
                         state = state.stabilization,
                         onStabilizationEnabledChanged = { enabled ->
                             onAction(SenderScreenAction.StabilizationChanged(enabled))
+                        },
+                    )
+                }
+                item {
+                    CameraAntiFlickerControls(
+                        state = state.antiFlicker,
+                        onModeSelected = { mode ->
+                            onAction(SenderScreenAction.AntiFlickerChanged(mode))
                         },
                     )
                 }

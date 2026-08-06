@@ -29,6 +29,7 @@ import dev.mobilewebcam.sender.app.model.ConnectionUiState
 import dev.mobilewebcam.sender.app.model.SenderScreenAction
 import dev.mobilewebcam.sender.app.model.UiText
 import dev.mobilewebcam.sender.app.model.value
+import dev.mobilewebcam.sender.feature.webcam.components.CameraAntiFlickerControls
 import dev.mobilewebcam.sender.feature.webcam.components.CameraLensControls
 import dev.mobilewebcam.sender.feature.webcam.components.CameraStabilizationControls
 import dev.mobilewebcam.sender.feature.webcam.components.CameraZoomControls
@@ -84,6 +85,14 @@ fun SettingsScreen(
                     state = state.camera.stabilization,
                     onStabilizationEnabledChanged = { enabled ->
                         onAction(SenderScreenAction.StabilizationChanged(enabled))
+                    },
+                )
+            }
+            item {
+                CameraAntiFlickerControls(
+                    state = state.camera.antiFlicker,
+                    onModeSelected = { mode ->
+                        onAction(SenderScreenAction.AntiFlickerChanged(mode))
                     },
                 )
             }

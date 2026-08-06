@@ -12,6 +12,7 @@ import dev.mobilewebcam.sender.app.model.UiText
 import dev.mobilewebcam.sender.app.model.SenderScreenAction
 import dev.mobilewebcam.sender.connection.SenderConnectionCoordinator
 import dev.mobilewebcam.sender.media.camera.CameraController
+import dev.mobilewebcam.sender.media.camera.AntiFlickerMode
 import dev.mobilewebcam.sender.model.StreamOrientation
 import dev.mobilewebcam.sender.model.StreamState
 import dev.mobilewebcam.sender.model.ReceiverCapabilities
@@ -73,6 +74,7 @@ class StreamSetupViewModel @Inject constructor(
             ?.capabilities
             ?.supports(configuredSettings.profile)
             ?: false
+        val cameraControls = CameraControlsUiStateMapper.map(cameraInteraction)
         StreamSetupUiState(
             connection = StreamPresentationMapper.connection(
                 StreamPresentationSnapshot(
@@ -94,7 +96,8 @@ class StreamSetupViewModel @Inject constructor(
                     isSelected = orientation == configuredSettings.streamOrientation,
                 )
             },
-            stabilization = CameraControlsUiStateMapper.map(cameraInteraction).stabilization,
+            stabilization = cameraControls.stabilization,
+            antiFlicker = cameraControls.antiFlicker,
             selectedProfile = configuredSettings.profile,
             selectedOrientation = configuredSettings.streamOrientation,
             selectedProfileSupported = selectedProfileSupported,
@@ -141,6 +144,7 @@ class StreamSetupViewModel @Inject constructor(
             is SenderScreenAction.ProfileSelected -> selectProfile(action.profileId)
             is SenderScreenAction.FrameRateSelected -> selectFrameRate(action.fps)
             is SenderScreenAction.StabilizationChanged -> setStabilizationEnabled(action.enabled)
+            is SenderScreenAction.AntiFlickerChanged -> setAntiFlickerMode(action.mode)
             is SenderScreenAction.StreamOrientationSelected -> settings.updateStreamOrientation(action.orientation)
             SenderScreenAction.CheckReceiver -> checkReceiver()
             SenderScreenAction.StartStream -> startStream()
@@ -172,6 +176,12 @@ class StreamSetupViewModel @Inject constructor(
     private fun setStabilizationEnabled(enabled: Boolean) {
         viewModelScope.launch(Dispatchers.Default) {
             cameraController.setStabilizationEnabled(enabled)
+        }
+    }
+
+    private fun setAntiFlickerMode(mode: AntiFlickerMode) {
+        viewModelScope.launch(Dispatchers.Default) {
+            cameraController.setAntiFlickerMode(mode)
         }
     }
 

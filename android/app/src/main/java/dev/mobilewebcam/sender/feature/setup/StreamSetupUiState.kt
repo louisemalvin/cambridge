@@ -2,6 +2,7 @@ package dev.mobilewebcam.sender.feature.setup
 
 import androidx.compose.runtime.Immutable
 import dev.mobilewebcam.sender.app.model.ConnectionUiState
+import dev.mobilewebcam.sender.app.model.AntiFlickerUiState
 import dev.mobilewebcam.sender.app.model.SelectOptionUi
 import dev.mobilewebcam.sender.app.model.StabilizationUiState
 import dev.mobilewebcam.sender.app.model.UiText
@@ -31,6 +32,7 @@ data class StreamSetupUiState(
     val frameRateOptions: List<SelectOptionUi> = emptyList(),
     val orientationOptions: List<SelectOptionUi> = emptyList(),
     val stabilization: StabilizationUiState = StabilizationUiState(),
+    val antiFlicker: AntiFlickerUiState = AntiFlickerUiState(),
     val selectedProfile: VideoProfile,
     val selectedOrientation: StreamOrientation,
     val selectedProfileSupported: Boolean = false,

@@ -8,6 +8,7 @@ import dev.mobilewebcam.sender.app.model.SenderUiEffect
 import dev.mobilewebcam.sender.app.model.StreamPresentationSnapshot
 import dev.mobilewebcam.sender.connection.SenderConnectionCoordinator
 import dev.mobilewebcam.sender.media.camera.CameraController
+import dev.mobilewebcam.sender.media.camera.AntiFlickerMode
 import dev.mobilewebcam.sender.model.SenderSettingsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -69,6 +70,7 @@ class SettingsViewModel @Inject constructor(
             SenderScreenAction.ResetZoom -> resetZoom()
             is SenderScreenAction.LensSelected -> selectPhysicalLens(action.key)
             is SenderScreenAction.StabilizationChanged -> setStabilizationEnabled(action.enabled)
+            is SenderScreenAction.AntiFlickerChanged -> setAntiFlickerMode(action.mode)
             SenderScreenAction.StopStream -> stop()
             SenderScreenAction.ForgetReceiver -> forgetReceiver()
             SenderScreenAction.CopyDiagnostics -> copyDiagnostics()
@@ -91,6 +93,12 @@ class SettingsViewModel @Inject constructor(
     private fun setStabilizationEnabled(enabled: Boolean) {
         viewModelScope.launch(Dispatchers.Default) {
             cameraController.setStabilizationEnabled(enabled)
+        }
+    }
+
+    private fun setAntiFlickerMode(mode: AntiFlickerMode) {
+        viewModelScope.launch(Dispatchers.Default) {
+            cameraController.setAntiFlickerMode(mode)
         }
     }
 

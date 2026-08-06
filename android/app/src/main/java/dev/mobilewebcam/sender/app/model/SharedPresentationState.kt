@@ -1,6 +1,7 @@
 package dev.mobilewebcam.sender.app.model
 
 import androidx.compose.runtime.Immutable
+import dev.mobilewebcam.sender.media.camera.AntiFlickerMode
 import dev.mobilewebcam.sender.media.camera.CameraZoom
 import dev.mobilewebcam.sender.model.StreamOrientation
 
@@ -45,6 +46,7 @@ data class CameraControlsUiState(
     val zoom: ZoomUiState = ZoomUiState(),
     val lensOptions: List<LensOptionUi> = emptyList(),
     val stabilization: StabilizationUiState = StabilizationUiState(),
+    val antiFlicker: AntiFlickerUiState = AntiFlickerUiState(),
 )
 
 @Immutable
@@ -92,6 +94,11 @@ data class StabilizationUiState(
 )
 
 @Immutable
+data class AntiFlickerUiState(
+    val options: List<SelectOptionUi> = emptyList(),
+)
+
+@Immutable
 sealed interface SenderDialogUiState {
     data class CameraPermission(
         val title: UiText,
@@ -109,6 +116,7 @@ sealed interface SenderScreenAction {
     data object ResetZoom : SenderScreenAction
     data class LensSelected(val key: String) : SenderScreenAction
     data class StabilizationChanged(val enabled: Boolean) : SenderScreenAction
+    data class AntiFlickerChanged(val mode: AntiFlickerMode) : SenderScreenAction
     data class ProfileSelected(val profileId: String) : SenderScreenAction
     data class FrameRateSelected(val fps: Int) : SenderScreenAction
     data class StreamOrientationSelected(val orientation: StreamOrientation) : SenderScreenAction

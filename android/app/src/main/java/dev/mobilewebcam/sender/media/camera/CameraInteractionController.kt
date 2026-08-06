@@ -15,6 +15,8 @@ interface CameraInteractionController {
 
     suspend fun setStabilizationEnabled(enabled: Boolean)
 
+    suspend fun setAntiFlickerMode(mode: AntiFlickerMode)
+
     suspend fun selectPhysicalLens(lens: PhysicalLensOption)
 }
 

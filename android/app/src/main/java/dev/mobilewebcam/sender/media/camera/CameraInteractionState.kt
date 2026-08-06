@@ -15,6 +15,8 @@ data class CameraInteractionState(
     val isCameraActive: Boolean = false,
     val isStabilizationSupported: Boolean = false,
     val isStabilizationEnabled: Boolean = false,
+    val supportedAntiFlickerModes: List<AntiFlickerMode> = emptyList(),
+    val antiFlickerMode: AntiFlickerMode = AntiFlickerMode.AUTO,
     val physicalLensOptions: List<PhysicalLensOption> = emptyList(),
     val selectedPhysicalLens: PhysicalLensOption? = null,
 ) {
@@ -67,6 +69,24 @@ data class CameraInteractionState(
             "Stabilization cannot be enabled when unsupported"
         }
         return copy(isStabilizationEnabled = enabled)
+    }
+
+    fun withAntiFlickerSupport(modes: List<AntiFlickerMode>): CameraInteractionState {
+        val supportedModes = modes.distinct()
+        val effectiveMode = antiFlickerMode.takeIf { it in supportedModes }
+            ?: AntiFlickerMode.AUTO.takeIf { it in supportedModes }
+            ?: supportedModes.firstOrNull()
+        return copy(
+            supportedAntiFlickerModes = supportedModes,
+            antiFlickerMode = effectiveMode ?: AntiFlickerMode.AUTO,
+        )
+    }
+
+    fun withAntiFlickerMode(mode: AntiFlickerMode): CameraInteractionState {
+        require(mode in supportedAntiFlickerModes) {
+            "Anti-flicker mode is not supported by the selected camera"
+        }
+        return copy(antiFlickerMode = mode)
     }
 
     fun withPhysicalLensOptions(

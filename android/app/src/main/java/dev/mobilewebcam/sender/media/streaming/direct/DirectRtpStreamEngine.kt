@@ -17,6 +17,7 @@ import dev.mobilewebcam.sender.connection.control.direct.DirectStreamContract.st
 import dev.mobilewebcam.sender.connection.control.direct.DirectStreamContract.stringFieldOrNull
 import dev.mobilewebcam.sender.logging.AndroidAppLogger
 import dev.mobilewebcam.sender.logging.AppLogger
+import dev.mobilewebcam.sender.media.camera.AntiFlickerMode
 import dev.mobilewebcam.sender.media.camera.CameraController
 import dev.mobilewebcam.sender.media.camera.CameraInteractionState
 import dev.mobilewebcam.sender.media.camera.CameraPreviewSurface
@@ -256,6 +257,10 @@ class DirectRtpStreamEngine(
 
     override suspend fun setStabilizationEnabled(enabled: Boolean) = lifecycleMutex.withLock {
         camera.setStabilizationEnabled(enabled)
+    }
+
+    override suspend fun setAntiFlickerMode(mode: AntiFlickerMode) = lifecycleMutex.withLock {
+        camera.setAntiFlickerMode(mode)
     }
 
     override suspend fun selectPhysicalLens(lens: PhysicalLensOption) = lifecycleMutex.withLock {

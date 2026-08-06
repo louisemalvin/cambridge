@@ -19,6 +19,7 @@ import android.view.Surface
 import androidx.core.content.ContextCompat
 import dev.mobilewebcam.sender.logging.AndroidAppLogger
 import dev.mobilewebcam.sender.logging.AppLogger
+import dev.mobilewebcam.sender.media.camera.AntiFlickerMode
 import dev.mobilewebcam.sender.media.camera.CameraInteractionState
 import dev.mobilewebcam.sender.media.camera.CameraPreviewSurface
 import dev.mobilewebcam.sender.media.camera.CameraZoom
@@ -50,6 +51,7 @@ internal class Camera2Capture(
     private var zoomRatio = CameraZoom.DEFAULT_ZOOM_RATIO
     private var requestedStabilizationEnabled = true
     private var stabilizationEnabled = false
+    private var requestedAntiFlickerMode = AntiFlickerMode.AUTO
     private var loggedFirstCapture = false
     private var captureResultCount = 0L
     private var captureSummaryStartNs = 0L
@@ -146,6 +148,18 @@ internal class Camera2Capture(
         stabilizationEnabled = enabled && isStabilizationSupported()
         submitRepeatingRequest()
         cameraState.value = cameraState.value.withStabilizationEnabled(stabilizationEnabled)
+    }
+
+    suspend fun setAntiFlickerMode(mode: AntiFlickerMode) {
+        val supportedModes = availableAntiFlickerModes()
+        require(mode in supportedModes) {
+            "Anti-flicker mode is not supported by the selected camera"
+        }
+        requestedAntiFlickerMode = mode
+        cameraState.value = cameraState.value
+            .withAntiFlickerSupport(supportedModes)
+            .withAntiFlickerMode(mode)
+        submitRepeatingRequest()
     }
 
     suspend fun selectPhysicalLens(lens: PhysicalLensOption) {
@@ -270,7 +284,9 @@ internal class Camera2Capture(
             set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO)
             set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO)
             targetFpsRange()?.let { range -> set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, range) }
-            autoAntiBandingMode()?.let { mode -> set(CaptureRequest.CONTROL_AE_ANTIBANDING_MODE, mode) }
+            antiFlickerCaptureRequestMode()?.let { mode ->
+                set(CaptureRequest.CONTROL_AE_ANTIBANDING_MODE, mode)
+            }
             cropRegion()?.let { crop -> set(CaptureRequest.SCALER_CROP_REGION, crop) }
             if (isStabilizationSupported()) {
                 set(
@@ -370,15 +386,36 @@ internal class Camera2Capture(
         return modes.contains(CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_ON)
     }
 
-    private fun autoAntiBandingMode(): Int? {
-        val modes = cameraCharacteristics?.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_ANTIBANDING_MODES)
-            ?: return null
-        return CaptureRequest.CONTROL_AE_ANTIBANDING_MODE_AUTO.takeIf { mode -> mode in modes }
+    private fun antiFlickerCaptureRequestMode(): Int? {
+        val supportedModes = availableAntiFlickerModes()
+        return effectiveAntiFlickerMode(supportedModes)?.toCaptureRequestMode()
+    }
+
+    private fun availableAntiFlickerModes(): List<AntiFlickerMode> {
+        val supportedCameraModes = cameraCharacteristics
+            ?.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_ANTIBANDING_MODES)
+            ?.toSet()
+            ?: return emptyList()
+        return AntiFlickerMode.entries.filter { mode ->
+            mode.toCaptureRequestMode() in supportedCameraModes
+        }
+    }
+
+    private fun effectiveAntiFlickerMode(supportedModes: List<AntiFlickerMode>): AntiFlickerMode? =
+        requestedAntiFlickerMode.takeIf { it in supportedModes }
+            ?: AntiFlickerMode.AUTO.takeIf { it in supportedModes }
+            ?: supportedModes.firstOrNull()
+
+    private fun AntiFlickerMode.toCaptureRequestMode(): Int = when (this) {
+        AntiFlickerMode.AUTO -> CaptureRequest.CONTROL_AE_ANTIBANDING_MODE_AUTO
+        AntiFlickerMode.HZ_50 -> CaptureRequest.CONTROL_AE_ANTIBANDING_MODE_50HZ
+        AntiFlickerMode.HZ_60 -> CaptureRequest.CONTROL_AE_ANTIBANDING_MODE_60HZ
     }
 
     private fun updateCameraState() {
         val characteristics = cameraCharacteristics ?: return
         val stabilizationSupported = isStabilizationSupported()
+        val antiFlickerModes = availableAntiFlickerModes()
         stabilizationEnabled = requestedStabilizationEnabled && stabilizationSupported
         val maximumZoom = characteristics.get(CameraCharacteristics.SCALER_AVAILABLE_MAX_DIGITAL_ZOOM)
             ?: CameraZoom.DEFAULT_ZOOM_RATIO
@@ -404,6 +441,7 @@ internal class Camera2Capture(
             .withPhysicalLensOptions(lensOptions)
             .withStabilizationSupport(stabilizationSupported)
             .withStabilizationEnabled(stabilizationEnabled)
+            .withAntiFlickerSupport(antiFlickerModes)
     }
 
     private fun getPhysicalLensLabel(physicalId: String): String {

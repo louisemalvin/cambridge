@@ -3,6 +3,7 @@ package dev.mobilewebcam.sender
 import dev.mobilewebcam.sender.media.camera.CameraInteractionState
 import dev.mobilewebcam.sender.media.camera.CameraStabilizationMode
 import dev.mobilewebcam.sender.media.camera.CameraStabilizationSupport
+import dev.mobilewebcam.sender.media.camera.AntiFlickerMode
 import dev.mobilewebcam.sender.media.camera.PhysicalLensOption
 import dev.mobilewebcam.sender.media.camera.preferredStabilizationMode
 import org.junit.Assert.assertEquals
@@ -87,6 +88,31 @@ class CameraInteractionStateTest {
         assertFalse(
             state.withStabilizationSupport(supported = false).isStabilizationEnabled,
         )
+    }
+
+    @Test
+    fun antiFlickerDefaultsToAutoAndTracksSelectedSupport() {
+        val supportedModes = listOf(
+            AntiFlickerMode.AUTO,
+            AntiFlickerMode.HZ_50,
+            AntiFlickerMode.HZ_60,
+        )
+        val state = CameraInteractionState().withAntiFlickerSupport(supportedModes)
+
+        assertEquals(AntiFlickerMode.AUTO, state.antiFlickerMode)
+        assertEquals(
+            AntiFlickerMode.HZ_60,
+            state.withAntiFlickerMode(AntiFlickerMode.HZ_60).antiFlickerMode,
+        )
+    }
+
+    @Test
+    fun antiFlickerFallsBackWhenAutoIsUnavailable() {
+        val state = CameraInteractionState().withAntiFlickerSupport(
+            listOf(AntiFlickerMode.HZ_50, AntiFlickerMode.HZ_60),
+        )
+
+        assertEquals(AntiFlickerMode.HZ_50, state.antiFlickerMode)
     }
 
     private companion object {

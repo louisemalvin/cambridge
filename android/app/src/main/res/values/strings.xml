@@ -22,6 +22,10 @@
     <string name="camera">Camera</string>
     <string name="physical_lens">Physical lens</string>
     <string name="stabilization">Stabilization</string>
+    <string name="anti_flicker">Anti-flicker</string>
+    <string name="anti_flicker_auto">Auto</string>
+    <string name="anti_flicker_50hz">50 Hz</string>
+    <string name="anti_flicker_60hz">60 Hz</string>
     <string name="on">On</string>
     <string name="off">Off</string>
     <string name="connection">Connection</string>
