@@ -23,7 +23,9 @@ setup screen lets the user choose the supported quality and Portrait or
 Landscape axis before pressing Start stream. The setup screen stays in the
 phone's current orientation while these choices are made. Once streaming
 starts, the selected axis is locked and may reverse 180 degrees. Stop releases
-the camera and keeps the configured computer for the next setup.
+the camera and keeps the configured computer for the next setup. Removing the
+app task also stops the active stream; the foreground notification remains the
+explicit in-session Stop control.
 
 ## Required runtime test target
 

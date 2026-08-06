@@ -79,7 +79,8 @@ graphics thread.
    180-degree reverse.
 6. Stop, control disconnect, or invalid generation ends the session and clears
    the mailbox. A lost session releases stale media resources and waits for a
-   new explicit Start stream.
+   new explicit Start stream. Removing the Android app task also stops the
+   active session through the foreground service.
 
 The source never creates a virtual camera device. OBS consumes the source
 directly as a native texture source.

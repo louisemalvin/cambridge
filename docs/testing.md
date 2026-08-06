@@ -49,6 +49,9 @@ The harness explicitly injects `720p30` for this AVD, opens the stream setup
 screen, exercises the selected display orientation, presses Start stream once,
 and checks lifecycle release. A lost OBS connection is not retried by the app;
 the next session requires another explicit Start stream action.
+On a physical device, removing the app task while streaming should also
+produce the normal stream cleanup event; the notification Stop action remains
+the preferred manual stop path.
 
 ## Native receiver checks
 

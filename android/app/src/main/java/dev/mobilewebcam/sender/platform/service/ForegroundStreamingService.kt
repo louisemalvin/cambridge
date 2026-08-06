@@ -35,10 +35,7 @@ class ForegroundStreamingService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
-            serviceScope.launch {
-                sessionController.stop()
-                stopSelfResult(startId)
-            }
+            stopSessionAndService(startId)
             return START_NOT_STICKY
         }
         val notification = notificationFactory.createStreamingNotification()
@@ -50,6 +47,11 @@ class ForegroundStreamingService : Service() {
         return START_NOT_STICKY
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        stopSessionAndService()
+        super.onTaskRemoved(rootIntent)
+    }
+
     override fun onDestroy() {
         if (::powerManager.isInitialized) {
             powerManager.release()
@@ -59,6 +61,20 @@ class ForegroundStreamingService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    private fun stopSessionAndService(startId: Int? = null) {
+        serviceScope.launch {
+            try {
+                sessionController.stop()
+            } finally {
+                if (startId == null) {
+                    stopSelf()
+                } else {
+                    stopSelfResult(startId)
+                }
+            }
+        }
+    }
 
     companion object {
         const val ACTION_START = "dev.mobilewebcam.sender.action.START_STREAMING"
