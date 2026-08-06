@@ -3,6 +3,7 @@ package dev.mobilewebcam.sender.app.model
 import dev.mobilewebcam.sender.R
 import dev.mobilewebcam.sender.media.camera.SessionTransform
 import dev.mobilewebcam.sender.model.StreamFailure
+import dev.mobilewebcam.sender.model.StreamOrientation
 import dev.mobilewebcam.sender.model.StreamState
 import dev.mobilewebcam.sender.model.VideoProfile
 import dev.mobilewebcam.sender.session.VideoProfiles
@@ -39,6 +40,15 @@ object StreamPresentationMapper {
         else -> null
     }
 
+    fun orientationLabel(orientation: StreamOrientation): UiText = UiText.Resource(
+        when (orientation) {
+            StreamOrientation.LANDSCAPE -> R.string.landscape
+            StreamOrientation.LANDSCAPE_REVERSED -> R.string.landscape_reversed
+            StreamOrientation.PORTRAIT -> R.string.portrait
+            StreamOrientation.PORTRAIT_REVERSED -> R.string.portrait_reversed
+        },
+    )
+
     fun videoProfileLabel(profile: VideoProfile): UiText = when (profile.id) {
         VideoProfiles.PROFILE_2K30.id -> UiText.Resource(R.string.profile_2k30)
         VideoProfiles.PROFILE_2K15.id -> UiText.Resource(R.string.profile_2k30)
@@ -69,8 +79,8 @@ object StreamPresentationMapper {
         else -> null
     }
 
-    private fun orientationLabel(transform: SessionTransform): UiText = UiText.Resource(
-        if (transform.isPortrait) R.string.portrait else R.string.landscape,
+    private fun orientationLabel(transform: SessionTransform): UiText = orientationLabel(
+        StreamOrientation.fromDisplayRotation(transform.displayOrientation.rotationDegrees),
     )
 
     private fun qualityFailureMessage(profile: VideoProfile): String =

@@ -90,9 +90,7 @@ class StreamSetupViewModel @Inject constructor(
             orientationOptions = StreamOrientation.entries.map { orientation ->
                 SelectOptionUi(
                     key = orientation.name,
-                    label = UiText.Resource(
-                        if (orientation.isPortrait) R.string.portrait else R.string.landscape,
-                    ),
+                    label = StreamPresentationMapper.orientationLabel(orientation),
                     isSelected = orientation == configuredSettings.streamOrientation,
                 )
             },

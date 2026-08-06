@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import dev.mobilewebcam.sender.R
 import dev.mobilewebcam.sender.app.model.ConnectionUiState
 import dev.mobilewebcam.sender.app.model.SenderScreenAction
+import dev.mobilewebcam.sender.app.model.StreamPresentationMapper
 import dev.mobilewebcam.sender.app.model.UiText
 import dev.mobilewebcam.sender.app.model.value
 import dev.mobilewebcam.sender.feature.settings.components.SettingsChoiceRow
@@ -233,11 +234,7 @@ private fun SessionContractSummary(
         R.string.stream_plan_summary,
         listOf(
             profile.width.toString() + "×" + profile.height,
-            if (state.selectedOrientation.isPortrait) {
-                stringResource(R.string.portrait)
-            } else {
-                stringResource(R.string.landscape)
-            },
+            StreamPresentationMapper.orientationLabel(state.selectedOrientation).value(),
             profile.fps,
         ),
     )

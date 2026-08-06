@@ -3,6 +3,8 @@ package dev.mobilewebcam.sender
 import android.view.Surface
 import dev.mobilewebcam.sender.media.camera.DisplayOrientation
 import dev.mobilewebcam.sender.media.camera.VideoPreviewLayout
+import dev.mobilewebcam.sender.media.camera.toDisplayOrientation
+import dev.mobilewebcam.sender.model.StreamOrientation
 import dev.mobilewebcam.sender.model.VideoProfile
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -55,6 +57,26 @@ class CameraPresentationTest {
         assertEquals(
             DisplayOrientation.REVERSE_LANDSCAPE,
             DisplayOrientation.fromSurfaceRotation(Surface.ROTATION_270),
+        )
+    }
+
+    @Test
+    fun streamOrientationsMapToExactDisplayOrientations() {
+        assertEquals(
+            DisplayOrientation.LANDSCAPE,
+            StreamOrientation.LANDSCAPE.toDisplayOrientation(),
+        )
+        assertEquals(
+            DisplayOrientation.REVERSE_LANDSCAPE,
+            StreamOrientation.LANDSCAPE_REVERSED.toDisplayOrientation(),
+        )
+        assertEquals(
+            DisplayOrientation.PORTRAIT,
+            StreamOrientation.PORTRAIT.toDisplayOrientation(),
+        )
+        assertEquals(
+            DisplayOrientation.REVERSE_PORTRAIT,
+            StreamOrientation.PORTRAIT_REVERSED.toDisplayOrientation(),
         )
     }
 

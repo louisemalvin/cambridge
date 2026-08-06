@@ -48,8 +48,8 @@ the media pipeline. It contains:
 
 The contract is locked for the lifetime of the session. Resolution, frame
 rate, codec, bitrate, and orientation changes require Stop followed by a new
-Start. A 180-degree reverse is presentation behavior within the selected
-orientation axis; it is not a renegotiation.
+Start. The sender selects one of four explicit display orientations before
+starting: landscape, landscape (reversed), portrait, or portrait (reversed).
 
 The current contract supports these catalog entries:
 

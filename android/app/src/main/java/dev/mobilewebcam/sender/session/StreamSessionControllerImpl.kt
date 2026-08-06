@@ -7,7 +7,7 @@ import dev.mobilewebcam.sender.logging.AppLogger
 import dev.mobilewebcam.sender.media.capabilities.EncoderCapabilityProbe
 import dev.mobilewebcam.sender.media.camera.CameraController
 import dev.mobilewebcam.sender.media.camera.SessionTransform
-import dev.mobilewebcam.sender.media.camera.DisplayOrientation
+import dev.mobilewebcam.sender.media.camera.toDisplayOrientation
 import dev.mobilewebcam.sender.media.streaming.StreamEngine
 import dev.mobilewebcam.sender.media.streaming.StreamEngineEvent
 import dev.mobilewebcam.sender.model.DirectStreamEndpoint
@@ -73,11 +73,7 @@ class StreamSessionControllerImpl(
         val sessionTransform = runCatching {
             cameraController?.snapshotSessionTransform(profile.width, profile.height, orientation)
                 ?: SessionTransform.forProfile(
-                    displayOrientation = if (orientation.isPortrait) {
-                        DisplayOrientation.PORTRAIT
-                    } else {
-                        DisplayOrientation.LANDSCAPE
-                    },
+                    displayOrientation = orientation.toDisplayOrientation(),
                     codedWidth = profile.width,
                     codedHeight = profile.height,
                 )

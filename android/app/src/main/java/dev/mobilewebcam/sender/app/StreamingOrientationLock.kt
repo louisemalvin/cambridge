@@ -5,10 +5,11 @@ import android.content.pm.ActivityInfo
 import dev.mobilewebcam.sender.model.StreamOrientation
 
 fun Activity.lockStreamingOrientation(orientation: StreamOrientation) {
-    requestedOrientation = if (orientation.isPortrait) {
-        ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
-    } else {
-        ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+    requestedOrientation = when (orientation) {
+        StreamOrientation.LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        StreamOrientation.LANDSCAPE_REVERSED -> ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE
+        StreamOrientation.PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        StreamOrientation.PORTRAIT_REVERSED -> ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT
     }
 }
 

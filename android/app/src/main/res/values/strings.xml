@@ -33,7 +33,7 @@
     <string name="frame_rate_option">%1$d fps</string>
     <string name="session_contract">Session contract</string>
     <string name="stream_plan_summary">%1$s · %2$s · %3$d fps</string>
-    <string name="orientation_support">The selected axis is locked while streaming. The phone may flip 180°.</string>
+    <string name="orientation_support">The selected orientation is locked while streaming. Stop before changing it.</string>
     <string name="setup_computer">Computer</string>
     <string name="receiver_status">Receiver status</string>
     <string name="receiver_checking">Checking for an OBS receiver…</string>
@@ -45,6 +45,8 @@
     <string name="setup_start_stream">Start stream</string>
     <string name="portrait">Portrait</string>
     <string name="landscape">Landscape</string>
+    <string name="landscape_reversed">Landscape (Reversed)</string>
+    <string name="portrait_reversed">Portrait (Reversed)</string>
     <string name="forget_receiver">Forget receiver</string>
     <string name="diagnostics">Diagnostics</string>
     <string name="copy_error_details">Copy error details</string>

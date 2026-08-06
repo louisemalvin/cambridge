@@ -1,6 +1,7 @@
 package dev.mobilewebcam.sender.media.camera
 
 import android.view.Surface
+import dev.mobilewebcam.sender.model.StreamOrientation
 
 private const val ROTATION_0_DEGREES = 0
 private const val ROTATION_90_DEGREES = 90
@@ -58,3 +59,6 @@ enum class DisplayOrientation(
             if (isPortrait) PORTRAIT else LANDSCAPE
     }
 }
+
+fun StreamOrientation.toDisplayOrientation(): DisplayOrientation =
+    DisplayOrientation.fromRotationDegrees(displayRotationDegrees)

@@ -40,12 +40,10 @@ class MainActivity : ComponentActivity() {
     private fun configureTestOrientationFromIntent() {
         val rotationDegrees = intent.getIntExtra(EXTRA_ROTATION_DEGREES, INVALID_ROTATION)
         val streamOrientation = when (rotationDegrees) {
-            PORTRAIT_ROTATION_DEGREES,
-            REVERSE_PORTRAIT_ROTATION_DEGREES,
-            -> StreamOrientation.PORTRAIT
-            LANDSCAPE_ROTATION_DEGREES,
-            REVERSE_LANDSCAPE_ROTATION_DEGREES,
-            -> StreamOrientation.LANDSCAPE
+            PORTRAIT_ROTATION_DEGREES -> StreamOrientation.PORTRAIT
+            LANDSCAPE_ROTATION_DEGREES -> StreamOrientation.LANDSCAPE
+            REVERSE_PORTRAIT_ROTATION_DEGREES -> StreamOrientation.PORTRAIT_REVERSED
+            REVERSE_LANDSCAPE_ROTATION_DEGREES -> StreamOrientation.LANDSCAPE_REVERSED
             else -> null
         }
         streamOrientation?.let(settings::updateStreamOrientation)

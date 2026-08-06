@@ -24,8 +24,8 @@ import dev.mobilewebcam.sender.media.camera.CameraPreviewSurface
 import dev.mobilewebcam.sender.media.camera.CameraZoom
 import dev.mobilewebcam.sender.media.camera.PhysicalLensOption
 import dev.mobilewebcam.sender.media.camera.CameraLensFacing
-import dev.mobilewebcam.sender.media.camera.DisplayOrientation
 import dev.mobilewebcam.sender.media.camera.SessionTransform
+import dev.mobilewebcam.sender.media.camera.toDisplayOrientation
 import dev.mobilewebcam.sender.connection.control.direct.DirectStreamContract
 import dev.mobilewebcam.sender.model.StreamOrientation
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -85,12 +85,8 @@ internal class Camera2Capture(
             updateCameraState()
         }
         val characteristics = cameraCharacteristics ?: error("Camera characteristics are unavailable")
-        val selectedOrientation = DisplayOrientation.fromPortraitFlag(orientation.isPortrait)
-        val displayOrientation = previewSurface?.orientation
-            ?.takeIf { it.isPortrait == orientation.isPortrait }
-            ?: selectedOrientation
         return SessionTransform.calculate(
-            displayOrientation = displayOrientation,
+            displayOrientation = orientation.toDisplayOrientation(),
             sensorOrientationDegrees = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION)
                 ?: DEFAULT_SENSOR_ORIENTATION_DEGREES,
             lensFacing = characteristics.get(CameraCharacteristics.LENS_FACING).toLensFacing(),
