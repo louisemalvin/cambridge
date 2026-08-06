@@ -8,6 +8,13 @@ pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET libavcodec libavutil libswscal
 pkg_check_modules(VA REQUIRED IMPORTED_TARGET libva libva-drm)
 pkg_check_modules(DRM REQUIRED IMPORTED_TARGET libdrm)
 pkg_check_modules(JANSSON REQUIRED IMPORTED_TARGET jansson)
+pkg_check_modules(AVAHI QUIET IMPORTED_TARGET avahi-client)
+
+if(AVAHI_FOUND)
+    message(STATUS "mDNS advertisement enabled through Avahi")
+else()
+    message(STATUS "mDNS advertisement disabled: avahi-client development files were not found")
+endif()
 
 set(DIRECT_WEBCAM_GIT_COMMIT "unknown" CACHE STRING "Source Git commit embedded in the module identity")
 
@@ -15,6 +22,7 @@ add_library(direct-webcam-source MODULE
     src/control_protocol.cpp
     src/control_server.cpp
     src/decoder.cpp
+    src/discovery_advertiser.cpp
     src/direct_webcam_source.cpp
     src/media_receiver.cpp
     src/module.cpp
@@ -26,6 +34,9 @@ target_compile_definitions(direct-webcam-source PRIVATE
     DIRECT_WEBCAM_GIT_COMMIT="${DIRECT_WEBCAM_GIT_COMMIT}"
     DIRECT_WEBCAM_VERSION="${PROJECT_VERSION}"
 )
+if(AVAHI_FOUND)
+    target_compile_definitions(direct-webcam-source PRIVATE DIRECT_WEBCAM_HAS_AVAHI=1)
+endif()
 target_compile_options(direct-webcam-source PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
 target_include_directories(direct-webcam-source PRIVATE
     ${OBS_INCLUDE_DIRS}
@@ -48,6 +59,9 @@ target_link_libraries(direct-webcam-source PRIVATE
     ${DRM_LIBRARIES}
     ${JANSSON_LIBRARIES}
 )
+if(AVAHI_FOUND)
+    target_link_libraries(direct-webcam-source PRIVATE PkgConfig::AVAHI)
+endif()
 set_target_properties(direct-webcam-source PROPERTIES
     PREFIX ""
     OUTPUT_NAME "direct-webcam-source"

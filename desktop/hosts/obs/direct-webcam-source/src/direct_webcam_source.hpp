@@ -2,6 +2,7 @@
 
 #include "control_server.hpp"
 #include "decoder.hpp"
+#include "discovery_advertiser.hpp"
 #include "latest_frame_mailbox.hpp"
 #include "media_receiver.hpp"
 #include "protocol_contract.hpp"
@@ -87,6 +88,7 @@ private:
 
     LatestFrameMailbox<VideoFrame> mailbox_;
     std::unique_ptr<ControlServer> control_server_;
+    std::unique_ptr<DiscoveryAdvertiser> discovery_advertiser_;
     std::unique_ptr<MediaReceiver> media_receiver_;
     std::unique_ptr<Decoder> decoder_;
     Renderer renderer_;

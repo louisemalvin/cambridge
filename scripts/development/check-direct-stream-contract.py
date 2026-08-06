@@ -218,6 +218,13 @@ def main() -> int:
     )
     check_scalar(
         cpp_contract,
+        r'kDiscoveryServiceType\[\] = "([^"]+)"',
+        contract["discovery"]["serviceType"],
+        "C++ discovery service type",
+        str,
+    )
+    check_scalar(
+        cpp_contract,
         r"kDefaultMediaPortOffset = ([0-9']+)",
         defaults["mediaPortOffset"],
         "C++ media port offset",

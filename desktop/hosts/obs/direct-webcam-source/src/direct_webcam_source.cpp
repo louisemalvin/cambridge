@@ -180,6 +180,14 @@ bool DirectWebcamSource::start(std::string &error)
         control_server_.reset();
         return false;
     }
+    discovery_advertiser_ = std::make_unique<DiscoveryAdvertiser>(config.control_port);
+    std::string discovery_error;
+    if (!discovery_advertiser_->start(discovery_error)) {
+        report("discovery_unavailable:" + discovery_error);
+        discovery_advertiser_.reset();
+    } else {
+        report("discovery:service_type=" + std::string(contract::kDiscoveryServiceType));
+    }
     started_ = true;
     report("identity:module=direct-webcam-source version=" + std::string(kModuleVersion) +
            " commit=" + std::string(DIRECT_WEBCAM_GIT_COMMIT) + " build=plugin protocol=" +
@@ -197,6 +205,10 @@ bool DirectWebcamSource::start(std::string &error)
 
 void DirectWebcamSource::stop()
 {
+    if (discovery_advertiser_) {
+        discovery_advertiser_->stop();
+        discovery_advertiser_.reset();
+    }
     if (control_server_) {
         control_server_->stop();
         control_server_.reset();

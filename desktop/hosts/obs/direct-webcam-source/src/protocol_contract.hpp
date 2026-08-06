@@ -58,6 +58,7 @@ inline constexpr char kCodecH264[] = "h264";
 inline constexpr char kDefaultProfileId[] = "2k30";
 inline constexpr char kDefaultReceiverId[] = "obs-direct-webcam-source";
 inline constexpr char kDefaultReceiverDisplayName[] = "OBS receiver";
+inline constexpr char kDiscoveryServiceType[] = "_direct-webcam._tcp";
 inline constexpr char kDefaultDrmDevice[] = "/dev/dri/renderD128";
 inline constexpr char kDefaultDecoderMode[] = "auto";
 inline constexpr char kDefaultDiagnosticsPath[] = "direct-webcam-diagnostics.json";
