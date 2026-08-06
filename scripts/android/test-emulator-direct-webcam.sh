@@ -168,7 +168,7 @@ restart_obs() {
 start_obs
 
 "${emulator}" -avd "${avd_name}" -no-window -no-audio -gpu swiftshader_indirect \
-    -camera-back "videofile=${camera_video}" -port "${emulator_port}" >"${emulator_log}" 2>&1 &
+    -camera-back "videofile:${camera_video}" -port "${emulator_port}" >"${emulator_log}" 2>&1 &
 emulator_pid=$!
 for ((attempt = 0; attempt < adb_wait_seconds; attempt += poll_interval_seconds)); do
     "${adb}" -s "${emulator_serial}" get-state >/dev/null 2>&1 && break
