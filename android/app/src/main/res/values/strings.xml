@@ -29,6 +29,8 @@
     <string name="stream_status">Stream status</string>
     <string name="orientation">Orientation</string>
     <string name="video_quality">Video quality</string>
+    <string name="frame_rate">Frame rate</string>
+    <string name="frame_rate_option">%1$d fps</string>
     <string name="session_contract">Session contract</string>
     <string name="stream_plan_summary">%1$s · %2$s · %3$d fps</string>
     <string name="orientation_support">The selected axis is locked while streaming. The phone may flip 180°.</string>

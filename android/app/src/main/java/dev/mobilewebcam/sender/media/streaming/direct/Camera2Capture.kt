@@ -14,6 +14,7 @@ import android.hardware.camera2.CaptureResult
 import android.hardware.camera2.TotalCaptureResult
 import android.os.Handler
 import android.os.HandlerThread
+import android.util.Range
 import android.view.Surface
 import androidx.core.content.ContextCompat
 import dev.mobilewebcam.sender.logging.AndroidAppLogger
@@ -25,6 +26,7 @@ import dev.mobilewebcam.sender.media.camera.PhysicalLensOption
 import dev.mobilewebcam.sender.media.camera.CameraLensFacing
 import dev.mobilewebcam.sender.media.camera.DisplayOrientation
 import dev.mobilewebcam.sender.media.camera.SessionTransform
+import dev.mobilewebcam.sender.connection.control.direct.DirectStreamContract
 import dev.mobilewebcam.sender.model.StreamOrientation
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
@@ -41,6 +43,7 @@ internal class Camera2Capture(
     private var cameraDevice: CameraDevice? = null
     private var captureSession: CameraCaptureSession? = null
     private var encoderSurface: Surface? = null
+    private var requestedFps: Int? = null
     private var previewSurface: CameraPreviewSurface? = null
     private var selectedCameraId: String? = null
     private var cameraCharacteristics: CameraCharacteristics? = null
@@ -96,7 +99,11 @@ internal class Camera2Capture(
         )
     }
 
-    suspend fun start(surface: Surface) {
+    suspend fun start(surface: Surface, targetFps: Int) {
+        require(targetFps in DirectStreamContract.MINIMUM_FPS..DirectStreamContract.MAXIMUM_FPS) {
+            "Requested frame rate is outside the direct stream contract"
+        }
+        requestedFps = targetFps
         encoderSurface = surface
         val cameraId = selectedCameraId ?: selectDefaultCameraId().also { selectedCameraId = it }
         val device = openCamera(cameraId)
@@ -107,6 +114,7 @@ internal class Camera2Capture(
     suspend fun stop() {
         closeCamera()
         encoderSurface = null
+        requestedFps = null
         loggedFirstCapture = false
         captureResultCount = 0L
         captureSummaryStartNs = 0L
@@ -152,7 +160,11 @@ internal class Camera2Capture(
         updateCameraState()
         if (wasRunning) {
             val surface = encoderSurface ?: return
-            start(surface)
+            start(
+                surface,
+                targetFps = requestedFps
+                    ?: error("Requested frame rate is unavailable while switching lenses"),
+            )
         }
     }
 
@@ -259,6 +271,7 @@ internal class Camera2Capture(
             previewSurface?.surface?.takeIf(Surface::isValid)?.let(::addTarget)
             set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO)
             set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO)
+            targetFpsRange()?.let { range -> set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, range) }
             cropRegion()?.let { crop -> set(CaptureRequest.SCALER_CROP_REGION, crop) }
             if (isStabilizationSupported()) {
                 set(
@@ -334,6 +347,22 @@ internal class Camera2Capture(
             centerX + width / CROP_CENTER_DIVISOR,
             centerY + height / CROP_CENTER_DIVISOR,
         )
+    }
+
+    private fun targetFpsRange(): Range<Int>? {
+        val target = requestedFps ?: return null
+        val ranges = cameraCharacteristics
+            ?.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES)
+            ?.toList()
+            .orEmpty()
+        if (ranges.isEmpty()) return null
+        return ranges.firstOrNull { range -> range.lower == target && range.upper == target }
+            ?: ranges.filter { range -> target in range.lower..range.upper }
+                .minWithOrNull(
+                    compareBy<Range<Int>> { range -> range.upper - range.lower }
+                        .thenByDescending { range -> range.lower },
+                )
+            ?: error("Camera does not support the requested target frame rate: $target")
     }
 
     private fun isStabilizationSupported(): Boolean {

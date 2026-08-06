@@ -4,7 +4,7 @@
   "requestId": "probe-example-request",
   "receiverId": "workstation-obs",
   "displayName": "OBS computer",
-  "profiles": ["1080p30", "2k30"],
+  "profiles": ["1080p15", "1080p30", "2k15", "2k30"],
   "maxLongEdge": 3840,
   "maxShortEdge": 2160
 }

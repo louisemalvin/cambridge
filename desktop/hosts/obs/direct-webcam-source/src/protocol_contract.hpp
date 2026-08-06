@@ -77,10 +77,16 @@ struct ProfileContract {
     std::uint32_t bitrate_bps;
 };
 
-inline constexpr std::array<ProfileContract, 3> kProfiles = {{
-    {"720p30", 1280, 720, 30, 4'000'000},
-    {"1080p30", 1920, 1080, 30, 8'000'000},
-    {"2k30", 2560, 1440, 30, 18'000'000},
+inline constexpr std::uint32_t kAlternateFps = 15;
+inline constexpr std::uint32_t kDefaultFps = 30;
+inline constexpr std::size_t kProfileCount = 5;
+
+inline constexpr std::array<ProfileContract, kProfileCount> kProfiles = {{
+    {"720p30", 1280, 720, kDefaultFps, 4'000'000},
+    {"1080p30", 1920, 1080, kDefaultFps, 8'000'000},
+    {"1080p15", 1920, 1080, kAlternateFps, 4'000'000},
+    {"2k30", 2560, 1440, kDefaultFps, 18'000'000},
+    {"2k15", 2560, 1440, kAlternateFps, 9'000'000},
 }};
 
 inline constexpr const ProfileContract *find_profile(std::string_view id)

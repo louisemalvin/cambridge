@@ -102,6 +102,17 @@ fun StreamSetupScreen(
             }
             item {
                 SettingsChoiceRow(
+                    titleResourceId = R.string.frame_rate,
+                    options = state.frameRateOptions,
+                    onSelected = { fps ->
+                        fps.toIntOrNull()?.let { frameRate ->
+                            onAction(SenderScreenAction.FrameRateSelected(frameRate))
+                        }
+                    },
+                )
+            }
+            item {
+                SettingsChoiceRow(
                     titleResourceId = R.string.orientation,
                     options = state.orientationOptions,
                     onSelected = { orientationName ->

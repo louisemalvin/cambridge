@@ -42,6 +42,7 @@ fun SettingsChoiceRow(
                 FilterChip(
                     selected = option.isSelected,
                     onClick = { onSelected(option.key) },
+                    enabled = option.isEnabled,
                     label = { Text(option.label.value()) },
                 )
             }

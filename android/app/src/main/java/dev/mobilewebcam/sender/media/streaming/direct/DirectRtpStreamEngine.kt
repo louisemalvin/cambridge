@@ -196,7 +196,10 @@ class DirectRtpStreamEngine(
             udpSocket = socket
             streamEndpoint = endpoint.copy(mediaPort = mediaPort)
             codec?.start()
-            camera.start(encoderSurface ?: error("Encoder surface is unavailable"))
+            camera.start(
+                encoderSurface ?: error("Encoder surface is unavailable"),
+                targetFps = streamConfiguration.profile.fps,
+            )
             running = true
             startSenderLoop(socket)
             startControlReader(connection)

@@ -52,6 +52,7 @@ data class SelectOptionUi(
     val key: String,
     val label: UiText,
     val isSelected: Boolean,
+    val isEnabled: Boolean = true,
 )
 
 @Immutable
@@ -109,6 +110,7 @@ sealed interface SenderScreenAction {
     data class LensSelected(val key: String) : SenderScreenAction
     data class StabilizationChanged(val enabled: Boolean) : SenderScreenAction
     data class ProfileSelected(val profileId: String) : SenderScreenAction
+    data class FrameRateSelected(val fps: Int) : SenderScreenAction
     data class StreamOrientationSelected(val orientation: StreamOrientation) : SenderScreenAction
     data object OpenPermissionDialog : SenderScreenAction
     data object DismissPermissionDialog : SenderScreenAction

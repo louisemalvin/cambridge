@@ -12,8 +12,10 @@ import dev.mobilewebcam.sender.app.model.SenderScreenAction
 import dev.mobilewebcam.sender.connection.SenderConnectionCoordinator
 import dev.mobilewebcam.sender.model.StreamOrientation
 import dev.mobilewebcam.sender.model.StreamState
+import dev.mobilewebcam.sender.model.ReceiverCapabilities
 import dev.mobilewebcam.sender.model.SenderSettingsRepository
 import dev.mobilewebcam.sender.model.ReceiverProbeState
+import dev.mobilewebcam.sender.model.VideoProfile
 import dev.mobilewebcam.sender.session.VideoProfiles
 import dev.mobilewebcam.sender.media.camera.CameraInteractionState
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -43,6 +45,7 @@ class StreamSetupViewModel @Inject constructor(
         validationMessage,
         coordinator.receiverProbeState,
     ) { streamState, receiverName, configuredSettings, validation, receiverProbeState ->
+        val receiverCapabilities = (receiverProbeState as? ReceiverProbeState.Available)?.capabilities
         val selectedProfileSupported = (receiverProbeState as? ReceiverProbeState.Available)
             ?.capabilities
             ?.supports(configuredSettings.profile)
@@ -59,13 +62,8 @@ class StreamSetupViewModel @Inject constructor(
             ),
             receiverReadiness = receiverReadiness(receiverProbeState),
             receiverName = receiverName?.let(UiText::Plain),
-            profileOptions = VideoProfiles.normal.map { profile ->
-                SelectOptionUi(
-                    key = profile.id,
-                    label = StreamPresentationMapper.videoProfileLabel(profile),
-                    isSelected = profile.id == configuredSettings.profile.id,
-                )
-            },
+            profileOptions = qualityOptions(configuredSettings.profile, receiverCapabilities),
+            frameRateOptions = frameRateOptions(configuredSettings.profile, receiverCapabilities),
             orientationOptions = StreamOrientation.entries.map { orientation ->
                 SelectOptionUi(
                     key = orientation.name,
@@ -113,6 +111,7 @@ class StreamSetupViewModel @Inject constructor(
     fun onAction(action: SenderScreenAction) {
         when (action) {
             is SenderScreenAction.ProfileSelected -> selectProfile(action.profileId)
+            is SenderScreenAction.FrameRateSelected -> selectFrameRate(action.fps)
             is SenderScreenAction.StreamOrientationSelected -> settings.updateStreamOrientation(action.orientation)
             SenderScreenAction.CheckReceiver -> checkReceiver()
             SenderScreenAction.StartStream -> startStream()
@@ -121,8 +120,24 @@ class StreamSetupViewModel @Inject constructor(
     }
 
     private fun selectProfile(profileId: String) {
-        VideoProfiles.normal.firstOrNull { profile -> profile.id == profileId }
-            ?.let(settings::updateProfile)
+        val currentProfile = settings.state.value.profile
+        val selectedQuality = VideoProfiles.all.firstOrNull { profile -> profile.id == profileId }
+            ?: return
+        val selectedProfile = VideoProfiles.profileForResolution(
+            width = selectedQuality.width,
+            height = selectedQuality.height,
+            fps = currentProfile.fps,
+        ) ?: selectedQuality
+        settings.updateProfile(selectedProfile)
+    }
+
+    private fun selectFrameRate(fps: Int) {
+        val currentProfile = settings.state.value.profile
+        VideoProfiles.profileForResolution(
+            width = currentProfile.width,
+            height = currentProfile.height,
+            fps = fps,
+        )?.let(settings::updateProfile)
     }
 
     private fun startStream() {
@@ -153,6 +168,51 @@ class StreamSetupViewModel @Inject constructor(
             message = UiText.Resource(R.string.receiver_not_found_support),
         )
     }
+
+    private fun qualityOptions(
+        selectedProfile: VideoProfile,
+        receiverCapabilities: ReceiverCapabilities?,
+    ): List<SelectOptionUi> {
+        val profiles = if (VideoProfiles.qualityProfiles.any { profile ->
+                sameResolution(profile, selectedProfile)
+            }) {
+            VideoProfiles.qualityProfiles
+        } else {
+            listOf(selectedProfile) + VideoProfiles.qualityProfiles
+        }
+        return profiles.map { profile ->
+            SelectOptionUi(
+                key = profile.id,
+                label = StreamPresentationMapper.videoProfileLabel(profile),
+                isSelected = sameResolution(profile, selectedProfile),
+                isEnabled = receiverCapabilities?.let {
+                    VideoProfiles.profilesForResolution(profile).any { candidate ->
+                        it.supports(candidate)
+                    }
+                } ?: true,
+            )
+        }
+    }
+
+    private fun frameRateOptions(
+        selectedProfile: VideoProfile,
+        receiverCapabilities: ReceiverCapabilities?,
+    ): List<SelectOptionUi> = VideoProfiles.profilesForResolution(selectedProfile)
+        .distinctBy { profile -> profile.fps }
+        .sortedBy { profile -> profile.fps }
+        .map { profile ->
+            SelectOptionUi(
+                key = profile.fps.toString(),
+                label = UiText.Resource(R.string.frame_rate_option, listOf(profile.fps)),
+                isSelected = profile.fps == selectedProfile.fps,
+                isEnabled = receiverCapabilities?.supports(profile) ?: true,
+            )
+        }
+
+    private fun sameResolution(
+        left: VideoProfile,
+        right: VideoProfile,
+    ): Boolean = left.width == right.width && left.height == right.height
 
     private companion object {
         const val EFFECT_BUFFER_CAPACITY = 1

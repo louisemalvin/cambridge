@@ -64,4 +64,27 @@ class DirectStreamContractTest {
         assertTrue(capabilities.supports(VideoProfiles.PROFILE_1080P30))
         assertEquals(listOf("1080p30", "2k30"), response.stringListField("profiles"))
     }
+
+    @Test
+    fun qualityAndFrameRateChoicesResolveToExactProfiles() {
+        assertEquals(
+            listOf("1080p30", "2k30"),
+            VideoProfiles.qualityProfiles.map { profile -> profile.id },
+        )
+        assertEquals(
+            listOf(15, 30),
+            VideoProfiles.profilesForResolution(VideoProfiles.PROFILE_1080P30)
+                .map { profile -> profile.fps }
+                .distinct()
+                .sorted(),
+        )
+        assertEquals(
+            VideoProfiles.PROFILE_1080P15,
+            VideoProfiles.profileForResolution(width = 1_920, height = 1_080, fps = 15),
+        )
+        assertEquals(
+            VideoProfiles.PROFILE_2K15,
+            VideoProfiles.profileForResolution(width = 2_560, height = 1_440, fps = 15),
+        )
+    }
 }

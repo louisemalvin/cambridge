@@ -12,7 +12,7 @@ UTF-8 JSON. Media is H.264 RTP over UDP unicast using the RFC 6184 payload
 format. Control and media share one session ID and generation; stale sessions
 are rejected.
 
-The normal profiles include 1080p30 and 2K30. The hello carries
+The normal profiles include 1080p and 2K at 15 or 30 fps. The hello carries
 the resolved clockwise rotation. Rotations `0` and `180` present landscape;
 rotations `90` and `270` present portrait. The native source rotates both NV12
 planes during presentation.

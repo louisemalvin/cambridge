@@ -12,8 +12,9 @@ Camera2 -> MediaCodec H.264 -> RTP/H.264 over UDP -> FFmpeg H.264 decoder
 If VAAPI or DMA-BUF import is unavailable, the source falls back to software
 decode and one bounded NV12 texture upload. The receiver keeps one active
 session and drops stale work instead of building an unbounded queue.
-The normal quality is 2K30; 720p30 is retained only for the named AVD smoke
-test.
+The normal quality choices are 1080p and 2K, each with 15 or 30 fps where the
+catalog provides that combination. 720p30 is retained only for the named AVD
+smoke test.
 
 ## Repository
 

@@ -56,15 +56,19 @@ The current contract supports these catalog entries:
 | Profile | Dimensions | Frame rate | Bitrate | Availability |
 | --- | ---: | ---: | ---: | --- |
 | `2k30` | 2560x1440 | 30 fps | 18 Mbps | normal product profile |
+| `2k15` | 2560x1440 | 15 fps | 9 Mbps | normal product profile |
 | `1080p30` | 1920x1080 | 30 fps | 8 Mbps | normal product profile |
+| `1080p15` | 1920x1080 | 15 fps | 4 Mbps | normal product profile |
 | `720p30` | 1280x720 | 30 fps | 4 Mbps | named AVD smoke profile |
 
-The profile catalog is the extension point for future quality and frame-rate
-choices. New profiles must be represented as data, validated against sender
-and receiver capabilities, and selected before the session starts. Existing
-profile IDs and semantics remain stable. Camera anti-banding and stabilization
-are sender-local capture settings and are intentionally not part of the wire
-session contract.
+Resolution and frame rate are separate user choices, but the wire contract
+negotiates an exact supported profile combination. The Android setup screen
+derives its resolution choices from this catalog and keeps only the frame rates
+available for the selected resolution. New combinations must be represented as
+data, validated against sender and receiver capabilities, and selected before
+the session starts. Existing profile IDs and semantics remain stable. Camera
+anti-banding and stabilization are sender-local capture settings and are
+intentionally not part of the wire session contract.
 
 ## Media behavior
 

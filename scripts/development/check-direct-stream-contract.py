@@ -49,6 +49,13 @@ def check_scalar(text: str, pattern: str, expected: Any, description: str, parse
 
 def check_profiles(kotlin_text: str, profiles: list[dict[str, Any]]) -> None:
     default_fps = integer_literal(required_match(kotlin_text, r"DEFAULT_FPS = ([0-9_]+)", "Kotlin default FPS"))
+    fps_constants = {"DEFAULT_FPS": default_fps}
+    fps_constants.update(
+        {
+            name: integer_literal(value)
+            for name, value in re.findall(r"const val ([A-Z][A-Z0-9_]*) = ([0-9_]+)", kotlin_text)
+        }
+    )
     for profile in profiles:
         profile_id = re.escape(profile["id"])
         pattern = (
@@ -63,7 +70,8 @@ def check_profiles(kotlin_text: str, profiles: list[dict[str, Any]]) -> None:
             raise AssertionError(f"Kotlin profile {profile['id']} is missing")
         actual_width = integer_literal(match.group(1))
         actual_height = integer_literal(match.group(2))
-        actual_fps = default_fps if match.group(3) == "DEFAULT_FPS" else integer_literal(match.group(3))
+        fps_token = match.group(3)
+        actual_fps = fps_constants[fps_token] if fps_token in fps_constants else integer_literal(fps_token)
         actual_bitrate = integer_literal(match.group(4))
         actual = (actual_width, actual_height, actual_fps, actual_bitrate)
         expected = (
@@ -77,15 +85,22 @@ def check_profiles(kotlin_text: str, profiles: list[dict[str, Any]]) -> None:
 
 
 def check_cpp_profiles(cpp_text: str, profiles: list[dict[str, Any]]) -> None:
+    numeric_constants = {
+        name: integer_literal(value)
+        for name, value in re.findall(r"(k[A-Za-z0-9_]+) = ([0-9']+)", cpp_text)
+    }
     for profile in profiles:
         profile_id = re.escape(profile["id"])
         pattern = (
-            rf'\{{"{profile_id}",\s*([0-9\']+),\s*([0-9\']+),\s*([0-9\']+),\s*([0-9\']+)\}}'
+            rf'\{{"{profile_id}",\s*([A-Za-z0-9_\']+),\s*([A-Za-z0-9_\']+),\s*([A-Za-z0-9_\']+),\s*([A-Za-z0-9_\']+)\}}'
         )
         match = re.search(pattern, cpp_text, re.MULTILINE)
         if match is None:
             raise AssertionError(f"C++ profile {profile['id']} is missing")
-        actual = tuple(integer_literal(value) for value in match.groups())
+        actual = tuple(
+            numeric_constants[value] if value in numeric_constants else integer_literal(value)
+            for value in match.groups()
+        )
         expected = (
             profile["width"],
             profile["height"],
@@ -116,8 +131,10 @@ def main() -> int:
     if set(computer) != expected_computer_keys or not all(computer.values()):
         raise AssertionError("deployment must define exactly one complete computer endpoint")
     profile_ids = {profile["id"] for profile in profiles}
-    if profile_ids != {"720p30", "1080p30", "2k30"}:
-        raise AssertionError("the direct product profiles must include 1080p30, 2k30, and the AVD-only 720p30 profile")
+    if profile_ids != {"720p30", "1080p30", "1080p15", "2k30", "2k15"}:
+        raise AssertionError(
+            "the direct product profiles must include 1080p15, 1080p30, 2k15, 2k30, and the AVD-only 720p30 profile"
+        )
     if next(profile["availability"] for profile in profiles if profile["id"] == defaults["profileId"]) != "normal":
         raise AssertionError("the default profile must be the normal product profile")
     if protocol_version != 4:
@@ -202,6 +219,7 @@ def main() -> int:
     check_profiles(kotlin_profiles, profiles)
 
     check_scalar(cpp_contract, r"kProtocolVersion = (\d+)", protocol_version, "C++ protocol version")
+    check_scalar(cpp_contract, r"kProfileCount = ([0-9']+)", len(profiles), "C++ profile count", integer_literal)
     check_scalar(
         cpp_contract,
         r"kDefaultControlPort = ([0-9']+)",

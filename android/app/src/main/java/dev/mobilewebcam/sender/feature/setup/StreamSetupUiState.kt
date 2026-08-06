@@ -27,6 +27,7 @@ data class StreamSetupUiState(
     val receiverReadiness: ReceiverReadinessUiState = ReceiverReadinessUiState.Checking,
     val receiverName: UiText? = null,
     val profileOptions: List<SelectOptionUi> = emptyList(),
+    val frameRateOptions: List<SelectOptionUi> = emptyList(),
     val orientationOptions: List<SelectOptionUi> = emptyList(),
     val selectedProfile: VideoProfile,
     val selectedOrientation: StreamOrientation,
