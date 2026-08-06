@@ -1,9 +1,13 @@
 package dev.mobilewebcam.sender.connection
 
 import dev.mobilewebcam.sender.deployment.DirectDeployment
+import dev.mobilewebcam.sender.connection.control.ReceiverProbe
+import dev.mobilewebcam.sender.connection.control.direct.DirectReceiverProbe
 import dev.mobilewebcam.sender.logging.AndroidAppLogger
 import dev.mobilewebcam.sender.logging.AppLogger
 import dev.mobilewebcam.sender.model.ReceiverEndpoint
+import dev.mobilewebcam.sender.model.ReceiverCapabilities
+import dev.mobilewebcam.sender.model.ReceiverProbeState
 import dev.mobilewebcam.sender.model.SenderSettingsRepository
 import dev.mobilewebcam.sender.model.StreamState
 import dev.mobilewebcam.sender.session.StreamSessionController
@@ -24,17 +28,21 @@ class SenderConnectionCoordinator(
     private val logger: AppLogger = AndroidAppLogger,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
     private val defaultEndpoint: ReceiverEndpoint = DirectDeployment.endpoint,
+    private val receiverProbe: ReceiverProbe = DirectReceiverProbe(),
 ) {
     private val mutex = Mutex()
     private val controllerOperationMutex = Mutex()
+    private val receiverProbeMutex = Mutex()
     private val stateFlow = MutableStateFlow<StreamState>(StreamState.Idle)
     private val activeReceiverNameFlow = MutableStateFlow(settings.state.value.receiverEndpoint?.displayName)
     private val configuredReceiverFlow = MutableStateFlow(settings.state.value.receiverEndpoint != null)
+    private val receiverProbeStateFlow = MutableStateFlow<ReceiverProbeState>(ReceiverProbeState.Idle)
     private var endpoint: ReceiverEndpoint? = settings.state.value.receiverEndpoint
 
     val streamState: StateFlow<StreamState> = stateFlow.asStateFlow()
     val activeReceiverName: StateFlow<String?> = activeReceiverNameFlow.asStateFlow()
     val hasConfiguredReceiver: StateFlow<Boolean> = configuredReceiverFlow.asStateFlow()
+    val receiverProbeState: StateFlow<ReceiverProbeState> = receiverProbeStateFlow.asStateFlow()
 
     init {
         scope.launch {
@@ -74,6 +82,29 @@ class SenderConnectionCoordinator(
 
     suspend fun startStream(): Result<Unit> = connect()
 
+    suspend fun probeReceiver(): Result<ReceiverCapabilities> = receiverProbeMutex.withLock {
+        val target = endpoint ?: defaultEndpoint
+        if (!target.isValid()) {
+            val failure = IllegalArgumentException("The configured receiver endpoint is invalid")
+            receiverProbeStateFlow.value = ReceiverProbeState.Unavailable(target, failure.message.orEmpty())
+            return@withLock Result.failure(failure)
+        }
+        receiverProbeStateFlow.value = ReceiverProbeState.Checking
+        receiverProbe.probe(target).onSuccess { capabilities ->
+            val resolvedEndpoint = target.copy(displayName = capabilities.displayName)
+            mutex.withLock {
+                endpoint = resolvedEndpoint
+                activeReceiverNameFlow.value = capabilities.displayName
+            }
+            receiverProbeStateFlow.value = ReceiverProbeState.Available(resolvedEndpoint, capabilities)
+        }.onFailure { failure ->
+            receiverProbeStateFlow.value = ReceiverProbeState.Unavailable(
+                endpoint = target,
+                reason = failure.message ?: "The receiver did not respond",
+            )
+        }
+    }
+
     suspend fun stop(): Result<Unit> {
         mutex.withLock {
             stateFlow.value = if (controller.state.value == StreamState.Idle) {
@@ -95,6 +126,7 @@ class SenderConnectionCoordinator(
             endpoint = null
             activeReceiverNameFlow.value = null
             configuredReceiverFlow.value = false
+            receiverProbeStateFlow.value = ReceiverProbeState.Idle
             settings.updateReceiverEndpoint(null)
             stateFlow.value = StreamState.Idle
         }

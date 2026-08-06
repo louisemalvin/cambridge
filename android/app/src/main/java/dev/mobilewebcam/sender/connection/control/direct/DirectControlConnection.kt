@@ -52,10 +52,16 @@ internal class DirectControlConnection private constructor(
 
     companion object {
         private const val EMPTY_MESSAGE_BYTES = 0
+        private const val NO_READ_TIMEOUT_MILLIS = 0
 
-        suspend fun connect(host: String, port: Int): DirectControlConnection = withContext(Dispatchers.IO) {
+        suspend fun connect(
+            host: String,
+            port: Int,
+            readTimeoutMillis: Int = NO_READ_TIMEOUT_MILLIS,
+        ): DirectControlConnection = withContext(Dispatchers.IO) {
             Socket().apply {
                 tcpNoDelay = true
+                soTimeout = readTimeoutMillis
                 connect(
                     InetSocketAddress(host, port),
                     DirectStreamContract.CONNECT_TIMEOUT_MILLIS,

@@ -1,5 +1,7 @@
 package dev.mobilewebcam.sender.connection.control.direct
 
+import dev.mobilewebcam.sender.model.ReceiverCapabilities
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.JsonPrimitive
@@ -35,8 +37,14 @@ internal object DirectStreamContract {
     const val MAXIMUM_BITRATE_BPS = 100_000_000
     const val MINIMUM_PORT = 1
     const val MAXIMUM_PORT = 65_535
-    const val SUPPORTED_FPS = 30
     const val KEYFRAME_INTERVAL_SECONDS = 1
+    const val CODEC_H264 = "h264"
+    const val MESSAGE_PROBE = "probe"
+    const val MESSAGE_CAPABILITIES = "capabilities"
+    const val MESSAGE_HELLO = "hello"
+    const val MESSAGE_ACCEPTED = "accepted"
+    const val MESSAGE_STOP = "stop"
+    const val MESSAGE_ERROR = "error"
 
     fun hello(
         sessionId: String,
@@ -49,11 +57,11 @@ internal object DirectStreamContract {
         bitrateBps: Int,
     ): JsonObject = buildJsonObject {
         put("protocolVersion", PROTOCOL_VERSION)
-        put("type", "hello")
+        put("type", MESSAGE_HELLO)
         put("sessionId", sessionId)
         put("generation", generation)
         put("profileId", profileId)
-        put("codec", "h264")
+        put("codec", CODEC_H264)
         put("codedWidth", codedWidth)
         put("codedHeight", codedHeight)
         put("rotationDegrees", rotationDegrees)
@@ -63,12 +71,20 @@ internal object DirectStreamContract {
 
     fun stop(sessionId: String, generation: Long): JsonObject = buildJsonObject {
         put("protocolVersion", PROTOCOL_VERSION)
-        put("type", "stop")
+        put("type", MESSAGE_STOP)
         put("sessionId", sessionId)
         put("generation", generation)
     }
 
-    fun JsonObject.requireProtocolVersion(): Int = intField("protocolVersion")
+    fun probe(requestId: String): JsonObject = buildJsonObject {
+        put("protocolVersion", PROTOCOL_VERSION)
+        put("type", MESSAGE_PROBE)
+        put("requestId", requestId)
+    }
+
+    fun JsonObject.requireProtocolVersion(): Int = intField("protocolVersion").also { version ->
+        check(version == PROTOCOL_VERSION) { "Unsupported direct protocol version: $version" }
+    }
 
     fun JsonObject.stringField(name: String): String = stringFieldOrNull(name)
         ?: error("Control field is missing or not a string: $name")
@@ -82,6 +98,34 @@ internal object DirectStreamContract {
 
     fun JsonObject.intField(name: String): Int = (this[name] as? JsonPrimitive)?.content?.toIntOrNull()
         ?: error("Control field is missing or not an integer: $name")
+
+    fun JsonObject.stringListField(name: String): List<String> {
+        val values = this[name] as? JsonArray
+            ?: error("Control field is missing or not an array: $name")
+        return values.map { value ->
+            (value as? JsonPrimitive)
+                ?.takeIf(JsonPrimitive::isString)
+                ?.content
+                ?: error("Control array field contains a non-string value: $name")
+        }
+    }
+
+    fun JsonObject.requireCapabilities(requestId: String): ReceiverCapabilities {
+        requireProtocolVersion()
+        check(stringField("type") == MESSAGE_CAPABILITIES) {
+            "Control response is not a capabilities message"
+        }
+        check(stringField("requestId") == requestId) {
+            "Control response request ID does not match the probe"
+        }
+        return ReceiverCapabilities(
+            receiverId = stringField("receiverId"),
+            displayName = stringField("displayName"),
+            profileIds = stringListField("profiles"),
+            maxLongEdge = intField("maxLongEdge"),
+            maxShortEdge = intField("maxShortEdge"),
+        )
+    }
 
     fun JsonObjectBuilder.putIdentity(sessionId: String, generation: Long) {
         put("sessionId", sessionId)

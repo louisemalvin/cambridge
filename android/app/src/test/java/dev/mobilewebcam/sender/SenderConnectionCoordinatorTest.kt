@@ -1,10 +1,13 @@
 package dev.mobilewebcam.sender
 
 import dev.mobilewebcam.sender.connection.SenderConnectionCoordinator
+import dev.mobilewebcam.sender.connection.control.ReceiverProbe
 import dev.mobilewebcam.sender.connection.control.direct.DirectStreamContract
 import dev.mobilewebcam.sender.logging.AppLogger
 import dev.mobilewebcam.sender.model.OutputPixelFormat
 import dev.mobilewebcam.sender.model.ReceiverEndpoint
+import dev.mobilewebcam.sender.model.ReceiverCapabilities
+import dev.mobilewebcam.sender.model.ReceiverProbeState
 import dev.mobilewebcam.sender.model.SenderSettings
 import dev.mobilewebcam.sender.model.SenderSettingsRepository
 import dev.mobilewebcam.sender.model.StreamFailure
@@ -81,17 +84,48 @@ class SenderConnectionCoordinatorTest {
         assertEquals(1, controller.stopCount)
     }
 
+    @Test
+    fun probingReportsReceiverCapabilities() = runTest {
+        val receiverProbe = FakeReceiverProbe()
+        val coordinator = coordinator(controller = FakeController(), scope = backgroundScope, receiverProbe = receiverProbe)
+
+        assertTrue(coordinator.probeReceiver().isSuccess)
+        assertEquals("OBS receiver", coordinator.activeReceiverName.value)
+        val state = coordinator.receiverProbeState.value as ReceiverProbeState.Available
+        assertEquals("obs-direct-webcam-source", state.capabilities.receiverId)
+        assertEquals(endpoint.host, receiverProbe.probedEndpoint?.host)
+    }
+
     private fun coordinator(
         controller: FakeController,
         scope: kotlinx.coroutines.CoroutineScope,
         settings: FakeSettings = FakeSettings(),
+        receiverProbe: ReceiverProbe = FakeReceiverProbe(),
     ) = SenderConnectionCoordinator(
         controller = controller,
         settings = settings,
         logger = TestLogger,
         scope = scope,
         defaultEndpoint = endpoint,
+        receiverProbe = receiverProbe,
     )
+
+    private class FakeReceiverProbe : ReceiverProbe {
+        var probedEndpoint: ReceiverEndpoint? = null
+
+        override suspend fun probe(endpoint: ReceiverEndpoint): Result<ReceiverCapabilities> {
+            probedEndpoint = endpoint
+            return Result.success(
+                ReceiverCapabilities(
+                    receiverId = "obs-direct-webcam-source",
+                    displayName = "OBS receiver",
+                    profileIds = listOf("1080p30", "2k30"),
+                    maxLongEdge = 3_840,
+                    maxShortEdge = 2_160,
+                ),
+            )
+        }
+    }
 
     private class FakeController(
         private val alwaysUnavailable: Boolean = false,

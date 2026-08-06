@@ -113,9 +113,6 @@ class DirectRtpStreamEngine(
         try {
             check(!prepared) { "The direct sender is already prepared" }
             require(configuration.codec.protocolId == H264_CODEC) { "The direct sender supports H.264 only" }
-            require(configuration.profile.fps == DirectStreamContract.SUPPORTED_FPS) {
-                "The direct path supports the contract frame rate only"
-            }
             resetTelemetry()
             this.configuration = configuration
             prepareCodec(configuration)
@@ -181,7 +178,9 @@ class DirectRtpStreamEngine(
             check(accepted.requireProtocolVersion() == DirectStreamContract.PROTOCOL_VERSION) {
                 "Receiver returned an unsupported direct protocol version"
             }
-            check(accepted.stringField("type") == "accepted") { accepted.stringFieldOrNull("error") ?: "Receiver rejected stream" }
+            check(accepted.stringField("type") == DirectStreamContract.MESSAGE_ACCEPTED) {
+                accepted.stringFieldOrNull("error") ?: "Receiver rejected stream"
+            }
             check(accepted.stringField("sessionId") == endpoint.sessionId) { "Receiver returned a different session" }
             check(accepted.longField("generation") == endpoint.generation) { "Receiver returned a different generation" }
             val mediaPort = accepted.intField("mediaPort")
