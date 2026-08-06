@@ -1,96 +1,77 @@
 # Mobile Webcam
 
-Mobile Webcam streams video from a mobile sender to a Linux desktop with a
-low-latency, bounded-buffer path. Android is the active sender implementation;
-iOS currently provides a native development skeleton:
+Mobile Webcam sends Android camera video to a native Linux OBS source through
+one bounded, low-latency path. The phone connects to one configured OBS
+computer and lets the operating system route the connection:
 
 ```text
-Android or iOS video source -> native H.264 encoder -> MPEG-TS over encrypted SRT
-    -> Rust/GStreamer receiver -> persistent v4l2loopback -> OBS or browser
+Camera2 -> MediaCodec H.264 -> RTP/H.264 over UDP -> FFmpeg H.264 decoder
+        -> VAAPI DRM PRIME -> DMA-BUF -> OBS texture
 ```
 
-The local-network flow has three explicit boundaries:
-
-- Receiver discovery with sender-side manual-origin fallback.
-- HTTP/JSON receiver control on TCP port `5001`.
-- One receiver-owned SRT listener on port `5000` (SRT uses UDP transport), with
-  per-session stream IDs and AES-256 passphrases.
-
-H.264 is the compatibility codec. H.265 remains available only where the
-receiver and sender explicitly support it. The project is video-only and
-designed for a trusted local network. v2 control can require a bearer token;
-SRT media is encrypted per session.
+If VAAPI or DMA-BUF import is unavailable, the source falls back to software
+decode and one bounded NV12 texture upload. The receiver keeps one active
+session and drops stale work instead of building an unbounded queue.
+The normal quality is 2K30; 720p30 is retained only for the named AVD smoke
+test.
 
 ## Repository
 
-- `android/`: one Kotlin/Compose sender application.
-- `ios/`: native SwiftUI/Xcode development skeleton and future media boundary.
-- `desktop/`: reusable Rust receiver crates and thin CLI.
-- `protocol/`: versioned control contract and JSON fixtures.
-- `docs/`: architecture, media transport, setup, testing, troubleshooting, and decisions.
-- `scripts/`: Linux setup and synthetic stream helpers.
+- `android/`: Kotlin/Compose phone app with a simple computer connection flow
+- `desktop/plugins/direct-webcam-source/`: native C++ OBS source
+- `protocol/`: versioned TCP control and RTP contract
+- `docs/`: setup, architecture, verification, diagnostics, and limitations
+- `scripts/`: native build, emulator smoke, and repository checks
 
-## Quick start
+## Build
 
-From a supported Linux desktop, run the one-time installer from the repository
-root:
-
-```bash
-./scripts/linux/install-receiver.sh
-```
-
-The installer handles the GStreamer packages, v4l2loopback module setup, and
-release build. It may ask for `sudo` for those operating-system changes. Start
-the desktop receiver each day with:
+Install Android Studio or a JDK 17 Android toolchain, OBS development headers,
+FFmpeg development libraries, libva/libdrm, and jansson. Then run:
 
 ```bash
-mobile-webcam-desktop
+./scripts/development/check-all.sh
 ```
 
-It opens the receiver window, shows a live preview, advertises itself on the
-local network, and writes the same decoded frames to the virtual camera. No
-device path is required. The receiver selects the first v4l2loopback device and
-waits for the phone to select it and create a v2 session. The Android app keeps
-manual receiver-origin entry as a fallback when local discovery is unavailable.
+The native module is installed into a staging directory under `build/` and the
+debug APK is written to `android/app/build/outputs/apk/debug/app-debug.apk`.
 
-The headless receiver is also available for servers or terminal-only sessions:
+## Emulator smoke
+
+The only supported automated Android runtime target is the AVD
+`codex-phone-webcam-api35`. The harness creates a deterministic camera video,
+starts an isolated OBS instance, installs the debug APK, supplies the AVD host
+endpoint `10.0.2.2`, presses the semantic Start camera action, restarts
+isolated OBS while streaming, and verifies fresh-session recovery, native
+decode, first-frame publication, and either direct DMA-BUF or CPU NV12
+presentation:
 
 ```bash
-mobile-webcam-receiver
+./scripts/android/test-emulator-direct-webcam.sh
 ```
 
-Advanced users can pass `--device`, `--control-port`, `--srt-port`, or
-`--receiver-name` to the receiver. The SRT host is derived from the control
-origin automatically. `--advertise-host` remains an explicit override for
-emulators, NAT, and multi-homed hosts. The repository wrappers
-`./scripts/linux/start-desktop.sh` and `./scripts/linux/start-receiver.sh` are
-available before installation.
+Every ADB command in that harness targets the explicit emulator serial
+`emulator-5556`. It must not be pointed at a physical phone.
 
-The installer supports CachyOS/Arch and Ubuntu/Debian. See the matching
-[Arch Linux guide](docs/linux-arch-setup.md) or
-[Ubuntu guide](docs/linux-ubuntu-setup.md) for platform-specific notes.
+## Manual OBS setup
 
-The Android application requires Android Studio or a JDK 17 Android build
-environment. See [Android setup](docs/android-setup.md).
+Build and stage the plugin with:
 
-## Status
+```bash
+./scripts/linux/build-direct-webcam-plugin.sh
+```
 
-The Phase 1 implementation is intentionally hardware-dependent at its final
-edges. Synthetic GStreamer tests and Rust/Kotlin unit tests cover the control,
-negotiation, and media architecture. Physical Android, v4l2loopback, OBS,
-browser, Wi-Fi, and USB-tethering validation must be run on a configured host.
-The iOS target is a non-functional skeleton until its native media spike is
-complete.
+Install the staged plugin using the OBS plugin directory layout documented in
+[Linux setup](docs/linux-setup.md), then add the `Phone Webcam` source in OBS.
+Its normal settings are already configured. Open the Phone Webcam app on the
+phone, follow its computer connection screen, and press Connect. No OBS
+transport or decoder settings need to be changed.
 
-See [known limitations](docs/known-limitations.md) and [testing](docs/testing.md).
-
-Key references:
+## Documentation
 
 - [Architecture](docs/architecture.md)
-- [Reliable SRT streaming plan](docs/reliable-streaming-v2-plan.md)
-- [Control and media protocol](docs/protocol.md)
-- [Control protocol](docs/protocol.md)
-- [Codec behavior](docs/codecs.md)
-- [Latency testing](docs/latency-testing.md)
-- [Troubleshooting](docs/troubleshooting.md)
-- [USB tethering](docs/usb-tethering.md)
+- [Protocol](docs/protocol.md)
+- [Android setup](docs/android-setup.md)
+- [Linux setup](docs/linux-setup.md)
+- [Testing](docs/testing.md)
+- [Diagnostics](docs/diagnostics.md)
+- [Known limitations](docs/known-limitations.md)

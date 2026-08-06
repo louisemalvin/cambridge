@@ -1,35 +1,20 @@
 # Known limitations
 
-- Physical Android hardware validation is required for camera permission,
-  MediaCodec support, RootEncoder preparation, background streaming, thermal
-  behavior, and actual H.264/H.265 output.
-- The API 35 emulator gate covers installation, launch with the manual receiver
-  origin fallback, connected standby, generation-driven encrypted SRT H.264
-  receiver decoding, black standby, clean release, reopen, and changing generic
-  V4L2 frame hashes. OBS-specific behavior remains a separate application gate.
-- H.265 support depends on the phone encoder, requested profile, installed
-  receiver parser, decoder, and output consumer.
-- 1440p30 is optional. 4K30 is experimental and may be rejected by the phone,
-  decoder, virtual camera, browser, or call application.
-- Android Gradle tests, lint, and debug APK assembly are build-verified in the
-  current environment, but a physical phone is still required for camera and
-  hardware-encoder validation.
-- RootEncoder 2.8.0 physical lens selection depends on Android 9+ and the
-  vendor's logical multi-camera metadata. The sender exposes the physical IDs
-  reported by the device, but those IDs are vendor-specific and are not stable
-  lens names across phones. Video stabilization remains unsupported by the
-  current RootEncoder `Camera2Source` adapter.
-- A desktop preview requires GTK 4 development/runtime libraries and the
-  GStreamer App plugin. Hosts without those packages can still use the CLI
-  receiver, but cannot build or launch the preview application.
-- Physical Android hardware, USB tethering, and long-duration thermal tests
-  remain unverified in the current environment.
-- SRT recovery and authentication are host-tested, but physical Wi-Fi, USB
-  tethering, and long-duration thermal behavior remain unverified.
-- Decoder hardware/software classification is best effort. `decodebin` is
-  used instead of a vendor-specific decoder.
-- Activity recreation keeps the application session owner but cannot restore
-  a session after process death. A new stream must be started.
-- Audio, microphone input, recording, filters, accounts, cloud
-  relays, WebRTC, AV1, 60 FPS,
-  Windows, macOS, and Tauri are deferred.
+- The canonical Android runtime gate uses the named Android API 35 AVD with an
+  explicit test-only 720p30 profile. The normal product profile is 2K30, but
+  the AVD does not advertise the required 2560x1440 encoder size.
+- Physical 2K landscape and portrait capture still require a separately
+  authorized hardware run.
+- A one-hour stability and bounded-RSS run has not been claimed by the short
+  smoke script. It must be executed with retained logs before release.
+- Physical Android camera, Wi-Fi, and glass-to-glass latency validation is
+  intentionally deferred. The required development check must not contact the
+  available physical device.
+- VAAPI and direct DMA-BUF import depend on the host GPU, Mesa/libva driver,
+  DRM render-node permissions, and OBS graphics support. Software decode with
+  NV12 upload is the bounded fallback.
+- OBS shutdown behavior can be host-session dependent under isolated Wayland
+  smoke runs. The source logs its own resource cleanup and module unload, but a
+  clean GUI shutdown is not used as a pass criterion.
+- The transport is intended for a trusted local network. Authentication and
+  encryption are outside this direct Phase 1 contract.

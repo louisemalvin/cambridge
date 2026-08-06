@@ -1,0 +1,14 @@
+{
+  "protocolVersion": 2,
+  "type": "hello",
+  "sessionId": "run-example-session",
+  "generation": 1,
+  "codec": "h264",
+  "codedWidth": 2560,
+  "codedHeight": 1440,
+  "displayWidth": 2560,
+  "displayHeight": 1440,
+  "rotationDegrees": 0,
+  "fps": 30,
+  "bitrateBps": 18000000
+}

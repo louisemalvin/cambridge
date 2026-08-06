@@ -1,0 +1,66 @@
+{
+  "name": "android-rtp-obs",
+  "protocolVersion": 2,
+  "control": {
+    "framing": "uint32-be-length-prefixed-json",
+    "maxMessageBytes": 8192,
+    "connectTimeoutMs": 2000,
+    "requestTimeoutMs": 2000
+  },
+  "defaults": {
+    "controlPort": 55031,
+    "mediaPortOffset": 1,
+    "profileId": "2k30"
+  },
+  "geometry": {
+    "minimumDimension": 16,
+    "dimensionAlignment": 2,
+    "maximumLongEdge": 3840,
+    "maximumShortEdge": 2160,
+    "rotationDegrees": [0, 90, 180, 270]
+  },
+  "media": {
+    "transport": "rtp-h264-udp-unicast",
+    "payloadType": 96,
+    "clockRateHz": 90000,
+    "rtpHeaderBytes": 12,
+    "mtuBytes": 1200,
+    "maxDatagramBytes": 1500,
+    "maxAccessUnitBytes": 8388608,
+    "maxInFlightAccessUnits": 2,
+    "maxReorderPackets": 64,
+    "mailboxCapacity": 1,
+    "texturePoolSlots": 3,
+    "maxDecoderQueueAgeMs": 100,
+    "maxLiveFrameAgeMs": 250,
+    "reorderDeadlineMs": 20,
+    "recoveryIdrTimeoutMs": 1500,
+    "keyframeIntervalSeconds": 1
+  },
+  "profiles": [
+    {
+      "id": "720p30",
+      "width": 1280,
+      "height": 720,
+      "fps": 30,
+      "bitrateBps": 4000000,
+      "availability": "avd-smoke-only"
+    },
+    {
+      "id": "2k30",
+      "width": 2560,
+      "height": 1440,
+      "fps": 30,
+      "bitrateBps": 18000000,
+      "availability": "normal"
+    }
+  ],
+  "messages": {
+    "hello": "{protocolVersion:2, type:hello, sessionId, generation, codec, codedWidth, codedHeight, displayWidth, displayHeight, rotationDegrees, fps, bitrateBps}",
+    "accepted": "{protocolVersion:2, type:accepted, sessionId, generation, mediaPort, maxLongEdge, maxShortEdge}",
+    "requestIdr": "{protocolVersion:2, type:request_idr, sessionId, generation}",
+    "stop": "{protocolVersion:2, type:stop, sessionId, generation}",
+    "status": "{protocolVersion:2, type:status, sessionId, generation, state, metrics}",
+    "error": "{protocolVersion:2, type:error, error}"
+  }
+}

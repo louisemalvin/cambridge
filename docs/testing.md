@@ -1,160 +1,91 @@
 # Testing
 
-## Automated checks
-
-Run the Rust checks from the repository root:
+## Fast checks
 
 ```bash
-cargo fmt --manifest-path desktop/Cargo.toml --all -- --check
-cargo clippy --manifest-path desktop/Cargo.toml --workspace --all-targets -- -D warnings
-cargo test --manifest-path desktop/Cargo.toml --workspace
-cargo build --manifest-path desktop/Cargo.toml --workspace
+./scripts/development/check-all.sh
 ```
 
-When the Android toolchain is installed, run:
+This runs Android unit tests, lint, debug APK assembly, native CMake tests, and
+the native plugin build. It begins with the contract parity check, which
+validates protocol version, ports, geometry limits, default profile, and typed
+Kotlin/C++ profile values against the JSON contract.
+
+## Native checks
 
 ```bash
-./android/gradlew -p android test lint assembleDebug
+./scripts/linux/build-direct-webcam-plugin.sh
+ldd -r build/direct-webcam-source/direct-webcam-source.so
 ```
 
-Rust tests cover JSON schema fixtures, protocol version and codec rejection,
-codec negotiation, output policy, authenticated v2 HTTP routes, session
-conflicts, timeout cleanup, bounded pipeline construction, SRT stream identity,
-H.265 parser selection, and Linux device inspection. Kotlin tests cover shared fixture decoding,
-negotiation, session cleanup behavior, profile-driven preview geometry,
-orientation mapping, zoom clamping/reset, and RootEncoder output-dimension
-mapping. The Android instrumentation suite also checks that the Material 3
-zoom control exposes its slider and reset action, receiver-origin persistence
-can be forgotten, and the coordinator clears its configured receiver state.
-The presentation mapper tests cover waiting, streaming, failure
-diagnostics, and camera-control projection without exposing domain types to
-Compose. The preview viewport tests cover fitted landscape and portrait
-geometry.
+The CTest suite covers RTP parsing, H.264 single-NAL and FU-A packetization,
+bounded reorder behavior, control framing, strict JSON fields, and identity
+validation. `ldd -r` should report no unresolved symbols.
 
-The MPEG-TS compatibility checks assert the parser branches and SRT source
-properties. The iOS adapter has source-level unit tests for configuration,
-typed SRT destinations, and the non-functional media boundary; it does not
-claim camera hardware or a completed media pipeline.
-
-## Synthetic SRT receiver gate
-
-Run the host SRT gate against a configured virtual camera:
+## Android checks
 
 ```bash
-scripts/linux/test-srt-receiver.sh /dev/video10 55001 55000
-scripts/linux/test-srt-netns.sh 55041 55040 /dev/video10
-scripts/linux/test-srt-lifecycle.sh 20 55011 55010 /dev/video10
-SUSTAINED_SECONDS=1800 scripts/linux/test-srt-sustained.sh 55021 55020 /dev/video10
+JAVA_HOME=/opt/android-studio/jbr ./gradlew \
+  -p android testDebugUnitTest lint assembleDebug --console=plain
 ```
 
-The gate creates a moving H.264 pattern, packages it in MPEG-TS, and sends it
-to the receiver's encrypted SRT endpoint. It checks wrong stream IDs and
-passphrases, decoded frames, reconnect, standby, idempotent cleanup, bounded
-RSS, and persistent output.
+The unit suite covers direct control framing, RTP packetization, the fixed 2K
+normal profile, same-endpoint retry bounds, network wakeup, generation
+changes, cancellation, Connect/Stop transitions, camera orientation, and
+failure diagnostics.
 
-## Android emulator SRT gate
-
-The emulator harness builds and installs the exact APK, uses the
-`codex-phone-webcam-api35` video-file camera, resolves that emulator's ADB serial,
-passes the manual receiver-origin fallback through the activity launcher, and
-proves connected standby before opening a generic V4L2 consumer:
+## End-to-end emulator check
 
 ```bash
-scripts/android/test-emulator-srt.sh
+./scripts/android/test-emulator-direct-webcam.sh
 ```
 
-The gate records the APK hash, resolved emulator serial, demand generations,
-receiver session IDs, black standby bytes, and distinct live frame hashes. It
-also overlaps a second generic consumer to verify that it does not duplicate the
-first media start, then closes and reopens the consumer without restarting the
-app, receiver, or virtual-camera device.
+The check uses only `codex-phone-webcam-api35` and an explicit emulator serial.
+It verifies Android `stream_started`, RTP access-unit transmission, native
+session acceptance, FFmpeg decoder readiness, first-frame publication, and
+`dma_buf_direct` or `cpu_nv12_upload` rendering. Logs are retained under a
+temporary `build/direct-webcam-avd.*` directory printed by the script.
+The harness explicitly injects `720p30` for this AVD, exercises the selected
+display orientation, restarts isolated OBS while Start remains desired, and
+then checks a fresh native session and lifecycle release. Set
+`DIRECT_WEBCAM_RESTART_OBS=0` when only the basic lifecycle is needed.
 
-## Virtual camera
+## Native receiver checks
 
-Validate the device with:
+These checks exercise the native OBS source with a contract-conformant H.264
+fixture. They do not replace the Android emulator check.
 
 ```bash
-scripts/linux/inspect-video-devices.sh
-scripts/linux/test-virtual-camera.sh
+DIRECT_WEBCAM_PROFILE_ID=2k30 \
+DIRECT_WEBCAM_DURATION_SECONDS=30 \
+bash scripts/linux/test-direct-webcam-fixture.sh
 ```
 
-The demand-driven loopback test validates the private client-usage event and
-the persistent standby producer without scanning processes:
+To verify the bounded CPU fallback in the same plugin:
 
 ```bash
-scripts/linux/test-demand-driven-webcam.sh /dev/video10
+DIRECT_WEBCAM_PROFILE_ID=2k30 \
+DIRECT_WEBCAM_DECODER_MODE=cpu \
+DIRECT_WEBCAM_DURATION_SECONDS=30 \
+bash scripts/linux/test-direct-webcam-fixture.sh
 ```
 
-It checks side-effect-free capability enumeration, sustained capture, a second
-consumer where the driver permits it, final release, and abrupt consumer death.
-The monitor must report `Active` only during sustained capture and `Inactive`
-after the final consumer leaves. The persistent producer remains attached in
-both states.
+Run the native fixture with portrait geometry metadata using
+`DIRECT_WEBCAM_ROTATION_DEGREES=90`. The fixture keeps the coded frame
+landscape and checks the native display dimensions and rotation.
 
-The test script automatically selects the first v4l2loopback device. Pass an
-explicit device path only when testing a non-default loopback configuration.
+Set `DIRECT_WEBCAM_CAPTURE_OUTPUT=1` to save an isolated OBS MP4 and changing
+frame hashes under the printed artifact directory. The fixture output is
+receiver evidence, not Android Camera2 evidence.
 
-Open the device in OBS, Firefox, Chromium, or a browser after the persistent
-desktop producer attaches. In OBS, add `Video Capture Device (V4L2)` and select
-`Mobile Webcam`. Capability enumeration alone must leave the phone camera off;
-the first sustained preview or capture should start one demand generation, and
-releasing the final consumer should return the output to black standby without
-disconnecting the sender.
+The AVD currently rejects the normal 2K30 profile with `NoCompatibleCodec`.
+The Android harness explicitly injects its test-only 720p30 profile and does
+not treat that profile as a product quality.
 
-With OBS open and the Mobile Webcam source selected, run:
+## Endurance gate
 
-```bash
-scripts/linux/test-obs-virtual-camera.sh /dev/video10
-```
-
-The desktop application can be used instead of the CLI:
-
-```bash
-mobile-webcam-desktop
-```
-
-It is the single receiver process for the control API, SRT media, decoded
-preview, and v4l2loopback output. Do not start both receiver binaries on the
-same ports and virtual-camera device.
-
-During an Android lifecycle check, record the v2 `sessionId` and verify that a
-repeated DELETE is idempotent, a sender restart can create a fresh session, and
-killing the receiver leaves the sender with a bounded control failure.
-
-## End-to-end matrix
-
-Run each applicable row on a physical mobile sender and configured Linux host:
-
-| Sender | Network | Receiver | Consumer |
-| --- | --- | --- | --- |
-| Android H.264 | Wi-Fi | Arch | OBS |
-| Android H.264 | Wi-Fi | Ubuntu | OBS |
-| Android H.264 | USB tethering | Arch | OBS |
-| Android H.264 | USB tethering | Ubuntu | OBS |
-| Android H.265 | Wi-Fi | Linux | OBS |
-| Android H.265 | USB tethering | Linux | OBS |
-| Android H.264 | Wi-Fi or USB | Linux | Browser |
-
-The iOS skeleton is not included in the end-to-end matrix until its native
-media spike is complete. Once implemented, iOS H.264 must pass the same
-receiver-side rows and MPEG-TS compatibility checks as Android.
-
-For each row verify codec selection, first-frame time, stable latency, sender
-restart without receiver restart, and receiver recovery after a two-second
-network interruption.
-
-For Android camera interaction, also verify on a physical device that the
-receiver reports decoded frames with the selected profile aspect ratio while
-the phone is held in portrait and landscape orientations. Change zoom through
-the slider and pinch gesture, confirm minimum/maximum/reset behavior, and
-confirm the media session remains active. Minimize the app, lock and unlock the
-phone, rotate or recreate the activity, and destroy/recreate the preview
-surface; each operation must leave streaming running. Stop and restart after
-these transitions, and repeat at least once with H.265.
-
-## Stability runs
-
-Record memory, CPU, decoder, first-frame time, latency, timeout count, and
-Android battery temperature for 60 minutes at 1080p30, 30 minutes at 1440p30,
-and 15 minutes at experimental 4K30. Normal phone heating is expected; a
-growing latency or queue is not.
+The release-level endurance gate is a separate one-hour native fixture run at
+2k30. Compare queue peaks, mailbox replacements, decoder drops, RSS, and thread
+count at the start and end. A short native fixture run and the emulator smoke
+check are sufficient for routine development; they do not claim the one-hour
+gate.

@@ -1,0 +1,272 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+repo_root=$(cd -- "${script_dir}/../.." && pwd)
+build_dir="${repo_root}/build/direct-webcam-source"
+artifact_dir=$(mktemp -d "${repo_root}/build/direct-webcam-fixture.XXXXXX")
+contract_json="${repo_root}/protocol/direct-stream-contract.json"
+scene_template="${repo_root}/scripts/linux/direct-webcam-test-scene.json"
+profile_template="${repo_root}/scripts/linux/direct-webcam-test-profile.ini"
+fixture_script="${repo_root}/scripts/linux/direct-webcam-fixture.py"
+
+profile_id="${DIRECT_WEBCAM_PROFILE_ID:-2k30}"
+rotation_degrees="${DIRECT_WEBCAM_ROTATION_DEGREES:-0}"
+duration_seconds="${DIRECT_WEBCAM_DURATION_SECONDS:-60}"
+reconnect_after_seconds="${DIRECT_WEBCAM_RECONNECT_AFTER_SECONDS:-}"
+decoder_mode="${DIRECT_WEBCAM_DECODER_MODE:-auto}"
+capture_output="${DIRECT_WEBCAM_CAPTURE_OUTPUT:-0}"
+poll_interval_seconds=1
+obs_wait_seconds=30
+obs_shutdown_wait_seconds=5
+obs_recording_settle_seconds=2
+recording_sample_fps=1
+
+obs_config="${artifact_dir}/obs-config"
+obs_log="${artifact_dir}/obs.log"
+metrics_log="${artifact_dir}/process-metrics.tsv"
+fixture_summary="${artifact_dir}/fixture-summary.json"
+scene_config="${artifact_dir}/scene.json"
+recording_dir="${artifact_dir}/recording"
+recording_hashes="${artifact_dir}/recording.framemd5"
+recording_file=""
+
+obs_pid=""
+monitor_pid=""
+
+fail() {
+    printf 'error: %s\n' "$1" >&2
+    exit 1
+}
+
+stop_obs() {
+    if [[ -z "${obs_pid}" ]]; then
+        return
+    fi
+    kill -TERM "${obs_pid}" >/dev/null 2>&1 || true
+    for ((attempt = 0; attempt < obs_shutdown_wait_seconds; attempt += poll_interval_seconds)); do
+        kill -0 "${obs_pid}" >/dev/null 2>&1 || break
+        sleep "${poll_interval_seconds}"
+    done
+    if kill -0 "${obs_pid}" >/dev/null 2>&1; then
+        kill -KILL "${obs_pid}" >/dev/null 2>&1 || true
+    fi
+    wait "${obs_pid}" >/dev/null 2>&1 || true
+    obs_pid=""
+}
+
+cleanup() {
+    if [[ -n "${monitor_pid}" ]]; then
+        kill -TERM "${monitor_pid}" >/dev/null 2>&1 || true
+        wait "${monitor_pid}" >/dev/null 2>&1 || true
+    fi
+    stop_obs
+}
+
+trap cleanup EXIT
+
+[[ -f "${contract_json}" ]] || fail "direct stream contract is missing: ${contract_json}"
+[[ -f "${scene_template}" ]] || fail "OBS scene template is missing: ${scene_template}"
+[[ -f "${profile_template}" ]] || fail "OBS profile template is missing: ${profile_template}"
+[[ -f "${fixture_script}" ]] || fail "fixture script is missing: ${fixture_script}"
+command -v jq >/dev/null 2>&1 || fail "jq is required"
+command -v obs >/dev/null 2>&1 || fail "OBS is required"
+ffmpeg_path=$(command -v ffmpeg) || fail "ffmpeg is required"
+python_path=$(command -v python3) || fail "python3 is required"
+case "${decoder_mode}" in
+    auto|cpu) ;;
+    *) fail "decoder mode must be auto or cpu" ;;
+esac
+case "${capture_output}" in
+    0|1) ;;
+    *) fail "capture output must be 0 or 1" ;;
+esac
+[[ "${duration_seconds}" =~ ^[1-9][0-9]*$ ]] || fail "duration must be a positive integer"
+[[ "${rotation_degrees}" =~ ^(0|90|180|270)$ ]] || fail "rotation must be 0, 90, 180, or 270 degrees"
+if [[ -n "${reconnect_after_seconds}" ]]; then
+    [[ "${reconnect_after_seconds}" =~ ^[1-9][0-9]*$ ]] || fail "reconnect-after must be a positive integer"
+    (( reconnect_after_seconds < duration_seconds )) || fail "reconnect-after must be shorter than duration"
+fi
+
+control_port=$(jq -er '.defaults.controlPort' "${contract_json}")
+media_port_offset=$(jq -er '.defaults.mediaPortOffset' "${contract_json}")
+media_port=$((control_port + media_port_offset))
+profile_json=$(jq -ce --arg profile_id "${profile_id}" '.profiles[] | select(.id == $profile_id)' "${contract_json}")
+profile_width=$(jq -er '.width' <<<"${profile_json}")
+profile_height=$(jq -er '.height' <<<"${profile_json}")
+profile_fps=$(jq -er '.fps' <<<"${profile_json}")
+maximum_decoder_queue=$(jq -er '.media.maxInFlightAccessUnits' "${contract_json}")
+maximum_reorder_packets=$(jq -er '.media.maxReorderPackets' "${contract_json}")
+mailbox_capacity=$(jq -er '.media.mailboxCapacity' "${contract_json}")
+
+"${repo_root}/scripts/linux/build-direct-webcam-plugin.sh" >"${artifact_dir}/plugin-build.log"
+plugin_so="${build_dir}/staging/obs-plugins/direct-webcam-source/bin/64bit/direct-webcam-source.so"
+[[ -f "${plugin_so}" ]] || fail "staged OBS plugin is missing: ${plugin_so}"
+
+jq --arg decoder_mode "${decoder_mode}" \
+    '(.sources[] | select(.id == "direct_android_rtp_webcam").settings.decoder_mode) = $decoder_mode' \
+    "${scene_template}" >"${scene_config}"
+mkdir -p "${obs_config}/obs-studio/basic/scenes" \
+    "${obs_config}/obs-studio/plugins/direct-webcam-source/bin/64bit"
+if [[ "${capture_output}" == "1" ]]; then
+    mkdir -p "${recording_dir}" "${obs_config}/obs-studio/basic/profiles/Untitled"
+    sed \
+        -e "s|__DIRECT_WEBCAM_RECORDING_DIR__|${recording_dir}|g" \
+        -e "s|__DIRECT_WEBCAM_OUTPUT_WIDTH__|${profile_width}|g" \
+        -e "s|__DIRECT_WEBCAM_OUTPUT_HEIGHT__|${profile_height}|g" \
+        -e "s|__DIRECT_WEBCAM_OUTPUT_FPS__|${profile_fps}|g" \
+        "${profile_template}" \
+        >"${obs_config}/obs-studio/basic/profiles/Untitled/basic.ini"
+fi
+cp "${scene_config}" "${obs_config}/obs-studio/basic/scenes/Untitled.json"
+cp "${plugin_so}" "${obs_config}/obs-studio/plugins/direct-webcam-source/bin/64bit/direct-webcam-source.so"
+
+obs_args=(
+    --multi
+    --verbose
+    --disable-missing-files-check
+    --profile Untitled
+    --scene Untitled
+)
+if [[ "${capture_output}" == "1" ]]; then
+    obs_args+=(--startrecording)
+fi
+XDG_CONFIG_HOME="${obs_config}" obs "${obs_args[@]}" >"${obs_log}" 2>&1 &
+obs_pid=$!
+for ((attempt = 0; attempt < obs_wait_seconds; attempt += poll_interval_seconds)); do
+    rg -q 'listening:control=' "${obs_log}" && break
+    sleep "${poll_interval_seconds}"
+done
+rg -q 'loaded module=direct-webcam-source' "${obs_log}" || fail "OBS did not load the exact direct webcam module"
+rg -q 'listening:control=' "${obs_log}" || fail "OBS source did not begin listening"
+
+printf 'timestamp_seconds\tresident_kib\tthreads\tfile_descriptors\tcpu_percent\n' >"${metrics_log}"
+(
+    while kill -0 "${obs_pid}" >/dev/null 2>&1; do
+        timestamp=$(date +%s)
+        resident_kib=$(awk '/VmRSS:/ {print $2}' "/proc/${obs_pid}/status" 2>/dev/null || printf '0')
+        threads=$(awk '/Threads:/ {print $2}' "/proc/${obs_pid}/status" 2>/dev/null || printf '0')
+        file_descriptors=$(find "/proc/${obs_pid}/fd" -mindepth 1 -maxdepth 1 -type l 2>/dev/null | wc -l)
+        cpu_percent=$(ps -p "${obs_pid}" -o %cpu= | awk '{$1=$1; print}')
+        printf '%s\t%s\t%s\t%s\t%s\n' "${timestamp}" "${resident_kib}" "${threads}" "${file_descriptors}" "${cpu_percent:-0}" >>"${metrics_log}"
+        sleep "${poll_interval_seconds}"
+    done
+) &
+monitor_pid=$!
+
+fixture_args=(
+    "${fixture_script}"
+    --contract "${contract_json}"
+    --profile "${profile_id}"
+    --host 127.0.0.1
+    --control-port "${control_port}"
+    --media-port "${media_port}"
+    --duration "${duration_seconds}"
+    --rotation-degrees "${rotation_degrees}"
+    --output "${fixture_summary}"
+    --ffmpeg "${ffmpeg_path}"
+)
+if [[ -n "${reconnect_after_seconds}" ]]; then
+    fixture_args+=(--reconnect-after "${reconnect_after_seconds}")
+fi
+if [[ "${capture_output}" == "1" ]]; then
+    fixture_args+=(--startup-delay "${obs_recording_settle_seconds}")
+fi
+
+"${python_path}" "${fixture_args[@]}"
+
+if [[ "${capture_output}" == "1" ]]; then
+    if [[ -n "${monitor_pid}" ]]; then
+        kill -TERM "${monitor_pid}" >/dev/null 2>&1 || true
+        wait "${monitor_pid}" >/dev/null 2>&1 || true
+        monitor_pid=""
+    fi
+    stop_obs
+    recording_file=$(find "${recording_dir}" -maxdepth 1 -type f -name '*.mp4' -size +0c -print -quit)
+    [[ -n "${recording_file}" ]] || fail "OBS did not produce a non-empty recording"
+    ffprobe -v error -select_streams v:0 -show_entries stream=width,height \
+        -of json "${recording_file}" >"${artifact_dir}/recording-stream.json"
+    recording_width=$(jq -er '.streams[0].width' "${artifact_dir}/recording-stream.json")
+    recording_height=$(jq -er '.streams[0].height' "${artifact_dir}/recording-stream.json")
+    [[ "${recording_width}" -eq "${profile_width}" && "${recording_height}" -eq "${profile_height}" ]] \
+        || fail "OBS recording used ${recording_width}x${recording_height}, expected ${profile_width}x${profile_height}"
+    ffmpeg -hide_banner -loglevel error -i "${recording_file}" -map 0:v:0 \
+        -vf "fps=${recording_sample_fps}" -an -f framemd5 "${recording_hashes}"
+    unique_hashes=$(awk -F, '$1 !~ /^#/ && NF >= 2 {gsub(/[[:space:]]/, "", $NF); print $NF}' \
+        "${recording_hashes}" | sort -u | wc -l)
+    [[ "${unique_hashes}" -gt 1 ]] || fail "OBS recording did not show changing frame hashes"
+fi
+
+display_width="${profile_width}"
+display_height="${profile_height}"
+if [[ "${rotation_degrees}" == "90" || "${rotation_degrees}" == "270" ]]; then
+    display_width="${profile_height}"
+    display_height="${profile_width}"
+fi
+rg -q "session_accepted:.*:display=${display_width}x${display_height}:rotation=${rotation_degrees}@${profile_fps}" "${obs_log}" \
+    || fail "native source did not accept the requested fixture profile"
+rg -q 'decoder_ready:h264/(VAAPI|software)' "${obs_log}" \
+    || fail "native decoder did not become ready"
+rg -q "first_frame_published:mode=.*profile=${profile_width}x${profile_height}" "${obs_log}" \
+    || fail "native source did not publish the requested profile"
+if [[ "${decoder_mode}" == "cpu" ]]; then
+    rg -q 'decoder_ready:h264/software' "${obs_log}" || fail "CPU decoder mode was not honored"
+    rg -q 'render_mode=cpu_nv12_upload' "${obs_log}" || fail "CPU NV12 rendering was not reported"
+else
+    rg -q 'decoder_ready:h264/VAAPI' "${obs_log}" || fail "VAAPI was not active for the hardware fixture"
+    rg -q 'render_mode=dma_buf_direct' "${obs_log}" || fail "direct DMA-BUF rendering was not reported"
+fi
+if rg -q 'decoder_error|decode_failed|rtp_invalid|settings_network_restart_failed' "${obs_log}"; then
+    fail "native fixture reported a media failure; see ${obs_log}"
+fi
+[[ "$(jq -r '.statusCount' "${fixture_summary}")" -gt 0 ]] \
+    || fail "fixture did not receive bounded native status telemetry"
+[[ "$(jq -r '.maximumMetrics.framesDecoded // 0' "${fixture_summary}")" -gt 0 ]] \
+    || fail "fixture status telemetry reported no decoded frames"
+[[ "$(jq -r '.lastStatus.codedWidth // 0' "${fixture_summary}")" -eq "${profile_width}" ]] \
+    || fail "status telemetry reported an unexpected coded width"
+[[ "$(jq -r '.lastStatus.codedHeight // 0' "${fixture_summary}")" -eq "${profile_height}" ]] \
+    || fail "status telemetry reported an unexpected coded height"
+[[ "$(jq -r '.lastStatus.displayWidth // 0' "${fixture_summary}")" -eq "${display_width}" ]] \
+    || fail "status telemetry reported an unexpected display width"
+[[ "$(jq -r '.lastStatus.displayHeight // 0' "${fixture_summary}")" -eq "${display_height}" ]] \
+    || fail "status telemetry reported an unexpected display height"
+[[ "$(jq -r '.maximumMetrics.decoderQueueMaximum // 0' "${fixture_summary}")" -eq "${maximum_decoder_queue}" ]] \
+    || fail "decoder queue maximum was not reported from the contract"
+[[ "$(jq -r '.maximumMetrics.decoderQueueOccupancy // 0' "${fixture_summary}")" -le "${maximum_decoder_queue}" ]] \
+    || fail "decoder queue occupancy exceeded its configured bound"
+[[ "$(jq -r '.maximumMetrics.mailboxMaximum // 0' "${fixture_summary}")" -eq "${mailbox_capacity}" ]] \
+    || fail "completed-frame mailbox maximum was not reported"
+[[ "$(jq -r '.maximumMetrics.mailboxOccupancy // 0' "${fixture_summary}")" -le "${mailbox_capacity}" ]] \
+    || fail "completed-frame mailbox occupancy exceeded one"
+[[ "$(jq -r '.maximumMetrics.reorderMaximum // 0' "${fixture_summary}")" -eq "${maximum_reorder_packets}" ]] \
+    || fail "RTP reorder maximum was not reported from the contract"
+[[ "$(jq -r '.maximumMetrics.reorderOccupancy // 0' "${fixture_summary}")" -le "${maximum_reorder_packets}" ]] \
+    || fail "RTP reorder occupancy exceeded its configured bound"
+[[ "$(jq -r '.maximumMetrics.decodeFailures // 0' "${fixture_summary}")" -eq 0 ]] \
+    || fail "receiver decoder failures were reported"
+[[ "$(jq -r '.maximumMetrics.importFailures // 0' "${fixture_summary}")" -eq 0 ]] \
+    || fail "receiver DMA-BUF import failures were reported"
+if [[ "${decoder_mode}" == "cpu" ]]; then
+    [[ "$(jq -r '.maximumMetrics.cpuUploads // 0' "${fixture_summary}")" -gt 0 ]] \
+        || fail "CPU mode did not report an NV12 upload"
+else
+    [[ "$(jq -r '.maximumMetrics.cpuUploads // 0' "${fixture_summary}")" -eq 0 ]] \
+        || fail "hardware mode reported CPU frame uploads"
+    [[ "$(jq -r '.maximumMetrics.hardwareCpuTransfers // 0' "${fixture_summary}")" -eq 0 ]] \
+        || fail "hardware mode reported GPU-to-CPU transfers"
+fi
+if [[ -n "${reconnect_after_seconds}" ]]; then
+    [[ "$(jq -r '.controlConnections' "${fixture_summary}")" -ge 2 ]] \
+        || fail "fixture reconnect did not establish a second control generation"
+fi
+
+printf 'profile=%s (%sx%s@%s)\n' "${profile_id}" "${profile_width}" "${profile_height}" "${profile_fps}"
+printf 'display=%sx%s rotation=%s\n' "${display_width}" "${display_height}" "${rotation_degrees}"
+printf 'decoder_mode=%s\n' "${decoder_mode}"
+printf 'duration_seconds=%s\n' "${duration_seconds}"
+printf 'capture_output=%s\n' "${capture_output}"
+printf 'control=%s\n' "${control_port}"
+printf 'media=%s\n' "${media_port}"
+printf 'module_sha256='; sha256sum "${plugin_so}" | awk '{print $1}'
+printf 'artifacts=%s\n' "${artifact_dir}"

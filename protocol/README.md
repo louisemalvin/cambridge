@@ -1,44 +1,26 @@
-# Control protocols
+# Direct Android RTP to OBS contract
 
-The receiver control plane is HTTP/JSON over TCP. The active contract is v2.
-The sender keeps a receiver-authoritative demand subscription open while
-connected, creates sessions only for active demand generations, and receives a
-receiver-owned encrypted SRT endpoint. The control plane never carries video
-bytes.
+The only active protocol is `android-rtp-obs` in
+[`direct-stream-contract.json`](direct-stream-contract.json). The JSON Schema
+is [`direct-stream.schema.json`](direct-stream.schema.json), and the examples
+under `examples/` are small control fixtures.
 
-Media uses H.264 in MPEG-TS over SRT unicast. The stable protocol identifiers
-are:
+Protocol v2 is the only active direct version. The control socket is TCP with a
+big-endian 32-bit length prefix followed by
+UTF-8 JSON. Media is H.264 RTP over UDP unicast using the RFC 6184 payload
+format. Control and media share one session ID and generation; stale sessions
+are rejected.
 
-- Codecs: `h264`, `h265`.
-- Transport kind: `srt`.
-- Output formats: `yuy2`, `nv12`, `i420`.
+The normal profile is 2K30 with a coded `2560x1440` frame. A portrait session
+reports display geometry `1440x2560` and its clockwise rotation in the v2 hello;
+the native source rotates both NV12 planes during presentation.
 
-The active JSON schema is `control-v2.schema.json`. Examples are executable
-test fixtures and are shared by Rust, Kotlin, and Swift adapters without code
-generation.
+The sender sends `hello`, the source returns `accepted`, and either side may
+send `status`, `request_idr`, or `stop`. The contract is deliberately video
+only. The receiver output is the OBS source texture, not a virtual camera
+device.
 
-## v2 endpoints
-
-- `GET /v2/health`
-- `GET /v2/capabilities`
-- `POST /v2/sessions`
-- `GET /v2/sessions/{sessionId}`
-- `DELETE /v2/sessions/{sessionId}`
-- `GET /v2/sessions/{sessionId}/diagnostics`
-- `GET /v2/diagnostics/latest`
-- `GET /v2/demand/subscribe` - authenticated server-sent demand events for a
-  connected sender. Events carry a generation, effective consumer count, and
-  `active` or `inactive` demand state.
-
-Unknown optional fields must be ignored. Unknown protocol versions and unknown
-required enum values must be rejected with a typed error.
-
-## Receiver origin and authentication
-
-The sender discovers the receiver with platform Bonjour/NSD and uses the
-resolved origin. Manual origin entry remains the fallback when multicast
-discovery cannot operate. Subnet probing and a phone-side TCP listener are not
-part of v2. Protected routes use the receiver's bearer token. Health is
-intentionally public so a sender can distinguish an offline receiver from a
-rejected credential. See [`discovery.md`](discovery.md) for the DNS-SD
-contract.
+Transport bounds, profile definitions, protocol version, and message names are
+defined in the contract JSON. Implementations keep typed named constants for
+those values at their language boundaries and must validate them against the
+contract fixtures.
