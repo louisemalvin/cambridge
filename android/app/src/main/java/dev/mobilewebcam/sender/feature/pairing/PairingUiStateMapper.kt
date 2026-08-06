@@ -12,20 +12,14 @@ object PairingUiStateMapper {
         snapshot.streamState is StreamState.Failed -> PairingUiState.Failed(
             UiText.Plain(StreamPresentationMapper.failureMessage(snapshot.streamState.failure)),
         )
-        snapshot.streamState == StreamState.Connecting ||
-            snapshot.streamState == StreamState.Reconnecting -> PairingUiState.Connecting(
-                if (snapshot.streamState == StreamState.Reconnecting) {
-                    UiText.Plain(RECONNECTING_MESSAGE)
-                } else {
-                    UiText.Plain(CONNECTING_MESSAGE)
-                },
-            )
+        snapshot.streamState == StreamState.Connecting -> PairingUiState.Connecting(
+            UiText.Plain(CONNECTING_MESSAGE),
+        )
         else -> PairingUiState.Searching(UiText.Plain(CONNECTION_MESSAGE))
     }
 
     private const val DEFAULT_RECEIVER_NAME = "Receiver"
     private const val CONNECTING_MESSAGE = "Connecting..."
-    private const val RECONNECTING_MESSAGE = "Reconnecting..."
     private const val CONNECTION_MESSAGE = "Connect to your OBS computer"
 }
 

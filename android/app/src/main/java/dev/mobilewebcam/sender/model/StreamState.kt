@@ -8,6 +8,5 @@ sealed interface StreamState {
         val startedAtMillis: Long,
     ) : StreamState
     data object Stopping : StreamState
-    data object Reconnecting : StreamState
     data class Failed(val failure: StreamFailure) : StreamState
 }

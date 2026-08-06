@@ -13,7 +13,6 @@ fixture_script="${repo_root}/scripts/linux/direct-webcam-fixture.py"
 profile_id="${DIRECT_WEBCAM_PROFILE_ID:-2k30}"
 rotation_degrees="${DIRECT_WEBCAM_ROTATION_DEGREES:-0}"
 duration_seconds="${DIRECT_WEBCAM_DURATION_SECONDS:-60}"
-reconnect_after_seconds="${DIRECT_WEBCAM_RECONNECT_AFTER_SECONDS:-}"
 decoder_mode="${DIRECT_WEBCAM_DECODER_MODE:-auto}"
 capture_output="${DIRECT_WEBCAM_CAPTURE_OUTPUT:-0}"
 poll_interval_seconds=1
@@ -83,10 +82,6 @@ case "${capture_output}" in
 esac
 [[ "${duration_seconds}" =~ ^[1-9][0-9]*$ ]] || fail "duration must be a positive integer"
 [[ "${rotation_degrees}" =~ ^(0|90|180|270)$ ]] || fail "rotation must be 0, 90, 180, or 270 degrees"
-if [[ -n "${reconnect_after_seconds}" ]]; then
-    [[ "${reconnect_after_seconds}" =~ ^[1-9][0-9]*$ ]] || fail "reconnect-after must be a positive integer"
-    (( reconnect_after_seconds < duration_seconds )) || fail "reconnect-after must be shorter than duration"
-fi
 
 control_port=$(jq -er '.defaults.controlPort' "${contract_json}")
 media_port_offset=$(jq -er '.defaults.mediaPortOffset' "${contract_json}")
@@ -95,9 +90,6 @@ profile_json=$(jq -ce --arg profile_id "${profile_id}" '.profiles[] | select(.id
 profile_width=$(jq -er '.width' <<<"${profile_json}")
 profile_height=$(jq -er '.height' <<<"${profile_json}")
 profile_fps=$(jq -er '.fps' <<<"${profile_json}")
-maximum_decoder_queue=$(jq -er '.media.maxInFlightAccessUnits' "${contract_json}")
-maximum_reorder_packets=$(jq -er '.media.maxReorderPackets' "${contract_json}")
-mailbox_capacity=$(jq -er '.media.mailboxCapacity' "${contract_json}")
 
 "${repo_root}/scripts/linux/build-direct-webcam-plugin.sh" >"${artifact_dir}/plugin-build.log"
 plugin_so="${build_dir}/staging/obs-plugins/direct-webcam-source/bin/64bit/direct-webcam-source.so"
@@ -166,9 +158,6 @@ fixture_args=(
     --output "${fixture_summary}"
     --ffmpeg "${ffmpeg_path}"
 )
-if [[ -n "${reconnect_after_seconds}" ]]; then
-    fixture_args+=(--reconnect-after "${reconnect_after_seconds}")
-fi
 if [[ "${capture_output}" == "1" ]]; then
     fixture_args+=(--startup-delay "${obs_recording_settle_seconds}")
 fi
@@ -219,48 +208,6 @@ fi
 if rg -q 'decoder_error|decode_failed|rtp_invalid|settings_network_restart_failed' "${obs_log}"; then
     fail "native fixture reported a media failure; see ${obs_log}"
 fi
-[[ "$(jq -r '.statusCount' "${fixture_summary}")" -gt 0 ]] \
-    || fail "fixture did not receive bounded native status telemetry"
-[[ "$(jq -r '.maximumMetrics.framesDecoded // 0' "${fixture_summary}")" -gt 0 ]] \
-    || fail "fixture status telemetry reported no decoded frames"
-[[ "$(jq -r '.lastStatus.codedWidth // 0' "${fixture_summary}")" -eq "${profile_width}" ]] \
-    || fail "status telemetry reported an unexpected coded width"
-[[ "$(jq -r '.lastStatus.codedHeight // 0' "${fixture_summary}")" -eq "${profile_height}" ]] \
-    || fail "status telemetry reported an unexpected coded height"
-[[ "$(jq -r '.lastStatus.displayWidth // 0' "${fixture_summary}")" -eq "${display_width}" ]] \
-    || fail "status telemetry reported an unexpected display width"
-[[ "$(jq -r '.lastStatus.displayHeight // 0' "${fixture_summary}")" -eq "${display_height}" ]] \
-    || fail "status telemetry reported an unexpected display height"
-[[ "$(jq -r '.maximumMetrics.decoderQueueMaximum // 0' "${fixture_summary}")" -eq "${maximum_decoder_queue}" ]] \
-    || fail "decoder queue maximum was not reported from the contract"
-[[ "$(jq -r '.maximumMetrics.decoderQueueOccupancy // 0' "${fixture_summary}")" -le "${maximum_decoder_queue}" ]] \
-    || fail "decoder queue occupancy exceeded its configured bound"
-[[ "$(jq -r '.maximumMetrics.mailboxMaximum // 0' "${fixture_summary}")" -eq "${mailbox_capacity}" ]] \
-    || fail "completed-frame mailbox maximum was not reported"
-[[ "$(jq -r '.maximumMetrics.mailboxOccupancy // 0' "${fixture_summary}")" -le "${mailbox_capacity}" ]] \
-    || fail "completed-frame mailbox occupancy exceeded one"
-[[ "$(jq -r '.maximumMetrics.reorderMaximum // 0' "${fixture_summary}")" -eq "${maximum_reorder_packets}" ]] \
-    || fail "RTP reorder maximum was not reported from the contract"
-[[ "$(jq -r '.maximumMetrics.reorderOccupancy // 0' "${fixture_summary}")" -le "${maximum_reorder_packets}" ]] \
-    || fail "RTP reorder occupancy exceeded its configured bound"
-[[ "$(jq -r '.maximumMetrics.decodeFailures // 0' "${fixture_summary}")" -eq 0 ]] \
-    || fail "receiver decoder failures were reported"
-[[ "$(jq -r '.maximumMetrics.importFailures // 0' "${fixture_summary}")" -eq 0 ]] \
-    || fail "receiver DMA-BUF import failures were reported"
-if [[ "${decoder_mode}" == "cpu" ]]; then
-    [[ "$(jq -r '.maximumMetrics.cpuUploads // 0' "${fixture_summary}")" -gt 0 ]] \
-        || fail "CPU mode did not report an NV12 upload"
-else
-    [[ "$(jq -r '.maximumMetrics.cpuUploads // 0' "${fixture_summary}")" -eq 0 ]] \
-        || fail "hardware mode reported CPU frame uploads"
-    [[ "$(jq -r '.maximumMetrics.hardwareCpuTransfers // 0' "${fixture_summary}")" -eq 0 ]] \
-        || fail "hardware mode reported GPU-to-CPU transfers"
-fi
-if [[ -n "${reconnect_after_seconds}" ]]; then
-    [[ "$(jq -r '.controlConnections' "${fixture_summary}")" -ge 2 ]] \
-        || fail "fixture reconnect did not establish a second control generation"
-fi
-
 printf 'profile=%s (%sx%s@%s)\n' "${profile_id}" "${profile_width}" "${profile_height}" "${profile_fps}"
 printf 'display=%sx%s rotation=%s\n' "${display_width}" "${display_height}" "${rotation_degrees}"
 printf 'decoder_mode=%s\n' "${decoder_mode}"

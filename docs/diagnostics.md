@@ -7,15 +7,14 @@ Android writes structured `MobileWebcam` events with schema
 - `session_created`
 - `encoder_prepared` with coded and display geometry
 - `stream_started`, `stream_stopped`, and `stream_resources_released`
-- `stream_failed` followed by same-endpoint recovery while Connect remains
-  desired
+- `stream_failed` followed by explicit user action when a new session is needed
 - `stream_resources_released`
 
-The native source logs a matching identity line, protocol v2 bounds, coded and
-display geometry, session generation, decoder mode, frame publication, render
-mode, and recovery events. Use the source properties dialog to write a
+The native source logs a matching identity line, protocol v3 bounds, coded and
+derived display geometry, session generation, decoder mode, frame publication,
+render mode, and media-drop events. Use the source properties dialog to write a
 diagnostics snapshot containing session identity, coded/display dimensions,
-rotation, mode, queue counts, drops, IDR requests, and frame age.
+rotation, mode, queue counts, drops, and frame age.
 
 For an emulator run, the harness prints paths for:
 

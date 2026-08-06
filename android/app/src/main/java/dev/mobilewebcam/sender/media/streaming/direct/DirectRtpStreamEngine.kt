@@ -151,7 +151,7 @@ class DirectRtpStreamEngine(
             check(!running) { "The direct sender is already running" }
             val streamConfiguration = configuration ?: error("Stream configuration is unavailable")
             val sessionTransform = streamConfiguration.sessionTransform
-                ?: camera.snapshotSessionTransform(streamConfiguration.profile.width, streamConfiguration.profile.height)
+                ?: error("The session contract must be resolved before streaming")
             require(sessionTransform.codedWidth == streamConfiguration.profile.width &&
                 sessionTransform.codedHeight == streamConfiguration.profile.height) {
                 "Session geometry does not match the selected video quality"
@@ -165,8 +165,6 @@ class DirectRtpStreamEngine(
                     generation = endpoint.generation,
                     codedWidth = sessionTransform.codedWidth,
                     codedHeight = sessionTransform.codedHeight,
-                    displayWidth = sessionTransform.displayWidth,
-                    displayHeight = sessionTransform.displayHeight,
                     rotationDegrees = sessionTransform.rotationDegrees,
                     fps = streamConfiguration.profile.fps,
                     bitrateBps = streamConfiguration.bitrateBps,
@@ -370,8 +368,7 @@ class DirectRtpStreamEngine(
         encodedQueue.offer(accessUnit)
         encodedQueueDrops.incrementAndGet()
         observeQueueOccupancy()
-        emit("encoded_queue_overrun_request_idr", mapOf("maximum" to DirectStreamContract.MAXIMUM_ENCODED_QUEUE))
-        requestSyncFrame()
+        emit("encoded_queue_drop", mapOf("maximum" to DirectStreamContract.MAXIMUM_ENCODED_QUEUE))
     }
 
     private fun observeQueueOccupancy() {
@@ -452,7 +449,6 @@ class DirectRtpStreamEngine(
                     val message = withContext(Dispatchers.IO) { connection.receive() } ?: break
                     if (message.requireProtocolVersion() != DirectStreamContract.PROTOCOL_VERSION) continue
                     when (message.stringFieldOrNull("type")) {
-                        "request_idr" -> requestSyncFrame()
                         "error" -> emit("receiver_control_error", mapOf("reason" to message.stringFieldOrNull("error")))
                         else -> Unit
                     }
@@ -507,15 +503,6 @@ class DirectRtpStreamEngine(
         codecThread = null
         codecConfigAnnexB = ByteArray(EMPTY_BYTE_COUNT)
         encodedQueue.clear()
-    }
-
-    private fun requestSyncFrame() {
-        runCatching {
-            codec?.setParameters(Bundle().apply {
-                putInt(MediaCodec.PARAMETER_KEY_REQUEST_SYNC_FRAME, REQUEST_SYNC_FRAME_NOW)
-            })
-            emit("encoder_idr_requested")
-        }.onFailure { error -> emit("encoder_idr_request_failed", mapOf("reason" to error.message)) }
     }
 
     private fun emit(name: String, fields: Map<String, Any?> = emptyMap()) {
@@ -615,7 +602,6 @@ class DirectRtpStreamEngine(
         const val UDP_SEND_BUFFER_BYTES = 4 * 1024 * 1024
         const val LOWEST_PRIORITY = 0
         const val NO_B_FRAMES = 0
-        const val REQUEST_SYNC_FRAME_NOW = 0
         const val EMPTY_BYTE_COUNT = 0
         const val EMPTY_LONG_VALUE = 0L
         const val ONE_BYTE_OFFSET = 1

@@ -77,9 +77,8 @@ class WebcamUiStateMapperTest {
     }
 
     @Test
-    fun connectingAndReconnectingMapToSimpleConnectionStatus() {
+    fun connectingMapsToSimpleConnectionStatus() {
         assertTrue(mapSnapshot(StreamState.Connecting).connection is ConnectionUiState.Connecting)
-        assertTrue(mapSnapshot(StreamState.Reconnecting).connection is ConnectionUiState.Connecting)
         assertFalse(mapSnapshot(StreamState.Connecting).preview.isLive)
     }
 

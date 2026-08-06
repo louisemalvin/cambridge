@@ -1,28 +1,24 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://mobile-webcam.invalid/protocol/direct-stream.schema.json",
-  "title": "Android RTP OBS direct stream control messages v2",
+  "title": "Android RTP OBS direct stream control messages v3",
   "type": "object",
   "required": ["protocolVersion", "type"],
   "properties": {
-    "protocolVersion": {"const": 2},
-    "type": {"enum": ["hello", "accepted", "request_idr", "stop", "status", "error"]},
+    "protocolVersion": {"const": 3},
+    "type": {"enum": ["hello", "accepted", "stop", "error"]},
     "sessionId": {"type": "string", "minLength": 1, "maxLength": 128},
     "generation": {"type": "integer", "minimum": 1},
     "codec": {"const": "h264"},
     "codedWidth": {"type": "integer", "minimum": 16, "maximum": 3840, "multipleOf": 2},
     "codedHeight": {"type": "integer", "minimum": 16, "maximum": 3840, "multipleOf": 2},
-    "displayWidth": {"type": "integer", "minimum": 16, "maximum": 3840, "multipleOf": 2},
-    "displayHeight": {"type": "integer", "minimum": 16, "maximum": 3840, "multipleOf": 2},
     "rotationDegrees": {"enum": [0, 90, 180, 270]},
     "fps": {"type": "integer", "const": 30},
     "bitrateBps": {"type": "integer", "minimum": 100000, "maximum": 100000000},
     "mediaPort": {"type": "integer", "minimum": 1, "maximum": 65535},
     "maxLongEdge": {"type": "integer", "minimum": 16, "maximum": 3840},
     "maxShortEdge": {"type": "integer", "minimum": 16, "maximum": 2160},
-    "state": {"type": "string", "minLength": 1},
-    "error": {"type": "string", "maxLength": 512},
-    "metrics": {"type": "object"}
+    "error": {"type": "string", "maxLength": 512}
   },
   "allOf": [
     {
@@ -30,7 +26,7 @@
       "then": {
         "required": [
           "sessionId", "generation", "codec", "codedWidth", "codedHeight",
-          "displayWidth", "displayHeight", "rotationDegrees", "fps", "bitrateBps"
+          "rotationDegrees", "fps", "bitrateBps"
         ],
         "allOf": [
           {
@@ -48,22 +44,6 @@
                 }
               }
             ]
-          },
-          {
-            "anyOf": [
-              {
-                "properties": {
-                  "displayWidth": {"maximum": 3840},
-                  "displayHeight": {"maximum": 2160}
-                }
-              },
-              {
-                "properties": {
-                  "displayWidth": {"maximum": 2160},
-                  "displayHeight": {"maximum": 3840}
-                }
-              }
-            ]
           }
         ]
       }
@@ -73,17 +53,13 @@
       "then": {"required": ["sessionId", "generation", "mediaPort", "maxLongEdge", "maxShortEdge"]}
     },
     {
-      "if": {"properties": {"type": {"enum": ["stop", "request_idr"]}}},
+      "if": {"properties": {"type": {"const": "stop"}}},
       "then": {"required": ["sessionId", "generation"]}
-    },
-    {
-      "if": {"properties": {"type": {"const": "status"}}},
-      "then": {"required": ["sessionId", "generation", "state", "metrics"]}
     },
     {
       "if": {"properties": {"type": {"const": "error"}}},
       "then": {"required": ["error"]}
     }
   ],
-  "additionalProperties": true
+  "additionalProperties": false
 }

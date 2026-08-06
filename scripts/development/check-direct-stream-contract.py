@@ -100,8 +100,8 @@ def main() -> int:
         raise AssertionError("the direct product profiles must be 2k30 plus the AVD-only 720p30 profile")
     if next(profile["availability"] for profile in profiles if profile["id"] == defaults["profileId"]) != "normal":
         raise AssertionError("the default profile must be the normal product profile")
-    if protocol_version != 2:
-        raise AssertionError("the direct stream contract must be protocol v2")
+    if protocol_version != 3:
+        raise AssertionError("the direct stream contract must be protocol v3")
     if schema["properties"]["protocolVersion"]["const"] != protocol_version:
         raise AssertionError("schema protocol version is out of sync")
 

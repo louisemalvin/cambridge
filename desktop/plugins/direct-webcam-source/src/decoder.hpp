@@ -36,10 +36,9 @@ struct DecoderConfig {
 class Decoder {
 public:
     using FrameCallback = std::function<void(VideoFramePtr)>;
-    using RequestIdrCallback = std::function<void()>;
     using EventCallback = std::function<void(const std::string &)>;
 
-    Decoder(FrameCallback on_frame, RequestIdrCallback request_idr, EventCallback on_event);
+    Decoder(FrameCallback on_frame, EventCallback on_event);
     ~Decoder();
 
     Decoder(const Decoder &) = delete;
@@ -74,11 +73,9 @@ private:
                        const DecoderConfig &config);
     void publish_nv12(AVFrame *decoded, const AccessUnit &access_unit, std::uint64_t stream_generation,
                       const DecoderConfig &config, RenderMode mode);
-    void request_idr();
     void report(const std::string &event);
 
     FrameCallback on_frame_;
-    RequestIdrCallback request_idr_;
     EventCallback on_event_;
     mutable std::mutex mutex_;
     std::condition_variable condition_;

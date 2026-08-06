@@ -268,7 +268,7 @@ void ControlServer::run()
                 }
                 continue;
             }
-            if (message.type == contract::kMessageRequestIdr || message.type == contract::kMessageStop) {
+            if (message.type == contract::kMessageStop) {
                 if (on_message_) {
                     on_message_(message);
                 }

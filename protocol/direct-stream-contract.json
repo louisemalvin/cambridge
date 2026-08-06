@@ -1,6 +1,6 @@
 {
   "name": "android-rtp-obs",
-  "protocolVersion": 2,
+  "protocolVersion": 3,
   "control": {
     "framing": "uint32-be-length-prefixed-json",
     "maxMessageBytes": 8192,
@@ -34,7 +34,6 @@
     "maxDecoderQueueAgeMs": 100,
     "maxLiveFrameAgeMs": 250,
     "reorderDeadlineMs": 20,
-    "recoveryIdrTimeoutMs": 1500,
     "keyframeIntervalSeconds": 1
   },
   "profiles": [
@@ -56,11 +55,9 @@
     }
   ],
   "messages": {
-    "hello": "{protocolVersion:2, type:hello, sessionId, generation, codec, codedWidth, codedHeight, displayWidth, displayHeight, rotationDegrees, fps, bitrateBps}",
-    "accepted": "{protocolVersion:2, type:accepted, sessionId, generation, mediaPort, maxLongEdge, maxShortEdge}",
-    "requestIdr": "{protocolVersion:2, type:request_idr, sessionId, generation}",
-    "stop": "{protocolVersion:2, type:stop, sessionId, generation}",
-    "status": "{protocolVersion:2, type:status, sessionId, generation, state, metrics}",
-    "error": "{protocolVersion:2, type:error, error}"
+    "hello": "{protocolVersion:3, type:hello, sessionId, generation, codec, codedWidth, codedHeight, rotationDegrees, fps, bitrateBps}",
+    "accepted": "{protocolVersion:3, type:accepted, sessionId, generation, mediaPort, maxLongEdge, maxShortEdge}",
+    "stop": "{protocolVersion:3, type:stop, sessionId, generation}",
+    "error": "{protocolVersion:3, type:error, error}"
   }
 }

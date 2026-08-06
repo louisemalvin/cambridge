@@ -10,7 +10,6 @@
     <string name="connect_computer">Connect</string>
     <string name="connecting_to_computer">Connecting to computer</string>
     <string name="camera_is_on">Camera is on</string>
-    <string name="connection_changed_reconnecting">Connection changed - reconnecting</string>
     <string name="stopping_stream">Stopping camera</string>
     <string name="not_connected">Waiting for webcam use</string>
     <string name="settings">Settings</string>

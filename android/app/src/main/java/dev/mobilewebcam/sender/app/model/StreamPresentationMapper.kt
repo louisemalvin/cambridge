@@ -15,9 +15,6 @@ object StreamPresentationMapper {
         StreamState.Connecting -> ConnectionUiState.Connecting(
             UiText.Resource(R.string.connecting_to_computer),
         )
-        StreamState.Reconnecting -> ConnectionUiState.Connecting(
-            UiText.Resource(R.string.connection_changed_reconnecting),
-        )
         is StreamState.Streaming -> ConnectionUiState.Streaming(
             status = UiText.Resource(R.string.camera_is_on),
             receiverName = snapshot.activeReceiverName?.let(UiText::Plain),
@@ -32,7 +29,6 @@ object StreamPresentationMapper {
     fun connectionStatus(streamState: StreamState, activeReceiverName: String? = null): UiText? = when (streamState) {
         StreamState.Idle -> UiText.Resource(R.string.not_connected)
         StreamState.Connecting -> UiText.Resource(R.string.connecting_to_computer)
-        StreamState.Reconnecting -> UiText.Resource(R.string.connection_changed_reconnecting)
         is StreamState.Streaming -> UiText.Resource(R.string.camera_is_on)
         StreamState.Stopping -> UiText.Resource(R.string.stopping_stream)
         is StreamState.Failed -> UiText.Plain(failureMessage(streamState.failure))
@@ -59,7 +55,7 @@ object StreamPresentationMapper {
         is StreamFailure.ReceiverRejectedProfile -> "The computer cannot use the selected video quality"
         is StreamFailure.EncoderPreparationFailed -> "This phone cannot use the selected video quality"
         is StreamFailure.StreamStartFailed -> "OBS is not available"
-        StreamFailure.NetworkDisconnected -> "Connection changed - reconnecting"
+        StreamFailure.NetworkDisconnected -> "Connection lost. Press Connect to start again"
         is StreamFailure.Unexpected -> "The camera could not start"
     }
 

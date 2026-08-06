@@ -54,8 +54,8 @@ std::shared_ptr<AVFrame> owned_frame(AVFrame *frame)
 
 } // namespace
 
-Decoder::Decoder(FrameCallback on_frame, RequestIdrCallback request_idr, EventCallback on_event)
-    : on_frame_(std::move(on_frame)), request_idr_(std::move(request_idr)), on_event_(std::move(on_event))
+Decoder::Decoder(FrameCallback on_frame, EventCallback on_event)
+    : on_frame_(std::move(on_frame)), on_event_(std::move(on_event))
 {
 }
 
@@ -126,7 +126,6 @@ void Decoder::request_cpu_fallback()
         queue_.clear();
     }
     condition_.notify_all();
-    request_idr();
     report("cpu_fallback_requested_after_dma_buf_import_failure");
 }
 
@@ -134,25 +133,19 @@ bool Decoder::submit(AccessUnit access_unit)
 {
     if (access_unit.annex_b.empty() || access_unit.annex_b.size() > contract::kMaximumAccessUnitBytes) {
         queue_drops_.fetch_add(1);
-        request_idr();
         return false;
     }
     bool accepted = false;
-    bool dropped_older_access_unit = false;
     {
         std::lock_guard<std::mutex> lock(mutex_);
         if (session_active_ && !stopping_) {
             if (queue_.size() >= contract::kMaximumInFlightAccessUnits) {
                 queue_.pop_front();
                 queue_drops_.fetch_add(1);
-                dropped_older_access_unit = true;
             }
             queue_.push_back(std::move(access_unit));
             accepted = true;
         }
-    }
-    if (!accepted || dropped_older_access_unit) {
-        request_idr();
     }
     condition_.notify_one();
     return accepted;
@@ -277,7 +270,6 @@ void Decoder::decode_access_unit(const AccessUnit &access_unit, std::uint64_t st
                                       kNanosecondsPerMillisecond;
     if (now > access_unit.receive_time_ns && now - access_unit.receive_time_ns > maximum_age) {
         stale_frames_.fetch_add(1);
-        request_idr();
         flush_codec();
         return;
     }
@@ -313,7 +305,6 @@ void Decoder::decode_access_unit(const AccessUnit &access_unit, std::uint64_t st
         decode_failures_.fetch_add(1);
         report("decoder_send_failed:" + ffmpeg_error(send_result));
         flush_codec();
-        request_idr();
         return;
     }
 
@@ -332,7 +323,6 @@ void Decoder::decode_access_unit(const AccessUnit &access_unit, std::uint64_t st
             decode_failures_.fetch_add(1);
             report("decoder_receive_failed:" + ffmpeg_error(receive_result));
             flush_codec();
-            request_idr();
             break;
         }
         publish_frame(decoded, access_unit, stream_generation, config);
@@ -385,7 +375,6 @@ void Decoder::publish_frame(AVFrame *decoded, const AccessUnit &access_unit, std
         }
         av_frame_free(&transferred);
         decode_failures_.fetch_add(1);
-        request_idr();
         return;
     }
     publish_nv12(decoded, access_unit, stream_generation, config, RenderMode::CpuNv12);
@@ -437,13 +426,6 @@ void Decoder::publish_nv12(AVFrame *decoded, const AccessUnit &access_unit, std:
     on_frame_(std::move(frame));
     frames_decoded_.fetch_add(1);
     current_render_mode_ = mode;
-}
-
-void Decoder::request_idr()
-{
-    if (request_idr_) {
-        request_idr_();
-    }
 }
 
 void Decoder::report(const std::string &event)

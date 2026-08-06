@@ -60,22 +60,22 @@ into the decoder or network code.
 - OBS presentation uses a finite texture pool and renders a placeholder when
   the newest frame is stale.
 
-When a bound is hit, the source requests an IDR and reports the event. It does
-not allocate a larger queue or block the graphics thread.
+When a bound is hit, the source drops media and reports the event. It does not
+request retransmission or an IDR, allocate a larger queue, or block the
+graphics thread.
 
 ## Lifecycle
 
 1. The user presses Connect for the configured OBS computer.
-2. The Android sender snapshots display and camera orientation, creates one
-   session ID and generation, validates the fixed 2K30 profile, and sends
-   protocol v2 `hello` over TCP.
+2. The Android sender locks the selected portrait or landscape axis, snapshots
+   the camera transform, creates one session ID and generation, validates the
+   fixed 2K30 profile, and sends protocol v3 `hello` over TCP.
 3. The native source accepts the matching hello, starts the decoder, and
    returns the media port.
 4. Android starts Camera2 and MediaCodec, then sends RTP/H.264.
 5. Stop, control disconnect, or invalid generation ends the session and clears
-   the mailbox. While Connect remains desired, a lost session releases stale
-   media resources and retries the same endpoint with bounded backoff and
-   jitter.
+   the mailbox. A lost session releases stale media resources and waits for a
+   new explicit Connect.
 
 The source never creates a virtual camera device. OBS consumes the source
 directly as a native texture source.

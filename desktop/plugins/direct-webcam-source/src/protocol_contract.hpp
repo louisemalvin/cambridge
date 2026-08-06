@@ -5,7 +5,7 @@
 
 namespace direct_webcam::contract {
 
-inline constexpr std::uint32_t kProtocolVersion = 2;
+inline constexpr std::uint32_t kProtocolVersion = 3;
 inline constexpr std::uint32_t kMinimumGeneration = 1;
 inline constexpr std::size_t kMaximumSessionIdBytes = 128;
 inline constexpr std::size_t kMaximumErrorBytes = 512;
@@ -40,7 +40,6 @@ inline constexpr std::uint32_t kDefaultCodedHeight = 1440;
 inline constexpr std::uint32_t kDefaultReorderDeadlineMs = 20;
 inline constexpr std::uint32_t kDefaultMaximumDecoderQueueAgeMs = 100;
 inline constexpr std::uint32_t kDefaultMaximumLiveFrameAgeMs = 250;
-inline constexpr std::uint32_t kDefaultRecoveryIdrTimeoutMs = 1500;
 inline constexpr std::uint32_t kControlConnectTimeoutMs = 2000;
 inline constexpr std::uint32_t kControlRequestTimeoutMs = 2000;
 inline constexpr std::uint32_t kWorkerPollIntervalMs = 100;
@@ -61,9 +60,7 @@ inline constexpr char kDefaultDecoderMode[] = "auto";
 inline constexpr char kDefaultDiagnosticsPath[] = "direct-webcam-diagnostics.json";
 inline constexpr char kMessageHello[] = "hello";
 inline constexpr char kMessageAccepted[] = "accepted";
-inline constexpr char kMessageRequestIdr[] = "request_idr";
 inline constexpr char kMessageStop[] = "stop";
-inline constexpr char kMessageStatus[] = "status";
 inline constexpr char kMessageError[] = "error";
 
 } // namespace direct_webcam::contract

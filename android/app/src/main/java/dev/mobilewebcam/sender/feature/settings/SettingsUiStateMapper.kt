@@ -32,8 +32,7 @@ object SettingsUiStateMapper {
                 )
             },
             isStreaming = snapshot.streamState is StreamState.Streaming ||
-                snapshot.streamState == StreamState.Connecting ||
-                snapshot.streamState == StreamState.Reconnecting,
+                snapshot.streamState == StreamState.Connecting,
         )
     }
 }

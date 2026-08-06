@@ -1,6 +1,7 @@
 package dev.mobilewebcam.sender.feature.webcam
 
 import android.Manifest
+import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -13,8 +14,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import dev.mobilewebcam.sender.app.lockStreamingOrientation
+import dev.mobilewebcam.sender.app.unlockStreamingOrientation
 import dev.mobilewebcam.sender.app.model.SenderScreenAction
 import dev.mobilewebcam.sender.app.model.SenderUiEffect
 
@@ -24,6 +28,8 @@ fun WebcamRoute(
     onCopyDiagnostics: (String) -> Unit,
 ) {
     val context = LocalContext.current
+    val configuration = LocalConfiguration.current
+    val activity = context as? Activity
     val viewModel: WebcamViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsState()
     var cameraPermissionGranted by remember {
@@ -56,6 +62,14 @@ fun WebcamRoute(
         onAction = { action ->
             when (action) {
                 SenderScreenAction.OpenSettings -> onNavigateToSettings()
+                SenderScreenAction.StartStream -> {
+                    activity?.lockStreamingOrientation(configuration.orientation)
+                    viewModel.onAction(action)
+                }
+                SenderScreenAction.StopStream -> {
+                    viewModel.onAction(action)
+                    activity?.unlockStreamingOrientation()
+                }
                 else -> viewModel.onAction(action)
             }
         },

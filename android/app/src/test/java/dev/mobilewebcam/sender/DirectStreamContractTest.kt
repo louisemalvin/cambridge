@@ -5,19 +5,16 @@ import dev.mobilewebcam.sender.connection.control.direct.DirectStreamContract.in
 import dev.mobilewebcam.sender.connection.control.direct.DirectStreamContract.requireProtocolVersion
 import dev.mobilewebcam.sender.connection.control.direct.DirectStreamContract.stringField
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Test
 
 class DirectStreamContractTest {
     @Test
-    fun helloUsesV2CodedAndDisplayGeometry() {
+    fun helloUsesV3CodedGeometryAndResolvedRotation() {
         val hello = DirectStreamContract.hello(
             sessionId = "test-session",
             generation = 1,
             codedWidth = 2_560,
             codedHeight = 1_440,
-            displayWidth = 1_440,
-            displayHeight = 2_560,
             rotationDegrees = 90,
             fps = DirectStreamContract.SUPPORTED_FPS,
             bitrateBps = 18_000_000,
@@ -27,10 +24,7 @@ class DirectStreamContractTest {
         assertEquals("hello", hello.stringField("type"))
         assertEquals(2_560, hello.intField("codedWidth"))
         assertEquals(1_440, hello.intField("codedHeight"))
-        assertEquals(1_440, hello.intField("displayWidth"))
-        assertEquals(2_560, hello.intField("displayHeight"))
         assertEquals(90, hello.intField("rotationDegrees"))
-        assertFalse("width" in hello)
-        assertFalse("height" in hello)
+        assertEquals(DirectStreamContract.SUPPORTED_FPS, hello.intField("fps"))
     }
 }

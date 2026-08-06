@@ -34,8 +34,6 @@ constexpr std::uint32_t kMinimumQueueAgeMs = 1;
 constexpr std::uint32_t kMaximumQueueAgeMs = 2000;
 constexpr std::uint32_t kMinimumLiveAgeMs = 33;
 constexpr std::uint32_t kMaximumLiveAgeMs = 5000;
-constexpr std::uint32_t kMinimumRecoveryMs = 100;
-constexpr std::uint32_t kMaximumRecoveryMs = 10'000;
 constexpr std::size_t kMinimumSocketBufferBytes = 64 * 1024;
 constexpr std::size_t kMaximumSocketBufferBytes = 32 * 1024 * 1024;
 constexpr std::size_t kSocketBufferStepBytes = 4096;
@@ -46,7 +44,6 @@ constexpr std::uint32_t kPortStep = 1;
 constexpr std::uint32_t kDeadlineStep = 1;
 constexpr std::uint32_t kQueueAgeStep = 1;
 constexpr std::uint32_t kLiveAgeStep = 1;
-constexpr std::uint32_t kRecoveryStep = 1;
 constexpr std::uint32_t kMailboxCapacity = contract::kMailboxCapacity;
 constexpr std::uint32_t kModuleProtocolVersion = contract::kProtocolVersion;
 constexpr char kModuleVersion[] = DIRECT_WEBCAM_VERSION;
@@ -57,7 +54,6 @@ constexpr char kPropertyMaximumShortEdge[] = "maximum_short_edge";
 constexpr char kPropertyReorderDeadline[] = "reorder_deadline_ms";
 constexpr char kPropertyQueueAge[] = "maximum_decoder_queue_age_ms";
 constexpr char kPropertyLiveAge[] = "maximum_live_frame_age_ms";
-constexpr char kPropertyRecoveryTimeout[] = "recovery_idr_timeout_ms";
 constexpr char kPropertySocketBuffer[] = "receive_buffer_bytes";
 constexpr char kPropertyDrmDevice[] = "drm_device";
 constexpr char kPropertyDecoderMode[] = "decoder_mode";
@@ -85,17 +81,6 @@ void observe_maximum(std::atomic<std::uint64_t> &maximum, std::uint64_t value)
 std::uint64_t milliseconds(std::uint64_t nanoseconds)
 {
     return nanoseconds / kNanosecondsPerMillisecond;
-}
-
-std::string stable_render_mode(const std::string &render_mode)
-{
-    if (render_mode == "DMA-BUF direct") {
-        return "dma_buf_direct";
-    }
-    if (render_mode == "CPU NV12 upload") {
-        return "cpu_nv12_upload";
-    }
-    return render_mode;
 }
 
 std::uint32_t bounded_setting(obs_data_t *settings, const char *name, std::uint32_t fallback,
@@ -156,7 +141,6 @@ bool DirectWebcamSource::start(std::string &error)
     }
     decoder_ = std::make_unique<Decoder>(
         [this](VideoFramePtr frame) { on_decoder_frame(std::move(frame)); },
-        [this] { request_idr(); },
         [this](const std::string &event) { on_decoder_event(event); });
     decoder_->start();
 
@@ -286,89 +270,7 @@ void DirectWebcamSource::render(gs_effect_t *)
 
 void DirectWebcamSource::tick(float)
 {
-    const std::uint64_t now = monotonic_time_ns();
-    const SourceConfig config = configuration();
-    std::string session_id;
-    std::uint64_t generation = 0;
-    std::uint32_t width = 0;
-    std::uint32_t height = 0;
-    std::uint32_t display_width = 0;
-    std::uint32_t display_height = 0;
-    std::uint32_t rotation_degrees = 0;
-    std::uint32_t fps = 0;
-    std::uint32_t bitrate_bps = 0;
-    bool stale = false;
-    bool should_request_idr = false;
-    {
-        std::lock_guard<std::mutex> lock(session_mutex_);
-        if (!session_active_ || now - last_status_at_ns_ < kNanosecondsPerSecond) {
-            return;
-        }
-        last_status_at_ns_ = now;
-        session_id = session_id_;
-        generation = stream_generation_;
-        width = active_width_;
-        height = active_height_;
-        display_width = active_display_width_;
-        display_height = active_display_height_;
-        rotation_degrees = active_rotation_degrees_;
-        fps = active_fps_;
-        bitrate_bps = active_bitrate_bps_;
-        stale = stale_state_;
-        if (stale && (last_idr_request_at_ns_ == 0 ||
-                      now - last_idr_request_at_ns_ >=
-                          static_cast<std::uint64_t>(config.recovery_idr_timeout_ms) *
-                              kNanosecondsPerMillisecond)) {
-            should_request_idr = true;
-        }
-    }
-    if (!control_server_) {
-        return;
-    }
-    if (should_request_idr) {
-        request_idr();
-    }
-    StatusMetrics metrics;
-    metrics.frames_decoded = decoder_ ? decoder_->frames_decoded() : 0;
-    metrics.frames_replaced = mailbox_.replaced_count();
-    metrics.packets_received = media_receiver_ ? media_receiver_->packets_received() : 0;
-    metrics.bytes_received = media_receiver_ ? media_receiver_->bytes_received() : 0;
-    metrics.packets_lost = media_receiver_ ? media_receiver_->packets_lost() : 0;
-    metrics.malformed_packets = media_receiver_ ? media_receiver_->malformed_packets() : 0;
-    metrics.invalid_source_packets = media_receiver_ ? media_receiver_->invalid_source_packets() : 0;
-    metrics.decode_failures = decoder_ ? decoder_->decode_failures() : 0;
-    metrics.decoder_queue_drops = decoder_ ? decoder_->queue_drops() : 0;
-    metrics.decoder_queue_occupancy = decoder_ ? decoder_->queue_occupancy() : 0;
-    metrics.decoder_queue_maximum = contract::kMaximumInFlightAccessUnits;
-    metrics.reorder_occupancy = media_receiver_ ? media_receiver_->reorder_occupancy() : 0;
-    metrics.reorder_maximum = contract::kMaximumReorderPackets;
-    metrics.reorder_peak = media_receiver_ ? media_receiver_->reorder_peak() : 0;
-    metrics.reorder_deadline_drops = media_receiver_ ? media_receiver_->reorder_deadline_drops() : 0;
-    metrics.stale_frames = (decoder_ ? decoder_->stale_frames() : 0) + stale_transitions_.load();
-    metrics.mailbox_occupancy = mailbox_.occupancy();
-    metrics.mailbox_maximum = kMailboxCapacity;
-    metrics.import_failures = renderer_.import_failures();
-    metrics.cpu_uploads = renderer_.cpu_uploads();
-    metrics.gpu_copies = renderer_.gpu_copies();
-    metrics.hardware_cpu_transfers = decoder_ ? decoder_->hardware_cpu_transfers() : 0;
-    metrics.max_receive_to_decode_ms = milliseconds(max_receive_to_decode_ns_.load());
-    metrics.max_receive_to_publish_ms = milliseconds(max_receive_to_publish_ns_.load());
-    metrics.max_receive_to_render_ms = milliseconds(max_receive_to_render_ns_.load());
-    metrics.max_live_frame_age_ms = metrics.max_receive_to_render_ms;
-    metrics.frames_rendered = frames_rendered_.load();
-    metrics.coded_width = width;
-    metrics.coded_height = height;
-    metrics.display_width = display_width;
-    metrics.display_height = display_height;
-    metrics.rotation_degrees = rotation_degrees;
-    metrics.width = display_width;
-    metrics.height = display_height;
-    metrics.fps = fps;
-    metrics.bitrate_bps = bitrate_bps;
-    metrics.decoder = decoder_ ? decoder_->decoder_name() : "uninitialized";
-    metrics.render_mode = stable_render_mode(renderer_.render_mode());
-    const auto json = encode_status_message(session_id, generation, stale ? "waiting_for_idr" : "presenting", metrics);
-    control_server_->send_json(json);
+    // Media loss is handled by dropping late or incomplete access units.
 }
 
 void DirectWebcamSource::write_diagnostics()
@@ -465,11 +367,14 @@ bool DirectWebcamSource::on_hello(const HelloMessage &hello, const std::string &
     const auto short_edge = [](std::uint32_t width, std::uint32_t height) {
         return std::min(width, height);
     };
+    const bool swaps_geometry = hello.rotation_degrees == 90 || hello.rotation_degrees == 270;
+    const std::uint32_t display_width = swaps_geometry ? hello.coded_height : hello.coded_width;
+    const std::uint32_t display_height = swaps_geometry ? hello.coded_width : hello.coded_height;
     if (hello.codec != contract::kCodecH264 || hello.fps != contract::kSupportedFps ||
         long_edge(hello.coded_width, hello.coded_height) > config.maximum_long_edge ||
         short_edge(hello.coded_width, hello.coded_height) > config.maximum_short_edge ||
-        long_edge(hello.display_width, hello.display_height) > config.maximum_long_edge ||
-        short_edge(hello.display_width, hello.display_height) > config.maximum_short_edge) {
+        long_edge(display_width, display_height) > config.maximum_long_edge ||
+        short_edge(display_width, display_height) > config.maximum_short_edge) {
         error = "only bounded H.264 sessions are accepted";
         return false;
     }
@@ -481,8 +386,8 @@ bool DirectWebcamSource::on_hello(const HelloMessage &hello, const std::string &
         stream_generation_ = hello.generation;
         active_width_ = hello.coded_width;
         active_height_ = hello.coded_height;
-        active_display_width_ = hello.display_width;
-        active_display_height_ = hello.display_height;
+        active_display_width_ = display_width;
+        active_display_height_ = display_height;
         active_rotation_degrees_ = hello.rotation_degrees;
         active_fps_ = hello.fps;
         active_bitrate_bps_ = hello.bitrate_bps;
@@ -507,8 +412,8 @@ bool DirectWebcamSource::on_hello(const HelloMessage &hello, const std::string &
     }
     report("session_accepted:id=" + hello.session_id + ":generation=" + std::to_string(hello.generation) +
            ":coded=" + std::to_string(hello.coded_width) + "x" + std::to_string(hello.coded_height) +
-           ":display=" + std::to_string(hello.display_width) + "x" +
-           std::to_string(hello.display_height) + ":rotation=" + std::to_string(hello.rotation_degrees) +
+           ":display=" + std::to_string(display_width) + "x" +
+           std::to_string(display_height) + ":rotation=" + std::to_string(hello.rotation_degrees) +
            "@" + std::to_string(hello.fps) + ":bitrate=" + std::to_string(hello.bitrate_bps));
     return true;
 }
@@ -536,8 +441,8 @@ void DirectWebcamSource::on_control_disconnect()
 
 void DirectWebcamSource::on_access_unit(AccessUnit access_unit)
 {
-    if (decoder_ && !decoder_->submit(std::move(access_unit))) {
-        request_idr();
+    if (decoder_) {
+        decoder_->submit(std::move(access_unit));
     }
 }
 
@@ -545,7 +450,6 @@ void DirectWebcamSource::on_packet_loss(std::size_t lost)
 {
     packet_loss_events_.fetch_add(1);
     report("rtp_loss:packets=" + std::to_string(lost));
-    request_idr();
 }
 
 void DirectWebcamSource::on_invalid_packet(const std::string &reason)
@@ -589,24 +493,6 @@ void DirectWebcamSource::on_renderer_hardware_fallback()
     }
 }
 
-void DirectWebcamSource::request_idr()
-{
-    std::string session;
-    std::uint64_t generation = 0;
-    {
-        std::lock_guard<std::mutex> lock(session_mutex_);
-        if (!session_active_) {
-            return;
-        }
-        session = session_id_;
-        generation = stream_generation_;
-        last_idr_request_at_ns_ = monotonic_time_ns();
-    }
-    if (control_server_) {
-        control_server_->send_json(encode_request_idr_message(session, generation));
-    }
-}
-
 void DirectWebcamSource::end_session()
 {
     std::lock_guard<std::mutex> lock(session_mutex_);
@@ -622,8 +508,6 @@ void DirectWebcamSource::end_session()
     active_fps_ = 0;
     active_bitrate_bps_ = 0;
     stale_state_ = false;
-    last_status_at_ns_ = 0;
-    last_idr_request_at_ns_ = 0;
     first_frame_reported_.store(false);
     last_rendered_frame_generation_.store(0);
     mailbox_.clear();
@@ -661,9 +545,6 @@ SourceConfig source_config_from_settings(obs_data_t *settings)
     config.maximum_live_frame_age_ms = bounded_setting(settings, kPropertyLiveAge,
                                                        contract::kDefaultMaximumLiveFrameAgeMs,
                                                        kMinimumLiveAgeMs, kMaximumLiveAgeMs);
-    config.recovery_idr_timeout_ms = bounded_setting(settings, kPropertyRecoveryTimeout,
-                                                     contract::kDefaultRecoveryIdrTimeoutMs, kMinimumRecoveryMs,
-                                                     kMaximumRecoveryMs);
     config.receive_buffer_bytes = static_cast<std::size_t>(bounded_setting(
         settings, kPropertySocketBuffer, contract::kDefaultReceiveBufferBytes, kMinimumSocketBufferBytes,
         kMaximumSocketBufferBytes));
@@ -683,7 +564,6 @@ void source_get_defaults(obs_data_t *settings)
     obs_data_set_default_int(settings, kPropertyReorderDeadline, contract::kDefaultReorderDeadlineMs);
     obs_data_set_default_int(settings, kPropertyQueueAge, contract::kDefaultMaximumDecoderQueueAgeMs);
     obs_data_set_default_int(settings, kPropertyLiveAge, contract::kDefaultMaximumLiveFrameAgeMs);
-    obs_data_set_default_int(settings, kPropertyRecoveryTimeout, contract::kDefaultRecoveryIdrTimeoutMs);
     obs_data_set_default_int(settings, kPropertySocketBuffer, contract::kDefaultReceiveBufferBytes);
     obs_data_set_default_string(settings, kPropertyDrmDevice, contract::kDefaultDrmDevice);
     obs_data_set_default_string(settings, kPropertyDecoderMode, contract::kDefaultDecoderMode);
@@ -713,8 +593,6 @@ obs_properties_t *source_get_properties(void *data)
                            kMaximumQueueAgeMs, kQueueAgeStep);
     obs_properties_add_int(advanced_properties, kPropertyLiveAge, "Maximum live frame age (ms)", kMinimumLiveAgeMs,
                            kMaximumLiveAgeMs, kLiveAgeStep);
-    obs_properties_add_int(advanced_properties, kPropertyRecoveryTimeout, "IDR recovery timeout (ms)", kMinimumRecoveryMs,
-                           kMaximumRecoveryMs, kRecoveryStep);
     obs_properties_add_int(advanced_properties, kPropertySocketBuffer, "UDP receive buffer (bytes)", kMinimumSocketBufferBytes,
                            kMaximumSocketBufferBytes, kSocketBufferStepBytes);
     obs_properties_add_path(advanced_properties, kPropertyDrmDevice, "DRM render device", OBS_PATH_FILE, "DRM device (*)",

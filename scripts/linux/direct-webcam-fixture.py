@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import select
 import socket
 import struct
 import subprocess
@@ -18,9 +17,7 @@ from typing import Any
 
 CONTROL_HEADER_BYTES = 4
 CONTROL_TIMEOUT_SECONDS = 2.0
-CONTROL_POLL_SECONDS = 0.1
-STATUS_SAMPLE_INTERVAL_SECONDS = 1.0
-RECONNECT_PAUSE_SECONDS = 1.0
+FIXTURE_POLL_SECONDS = 0.1
 PROCESS_STOP_TIMEOUT_SECONDS = 3.0
 MINIMUM_DURATION_SECONDS = 1.0
 DEFAULT_STARTUP_DELAY_SECONDS = 0.0
@@ -94,7 +91,6 @@ def connect_control(
     rotation_degrees: int,
 ) -> tuple[socket.socket, str, dict[str, Any]]:
     session_id = f"fixture-{uuid.uuid4()}"
-    display_width, display_height = display_geometry(profile, rotation_degrees)
     connection = socket.create_connection((host, port), timeout=CONTROL_TIMEOUT_SECONDS)
     send_frame(
         connection,
@@ -106,8 +102,6 @@ def connect_control(
             "codec": "h264",
             "codedWidth": profile["width"],
             "codedHeight": profile["height"],
-            "displayWidth": display_width,
-            "displayHeight": display_height,
             "rotationDegrees": rotation_degrees,
             "fps": profile["fps"],
             "bitrateBps": profile["bitrateBps"],
@@ -219,40 +213,6 @@ def stop_process(process: subprocess.Popen[bytes] | None, stderr: Any | None) ->
         stderr.close()
 
 
-def consume_control(
-    connection: socket.socket,
-    buffer: bytearray,
-    summary: dict[str, Any],
-) -> None:
-    try:
-        chunk = connection.recv(64 * 1024)
-    except BlockingIOError:
-        return
-    if not chunk:
-        raise ConnectionError("receiver closed the control connection")
-    buffer.extend(chunk)
-    while len(buffer) >= CONTROL_HEADER_BYTES:
-        message_size = struct.unpack(">I", buffer[:CONTROL_HEADER_BYTES])[0]
-        if len(buffer) < CONTROL_HEADER_BYTES + message_size:
-            return
-        payload_start = CONTROL_HEADER_BYTES
-        payload_end = payload_start + message_size
-        message = json.loads(bytes(buffer[payload_start:payload_end]).decode("utf-8"))
-        del buffer[:payload_end]
-        message_type = message.get("type")
-        if message_type == "status":
-            metrics = message.get("metrics", {})
-            summary["statusCount"] += 1
-            summary["lastStatus"] = metrics
-            for name, value in metrics.items():
-                if isinstance(value, int):
-                    summary["maximumMetrics"][name] = max(summary["maximumMetrics"].get(name, value), value)
-        elif message_type == "request_idr":
-            summary["idrRequests"] += 1
-        elif message_type == "error":
-            summary["receiverErrors"].append(message.get("error", "unknown receiver error"))
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--contract", type=Path, default=DEFAULT_CONTRACT)
@@ -261,7 +221,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--control-port", type=int, default=None)
     parser.add_argument("--media-port", type=int, default=None)
     parser.add_argument("--duration", type=float, default=30.0)
-    parser.add_argument("--reconnect-after", type=float, default=None)
     parser.add_argument(
         "--rotation-degrees",
         type=int,
@@ -280,30 +239,21 @@ def main() -> int:
         raise ValueError("duration must be at least one second")
     if args.startup_delay < DEFAULT_STARTUP_DELAY_SECONDS:
         raise ValueError("startup delay cannot be negative")
-    if args.reconnect_after is not None and not MINIMUM_DURATION_SECONDS <= args.reconnect_after < args.duration:
-        raise ValueError("reconnect-after must be inside the fixture duration")
     contract, profile, profile_id = load_contract(args.contract, args.profile)
     control_port = args.control_port or contract["defaults"]["controlPort"]
     media_port = args.media_port or control_port + contract["defaults"]["mediaPortOffset"]
     summary: dict[str, Any] = {
         "profile": profile,
         "durationSeconds": args.duration,
-        "reconnectAfterSeconds": args.reconnect_after,
         "controlConnections": 0,
-        "statusCount": 0,
-        "lastStatus": {},
-        "maximumMetrics": {},
-        "idrRequests": 0,
         "receiverErrors": [],
     }
     connection: socket.socket | None = None
     ffmpeg_process: subprocess.Popen[bytes] | None = None
     ffmpeg_stderr: Any | None = None
-    control_buffer = bytearray()
     generation = 1
     session_id: str | None = None
     started = time.monotonic()
-    reconnect_done = False
     stderr_path = (args.output.parent if args.output else Path.cwd()) / f"direct-webcam-fixture-{profile_id}.ffmpeg.log"
     try:
         connection, session_id, _ = connect_control(
@@ -321,40 +271,9 @@ def main() -> int:
             args.ffmpeg, args.host, media_port, profile, contract, stderr_path
         )
         while time.monotonic() - started < args.duration:
-            elapsed = time.monotonic() - started
             if ffmpeg_process.poll() is not None:
                 raise RuntimeError(f"ffmpeg exited with status {ffmpeg_process.returncode}")
-            if (
-                args.reconnect_after is not None
-                and not reconnect_done
-                and elapsed >= args.reconnect_after
-            ):
-                stop_process(ffmpeg_process, ffmpeg_stderr)
-                ffmpeg_process = None
-                ffmpeg_stderr = None
-                connection.close()
-                connection = None
-                time.sleep(RECONNECT_PAUSE_SECONDS)
-                generation += 1
-                control_buffer.clear()
-                connection, session_id, _ = connect_control(
-                    args.host,
-                    control_port,
-                    contract,
-                    profile,
-                    generation,
-                    args.rotation_degrees,
-                )
-                summary["controlConnections"] += 1
-                ffmpeg_process, ffmpeg_stderr = start_ffmpeg(
-                    args.ffmpeg, args.host, media_port, profile, contract, stderr_path
-                )
-                reconnect_done = True
-                continue
-            if connection is not None:
-                readable, _, _ = select.select([connection], [], [], CONTROL_POLL_SECONDS)
-                if readable:
-                    consume_control(connection, control_buffer, summary)
+            time.sleep(FIXTURE_POLL_SECONDS)
         if connection is not None:
             try:
                 send_frame(

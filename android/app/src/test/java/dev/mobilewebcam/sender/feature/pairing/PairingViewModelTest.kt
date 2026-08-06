@@ -18,16 +18,12 @@ class PairingViewModelTest {
     }
 
     @Test
-    fun connectingAndReconnectingStatesMapToConnecting() {
+    fun connectingStateMapsToConnecting() {
         val connecting = PairingUiStateMapper.map(
             PairingDomainSnapshot(StreamState.Connecting, null),
         )
-        val reconnecting = PairingUiStateMapper.map(
-            PairingDomainSnapshot(StreamState.Reconnecting, null),
-        )
 
         assertTrue(connecting is PairingUiState.Connecting)
-        assertTrue(reconnecting is PairingUiState.Connecting)
     }
 
     @Test
@@ -36,7 +32,7 @@ class PairingViewModelTest {
             PairingDomainSnapshot(StreamState.Failed(StreamFailure.NetworkDisconnected), null),
         )
 
-        assertEquals(PairingUiState.Failed(UiText.Plain("Connection changed - reconnecting")), state)
+        assertEquals(PairingUiState.Failed(UiText.Plain("Connection lost. Press Connect to start again")), state)
     }
 
     @Test

@@ -27,7 +27,6 @@ struct SourceConfig {
     std::uint32_t reorder_deadline_ms = contract::kDefaultReorderDeadlineMs;
     std::uint32_t maximum_decoder_queue_age_ms = contract::kDefaultMaximumDecoderQueueAgeMs;
     std::uint32_t maximum_live_frame_age_ms = contract::kDefaultMaximumLiveFrameAgeMs;
-    std::uint32_t recovery_idr_timeout_ms = contract::kDefaultRecoveryIdrTimeoutMs;
     std::size_t receive_buffer_bytes = contract::kDefaultReceiveBufferBytes;
     std::string drm_device = contract::kDefaultDrmDevice;
     std::string decoder_mode = contract::kDefaultDecoderMode;
@@ -64,7 +63,6 @@ private:
     void on_decoder_frame(VideoFramePtr frame);
     void on_decoder_event(const std::string &event);
     void on_renderer_hardware_fallback();
-    void request_idr();
     void end_session();
     void report(const std::string &event) const;
 
@@ -84,8 +82,6 @@ private:
     std::uint32_t active_bitrate_bps_ = 0;
     bool session_active_ = false;
     bool started_ = false;
-    std::uint64_t last_status_at_ns_ = 0;
-    std::uint64_t last_idr_request_at_ns_ = 0;
     bool stale_state_ = false;
 
     LatestFrameMailbox<VideoFrame> mailbox_;
