@@ -90,6 +90,26 @@ void test_accepted_uses_shape_independent_bounds()
     require(accepted.find("maxHeight") == std::string::npos);
 }
 
+void test_probe_and_capabilities_round_trip()
+{
+    const std::string probe =
+        R"({"protocolVersion":4,"type":"probe","requestId":"request-1"})";
+    direct_webcam::ControlMessage message;
+    std::string error;
+    require(direct_webcam::decode_control_message(probe, message, error));
+    require(message.type == direct_webcam::contract::kMessageProbe);
+    require(message.request_id == "request-1");
+
+    const auto capabilities = direct_webcam::encode_capabilities_message(
+        "request-1", direct_webcam::contract::kDefaultReceiverId,
+        direct_webcam::contract::kDefaultReceiverDisplayName, {"720p30", "1080p30", "2k30"},
+        direct_webcam::contract::kMaximumLongEdge, direct_webcam::contract::kMaximumShortEdge);
+    require(capabilities.find("\"type\":\"capabilities\"") != std::string::npos);
+    require(capabilities.find("\"requestId\":\"request-1\"") != std::string::npos);
+    require(capabilities.find("\"receiverId\":\"obs-direct-webcam-source\"") != std::string::npos);
+    require(capabilities.find("\"1080p30\"") != std::string::npos);
+}
+
 void test_control_frame_has_big_endian_length_prefix()
 {
     const auto frame = direct_webcam::frame_control_message("{}");
@@ -110,6 +130,7 @@ int main()
     test_duplicate_and_invalid_messages_are_rejected();
     test_reverse_orientations_are_valid();
     test_accepted_uses_shape_independent_bounds();
+    test_probe_and_capabilities_round_trip();
     test_control_frame_has_big_endian_length_prefix();
     return 0;
 }

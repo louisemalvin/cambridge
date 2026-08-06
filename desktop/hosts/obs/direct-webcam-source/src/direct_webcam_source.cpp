@@ -14,6 +14,7 @@
 #include <limits>
 #include <sstream>
 #include <time.h>
+#include <vector>
 
 namespace direct_webcam {
 namespace {
@@ -168,6 +169,7 @@ bool DirectWebcamSource::start(std::string &error)
         [this](const HelloMessage &hello, const std::string &peer, std::string &reason) {
             return on_hello(hello, peer, reason);
         },
+        [this](const std::string &request_id) { return on_probe(request_id); },
         [this](const ControlMessage &message) { on_control_message(message); },
         [this] { on_control_disconnect(); });
     if (!control_server_->start(error)) {
@@ -420,6 +422,23 @@ bool DirectWebcamSource::on_hello(const HelloMessage &hello, const std::string &
            std::to_string(display_height) + ":rotation=" + std::to_string(hello.rotation_degrees) +
            "@" + std::to_string(hello.fps) + ":bitrate=" + std::to_string(hello.bitrate_bps));
     return true;
+}
+
+std::string DirectWebcamSource::on_probe(const std::string &request_id) const
+{
+    const SourceConfig config = configuration();
+    std::vector<std::string> profile_ids;
+    profile_ids.reserve(contract::kProfiles.size());
+    for (const contract::ProfileContract &profile : contract::kProfiles) {
+        profile_ids.emplace_back(profile.id);
+    }
+    return encode_capabilities_message(
+        request_id,
+        contract::kDefaultReceiverId,
+        contract::kDefaultReceiverDisplayName,
+        profile_ids,
+        config.maximum_long_edge,
+        config.maximum_short_edge);
 }
 
 void DirectWebcamSource::on_control_message(const ControlMessage &message)

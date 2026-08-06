@@ -55,6 +55,7 @@ public:
 private:
     [[nodiscard]] SourceConfig configuration() const;
     bool on_hello(const HelloMessage &hello, const std::string &peer_address, std::string &error);
+    std::string on_probe(const std::string &request_id) const;
     void on_control_message(const ControlMessage &message);
     void on_control_disconnect();
     void on_access_unit(AccessUnit access_unit);

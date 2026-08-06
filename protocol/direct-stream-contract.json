@@ -11,6 +11,10 @@
     "serviceType": "_direct-webcam._tcp",
     "txtKeys": ["id", "name", "protocolVersion", "codec"]
   },
+  "receiver": {
+    "defaultId": "obs-direct-webcam-source",
+    "defaultDisplayName": "OBS receiver"
+  },
   "defaults": {
     "controlPort": 55031,
     "mediaPortOffset": 1,

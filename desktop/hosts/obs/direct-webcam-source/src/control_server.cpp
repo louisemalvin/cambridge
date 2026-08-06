@@ -78,11 +78,13 @@ std::string peer_address(const sockaddr_in &peer)
 } // namespace
 
 ControlServer::ControlServer(std::uint16_t port, std::uint16_t media_port, std::uint32_t maximum_long_edge,
-                             std::uint32_t maximum_short_edge, HelloHandler on_hello, MessageHandler on_message,
+                             std::uint32_t maximum_short_edge, HelloHandler on_hello, ProbeHandler on_probe,
+                             MessageHandler on_message,
                              DisconnectHandler on_disconnect)
     : port_(port), media_port_(media_port), maximum_long_edge_(maximum_long_edge),
       maximum_short_edge_(maximum_short_edge),
-      on_hello_(std::move(on_hello)), on_message_(std::move(on_message)), on_disconnect_(std::move(on_disconnect))
+      on_hello_(std::move(on_hello)), on_probe_(std::move(on_probe)), on_message_(std::move(on_message)),
+      on_disconnect_(std::move(on_disconnect))
 {
 }
 
@@ -127,13 +129,16 @@ void ControlServer::stop()
 {
     int listen_fd = kInvalidSocket;
     int active_fd = kInvalidSocket;
+    int pending_fd = kInvalidSocket;
     {
         std::lock_guard<std::mutex> lock(mutex_);
         stopping_ = true;
         listen_fd = listen_fd_;
         active_fd = active_fd_;
+        pending_fd = pending_fd_;
         listen_fd_ = kInvalidSocket;
         active_fd_ = kInvalidSocket;
+        pending_fd_ = kInvalidSocket;
     }
     if (listen_fd != kInvalidSocket) {
         shutdown(listen_fd, SHUT_RDWR);
@@ -142,6 +147,10 @@ void ControlServer::stop()
     if (active_fd != kInvalidSocket) {
         shutdown(active_fd, SHUT_RDWR);
         close(active_fd);
+    }
+    if (pending_fd != kInvalidSocket) {
+        shutdown(pending_fd, SHUT_RDWR);
+        close(pending_fd);
     }
     if (thread_.joinable()) {
         thread_.join();
@@ -179,6 +188,16 @@ void ControlServer::close_active_connection()
         shutdown(descriptor, SHUT_RDWR);
         close(descriptor);
     }
+}
+
+bool ControlServer::take_pending_connection(int descriptor)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (pending_fd_ != descriptor || stopping_) {
+        return false;
+    }
+    pending_fd_ = kInvalidSocket;
+    return true;
 }
 
 bool ControlServer::read_frame(int fd, std::string &json)
@@ -230,10 +249,54 @@ void ControlServer::run()
         if (client == kInvalidSocket) {
             continue;
         }
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (stopping_) {
+                close(client);
+                break;
+            }
+            pending_fd_ = client;
+        }
+
+        std::string first_json;
+        const bool received_first_frame = read_frame(client, first_json);
+        const bool owns_pending_connection = take_pending_connection(client);
+        if (!received_first_frame || !owns_pending_connection) {
+            if (owns_pending_connection) {
+                shutdown(client, SHUT_RDWR);
+                close(client);
+            }
+            continue;
+        }
+
+        ControlMessage first_message;
+        std::string error;
+        if (!decode_control_message(first_json, first_message, error)) {
+            write_frame(client, encode_error_message(error));
+            shutdown(client, SHUT_RDWR);
+            close(client);
+            continue;
+        }
+        if (first_message.type == contract::kMessageProbe) {
+            if (on_probe_) {
+                write_frame(client, on_probe_(first_message.request_id));
+            }
+            shutdown(client, SHUT_RDWR);
+            close(client);
+            continue;
+        }
+        if (first_message.type != contract::kMessageHello) {
+            write_frame(client, encode_error_message("the first control message must be hello"));
+            shutdown(client, SHUT_RDWR);
+            close(client);
+            continue;
+        }
+
         close_active_connection();
         {
             std::lock_guard<std::mutex> lock(mutex_);
             if (stopping_) {
+                shutdown(client, SHUT_RDWR);
                 close(client);
                 break;
             }
@@ -241,22 +304,23 @@ void ControlServer::run()
         }
 
         bool accepted = false;
+        bool first_message_pending = true;
         while (true) {
-            std::string json;
-            if (!read_frame(client, json)) {
-                break;
-            }
             ControlMessage message;
-            std::string error;
-            if (!decode_control_message(json, message, error)) {
-                write_frame(client, encode_error_message(error));
-                break;
-            }
-            if (!accepted) {
-                if (message.type != contract::kMessageHello) {
-                    write_frame(client, encode_error_message("the first control message must be hello"));
+            if (first_message_pending) {
+                message = std::move(first_message);
+                first_message_pending = false;
+            } else {
+                std::string json;
+                if (!read_frame(client, json)) {
                     break;
                 }
+                if (!decode_control_message(json, message, error)) {
+                    write_frame(client, encode_error_message(error));
+                    break;
+                }
+            }
+            if (!accepted) {
                 if (!on_hello_ || !on_hello_(message.hello, peer_address(peer), error)) {
                     write_frame(client, encode_error_message(error.empty() ? "session rejected" : error));
                     break;

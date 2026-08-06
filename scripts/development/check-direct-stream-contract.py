@@ -204,6 +204,20 @@ def main() -> int:
     )
     check_scalar(
         cpp_contract,
+        r'kDefaultReceiverId\[\] = "([^"]+)"',
+        contract["receiver"]["defaultId"],
+        "C++ default receiver ID",
+        str,
+    )
+    check_scalar(
+        cpp_contract,
+        r'kDefaultReceiverDisplayName\[\] = "([^"]+)"',
+        contract["receiver"]["defaultDisplayName"],
+        "C++ default receiver display name",
+        str,
+    )
+    check_scalar(
+        cpp_contract,
         r"kDefaultMediaPortOffset = ([0-9']+)",
         defaults["mediaPortOffset"],
         "C++ media port offset",

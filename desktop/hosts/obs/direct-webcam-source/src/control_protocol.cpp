@@ -109,6 +109,7 @@ bool decode_control_message(const std::string &json, ControlMessage &message, st
     }
 
     if (message.type == contract::kMessageHello) {
+        message.request_id.clear();
         message.hello.session_id.clear();
         message.hello.profile_id.clear();
         message.hello.codec.clear();
@@ -154,7 +155,13 @@ bool decode_control_message(const std::string &json, ControlMessage &message, st
         }
         message.session_id = message.hello.session_id;
         message.generation = message.hello.generation;
+    } else if (message.type == contract::kMessageProbe) {
+        if (!get_string(root, "requestId", message.request_id, error, contract::kMaximumSessionIdBytes)) {
+            json_decref(root);
+            return false;
+        }
     } else if (message.type == contract::kMessageStop) {
+        message.request_id.clear();
         if (!get_string(root, "sessionId", message.session_id, error, contract::kMaximumSessionIdBytes) ||
             !get_unsigned(root, "generation", message.generation, error, contract::kMinimumGeneration,
                           std::numeric_limits<std::uint64_t>::max())) {
@@ -182,6 +189,30 @@ std::string encode_accepted_message(const std::string &session_id, std::uint64_t
     json_object_set_new(root, "generation", json_integer(static_cast<json_int_t>(generation)));
     json_object_set_new(root, "profileId", json_string(profile_id.c_str()));
     json_object_set_new(root, "mediaPort", json_integer(media_port));
+    json_object_set_new(root, "maxLongEdge", json_integer(maximum_long_edge));
+    json_object_set_new(root, "maxShortEdge", json_integer(maximum_short_edge));
+    const std::string result = dump_json(root);
+    json_decref(root);
+    return result;
+}
+
+std::string encode_capabilities_message(const std::string &request_id, const std::string &receiver_id,
+                                        const std::string &display_name,
+                                        const std::vector<std::string> &profile_ids,
+                                        std::uint32_t maximum_long_edge,
+                                        std::uint32_t maximum_short_edge)
+{
+    json_t *root = json_object();
+    json_object_set_new(root, "protocolVersion", json_integer(contract::kProtocolVersion));
+    json_object_set_new(root, "type", json_string(contract::kMessageCapabilities));
+    json_object_set_new(root, "requestId", json_string(request_id.c_str()));
+    json_object_set_new(root, "receiverId", json_string(receiver_id.c_str()));
+    json_object_set_new(root, "displayName", json_string(display_name.c_str()));
+    json_t *profiles = json_array();
+    for (const std::string &profile_id : profile_ids) {
+        json_array_append_new(profiles, json_string(profile_id.c_str()));
+    }
+    json_object_set_new(root, "profiles", profiles);
     json_object_set_new(root, "maxLongEdge", json_integer(maximum_long_edge));
     json_object_set_new(root, "maxShortEdge", json_integer(maximum_short_edge));
     const std::string result = dump_json(root);
