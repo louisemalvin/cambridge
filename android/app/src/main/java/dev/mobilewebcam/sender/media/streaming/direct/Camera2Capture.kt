@@ -63,7 +63,6 @@ internal class Camera2Capture(
             PackageManager.PERMISSION_GRANTED) {
             "Camera permission is required before preparing the direct sender"
         }
-        startThread()
         val cameraId = selectedCameraId ?: selectDefaultCameraId().also { selectedCameraId = it }
         cameraCharacteristics = cameraManager.getCameraCharacteristics(cameraId)
         updateCameraState()
@@ -106,6 +105,7 @@ internal class Camera2Capture(
         }
         requestedFps = targetFps
         encoderSurface = surface
+        startThread()
         val cameraId = selectedCameraId ?: selectDefaultCameraId().also { selectedCameraId = it }
         val device = openCamera(cameraId)
         cameraDevice = device
