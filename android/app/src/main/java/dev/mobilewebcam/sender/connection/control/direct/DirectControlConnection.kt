@@ -32,18 +32,18 @@ internal class DirectControlConnection private constructor(
         }
     }
 
-    fun receive(): JsonObject? {
+    suspend fun receive(): JsonObject? = withContext(Dispatchers.IO) {
         val size = try {
             input.readInt()
         } catch (_: IOException) {
-            return null
+            return@withContext null
         }
         if (size <= EMPTY_MESSAGE_BYTES || size > DirectStreamContract.MAXIMUM_CONTROL_MESSAGE_BYTES) {
             error("Control frame exceeds the configured maximum")
         }
         val bytes = ByteArray(size)
         input.readFully(bytes)
-        return Json.decodeFromString(JsonObject.serializer(), bytes.decodeToString())
+        Json.decodeFromString(JsonObject.serializer(), bytes.decodeToString())
     }
 
     override fun close() {

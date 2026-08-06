@@ -103,8 +103,22 @@ class SenderConnectionCoordinator(
                 endpoint = resolvedEndpoint
                 activeReceiverNameFlow.value = capabilities.displayName
             }
+            logger.info(
+                "receiver probe succeeded",
+                mapOf(
+                    "host" to target.host,
+                    "controlPort" to target.controlPort,
+                    "receiverId" to capabilities.receiverId,
+                    "profiles" to capabilities.profileIds.joinToString(","),
+                ),
+            )
             receiverProbeStateFlow.value = ReceiverProbeState.Available(resolvedEndpoint, capabilities)
         }.onFailure { failure ->
+            logger.warn(
+                "receiver probe failed",
+                failure,
+                mapOf("host" to target.host, "controlPort" to target.controlPort),
+            )
             receiverProbeStateFlow.value = ReceiverProbeState.Unavailable(
                 endpoint = target,
                 reason = failure.message ?: "The receiver did not respond",

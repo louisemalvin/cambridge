@@ -173,7 +173,7 @@ class DirectRtpStreamEngine(
                     bitrateBps = streamConfiguration.bitrateBps,
                 ),
             )
-            val accepted = withContext(Dispatchers.IO) { connection.receive() }
+            val accepted = connection.receive()
                 ?: error("Receiver closed the control connection before accepting the stream")
             check(accepted.requireProtocolVersion() == DirectStreamContract.PROTOCOL_VERSION) {
                 "Receiver returned an unsupported direct protocol version"
@@ -458,7 +458,7 @@ class DirectRtpStreamEngine(
         controlReaderJob = workerScope.launch {
             try {
                 while (true) {
-                    val message = withContext(Dispatchers.IO) { connection.receive() } ?: break
+                    val message = connection.receive() ?: break
                     if (message.requireProtocolVersion() != DirectStreamContract.PROTOCOL_VERSION) continue
                     when (message.stringFieldOrNull("type")) {
                         "error" -> emit("receiver_control_error", mapOf("reason" to message.stringFieldOrNull("error")))
