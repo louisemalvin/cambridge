@@ -1,8 +1,11 @@
 package dev.mobilewebcam.sender.connection
 
 import dev.mobilewebcam.sender.deployment.DirectDeployment
+import dev.mobilewebcam.sender.connection.control.EmptyReceiverDiscovery
+import dev.mobilewebcam.sender.connection.control.ReceiverDiscovery
 import dev.mobilewebcam.sender.connection.control.ReceiverProbe
 import dev.mobilewebcam.sender.connection.control.direct.DirectReceiverProbe
+import dev.mobilewebcam.sender.connection.control.direct.DirectStreamContract
 import dev.mobilewebcam.sender.logging.AndroidAppLogger
 import dev.mobilewebcam.sender.logging.AppLogger
 import dev.mobilewebcam.sender.model.ReceiverEndpoint
@@ -12,15 +15,18 @@ import dev.mobilewebcam.sender.model.SenderSettingsRepository
 import dev.mobilewebcam.sender.model.StreamState
 import dev.mobilewebcam.sender.session.StreamSessionController
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 
 class SenderConnectionCoordinator(
     private val controller: StreamSessionController,
@@ -29,6 +35,7 @@ class SenderConnectionCoordinator(
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
     private val defaultEndpoint: ReceiverEndpoint = DirectDeployment.endpoint,
     private val receiverProbe: ReceiverProbe = DirectReceiverProbe(),
+    private val receiverDiscovery: ReceiverDiscovery = EmptyReceiverDiscovery,
 ) {
     private val mutex = Mutex()
     private val controllerOperationMutex = Mutex()
@@ -83,7 +90,7 @@ class SenderConnectionCoordinator(
     suspend fun startStream(): Result<Unit> = connect()
 
     suspend fun probeReceiver(): Result<ReceiverCapabilities> = receiverProbeMutex.withLock {
-        val target = endpoint ?: defaultEndpoint
+        val target = endpoint ?: settings.state.value.receiverEndpoint ?: discoverReceiver() ?: defaultEndpoint
         if (!target.isValid()) {
             val failure = IllegalArgumentException("The configured receiver endpoint is invalid")
             receiverProbeStateFlow.value = ReceiverProbeState.Unavailable(target, failure.message.orEmpty())
@@ -103,6 +110,16 @@ class SenderConnectionCoordinator(
                 reason = failure.message ?: "The receiver did not respond",
             )
         }
+    }
+
+    private suspend fun discoverReceiver(): ReceiverEndpoint? = try {
+        withTimeoutOrNull(DirectStreamContract.REQUEST_TIMEOUT_MILLIS.toLong()) {
+            receiverDiscovery.discover().first()
+        }
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (_: Throwable) {
+        null
     }
 
     suspend fun stop(): Result<Unit> {

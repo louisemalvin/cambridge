@@ -2,6 +2,7 @@ package dev.mobilewebcam.sender
 
 import dev.mobilewebcam.sender.connection.SenderConnectionCoordinator
 import dev.mobilewebcam.sender.connection.control.ReceiverProbe
+import dev.mobilewebcam.sender.connection.control.ReceiverDiscovery
 import dev.mobilewebcam.sender.connection.control.direct.DirectStreamContract
 import dev.mobilewebcam.sender.logging.AppLogger
 import dev.mobilewebcam.sender.model.OutputPixelFormat
@@ -23,6 +24,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -96,11 +98,30 @@ class SenderConnectionCoordinatorTest {
         assertEquals(endpoint.host, receiverProbe.probedEndpoint?.host)
     }
 
+    @Test
+    fun probingPrefersDiscoveredReceiverWhenNoEndpointIsConfigured() = runTest {
+        val discoveredEndpoint = ReceiverEndpoint("10.0.0.8", endpoint.controlPort, "Discovered OBS")
+        val receiverProbe = FakeReceiverProbe()
+        val discovery = object : ReceiverDiscovery {
+            override fun discover() = flowOf(discoveredEndpoint)
+        }
+        val coordinator = coordinator(
+            controller = FakeController(),
+            scope = backgroundScope,
+            receiverProbe = receiverProbe,
+            receiverDiscovery = discovery,
+        )
+
+        assertTrue(coordinator.probeReceiver().isSuccess)
+        assertEquals(discoveredEndpoint.host, receiverProbe.probedEndpoint?.host)
+    }
+
     private fun coordinator(
         controller: FakeController,
         scope: kotlinx.coroutines.CoroutineScope,
         settings: FakeSettings = FakeSettings(),
         receiverProbe: ReceiverProbe = FakeReceiverProbe(),
+        receiverDiscovery: ReceiverDiscovery = dev.mobilewebcam.sender.connection.control.EmptyReceiverDiscovery,
     ) = SenderConnectionCoordinator(
         controller = controller,
         settings = settings,
@@ -108,6 +129,7 @@ class SenderConnectionCoordinatorTest {
         scope = scope,
         defaultEndpoint = endpoint,
         receiverProbe = receiverProbe,
+        receiverDiscovery = receiverDiscovery,
     )
 
     private class FakeReceiverProbe : ReceiverProbe {

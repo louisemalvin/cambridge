@@ -18,12 +18,14 @@ rotations `90` and `270` present portrait. The native source rotates both NV12
 planes during presentation.
 
 The v4 contract defines a receiver discovery service and a side-effect-free
-`probe`/`capabilities` exchange. The sender then sends `hello`, the receiver
-returns `accepted`, and the sender may send `stop`. Media is best-effort: late
-or incomplete frames are dropped and the stream continues. There is no
-retransmission, media feedback, or automatic reconnect. The current receiver
-output is an OBS source texture; the wire protocol does not require OBS or a
-virtual camera device.
+`probe`/`capabilities` exchange. The Linux OBS source advertises the service
+through Avahi when that optional backend is available, and Android discovers it
+through `NsdManager`. A manually configured endpoint remains the fallback. The
+sender then sends `hello`, the receiver returns `accepted`, and the sender may
+send `stop`. Media is best-effort: late or incomplete frames are dropped and
+the stream continues. There is no retransmission, media feedback, or automatic
+reconnect. The current receiver output is an OBS source texture; the wire
+protocol does not require OBS or a virtual camera device.
 
 Transport bounds, profile definitions, protocol version, and message names are
 defined in the contract JSON. Implementations keep typed named constants for

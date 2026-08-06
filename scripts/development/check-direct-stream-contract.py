@@ -192,6 +192,13 @@ def main() -> int:
         "Kotlin default profile",
         str,
     )
+    check_scalar(
+        kotlin_contract,
+        r'const val DISCOVERY_SERVICE_TYPE = "([^"]+)"',
+        contract["discovery"]["serviceType"],
+        "Kotlin discovery service type",
+        str,
+    )
     check_profiles(kotlin_profiles, profiles)
 
     check_scalar(cpp_contract, r"kProtocolVersion = (\d+)", protocol_version, "C++ protocol version")

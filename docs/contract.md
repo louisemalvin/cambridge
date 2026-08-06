@@ -22,9 +22,11 @@ sender -> RFC 6184 H.264 RTP over UDP -> receiver
 ```
 
 The v4 contract defines local receiver discovery while the implementation
-retains a manually configured receiver address as a fallback. Discovery will
-identify a candidate; the side-effect-free control probe will confirm that it
-is a compatible OBS receiver.
+retains a manually configured receiver address as a fallback. The Linux OBS
+source advertises `_direct-webcam._tcp` through Avahi when that optional
+backend is available; Android resolves candidates through `NsdManager`, then
+the side-effect-free control probe confirms that the candidate is a compatible
+receiver.
 
 The control connection uses a big-endian 32-bit message length followed by
 UTF-8 JSON. The receiver accepts one active session at a time. The media port

@@ -45,6 +45,7 @@ internal object DirectStreamContract {
     const val MESSAGE_ACCEPTED = "accepted"
     const val MESSAGE_STOP = "stop"
     const val MESSAGE_ERROR = "error"
+    const val DISCOVERY_SERVICE_TYPE = "_direct-webcam._tcp"
 
     fun hello(
         sessionId: String,
