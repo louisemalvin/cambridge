@@ -77,11 +77,6 @@ internal class Camera2Capture(
             updateCameraState()
         }
         val characteristics = cameraCharacteristics ?: error("Camera characteristics are unavailable")
-        val outputMap = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
-        val supportedSizes = outputMap?.getOutputSizes(Surface::class.java).orEmpty()
-        check(supportedSizes.any { size -> size.width == codedWidth && size.height == codedHeight }) {
-            "The selected camera cannot provide the requested video quality"
-        }
         val displayOrientation = previewSurface?.orientation ?: DisplayOrientation.PORTRAIT
         return SessionTransform.calculate(
             displayOrientation = displayOrientation,

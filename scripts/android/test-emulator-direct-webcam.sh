@@ -26,6 +26,7 @@ stream_wait_seconds="${DIRECT_WEBCAM_HOLD_SECONDS:-20}"
 lifecycle_cycles="${DIRECT_WEBCAM_LIFECYCLE_CYCLES:-1}"
 restart_obs_enabled="${DIRECT_WEBCAM_RESTART_OBS:-1}"
 app_event_wait_seconds=30
+obs_shutdown_wait_seconds=5
 
 sdk_root="${ANDROID_SDK_ROOT:-${HOME}/Android/Sdk}"
 adb="${sdk_root}/platform-tools/adb"
@@ -140,6 +141,22 @@ start_obs() {
         sleep "${poll_interval_seconds}"
     done
     fail "OBS did not load the direct webcam source"
+}
+
+stop_obs() {
+    if [[ -z "${obs_pid}" ]]; then
+        return
+    fi
+    kill -TERM "${obs_pid}" >/dev/null 2>&1 || true
+    for ((attempt = 0; attempt < obs_shutdown_wait_seconds; attempt += poll_interval_seconds)); do
+        kill -0 "${obs_pid}" >/dev/null 2>&1 || break
+        sleep "${poll_interval_seconds}"
+    done
+    if kill -0 "${obs_pid}" >/dev/null 2>&1; then
+        kill -KILL "${obs_pid}" >/dev/null 2>&1 || true
+    fi
+    wait "${obs_pid}" >/dev/null 2>&1 || true
+    obs_pid=""
 }
 
 restart_obs() {

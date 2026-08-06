@@ -75,6 +75,10 @@ class StreamSessionControllerImpl(
                 )
         }.getOrElse { cause ->
             val failure = StreamFailure.VideoQualityUnsupported(profile)
+            diagnosticEvent(
+                "stream_start_failed",
+                mapOf("failureType" to failure::class.simpleName, "reason" to cause.message),
+            )
             stateFlow.value = StreamState.Failed(failure)
             return@withLock Result.failure(StreamFailureException(failure, cause))
         }
