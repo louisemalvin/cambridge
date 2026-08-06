@@ -26,6 +26,12 @@ stream_wait_seconds="${DIRECT_WEBCAM_HOLD_SECONDS:-20}"
 lifecycle_cycles="${DIRECT_WEBCAM_LIFECYCLE_CYCLES:-1}"
 app_event_wait_seconds=30
 obs_shutdown_wait_seconds=5
+ui_scroll_attempts=4
+ui_scroll_start_x=540
+ui_scroll_start_y=1600
+ui_scroll_end_x=540
+ui_scroll_end_y=500
+ui_scroll_duration_millis=300
 
 sdk_root="${ANDROID_SDK_ROOT:-${HOME}/Android/Sdk}"
 adb="${sdk_root}/platform-tools/adb"
@@ -219,17 +225,32 @@ wait_for_event_count() {
 click_stream_action() {
     local content_description="$1"
     local ui_dump="${artifact_dir}/ui.xml"
-    "${adb}" -s "${emulator_serial}" shell uiautomator dump /sdcard/direct-webcam-ui.xml >/dev/null 2>&1
-    "${adb}" -s "${emulator_serial}" exec-out cat /sdcard/direct-webcam-ui.xml >"${ui_dump}"
-    local node
-    node=$(rg -o "<node[^>]*content-desc=\"${content_description}\"[^>]*>" "${ui_dump}" | head -n 1 || true)
-    [[ -n "${node}" ]] || fail "Android action is not present: ${content_description}"
-    local bounds
-    bounds=$(sed -n 's/.*bounds="\[\([0-9][0-9]*\),\([0-9][0-9]*\)\]\[\([0-9][0-9]*\),\([0-9][0-9]*\)\]".*/\1 \2 \3 \4/p' <<<"${node}")
-    read -r left top right bottom <<<"${bounds}"
-    [[ -n "${left:-}" && -n "${top:-}" && -n "${right:-}" && -n "${bottom:-}" ]] \
-        || fail "Android action has no usable bounds: ${content_description}"
-    "${adb}" -s "${emulator_serial}" shell input tap "$(((left + right) / 2))" "$(((top + bottom) / 2))"
+    local node=""
+    local bounds=""
+    local left=""
+    local top=""
+    local right=""
+    local bottom=""
+    local scroll_attempt
+    for ((scroll_attempt = 0; scroll_attempt < ui_scroll_attempts; scroll_attempt += 1)); do
+        "${adb}" -s "${emulator_serial}" shell uiautomator dump /sdcard/direct-webcam-ui.xml >/dev/null 2>&1
+        "${adb}" -s "${emulator_serial}" exec-out cat /sdcard/direct-webcam-ui.xml >"${ui_dump}"
+        node=$(rg -o "<node[^>]*content-desc=\"${content_description}\"[^>]*>" "${ui_dump}" | head -n 1 || true)
+        if [[ -n "${node}" ]]; then
+            bounds=$(sed -n 's/.*bounds="\[\([0-9][0-9]*\),\([0-9][0-9]*\)\]\[\([0-9][0-9]*\),\([0-9][0-9]*\)\]".*/\1 \2 \3 \4/p' <<<"${node}")
+            read -r left top right bottom <<<"${bounds}"
+            [[ -n "${left:-}" && -n "${top:-}" && -n "${right:-}" && -n "${bottom:-}" ]] \
+                || fail "Android action has no usable bounds: ${content_description}"
+            "${adb}" -s "${emulator_serial}" shell input tap "$(((left + right) / 2))" "$(((top + bottom) / 2))"
+            return
+        fi
+        "${adb}" -s "${emulator_serial}" shell input swipe \
+            "${ui_scroll_start_x}" "${ui_scroll_start_y}" \
+            "${ui_scroll_end_x}" "${ui_scroll_end_y}" \
+            "${ui_scroll_duration_millis}"
+        sleep "${poll_interval_seconds}"
+    done
+    fail "Android action is not present: ${content_description}"
 }
 
 stream_started_count=0
