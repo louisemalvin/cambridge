@@ -9,6 +9,7 @@ namespace direct_webcam {
 struct HelloMessage {
     std::string session_id;
     std::uint64_t generation = 0;
+    std::string profile_id;
     std::uint32_t coded_width = 0;
     std::uint32_t coded_height = 0;
     std::uint32_t rotation_degrees = 0;
@@ -26,6 +27,7 @@ struct ControlMessage {
 
 bool decode_control_message(const std::string &json, ControlMessage &message, std::string &error);
 std::string encode_accepted_message(const std::string &session_id, std::uint64_t generation,
+                                    const std::string &profile_id,
                                     std::uint32_t media_port, std::uint32_t maximum_long_edge,
                                     std::uint32_t maximum_short_edge);
 std::string encode_error_message(const std::string &reason);

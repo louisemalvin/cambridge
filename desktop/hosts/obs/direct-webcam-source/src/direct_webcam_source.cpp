@@ -370,7 +370,10 @@ bool DirectWebcamSource::on_hello(const HelloMessage &hello, const std::string &
     const bool swaps_geometry = hello.rotation_degrees == 90 || hello.rotation_degrees == 270;
     const std::uint32_t display_width = swaps_geometry ? hello.coded_height : hello.coded_width;
     const std::uint32_t display_height = swaps_geometry ? hello.coded_width : hello.coded_height;
-    if (hello.codec != contract::kCodecH264 || hello.fps != contract::kSupportedFps ||
+    const contract::ProfileContract *profile = contract::find_profile(hello.profile_id);
+    if (profile == nullptr || hello.codec != contract::kCodecH264 ||
+        hello.coded_width != profile->width || hello.coded_height != profile->height ||
+        hello.fps != profile->fps || hello.bitrate_bps != profile->bitrate_bps ||
         long_edge(hello.coded_width, hello.coded_height) > config.maximum_long_edge ||
         short_edge(hello.coded_width, hello.coded_height) > config.maximum_short_edge ||
         long_edge(display_width, display_height) > config.maximum_long_edge ||
@@ -411,6 +414,7 @@ bool DirectWebcamSource::on_hello(const HelloMessage &hello, const std::string &
         decoder_->begin_session(hello.generation, std::move(decoder_config));
     }
     report("session_accepted:id=" + hello.session_id + ":generation=" + std::to_string(hello.generation) +
+           ":profile=" + hello.profile_id +
            ":coded=" + std::to_string(hello.coded_width) + "x" + std::to_string(hello.coded_height) +
            ":display=" + std::to_string(display_width) + "x" +
            std::to_string(display_height) + ":rotation=" + std::to_string(hello.rotation_degrees) +

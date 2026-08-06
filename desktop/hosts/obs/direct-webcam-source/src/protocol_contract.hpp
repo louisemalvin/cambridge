@@ -2,10 +2,12 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <array>
+#include <string_view>
 
 namespace direct_webcam::contract {
 
-inline constexpr std::uint32_t kProtocolVersion = 3;
+inline constexpr std::uint32_t kProtocolVersion = 4;
 inline constexpr std::uint32_t kMinimumGeneration = 1;
 inline constexpr std::size_t kMaximumSessionIdBytes = 128;
 inline constexpr std::size_t kMaximumErrorBytes = 512;
@@ -13,8 +15,8 @@ inline constexpr std::uint32_t kMinimumDimension = 16;
 inline constexpr std::uint32_t kDimensionAlignment = 2;
 inline constexpr std::uint32_t kMaximumLongEdge = 3840;
 inline constexpr std::uint32_t kMaximumShortEdge = 2160;
-inline constexpr std::uint32_t kMaximumFps = 30;
-inline constexpr std::uint32_t kMinimumFps = 30;
+inline constexpr std::uint32_t kMaximumFps = 120;
+inline constexpr std::uint32_t kMinimumFps = 1;
 inline constexpr std::uint32_t kMinimumBitrateBps = 100'000;
 inline constexpr std::uint32_t kMaximumBitrateBps = 100'000'000;
 inline constexpr std::uint32_t kMinimumPort = 1;
@@ -50,7 +52,6 @@ inline constexpr std::uint32_t kFuHeaderBytes = 1;
 inline constexpr std::uint32_t kH264StartCodeBytes = 4;
 inline constexpr std::uint32_t kH264FuANalType = 28;
 inline constexpr std::uint32_t kH264IdrNalType = 5;
-inline constexpr std::uint32_t kSupportedFps = 30;
 inline constexpr std::size_t kTexturePoolSlots = 3;
 
 inline constexpr char kCodecH264[] = "h264";
@@ -62,5 +63,31 @@ inline constexpr char kMessageHello[] = "hello";
 inline constexpr char kMessageAccepted[] = "accepted";
 inline constexpr char kMessageStop[] = "stop";
 inline constexpr char kMessageError[] = "error";
+inline constexpr char kMessageProbe[] = "probe";
+inline constexpr char kMessageCapabilities[] = "capabilities";
+
+struct ProfileContract {
+    std::string_view id;
+    std::uint32_t width;
+    std::uint32_t height;
+    std::uint32_t fps;
+    std::uint32_t bitrate_bps;
+};
+
+inline constexpr std::array<ProfileContract, 3> kProfiles = {{
+    {"720p30", 1280, 720, 30, 4'000'000},
+    {"1080p30", 1920, 1080, 30, 8'000'000},
+    {"2k30", 2560, 1440, 30, 18'000'000},
+}};
+
+inline constexpr const ProfileContract *find_profile(std::string_view id)
+{
+    for (const ProfileContract &profile : kProfiles) {
+        if (profile.id == id) {
+            return &profile;
+        }
+    }
+    return nullptr;
+}
 
 } // namespace direct_webcam::contract

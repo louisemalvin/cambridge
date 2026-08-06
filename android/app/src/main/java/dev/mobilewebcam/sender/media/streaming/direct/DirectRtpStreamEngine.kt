@@ -168,6 +168,7 @@ class DirectRtpStreamEngine(
                 DirectStreamContract.hello(
                     sessionId = endpoint.sessionId,
                     generation = endpoint.generation,
+                    profileId = streamConfiguration.profile.id,
                     codedWidth = sessionTransform.codedWidth,
                     codedHeight = sessionTransform.codedHeight,
                     rotationDegrees = sessionTransform.rotationDegrees,

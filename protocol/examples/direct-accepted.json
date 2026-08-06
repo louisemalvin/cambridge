@@ -1,8 +1,9 @@
 {
-  "protocolVersion": 3,
+  "protocolVersion": 4,
   "type": "accepted",
   "sessionId": "run-example-session",
   "generation": 1,
+  "profileId": "2k30",
   "mediaPort": 55032,
   "maxLongEdge": 3840,
   "maxShortEdge": 2160

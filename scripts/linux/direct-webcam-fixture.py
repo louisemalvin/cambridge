@@ -99,6 +99,7 @@ def connect_control(
             "type": "hello",
             "sessionId": session_id,
             "generation": generation,
+            "profileId": profile["id"],
             "codec": "h264",
             "codedWidth": profile["width"],
             "codedHeight": profile["height"],

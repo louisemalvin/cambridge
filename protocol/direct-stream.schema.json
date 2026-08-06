@@ -1,19 +1,24 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://mobile-webcam.invalid/protocol/direct-stream.schema.json",
-  "title": "Direct Webcam control messages v3",
+  "title": "Direct Webcam control messages v4",
   "type": "object",
   "required": ["protocolVersion", "type"],
   "properties": {
-    "protocolVersion": {"const": 3},
-    "type": {"enum": ["hello", "accepted", "stop", "error"]},
+    "protocolVersion": {"const": 4},
+    "type": {"enum": ["probe", "capabilities", "hello", "accepted", "stop", "error"]},
+    "requestId": {"type": "string", "minLength": 1, "maxLength": 128},
+    "receiverId": {"type": "string", "minLength": 1, "maxLength": 128},
+    "displayName": {"type": "string", "minLength": 1, "maxLength": 128},
+    "profiles": {"type": "array", "items": {"type": "string", "minLength": 1, "maxLength": 64}, "uniqueItems": true},
     "sessionId": {"type": "string", "minLength": 1, "maxLength": 128},
     "generation": {"type": "integer", "minimum": 1},
     "codec": {"const": "h264"},
+    "profileId": {"type": "string", "minLength": 1, "maxLength": 64},
     "codedWidth": {"type": "integer", "minimum": 16, "maximum": 3840, "multipleOf": 2},
     "codedHeight": {"type": "integer", "minimum": 16, "maximum": 3840, "multipleOf": 2},
     "rotationDegrees": {"enum": [0, 90, 180, 270]},
-    "fps": {"type": "integer", "const": 30},
+    "fps": {"type": "integer", "minimum": 1, "maximum": 120},
     "bitrateBps": {"type": "integer", "minimum": 100000, "maximum": 100000000},
     "mediaPort": {"type": "integer", "minimum": 1, "maximum": 65535},
     "maxLongEdge": {"type": "integer", "minimum": 16, "maximum": 3840},
@@ -22,10 +27,18 @@
   },
   "allOf": [
     {
+      "if": {"properties": {"type": {"const": "probe"}}},
+      "then": {"required": ["requestId"]}
+    },
+    {
+      "if": {"properties": {"type": {"const": "capabilities"}}},
+      "then": {"required": ["requestId", "receiverId", "displayName", "profiles", "maxLongEdge", "maxShortEdge"]}
+    },
+    {
       "if": {"properties": {"type": {"const": "hello"}}},
       "then": {
         "required": [
-          "sessionId", "generation", "codec", "codedWidth", "codedHeight",
+          "sessionId", "generation", "profileId", "codec", "codedWidth", "codedHeight",
           "rotationDegrees", "fps", "bitrateBps"
         ],
         "allOf": [
@@ -50,7 +63,7 @@
     },
     {
       "if": {"properties": {"type": {"const": "accepted"}}},
-      "then": {"required": ["sessionId", "generation", "mediaPort", "maxLongEdge", "maxShortEdge"]}
+      "then": {"required": ["sessionId", "generation", "profileId", "mediaPort", "maxLongEdge", "maxShortEdge"]}
     },
     {
       "if": {"properties": {"type": {"const": "stop"}}},

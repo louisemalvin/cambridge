@@ -15,6 +15,15 @@ object VideoProfiles {
         keyframeIntervalSeconds = DEFAULT_KEYFRAME_INTERVAL_SECONDS,
     )
 
+    val PROFILE_1080P30: VideoProfile = VideoProfile(
+        id = "1080p30",
+        width = 1_920,
+        height = 1_080,
+        fps = DEFAULT_FPS,
+        h264BitrateBps = 8_000_000,
+        keyframeIntervalSeconds = DEFAULT_KEYFRAME_INTERVAL_SECONDS,
+    )
+
     val PROFILE_2K30: VideoProfile = VideoProfile(
         id = "2k30",
         width = 2_560,
@@ -24,7 +33,7 @@ object VideoProfiles {
         keyframeIntervalSeconds = DEFAULT_KEYFRAME_INTERVAL_SECONDS,
     )
 
-    val normal: List<VideoProfile> = listOf(PROFILE_2K30)
+    val normal: List<VideoProfile> = listOf(PROFILE_1080P30, PROFILE_2K30)
 
     /** Includes the named AVD smoke profile for test-only intent injection. */
     val all: List<VideoProfile> = listOf(PROFILE_720P30) + normal

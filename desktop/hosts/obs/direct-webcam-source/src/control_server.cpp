@@ -263,7 +263,8 @@ void ControlServer::run()
                 }
                 accepted = true;
                 if (!write_frame(client, encode_accepted_message(message.hello.session_id, message.hello.generation,
-                                                                  media_port_, maximum_long_edge_, maximum_short_edge_))) {
+                                                                  message.hello.profile_id, media_port_, maximum_long_edge_,
+                                                                  maximum_short_edge_))) {
                     break;
                 }
                 continue;

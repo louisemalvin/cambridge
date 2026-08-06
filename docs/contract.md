@@ -1,6 +1,6 @@
-# Direct Webcam baseline contract
+# Direct Webcam contract
 
-Status: frozen product baseline.
+Status: active product contract v4. Protocol v3 is frozen and is not extended.
 
 This document describes the supported direct stream connection. It is
 platform-neutral at the wire boundary: Android is the current sender and the
@@ -21,9 +21,10 @@ sender -> length-prefixed JSON over TCP -> receiver
 sender -> RFC 6184 H.264 RTP over UDP -> receiver
 ```
 
-The sender uses one manually configured receiver address. The connection does
-not require discovery, a virtual camera device, a broker, or an operating
-system-specific transport.
+The v4 contract defines local receiver discovery while the implementation
+retains a manually configured receiver address as a fallback. Discovery will
+identify a candidate; the side-effect-free control probe will confirm that it
+is a compatible OBS receiver.
 
 The control connection uses a big-endian 32-bit message length followed by
 UTF-8 JSON. The receiver accepts one active session at a time. The media port
@@ -48,17 +49,20 @@ rate, codec, bitrate, and orientation changes require Stop followed by a new
 Start. A 180-degree reverse is presentation behavior within the selected
 orientation axis; it is not a renegotiation.
 
-The current baseline supports these catalog entries:
+The current contract supports these catalog entries:
 
 | Profile | Dimensions | Frame rate | Bitrate | Availability |
 | --- | ---: | ---: | ---: | --- |
 | `2k30` | 2560x1440 | 30 fps | 18 Mbps | normal product profile |
+| `1080p30` | 1920x1080 | 30 fps | 8 Mbps | normal product profile |
 | `720p30` | 1280x720 | 30 fps | 4 Mbps | named AVD smoke profile |
 
 The profile catalog is the extension point for future quality and frame-rate
 choices. New profiles must be represented as data, validated against sender
 and receiver capabilities, and selected before the session starts. Existing
-profile IDs and semantics remain stable.
+profile IDs and semantics remain stable. Camera anti-banding and stabilization
+are sender-local capture settings and are intentionally not part of the wire
+session contract.
 
 ## Media behavior
 

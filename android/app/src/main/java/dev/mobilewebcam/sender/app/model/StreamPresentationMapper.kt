@@ -41,6 +41,7 @@ object StreamPresentationMapper {
 
     fun videoProfileLabel(profile: VideoProfile): UiText = when (profile.id) {
         VideoProfiles.PROFILE_2K30.id -> UiText.Resource(R.string.profile_2k30)
+        VideoProfiles.PROFILE_1080P30.id -> UiText.Resource(R.string.profile_1080p30)
         VideoProfiles.PROFILE_720P30.id -> UiText.Resource(R.string.profile_720p30)
         else -> UiText.Plain(profile.id)
     }
@@ -71,9 +72,9 @@ object StreamPresentationMapper {
     )
 
     private fun qualityFailureMessage(profile: VideoProfile): String =
-        if (profile.id == VideoProfiles.PROFILE_2K30.id) {
-            "This phone cannot use 2K video"
-        } else {
-            "This phone cannot use the selected video quality"
+        when (profile.id) {
+            VideoProfiles.PROFILE_2K30.id -> "This phone cannot use 2K video"
+            VideoProfiles.PROFILE_1080P30.id -> "This phone cannot use 1080p video"
+            else -> "This phone cannot use the selected video quality"
         }
 }

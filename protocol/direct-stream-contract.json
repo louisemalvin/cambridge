@@ -1,11 +1,15 @@
 {
   "name": "direct-webcam",
-  "protocolVersion": 3,
+  "protocolVersion": 4,
   "control": {
     "framing": "uint32-be-length-prefixed-json",
     "maxMessageBytes": 8192,
     "connectTimeoutMs": 2000,
     "requestTimeoutMs": 2000
+  },
+  "discovery": {
+    "serviceType": "_direct-webcam._tcp",
+    "txtKeys": ["id", "name", "protocolVersion", "codec"]
   },
   "defaults": {
     "controlPort": 55031,
@@ -18,6 +22,10 @@
     "maximumLongEdge": 3840,
     "maximumShortEdge": 2160,
     "rotationDegrees": [0, 90, 180, 270]
+  },
+  "video": {
+    "minimumFps": 1,
+    "maximumFps": 120
   },
   "media": {
     "transport": "rtp-h264-udp-unicast",
@@ -46,6 +54,14 @@
       "availability": "avd-smoke-only"
     },
     {
+      "id": "1080p30",
+      "width": 1920,
+      "height": 1080,
+      "fps": 30,
+      "bitrateBps": 8000000,
+      "availability": "normal"
+    },
+    {
       "id": "2k30",
       "width": 2560,
       "height": 1440,
@@ -55,9 +71,11 @@
     }
   ],
   "messages": {
-    "hello": "{protocolVersion:3, type:hello, sessionId, generation, codec, codedWidth, codedHeight, rotationDegrees, fps, bitrateBps}",
-    "accepted": "{protocolVersion:3, type:accepted, sessionId, generation, mediaPort, maxLongEdge, maxShortEdge}",
-    "stop": "{protocolVersion:3, type:stop, sessionId, generation}",
-    "error": "{protocolVersion:3, type:error, error}"
+    "probe": "{protocolVersion:4, type:probe, requestId}",
+    "capabilities": "{protocolVersion:4, type:capabilities, requestId, receiverId, displayName, profiles, maxLongEdge, maxShortEdge}",
+    "hello": "{protocolVersion:4, type:hello, sessionId, generation, profileId, codec, codedWidth, codedHeight, rotationDegrees, fps, bitrateBps}",
+    "accepted": "{protocolVersion:4, type:accepted, sessionId, generation, profileId, mediaPort, maxLongEdge, maxShortEdge}",
+    "stop": "{protocolVersion:4, type:stop, sessionId, generation}",
+    "error": "{protocolVersion:4, type:error, error}"
   }
 }

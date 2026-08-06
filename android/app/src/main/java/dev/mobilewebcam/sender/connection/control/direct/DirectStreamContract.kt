@@ -7,7 +7,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
 internal object DirectStreamContract {
-    const val PROTOCOL_VERSION = 3
+    const val PROTOCOL_VERSION = 4
     const val CONTROL_HEADER_BYTES = 4
     const val MAXIMUM_CONTROL_MESSAGE_BYTES = 8_192
     const val RTP_PAYLOAD_TYPE = 96
@@ -26,6 +26,8 @@ internal object DirectStreamContract {
     const val DIMENSION_ALIGNMENT = 2
     const val MAXIMUM_LONG_EDGE = 3_840
     const val MAXIMUM_SHORT_EDGE = 2_160
+    const val MINIMUM_FPS = 1
+    const val MAXIMUM_FPS = 120
     const val DEFAULT_CODED_WIDTH = 2_560
     const val DEFAULT_CODED_HEIGHT = 1_440
     const val DEFAULT_PROFILE_ID = "2k30"
@@ -39,6 +41,7 @@ internal object DirectStreamContract {
     fun hello(
         sessionId: String,
         generation: Long,
+        profileId: String,
         codedWidth: Int,
         codedHeight: Int,
         rotationDegrees: Int,
@@ -49,6 +52,7 @@ internal object DirectStreamContract {
         put("type", "hello")
         put("sessionId", sessionId)
         put("generation", generation)
+        put("profileId", profileId)
         put("codec", "h264")
         put("codedWidth", codedWidth)
         put("codedHeight", codedHeight)

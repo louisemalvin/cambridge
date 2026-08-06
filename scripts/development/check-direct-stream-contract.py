@@ -76,6 +76,26 @@ def check_profiles(kotlin_text: str, profiles: list[dict[str, Any]]) -> None:
             raise AssertionError(f"Kotlin profile {profile['id']}: expected {expected}, found {actual}")
 
 
+def check_cpp_profiles(cpp_text: str, profiles: list[dict[str, Any]]) -> None:
+    for profile in profiles:
+        profile_id = re.escape(profile["id"])
+        pattern = (
+            rf'\{{"{profile_id}",\s*([0-9\']+),\s*([0-9\']+),\s*([0-9\']+),\s*([0-9\']+)\}}'
+        )
+        match = re.search(pattern, cpp_text, re.MULTILINE)
+        if match is None:
+            raise AssertionError(f"C++ profile {profile['id']} is missing")
+        actual = tuple(integer_literal(value) for value in match.groups())
+        expected = (
+            profile["width"],
+            profile["height"],
+            profile["fps"],
+            profile["bitrateBps"],
+        )
+        if actual != expected:
+            raise AssertionError(f"C++ profile {profile['id']}: expected {expected}, found {actual}")
+
+
 def main() -> int:
     contract = json.loads(read(CONTRACT_PATH))
     deployment = json.loads(read(DEPLOYMENT_PATH))
@@ -96,14 +116,17 @@ def main() -> int:
     if set(computer) != expected_computer_keys or not all(computer.values()):
         raise AssertionError("deployment must define exactly one complete computer endpoint")
     profile_ids = {profile["id"] for profile in profiles}
-    if profile_ids != {"720p30", "2k30"}:
-        raise AssertionError("the direct product profiles must be 2k30 plus the AVD-only 720p30 profile")
+    if profile_ids != {"720p30", "1080p30", "2k30"}:
+        raise AssertionError("the direct product profiles must include 1080p30, 2k30, and the AVD-only 720p30 profile")
     if next(profile["availability"] for profile in profiles if profile["id"] == defaults["profileId"]) != "normal":
         raise AssertionError("the default profile must be the normal product profile")
-    if protocol_version != 3:
-        raise AssertionError("the direct stream contract must be protocol v3")
+    if protocol_version != 4:
+        raise AssertionError("the direct stream contract must be protocol v4")
     if schema["properties"]["protocolVersion"]["const"] != protocol_version:
         raise AssertionError("schema protocol version is out of sync")
+    if schema["properties"]["fps"]["minimum"] != contract["video"]["minimumFps"] or \
+        schema["properties"]["fps"]["maximum"] != contract["video"]["maximumFps"]:
+        raise AssertionError("schema FPS bounds are out of sync")
 
     check_scalar(kotlin_contract, r"const val PROTOCOL_VERSION = (\d+)", protocol_version, "Kotlin protocol version")
     check_scalar(
@@ -132,6 +155,20 @@ def main() -> int:
         r"const val MAXIMUM_SHORT_EDGE = ([0-9_]+)",
         geometry["maximumShortEdge"],
         "Kotlin short-edge limit",
+        integer_literal,
+    )
+    check_scalar(
+        kotlin_contract,
+        r"const val MINIMUM_FPS = ([0-9_]+)",
+        contract["video"]["minimumFps"],
+        "Kotlin minimum FPS",
+        integer_literal,
+    )
+    check_scalar(
+        kotlin_contract,
+        r"const val MAXIMUM_FPS = ([0-9_]+)",
+        contract["video"]["maximumFps"],
+        "Kotlin maximum FPS",
         integer_literal,
     )
     check_scalar(
@@ -188,6 +225,20 @@ def main() -> int:
     )
     check_scalar(
         cpp_contract,
+        r"kMinimumFps = ([0-9']+)",
+        contract["video"]["minimumFps"],
+        "C++ minimum FPS",
+        integer_literal,
+    )
+    check_scalar(
+        cpp_contract,
+        r"kMaximumFps = ([0-9']+)",
+        contract["video"]["maximumFps"],
+        "C++ maximum FPS",
+        integer_literal,
+    )
+    check_scalar(
+        cpp_contract,
         r"kDefaultCodedWidth = ([0-9']+)",
         next(profile["width"] for profile in profiles if profile["id"] == defaults["profileId"]),
         "C++ default coded width",
@@ -207,6 +258,7 @@ def main() -> int:
         "C++ default profile",
         str,
     )
+    check_cpp_profiles(cpp_contract, profiles)
 
     if 'parser.add_argument("--profile", default=None)' not in fixture or \
         'profile_id = requested_profile_id or contract["defaults"]["profileId"]' not in fixture:
@@ -216,7 +268,12 @@ def main() -> int:
     if 'profile_id="${DIRECT_WEBCAM_PROFILE_ID:-2k30}"' not in native_fixture:
         raise AssertionError("the native fixture must default to the normal 2K profile")
 
-    for example_name in ("direct-hello.json", "direct-accepted.json"):
+    for example_name in (
+        "direct-probe.json",
+        "direct-capabilities.json",
+        "direct-hello.json",
+        "direct-accepted.json",
+    ):
         example = json.loads(read(REPOSITORY_ROOT / "protocol/examples" / example_name))
         if example["protocolVersion"] != protocol_version:
             raise AssertionError(f"{example_name} protocol version is out of sync")

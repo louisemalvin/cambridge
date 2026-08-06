@@ -18,7 +18,8 @@ void require(bool condition)
 void test_hello_round_trip()
 {
     const std::string json =
-        R"({"protocolVersion":3,"type":"hello","sessionId":"session-1","generation":7,)"
+        R"({"protocolVersion":4,"type":"hello","sessionId":"session-1","generation":7,)"
+        R"("profileId":"2k30",)"
         R"("codec":"h264","codedWidth":2560,"codedHeight":1440,)"
         R"("rotationDegrees":90,"fps":30,"bitrateBps":18000000})";
     direct_webcam::ControlMessage message;
@@ -30,30 +31,34 @@ void test_hello_round_trip()
     require(message.hello.coded_width == 2560);
     require(message.hello.coded_height == 1440);
     require(message.hello.rotation_degrees == 90);
-    require(message.hello.fps == direct_webcam::contract::kSupportedFps);
+    require(message.hello.profile_id == "2k30");
+    require(message.hello.fps == direct_webcam::contract::find_profile("2k30")->fps);
 }
 
 void test_duplicate_and_invalid_messages_are_rejected()
 {
     const std::string duplicate =
-        R"({"protocolVersion":3,"protocolVersion":3,"type":"stop","sessionId":"s","generation":1})";
+        R"({"protocolVersion":4,"protocolVersion":4,"type":"stop","sessionId":"s","generation":1})";
     direct_webcam::ControlMessage message;
     std::string error;
     require(!direct_webcam::decode_control_message(duplicate, message, error));
 
     const std::string wrong_codec =
-        R"({"protocolVersion":3,"type":"hello","sessionId":"s","generation":1,)"
+        R"({"protocolVersion":4,"type":"hello","sessionId":"s","generation":1,)"
+        R"("profileId":"2k30",)"
         R"("codec":"av1","codedWidth":2560,"codedHeight":1440,)"
         R"("rotationDegrees":0,"fps":30,"bitrateBps":18000000})";
     require(!direct_webcam::decode_control_message(wrong_codec, message, error));
 
     const std::string old_protocol =
-        R"({"protocolVersion":2,"type":"hello","sessionId":"s","generation":1,)"
+        R"({"protocolVersion":3,"type":"hello","sessionId":"s","generation":1,)"
+        R"("profileId":"2k30",)"
         R"("codec":"h264","width":1280,"height":720,"fps":30,"bitrateBps":4000000})";
     require(!direct_webcam::decode_control_message(old_protocol, message, error));
 
     const std::string malformed_geometry =
-        R"({"protocolVersion":3,"type":"hello","sessionId":"s","generation":1,)"
+        R"({"protocolVersion":4,"type":"hello","sessionId":"s","generation":1,)"
+        R"("profileId":"2k30",)"
         R"("codec":"h264","codedWidth":2560,"codedHeight":1440,)"
         R"("rotationDegrees":45,"fps":30,"bitrateBps":18000000})";
     require(!direct_webcam::decode_control_message(malformed_geometry, message, error));
@@ -63,8 +68,8 @@ void test_reverse_orientations_are_valid()
 {
     for (const int rotation : {0, 90, 180, 270}) {
         const std::string json =
-            "{\"protocolVersion\":3,\"type\":\"hello\",\"sessionId\":\"s\",\"generation\":1,"
-            "\"codec\":\"h264\",\"codedWidth\":2560,\"codedHeight\":1440,"
+            "{\"protocolVersion\":4,\"type\":\"hello\",\"sessionId\":\"s\",\"generation\":1,"
+            "\"profileId\":\"2k30\",\"codec\":\"h264\",\"codedWidth\":2560,\"codedHeight\":1440,"
             "\"rotationDegrees\":" +
             std::to_string(rotation) + ",\"fps\":30,\"bitrateBps\":18000000}";
         direct_webcam::ControlMessage message;
@@ -77,7 +82,7 @@ void test_reverse_orientations_are_valid()
 void test_accepted_uses_shape_independent_bounds()
 {
     const auto accepted = direct_webcam::encode_accepted_message(
-        "session-1", 7, direct_webcam::contract::kDefaultMediaPort,
+        "session-1", 7, "2k30", direct_webcam::contract::kDefaultMediaPort,
         direct_webcam::contract::kMaximumLongEdge, direct_webcam::contract::kMaximumShortEdge);
     require(accepted.find("maxLongEdge") != std::string::npos);
     require(accepted.find("maxShortEdge") != std::string::npos);

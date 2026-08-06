@@ -48,5 +48,6 @@
     <string name="cancel">Cancel</string>
     <string name="stop_stream">Stop camera</string>
     <string name="profile_2k30">2K</string>
+    <string name="profile_1080p30">1080p</string>
     <string name="profile_720p30">720p test mode</string>
 </resources>

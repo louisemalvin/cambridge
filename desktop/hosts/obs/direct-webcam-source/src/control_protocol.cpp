@@ -110,10 +110,12 @@ bool decode_control_message(const std::string &json, ControlMessage &message, st
 
     if (message.type == contract::kMessageHello) {
         message.hello.session_id.clear();
+        message.hello.profile_id.clear();
         message.hello.codec.clear();
         if (!get_string(root, "sessionId", message.hello.session_id, error, contract::kMaximumSessionIdBytes) ||
             !get_unsigned(root, "generation", message.hello.generation, error, contract::kMinimumGeneration,
                           std::numeric_limits<std::uint64_t>::max()) ||
+            !get_string(root, "profileId", message.hello.profile_id, error, contract::kMaximumSessionIdBytes) ||
             !get_string(root, "codec", message.hello.codec, error, contract::kMaximumSessionIdBytes)) {
             json_decref(root);
             return false;
@@ -169,6 +171,7 @@ bool decode_control_message(const std::string &json, ControlMessage &message, st
 }
 
 std::string encode_accepted_message(const std::string &session_id, std::uint64_t generation,
+                                    const std::string &profile_id,
                                     std::uint32_t media_port, std::uint32_t maximum_long_edge,
                                     std::uint32_t maximum_short_edge)
 {
@@ -177,6 +180,7 @@ std::string encode_accepted_message(const std::string &session_id, std::uint64_t
     json_object_set_new(root, "type", json_string(contract::kMessageAccepted));
     json_object_set_new(root, "sessionId", json_string(session_id.c_str()));
     json_object_set_new(root, "generation", json_integer(static_cast<json_int_t>(generation)));
+    json_object_set_new(root, "profileId", json_string(profile_id.c_str()));
     json_object_set_new(root, "mediaPort", json_integer(media_port));
     json_object_set_new(root, "maxLongEdge", json_integer(maximum_long_edge));
     json_object_set_new(root, "maxShortEdge", json_integer(maximum_short_edge));
