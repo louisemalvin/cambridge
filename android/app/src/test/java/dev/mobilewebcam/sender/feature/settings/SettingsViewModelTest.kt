@@ -3,7 +3,6 @@ package dev.mobilewebcam.sender.feature.settings
 import dev.mobilewebcam.sender.app.model.ConnectionUiState
 import dev.mobilewebcam.sender.app.model.StreamPresentationSnapshot
 import dev.mobilewebcam.sender.media.camera.CameraInteractionState
-import dev.mobilewebcam.sender.model.CodecPreference
 import dev.mobilewebcam.sender.model.StreamState
 import dev.mobilewebcam.sender.session.VideoProfiles
 import org.junit.Assert.assertEquals
@@ -13,29 +12,20 @@ import org.junit.Test
 
 class SettingsViewModelTest {
     @Test
-    fun configuredSettingsAreMappedToSelectedOptions() {
+    fun settingsUseTheFixedNormal2kProfile() {
         val state = SettingsUiStateMapper.map(
-            snapshot = snapshot(
-                codecPreference = CodecPreference.FORCE_H264,
-                profile = VideoProfiles.PROFILE_1440P30,
-            ),
+            snapshot = snapshot(profile = VideoProfiles.PROFILE_2K30),
             hasConfiguredReceiver = true,
         )
 
-        assertEquals(
-            CodecPreference.FORCE_H264.name,
-            state.codecOptions.single { it.isSelected }.key,
-        )
-        assertEquals(
-            VideoProfiles.PROFILE_1440P30.id,
-            state.profileOptions.single { it.isSelected }.key,
-        )
+        assertEquals(VideoProfiles.PROFILE_2K30, VideoProfiles.default)
+        assertTrue(state.hasConfiguredReceiver)
     }
 
     @Test
-    fun settingsExposeConnectionStatusAndUnsupportedCameraCapabilities() {
+    fun settingsExposeConnectionStatusAndCameraCapabilities() {
         val state = SettingsUiStateMapper.map(
-            snapshot = snapshot(streamState = StreamState.CheckingReceiver),
+            snapshot = snapshot(streamState = StreamState.Connecting),
             hasConfiguredReceiver = false,
         )
 
@@ -46,11 +36,9 @@ class SettingsViewModelTest {
     }
 
     private fun snapshot(
-        codecPreference: CodecPreference = CodecPreference.AUTO_PREFER_H265,
         profile: dev.mobilewebcam.sender.model.VideoProfile = VideoProfiles.default,
         streamState: StreamState = StreamState.Idle,
     ) = StreamPresentationSnapshot(
-        codecPreference = codecPreference,
         profile = profile,
         cameraInteraction = CameraInteractionState(),
         streamState = streamState,

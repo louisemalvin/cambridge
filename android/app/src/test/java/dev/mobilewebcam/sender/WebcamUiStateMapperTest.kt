@@ -1,18 +1,20 @@
 package dev.mobilewebcam.sender
 
+import dev.mobilewebcam.sender.R
 import dev.mobilewebcam.sender.app.model.ConnectionUiState
 import dev.mobilewebcam.sender.app.model.SenderDialogUiState
 import dev.mobilewebcam.sender.app.model.StreamPresentationSnapshot
 import dev.mobilewebcam.sender.app.model.UiText
 import dev.mobilewebcam.sender.feature.webcam.WebcamUiStateMapper
 import dev.mobilewebcam.sender.media.camera.CameraInteractionState
-import dev.mobilewebcam.sender.model.CodecPreference
-import dev.mobilewebcam.sender.model.StreamFailure
-import dev.mobilewebcam.sender.model.StreamState
-import dev.mobilewebcam.sender.model.VideoCodec
-import dev.mobilewebcam.sender.model.NegotiatedSession
+import dev.mobilewebcam.sender.media.camera.DisplayOrientation
+import dev.mobilewebcam.sender.media.camera.SessionTransform
 import dev.mobilewebcam.sender.model.OutputPixelFormat
 import dev.mobilewebcam.sender.model.ReceiverEndpoint
+import dev.mobilewebcam.sender.model.StreamFailure
+import dev.mobilewebcam.sender.model.StreamSession
+import dev.mobilewebcam.sender.model.StreamState
+import dev.mobilewebcam.sender.model.VideoCodec
 import dev.mobilewebcam.sender.session.VideoProfiles
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -40,15 +42,16 @@ class WebcamUiStateMapperTest {
     fun streamingMapsToConnectionPresentationAndLivePreview() {
         val state = mapSnapshot(
             streamState = StreamState.Streaming(
-                session = NegotiatedSession(
+                session = StreamSession(
                     sessionId = "session",
-                    endpoint = ReceiverEndpoint("desktop", 50000),
+                    endpoint = ReceiverEndpoint("desktop", 50_000),
                     selectedCodec = VideoCodec.H264,
                     profile = VideoProfiles.default,
                     bitrateBps = VideoProfiles.default.h264BitrateBps,
-                    mediaPort = 50001,
+                    mediaPort = 50_001,
                     outputPixelFormat = OutputPixelFormat.NV12,
                     warnings = emptyList(),
+                    sessionTransform = SessionTransform.forProfile(DisplayOrientation.PORTRAIT),
                 ),
                 startedAtMillis = 0,
             ),
@@ -57,27 +60,27 @@ class WebcamUiStateMapperTest {
 
         val connection = state.connection as ConnectionUiState.Streaming
         assertEquals(UiText.Plain("Test desktop"), connection.receiverName)
+        assertEquals(UiText.Resource(R.string.portrait), state.sessionOrientation)
         assertTrue(state.preview.isLive)
     }
 
     @Test
     fun failureMapsToCopyableDiagnosticsWithoutDomainStateInScreenState() {
         val state = mapSnapshot(
-            streamState = StreamState.Failed(
-                StreamFailure.ReceiverUnavailable("Health check failed"),
-            ),
+            streamState = StreamState.Failed(StreamFailure.ReceiverUnavailable("connection failed")),
             activeReceiverName = "Test desktop",
         )
 
         assertTrue(state.connection is ConnectionUiState.Failed)
+        assertEquals(UiText.Plain("OBS is not available"), (state.connection as ConnectionUiState.Failed).message)
         assertTrue(state.failureDiagnostics?.contains("Test desktop") == true)
     }
 
     @Test
-    fun connectingStateMapsToConnectingUiState() {
-        val state = mapSnapshot(streamState = StreamState.Negotiating)
-        assertTrue(state.connection is ConnectionUiState.Connecting)
-        assertFalse(state.preview.isLive)
+    fun connectingAndReconnectingMapToSimpleConnectionStatus() {
+        assertTrue(mapSnapshot(StreamState.Connecting).connection is ConnectionUiState.Connecting)
+        assertTrue(mapSnapshot(StreamState.Reconnecting).connection is ConnectionUiState.Connecting)
+        assertFalse(mapSnapshot(StreamState.Connecting).preview.isLive)
     }
 
     @Test
@@ -93,7 +96,6 @@ class WebcamUiStateMapperTest {
         isPermissionDialogOpen: Boolean = false,
     ) = WebcamUiStateMapper.map(
         snapshot = StreamPresentationSnapshot(
-            codecPreference = CodecPreference.AUTO_PREFER_H265,
             profile = VideoProfiles.default,
             cameraInteraction = CameraInteractionState(),
             streamState = streamState,

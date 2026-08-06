@@ -22,11 +22,11 @@ object WebcamUiStateMapper {
         return WebcamUiState(
             preview = PreviewUiState(
                 landscapeAspectRatio = snapshot.profile.width.toFloat() / snapshot.profile.height,
-                isLive = snapshot.streamState is StreamState.Starting ||
-                    snapshot.streamState is StreamState.Streaming ||
+                isLive = snapshot.streamState is StreamState.Streaming ||
                     snapshot.streamState == StreamState.Stopping,
             ),
             connection = connection,
+            sessionOrientation = StreamPresentationMapper.sessionOrientation(snapshot.streamState),
             camera = CameraControlsUiStateMapper.map(snapshot.cameraInteraction),
             dialog = if (isPermissionDialogOpen) {
                 SenderDialogUiState.CameraPermission(
@@ -42,7 +42,6 @@ object WebcamUiStateMapper {
                 buildFailureDiagnostics(
                     receiverName = snapshot.activeReceiverName,
                     profile = snapshot.profile,
-                    codecPreference = snapshot.codecPreference,
                     failure = failed.failure,
                     cause = StreamPresentationMapper.causeOrNull(failed.failure),
                 )

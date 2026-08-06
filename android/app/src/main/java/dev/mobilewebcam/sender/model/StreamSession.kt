@@ -1,6 +1,9 @@
 package dev.mobilewebcam.sender.model
 
-data class NegotiatedSession(
+import dev.mobilewebcam.sender.connection.control.direct.DirectStreamContract
+import dev.mobilewebcam.sender.media.camera.SessionTransform
+
+data class StreamSession(
     val sessionId: String,
     val endpoint: ReceiverEndpoint,
     val selectedCodec: VideoCodec,
@@ -9,10 +12,13 @@ data class NegotiatedSession(
     val mediaPort: Int,
     val outputPixelFormat: OutputPixelFormat,
     val warnings: List<String>,
-    val srtEndpoint: SrtTransportEndpoint? = null,
-    val connectDeadlineMs: Long? = null,
-    val reconnectGraceMs: Long? = null,
+    val streamGeneration: Long = DirectStreamContract.FIRST_STREAM_GENERATION,
+    val sessionTransform: SessionTransform? = null,
 )
+
+enum class OutputPixelFormat {
+    NV12,
+}
 
 data class StreamConfiguration(
     val codec: VideoCodec,
@@ -21,4 +27,5 @@ data class StreamConfiguration(
     val keyframeIntervalSeconds: Int,
     val runId: String? = null,
     val sessionId: String? = null,
+    val sessionTransform: SessionTransform? = null,
 )

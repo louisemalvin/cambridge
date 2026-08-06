@@ -3,6 +3,7 @@ package dev.mobilewebcam.sender.model
 sealed interface StreamFailure {
     data object CameraPermissionDenied : StreamFailure
     data object CameraUnavailable : StreamFailure
+    data class VideoQualityUnsupported(val requestedProfile: VideoProfile) : StreamFailure
     data class ReceiverUnavailable(val reason: String) : StreamFailure
     data class NoCompatibleCodec(val requestedProfile: VideoProfile) : StreamFailure
     data class ForcedCodecUnsupported(

@@ -3,7 +3,6 @@ package dev.mobilewebcam.sender.feature.webcam
 import dev.mobilewebcam.sender.app.model.ConnectionUiState
 import dev.mobilewebcam.sender.app.model.StreamPresentationSnapshot
 import dev.mobilewebcam.sender.media.camera.CameraInteractionState
-import dev.mobilewebcam.sender.model.CodecPreference
 import dev.mobilewebcam.sender.model.StreamFailure
 import dev.mobilewebcam.sender.model.StreamState
 import dev.mobilewebcam.sender.session.VideoProfiles
@@ -65,7 +64,6 @@ class WebcamViewModelTest {
         streamState: StreamState = StreamState.Idle,
         cameraInteraction: CameraInteractionState = CameraInteractionState(),
     ) = StreamPresentationSnapshot(
-        codecPreference = CodecPreference.AUTO_PREFER_H265,
         profile = VideoProfiles.default,
         cameraInteraction = cameraInteraction,
         streamState = streamState,

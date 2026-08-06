@@ -5,6 +5,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.hilt.navigation.compose.hiltViewModel
+import dev.mobilewebcam.sender.R
+import androidx.compose.ui.res.stringResource
 
 @Composable
 fun PairingRoute(
@@ -12,10 +14,6 @@ fun PairingRoute(
 ) {
     val viewModel: PairingViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsState()
-    val receiverOrigin by viewModel.receiverOrigin.collectAsState()
-    val receiverOriginError by viewModel.receiverOriginError.collectAsState()
-    val discoveryState by viewModel.discoveryState.collectAsState()
-
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
             when (effect) {
@@ -26,9 +24,7 @@ fun PairingRoute(
 
     PairingScreen(
         state = state,
-        receiverOrigin = receiverOrigin,
-        receiverOriginError = receiverOriginError,
-        discoveryState = discoveryState,
+        computerName = stringResource(R.string.computer_name),
         onAction = viewModel::onAction,
     )
 }

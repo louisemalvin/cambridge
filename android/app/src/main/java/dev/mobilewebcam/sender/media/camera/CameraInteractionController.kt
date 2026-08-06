@@ -21,3 +21,6 @@ interface CameraPreviewSurfaceController {
 }
 
 interface CameraController : CameraInteractionController, CameraPreviewSurfaceController
+{
+    suspend fun snapshotSessionTransform(codedWidth: Int, codedHeight: Int): SessionTransform
+}

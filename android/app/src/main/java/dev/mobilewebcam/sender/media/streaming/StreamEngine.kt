@@ -1,7 +1,7 @@
 package dev.mobilewebcam.sender.media.streaming
 
 import dev.mobilewebcam.sender.model.StreamConfiguration
-import dev.mobilewebcam.sender.model.SrtTransportEndpoint
+import dev.mobilewebcam.sender.model.DirectStreamEndpoint
 import kotlinx.coroutines.flow.Flow
 
 interface StreamEngine {
@@ -9,7 +9,7 @@ interface StreamEngine {
 
     suspend fun prepare(configuration: StreamConfiguration): Result<Unit>
 
-    suspend fun start(endpoint: SrtTransportEndpoint): Result<Unit>
+    suspend fun start(endpoint: DirectStreamEndpoint): Result<Unit>
 
     suspend fun updateBitrate(bitrateBps: Int): Result<Unit>
 

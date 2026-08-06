@@ -66,7 +66,6 @@ class CameraPresentationTest {
             height = 1080,
             fps = 30,
             h264BitrateBps = 10_000_000,
-            h265BitrateBps = 7_000_000,
             keyframeIntervalSeconds = 1,
         )
     }

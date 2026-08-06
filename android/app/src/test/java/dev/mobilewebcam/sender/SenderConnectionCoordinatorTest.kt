@@ -1,188 +1,169 @@
 package dev.mobilewebcam.sender
 
+import dev.mobilewebcam.sender.connection.NetworkChangeMonitor
+import dev.mobilewebcam.sender.connection.ReconnectPolicy
 import dev.mobilewebcam.sender.connection.SenderConnectionCoordinator
-import dev.mobilewebcam.sender.connection.control.ReceiverControlClient
+import dev.mobilewebcam.sender.connection.control.direct.DirectStreamContract
 import dev.mobilewebcam.sender.logging.AppLogger
-import dev.mobilewebcam.sender.model.CodecPreference
-import dev.mobilewebcam.sender.model.DecoderAcceleration
-import dev.mobilewebcam.sender.model.NegotiatedSession
 import dev.mobilewebcam.sender.model.OutputPixelFormat
-import dev.mobilewebcam.sender.model.PrepareSessionRequest
-import dev.mobilewebcam.sender.model.ReceiverCapabilities
-import dev.mobilewebcam.sender.model.ReceiverCodecCapability
-import dev.mobilewebcam.sender.model.ReceiverDemand
-import dev.mobilewebcam.sender.model.ReceiverDemandEvent
 import dev.mobilewebcam.sender.model.ReceiverEndpoint
-import dev.mobilewebcam.sender.model.ReceiverHealth
 import dev.mobilewebcam.sender.model.SenderSettings
 import dev.mobilewebcam.sender.model.SenderSettingsRepository
 import dev.mobilewebcam.sender.model.StreamFailure
+import dev.mobilewebcam.sender.model.StreamFailureException
+import dev.mobilewebcam.sender.model.StreamSession
 import dev.mobilewebcam.sender.model.StreamState
-import dev.mobilewebcam.sender.model.SrtTransportEndpoint
 import dev.mobilewebcam.sender.model.VideoCodec
 import dev.mobilewebcam.sender.model.VideoProfile
 import dev.mobilewebcam.sender.session.StreamSessionController
 import dev.mobilewebcam.sender.session.VideoProfiles
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.test.TestCoroutineScheduler
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.IOException
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SenderConnectionCoordinatorTest {
     @Test
-    fun connectingLeavesTheSenderInStandbyWithoutStartingMedia() = runTest {
-        val harness = harness(backgroundScope, testScheduler)
+    fun connectStartsStreamingImmediately() = runTest {
+        val controller = FakeController()
+        val coordinator = coordinator(controller, backgroundScope)
 
-        assertTrue(harness.coordinator.connectToReceiver(harness.endpoint).isSuccess)
+        assertTrue(coordinator.connectToReceiver(endpoint).isSuccess)
+
+        assertEquals(1, controller.startCount)
+        assertEquals(listOf(endpoint), controller.attemptedEndpoints)
+        assertTrue(coordinator.streamState.value is StreamState.Streaming)
+        assertTrue(coordinator.hasConfiguredReceiver.value)
+    }
+
+    @Test
+    fun failedConnectRetriesTheSameEndpoint() = runTest {
+        val controller = FakeController(failuresBeforeSuccess = 1)
+        val coordinator = coordinator(controller, backgroundScope, testReconnectPolicy())
+
+        assertTrue(coordinator.connectToReceiver(endpoint).isFailure)
+        testScheduler.runCurrent()
+        assertEquals(StreamState.Reconnecting, coordinator.streamState.value)
+
+        testScheduler.advanceTimeBy(RETRY_DELAY_MILLIS)
         testScheduler.runCurrent()
 
-        assertEquals(StreamState.ConnectedStandby, harness.coordinator.streamState.value)
-        assertEquals(0, harness.controller.startCount)
+        assertEquals(listOf(endpoint, endpoint), controller.attemptedEndpoints)
+        assertTrue(coordinator.streamState.value is StreamState.Streaming)
     }
 
     @Test
-    fun firstDemandStartsOnceAndFinalReleaseReturnsToStandby() = runTest {
-        val harness = harness(backgroundScope, testScheduler)
-        connect(harness)
-
-        harness.emit(activeDemand(generation = FIRST_GENERATION))
-        assertEquals(1, harness.controller.startCount)
-
-        harness.emit(activeDemand(generation = FIRST_GENERATION, consumerCount = SECOND_CONSUMER_COUNT))
-        assertEquals(1, harness.controller.startCount)
-
-        harness.emit(inactiveDemand(generation = FIRST_GENERATION))
-        assertEquals(1, harness.controller.stopCount)
-        assertEquals(StreamState.ConnectedStandby, harness.coordinator.streamState.value)
-
-        harness.emit(inactiveDemand(generation = FIRST_GENERATION))
-        assertEquals(1, harness.controller.stopCount)
-    }
-
-    @Test
-    fun staleGenerationsCannotRestartOrStopTheCurrentMediaSession() = runTest {
-        val harness = harness(backgroundScope, testScheduler)
-        connect(harness)
-
-        harness.emit(activeDemand(generation = FIRST_GENERATION))
-        harness.emit(inactiveDemand(generation = FIRST_GENERATION))
-        harness.emit(activeDemand(generation = SECOND_GENERATION))
-        testScheduler.advanceTimeBy(RESTART_SETTLE_TIME_MILLIS)
-        testScheduler.runCurrent()
-        assertEquals(2, harness.controller.startCount)
-
-        harness.emit(activeDemand(generation = FIRST_GENERATION, consumerCount = SECOND_CONSUMER_COUNT))
-        harness.emit(inactiveDemand(generation = FIRST_GENERATION))
-
-        assertEquals(2, harness.controller.startCount)
-        assertEquals(1, harness.controller.stopCount)
-        assertTrue(harness.coordinator.streamState.value is StreamState.Streaming)
-    }
-
-    @Test
-    fun losingTheDemandConnectionStopsMediaAndReportsReceiverFailure() = runTest {
-        val receiver = FakeReceiver().apply {
-            demandFlow = flow {
-                emit(activeDemand(generation = FIRST_GENERATION))
-                throw IOException("receiver unavailable")
-            }
-        }
-        val harness = harness(backgroundScope, testScheduler, receiver)
-
-        connect(harness)
-
-        assertEquals(1, harness.controller.startCount)
-        assertEquals(1, harness.controller.stopCount)
-        assertEquals(
-            StreamState.Failed(StreamFailure.ReceiverUnavailable("Receiver demand connection was lost")),
-            harness.coordinator.streamState.value,
+    fun stopCancelsReconnectAndPreventsLaterCameraActivation() = runTest {
+        val controller = FakeController(alwaysUnavailable = true)
+        val coordinator = coordinator(
+            controller = controller,
+            scope = backgroundScope,
+            reconnectPolicy = testReconnectPolicy(maximumDelayMillis = LONG_RETRY_DELAY_MILLIS),
         )
+
+        assertTrue(coordinator.connectToReceiver(endpoint).isFailure)
+        testScheduler.runCurrent()
+        val attemptsBeforeStop = controller.attemptedEndpoints.size
+
+        assertTrue(coordinator.stop().isSuccess)
+        testScheduler.advanceTimeBy(LONG_RETRY_DELAY_MILLIS * RETRY_ATTEMPT_COUNT)
+        testScheduler.runCurrent()
+
+        assertEquals(StreamState.Idle, coordinator.streamState.value)
+        assertEquals(attemptsBeforeStop, controller.attemptedEndpoints.size)
     }
 
     @Test
-    fun stoppingDisconnectsTheDemandSubscriptionBeforeTheNextEvent() = runTest {
-        val harness = harness(backgroundScope, testScheduler)
-        connect(harness)
-        harness.emit(activeDemand(generation = FIRST_GENERATION))
+    fun networkChangeRestartsTheSameConfiguredEndpoint() = runTest {
+        val controller = FakeController()
+        val monitor = FakeNetworkChangeMonitor()
+        val coordinator = coordinator(controller, backgroundScope, monitor = monitor)
 
-        assertTrue(harness.coordinator.stop().isSuccess)
-        harness.emit(activeDemand(generation = SECOND_GENERATION))
-
-        assertEquals(StreamState.Idle, harness.coordinator.streamState.value)
-        assertEquals(1, harness.controller.startCount)
-        assertEquals(1, harness.controller.stopCount)
-    }
-
-    private suspend fun connect(harness: TestHarness) {
-        assertTrue(harness.coordinator.connectToReceiver(harness.endpoint).isSuccess)
-        harness.testScheduler.runCurrent()
-    }
-
-    private suspend fun TestHarness.emit(event: ReceiverDemandEvent) {
-        receiver.demandEvents.emit(event)
+        assertTrue(coordinator.connectToReceiver(endpoint).isSuccess)
         testScheduler.runCurrent()
+        monitor.emitChange()
+        testScheduler.runCurrent()
+        testScheduler.advanceTimeBy(RETRY_DELAY_MILLIS)
+        testScheduler.runCurrent()
+
+        assertEquals(listOf(endpoint, endpoint), controller.attemptedEndpoints)
+        assertTrue(coordinator.streamState.value is StreamState.Streaming)
     }
 
-    private fun harness(
-        scope: CoroutineScope,
-        testScheduler: TestCoroutineScheduler,
-        receiver: FakeReceiver = FakeReceiver(),
-    ): TestHarness {
+    @Test
+    fun forgettingTheDesktopStopsMediaAndClearsTheEndpoint() = runTest {
         val controller = FakeController()
         val settings = FakeSettings()
-        val endpoint = ReceiverEndpoint(
-            host = "127.0.0.1",
-            controlPort = CONTROL_PORT,
-            displayName = "Test receiver",
-        )
-        return TestHarness(
-            coordinator = SenderConnectionCoordinator(
-                controller = controller,
-                receiver = receiver,
-                settings = settings,
-                logger = TestLogger,
-                scope = scope,
-            ),
-            controller = controller,
-            receiver = receiver,
-            endpoint = endpoint,
-            testScheduler = testScheduler,
-        )
+        val coordinator = coordinator(controller, backgroundScope, settings = settings)
+
+        assertTrue(coordinator.connectToReceiver(endpoint).isSuccess)
+        assertTrue(coordinator.forgetReceiver().isSuccess)
+
+        assertEquals(StreamState.Idle, coordinator.streamState.value)
+        assertFalse(coordinator.hasConfiguredReceiver.value)
+        assertEquals(null, settings.state.value.receiverEndpoint)
+        assertEquals(1, controller.stopCount)
     }
 
-    private data class TestHarness(
-        val coordinator: SenderConnectionCoordinator,
-        val controller: FakeController,
-        val receiver: FakeReceiver,
-        val endpoint: ReceiverEndpoint,
-        val testScheduler: TestCoroutineScheduler,
+    private fun coordinator(
+        controller: FakeController,
+        scope: kotlinx.coroutines.CoroutineScope,
+        reconnectPolicy: ReconnectPolicy = ReconnectPolicy(),
+        monitor: NetworkChangeMonitor = NoopNetworkChangeMonitor,
+        settings: FakeSettings = FakeSettings(),
+    ) = SenderConnectionCoordinator(
+        controller = controller,
+        settings = settings,
+        logger = TestLogger,
+        scope = scope,
+        defaultEndpoint = endpoint,
+        networkChangeMonitor = monitor,
+        reconnectPolicy = reconnectPolicy,
+        jitterSource = { NEUTRAL_JITTER_SAMPLE },
     )
 
-    private class FakeController : StreamSessionController {
+    private class FakeController(
+        private var failuresBeforeSuccess: Int = NO_FAILURES,
+        private val alwaysUnavailable: Boolean = false,
+    ) : StreamSessionController {
         private val stateFlow = MutableStateFlow<StreamState>(StreamState.Idle)
         override val state: StateFlow<StreamState> = stateFlow.asStateFlow()
-
+        val attemptedEndpoints = mutableListOf<ReceiverEndpoint>()
         var startCount = 0
         var stopCount = 0
+        private var nextGeneration = DirectStreamContract.FIRST_STREAM_GENERATION
 
-        override suspend fun start(
-            endpoint: ReceiverEndpoint,
-            preference: CodecPreference,
-            profile: VideoProfile,
-        ): Result<Unit> {
+        override suspend fun start(endpoint: ReceiverEndpoint, profile: VideoProfile): Result<Unit> {
+            attemptedEndpoints += endpoint
             startCount += 1
-            stateFlow.value = StreamState.Streaming(testSession(endpoint), STREAM_START_TIME)
+            if (alwaysUnavailable || failuresBeforeSuccess-- > NO_FAILURES) {
+                val failure = StreamFailure.StreamStartFailed(IllegalStateException("unavailable"))
+                stateFlow.value = StreamState.Failed(failure)
+                return Result.failure(StreamFailureException(failure))
+            }
+            stateFlow.value = StreamState.Streaming(
+                session = StreamSession(
+                    sessionId = "test-session",
+                    endpoint = endpoint,
+                    selectedCodec = VideoCodec.H264,
+                    profile = profile,
+                    bitrateBps = profile.h264BitrateBps,
+                    mediaPort = DirectStreamContract.DEFAULT_MEDIA_PORT,
+                    outputPixelFormat = OutputPixelFormat.NV12,
+                    warnings = emptyList(),
+                    streamGeneration = nextGeneration++,
+                ),
+                startedAtMillis = STREAM_START_TIME,
+            )
             return Result.success(Unit)
         }
 
@@ -195,59 +176,29 @@ class SenderConnectionCoordinatorTest {
         override suspend fun updateBitrate(bitrateBps: Int): Result<Unit> = Result.success(Unit)
     }
 
-    private class FakeReceiver : ReceiverControlClient {
-        val demandEvents = MutableSharedFlow<ReceiverDemandEvent>(extraBufferCapacity = DEMAND_BUFFER_CAPACITY)
-        var demandFlow: Flow<ReceiverDemandEvent> = demandEvents
-
-        override suspend fun healthV2(endpoint: ReceiverEndpoint): Result<ReceiverHealth> =
-            Result.success(ReceiverHealth("ready", CONTROL_V2_PROTOCOL_VERSION))
-
-        override suspend fun capabilitiesV2(endpoint: ReceiverEndpoint): Result<ReceiverCapabilities> =
-            Result.success(
-                ReceiverCapabilities(
-                    protocolVersion = CONTROL_V2_PROTOCOL_VERSION,
-                    codecs = listOf(
-                        ReceiverCodecCapability(VideoCodec.H264, true, DecoderAcceleration.UNKNOWN),
-                    ),
-                    outputDevice = "/dev/video10",
-                    pixelFormats = listOf(OutputPixelFormat.YUY2),
-                    activeSession = false,
-                ),
-            )
-
-        override fun demandEventsV2(endpoint: ReceiverEndpoint): Flow<ReceiverDemandEvent> = demandFlow
-
-        override suspend fun createSessionV2(
-            endpoint: ReceiverEndpoint,
-            request: PrepareSessionRequest,
-        ): Result<NegotiatedSession> = Result.failure(UnsupportedOperationException("not used"))
-
-        override suspend fun stopSessionV2(endpoint: ReceiverEndpoint, sessionId: String): Result<Unit> =
-            Result.success(Unit)
-
-        override suspend fun sessionStateV2(endpoint: ReceiverEndpoint, sessionId: String): Result<Unit> =
-            Result.success(Unit)
-    }
-
     private class FakeSettings : SenderSettingsRepository {
-        private val stateFlow = MutableStateFlow(
-            SenderSettings(
-                codecPreference = CodecPreference.AUTO_PREFER_H265,
-                profile = VideoProfiles.default,
-            ),
-        )
+        private val stateFlow = MutableStateFlow(SenderSettings(profile = VideoProfiles.default))
         override val state: StateFlow<SenderSettings> = stateFlow.asStateFlow()
 
-        override fun updateCodecPreference(preference: CodecPreference) {
-            stateFlow.value = stateFlow.value.copy(codecPreference = preference)
-        }
-
-        override fun updateProfile(profile: dev.mobilewebcam.sender.model.VideoProfile) {
+        override fun updateProfile(profile: VideoProfile) {
             stateFlow.value = stateFlow.value.copy(profile = profile)
         }
 
         override fun updateReceiverEndpoint(endpoint: ReceiverEndpoint?) {
             stateFlow.value = stateFlow.value.copy(receiverEndpoint = endpoint)
+        }
+    }
+
+    private class FakeNetworkChangeMonitor : NetworkChangeMonitor {
+        private val changeFlow = MutableSharedFlow<Unit>(extraBufferCapacity = NETWORK_EVENT_BUFFER_CAPACITY)
+        override val changes: Flow<Unit> = changeFlow.asSharedFlow()
+
+        override fun start() = Unit
+
+        override fun stop() = Unit
+
+        suspend fun emitChange() {
+            changeFlow.emit(Unit)
         }
     }
 
@@ -258,40 +209,30 @@ class SenderConnectionCoordinatorTest {
         override fun error(message: String, cause: Throwable?, fields: Map<String, Any?>) = Unit
     }
 
+    private object NoopNetworkChangeMonitor : NetworkChangeMonitor {
+        override val changes: Flow<Unit> = kotlinx.coroutines.flow.emptyFlow()
+        override fun start() = Unit
+        override fun stop() = Unit
+    }
+
     private companion object {
-        const val CONTROL_V2_PROTOCOL_VERSION = 2
-        const val CONTROL_PORT = 5_001
-        const val FIRST_GENERATION = 1L
-        const val SECOND_GENERATION = 2L
-        const val FIRST_CONSUMER_COUNT = 1
-        const val SECOND_CONSUMER_COUNT = 2
-        const val DEMAND_BUFFER_CAPACITY = 1
+        val endpoint = ReceiverEndpoint(
+            "127.0.0.1",
+            DirectStreamContract.DEFAULT_CONTROL_PORT,
+            "Test receiver",
+        )
+        const val RETRY_DELAY_MILLIS = 250L
+        const val LONG_RETRY_DELAY_MILLIS = 5_000L
+        const val RETRY_ATTEMPT_COUNT = 3
+        const val NO_FAILURES = 0
+        const val NEUTRAL_JITTER_SAMPLE = 0.5
+        const val NETWORK_EVENT_BUFFER_CAPACITY = 1
         const val STREAM_START_TIME = 100L
-        const val RESTART_SETTLE_TIME_MILLIS = 2_000L
 
-        fun activeDemand(generation: Long, consumerCount: Int = FIRST_CONSUMER_COUNT) =
-            ReceiverDemandEvent(generation, ReceiverDemand.ACTIVE, consumerCount)
-
-        fun inactiveDemand(generation: Long) =
-            ReceiverDemandEvent(generation, ReceiverDemand.INACTIVE, 0)
-
-        fun testSession(endpoint: ReceiverEndpoint) = NegotiatedSession(
-            sessionId = "test-session",
-            endpoint = endpoint,
-            selectedCodec = VideoCodec.H264,
-            profile = VideoProfiles.default,
-            bitrateBps = VideoProfiles.default.h264BitrateBps,
-            mediaPort = 5_000,
-            outputPixelFormat = OutputPixelFormat.YUY2,
-            warnings = emptyList(),
-            srtEndpoint = SrtTransportEndpoint(
-                host = endpoint.host,
-                port = 5_000,
-                streamId = "test-stream",
-                latencyMs = 120,
-                keyLengthBytes = 32,
-                passphrase = "test-passphrase-0123456789",
-            ),
+        fun testReconnectPolicy(maximumDelayMillis: Long = RETRY_DELAY_MILLIS) = ReconnectPolicy(
+            initialDelayMillis = RETRY_DELAY_MILLIS,
+            maximumDelayMillis = maximumDelayMillis,
+            jitterFraction = 0.0,
         )
     }
 }

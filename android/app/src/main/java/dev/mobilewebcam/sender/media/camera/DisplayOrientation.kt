@@ -8,7 +8,7 @@ private const val ROTATION_180_DEGREES = 180
 private const val ROTATION_270_DEGREES = 270
 private const val FULL_TURN_DEGREES = 360
 
-/** Display rotations used to choose the preview shape and RootEncoder preview rotation. */
+/** Display rotations used to choose the preview shape and camera capture rotation. */
 enum class DisplayOrientation(
     val rotationDegrees: Int,
     val isPortrait: Boolean,

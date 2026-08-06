@@ -1,13 +1,11 @@
 package dev.mobilewebcam.sender.app.model
 
-import dev.mobilewebcam.sender.model.CodecPreference
 import dev.mobilewebcam.sender.model.StreamFailure
 import dev.mobilewebcam.sender.model.VideoProfile
 
 internal fun buildFailureDiagnostics(
     receiverName: String?,
     profile: VideoProfile,
-    codecPreference: CodecPreference,
     failure: StreamFailure,
     cause: Throwable?,
 ): String = buildString {
@@ -17,7 +15,6 @@ internal fun buildFailureDiagnostics(
     appendLine(
         "Profile: ${profile.width}x${profile.height}@${profile.fps}",
     )
-    appendLine("Codec preference: $codecPreference")
     appendLine("Failure type: ${failure::class.qualifiedName}")
     cause?.let {
         appendLine("Exception details:")

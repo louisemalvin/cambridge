@@ -7,7 +7,6 @@ import android.widget.Toast
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -19,23 +18,14 @@ import dev.mobilewebcam.sender.app.navigation.AppDestination
 import dev.mobilewebcam.sender.app.navigation.AppNavigation
 import dev.mobilewebcam.sender.app.navigation.rememberAppBackStack
 import dev.mobilewebcam.sender.app.startup.StartupStateResolver
-import dev.mobilewebcam.sender.connection.SenderConnectionCoordinator
 import dev.mobilewebcam.sender.model.SenderSettingsRepository
-import dev.mobilewebcam.sender.model.StreamState
 
 @Composable
 fun SenderApp(
-    coordinator: SenderConnectionCoordinator,
     settings: SenderSettingsRepository,
 ) {
     val context = LocalContext.current
     val senderSettings by settings.state.collectAsState()
-    LaunchedEffect(senderSettings.receiverEndpoint) {
-        val endpoint = senderSettings.receiverEndpoint
-        if (endpoint != null && coordinator.streamState.value is StreamState.Idle) {
-            coordinator.connectToReceiver(endpoint)
-        }
-    }
     val initialDestination = remember(senderSettings.receiverEndpoint) {
         StartupStateResolver(
             hasConfiguredReceiver = senderSettings.receiverEndpoint != null,

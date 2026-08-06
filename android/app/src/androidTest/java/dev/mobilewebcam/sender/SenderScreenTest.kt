@@ -7,11 +7,9 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import dev.mobilewebcam.sender.app.model.CameraControlsUiState
-import dev.mobilewebcam.sender.app.model.SelectOptionUi
 import dev.mobilewebcam.sender.feature.settings.SettingsUiState
-import dev.mobilewebcam.sender.feature.webcam.WebcamUiState
-import dev.mobilewebcam.sender.app.model.UiText
 import dev.mobilewebcam.sender.feature.webcam.WebcamScreen
+import dev.mobilewebcam.sender.feature.webcam.WebcamUiState
 import dev.mobilewebcam.sender.feature.settings.SettingsScreen
 import org.junit.Rule
 import org.junit.Test
@@ -60,20 +58,6 @@ class SenderScreenTest {
                 SettingsScreen(
                     state = SettingsUiState(
                         camera = CameraControlsUiState(),
-                        codecOptions = listOf(
-                            SelectOptionUi(
-                                key = "auto",
-                                label = UiText.Plain("Auto"),
-                                isSelected = true,
-                            ),
-                        ),
-                        profileOptions = listOf(
-                            SelectOptionUi(
-                                key = "1080p30",
-                                label = UiText.Plain("1080p30"),
-                                isSelected = true,
-                            ),
-                        ),
                         hasConfiguredReceiver = true,
                     ),
                     onAction = {},
@@ -83,9 +67,8 @@ class SenderScreenTest {
 
         composeRule.onNodeWithText("Settings").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Back").assertIsDisplayed()
-        composeRule.onNodeWithText("Stream defaults").assertIsDisplayed()
-        composeRule.onNodeWithText("Codec mode").assertIsDisplayed()
-        composeRule.onNodeWithText("Video profile").assertIsDisplayed()
+        composeRule.onNodeWithText("Connection").assertIsDisplayed()
+        composeRule.onNodeWithText("Stream status").assertIsDisplayed()
         composeRule.onNodeWithText("Forget receiver").assertIsDisplayed()
     }
 }

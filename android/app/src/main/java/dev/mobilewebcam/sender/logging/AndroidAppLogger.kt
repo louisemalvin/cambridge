@@ -1,6 +1,7 @@
 package dev.mobilewebcam.sender.logging
 
 import android.util.Log
+import dev.mobilewebcam.sender.BuildConfig
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.JsonPrimitive
@@ -57,6 +58,10 @@ object AndroidAppLogger : AppLogger {
         put("level", JsonPrimitive(level))
         put("message", JsonPrimitive(message))
         put("timestampMs", JsonPrimitive(System.currentTimeMillis()))
+        put("monotonicNs", JsonPrimitive(System.nanoTime()))
+        put("appVersion", JsonPrimitive(BuildConfig.VERSION_NAME))
+        put("buildType", JsonPrimitive(BuildConfig.BUILD_TYPE))
+        put("applicationId", JsonPrimitive(BuildConfig.APPLICATION_ID))
     }
 
     private fun JsonObjectBuilder.putFields(fields: Map<String, Any?>) {

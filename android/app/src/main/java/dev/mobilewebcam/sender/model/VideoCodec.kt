@@ -6,7 +6,4 @@ enum class VideoCodec(
     H264(
         protocolId = "h264",
     ),
-    H265(
-        protocolId = "h265",
-    ),
 }

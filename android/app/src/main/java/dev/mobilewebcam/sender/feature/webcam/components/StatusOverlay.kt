@@ -30,62 +30,45 @@ fun PreviewStatusOverlay(
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier) {
-        ConnectionChip(
-            state = state.connection,
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(TOP_STATUS_PADDING.dp),
-        )
-
-        when (val connection = state.connection) {
-            ConnectionUiState.Waiting -> WaitingCard(
-                state = state,
-                onAction = onAction,
-                modifier = Modifier.align(Alignment.Center),
-            )
-            is ConnectionUiState.ConnectedStandby -> Unit
-            is ConnectionUiState.Connecting -> StatusCard(
-                message = connection.status,
-                modifier = Modifier.align(Alignment.Center),
-            )
-            ConnectionUiState.Stopping -> StatusCard(
-                message = UiText.Resource(R.string.stopping_stream),
-                modifier = Modifier.align(Alignment.Center),
-            )
-            is ConnectionUiState.Failed -> FailureCard(
-                message = connection.message,
-                onOpenSettings = { onAction(SenderScreenAction.OpenSettings) },
-                modifier = Modifier.align(Alignment.Center),
-            )
-            is ConnectionUiState.Streaming -> Unit
+        state.sessionOrientation?.let { orientation ->
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(ORIENTATION_BADGE_PADDING.dp),
+                shape = MaterialTheme.shapes.medium,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = STATUS_CARD_ALPHA),
+            ) {
+                Text(
+                    text = orientation.value(),
+                    modifier = Modifier.padding(ORIENTATION_BADGE_CONTENT_PADDING.dp),
+                )
+            }
         }
-    }
-}
+        val showCenterCard = !state.preview.isLive || !state.cameraPermissionGranted
 
-@Composable
-private fun ConnectionChip(
-    state: ConnectionUiState,
-    modifier: Modifier = Modifier,
-) {
-    val label = when (state) {
-        ConnectionUiState.Waiting -> UiText.Resource(R.string.waiting_for_connection)
-        is ConnectionUiState.ConnectedStandby -> state.receiverName
-            ?: UiText.Resource(R.string.connected_standby)
-        is ConnectionUiState.Connecting -> state.status
-        is ConnectionUiState.Streaming -> state.receiverName
-            ?: UiText.Resource(R.string.connected_to_receiver, listOf("receiver"))
-        ConnectionUiState.Stopping -> UiText.Resource(R.string.stopping_stream)
-        is ConnectionUiState.Failed -> state.message
-    }
-    Surface(
-        modifier = modifier,
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = STATUS_CHIP_ALPHA),
-    ) {
-        Text(
-            text = label.value(),
-            modifier = Modifier.padding(STATUS_CHIP_PADDING.dp),
-        )
+        if (showCenterCard) {
+            when (val connection = state.connection) {
+                ConnectionUiState.Waiting -> WaitingCard(
+                    state = state,
+                    onAction = onAction,
+                    modifier = Modifier.align(Alignment.Center),
+                )
+                is ConnectionUiState.Connecting -> StatusCard(
+                    message = connection.status,
+                    modifier = Modifier.align(Alignment.Center),
+                )
+                ConnectionUiState.Stopping -> StatusCard(
+                    message = UiText.Resource(R.string.stopping_stream),
+                    modifier = Modifier.align(Alignment.Center),
+                )
+                is ConnectionUiState.Failed -> FailureCard(
+                    message = connection.message,
+                    onOpenSettings = { onAction(SenderScreenAction.OpenSettings) },
+                    modifier = Modifier.align(Alignment.Center),
+                )
+                is ConnectionUiState.Streaming -> Unit
+            }
+        }
     }
 }
 
@@ -160,13 +143,11 @@ private fun FailureCard(
     }
 }
 
-private const val TOP_STATUS_PADDING = 16
-private const val STATUS_CHIP_CORNER_RADIUS = 20
-private const val STATUS_CHIP_ALPHA = 0.92f
-private const val STATUS_CHIP_PADDING = 10
 private const val WAITING_CARD_PADDING = 16
 private const val WAITING_CARD_CONTENT_PADDING = 20
 private const val WAITING_CARD_ITEM_SPACING = 8
 private const val STATUS_CARD_CORNER_RADIUS = 16
 private const val STATUS_CARD_ALPHA = 0.92f
 private const val STATUS_CARD_PADDING = 16
+private const val ORIENTATION_BADGE_PADDING = 16
+private const val ORIENTATION_BADGE_CONTENT_PADDING = 8

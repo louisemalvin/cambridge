@@ -13,8 +13,7 @@ class FailureDiagnosticsTest {
         val details = buildFailureDiagnostics(
             receiverName = "Test desktop",
             profile = defaultProfile,
-            codecPreference = dev.mobilewebcam.sender.model.CodecPreference.AUTO_PREFER_H265,
-            failure = StreamFailure.ReceiverUnavailable("Health check failed"),
+            failure = StreamFailure.ReceiverUnavailable("Desktop unavailable"),
             cause = cause,
         )
 

@@ -1,9 +1,19 @@
+import groovy.json.JsonSlurper
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt.android)
+}
+
+val deploymentJson = JsonSlurper().parse(rootProject.file("../protocol/direct-stream-deployment.json")) as Map<*, *>
+val deploymentComputer = deploymentJson["computer"] as Map<*, *>
+
+fun buildConfigString(value: Any?): String {
+    val escaped = value.toString().replace("\\", "\\\\").replace("\"", "\\\"")
+    return "\"$escaped\""
 }
 
 android {
@@ -16,6 +26,14 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
+
+        buildConfigField("String", "DIRECT_COMPUTER_ID", buildConfigString(deploymentComputer["id"]))
+        buildConfigField(
+            "String",
+            "DIRECT_COMPUTER_DISPLAY_NAME",
+            buildConfigString(deploymentComputer["displayName"]),
+        )
+        buildConfigField("String", "DIRECT_COMPUTER_ADDRESS", buildConfigString(deploymentComputer["address"]))
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
@@ -62,16 +80,6 @@ dependencies {
     implementation(libs.hilt.android)
     implementation(libs.androidx.hilt.navigation.compose)
     ksp(libs.hilt.compiler)
-    implementation(libs.rootencoder.common)
-    implementation(libs.rootencoder.srt)
-    implementation(libs.ktor.client.core)
-    implementation(libs.ktor.client.cio)
-    implementation(libs.ktor.client.content.negotiation)
-    implementation(libs.ktor.serialization.kotlinx.json)
-    implementation(libs.rootencoder.library) {
-        exclude(group = "com.github.pedroSG94.RootEncoder", module = "udp")
-    }
-
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.tooling.preview)
@@ -82,7 +90,6 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
-    testImplementation(libs.ktor.client.mock)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))

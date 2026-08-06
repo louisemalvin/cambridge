@@ -4,10 +4,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Brightness6
 import androidx.compose.material.icons.outlined.Brightness7
+import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.StopCircle
 import androidx.compose.material.icons.outlined.ZoomIn
@@ -20,20 +20,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.mobilewebcam.sender.R
 import dev.mobilewebcam.sender.app.model.ConnectionUiState
 import dev.mobilewebcam.sender.app.model.SenderScreenAction
-import dev.mobilewebcam.sender.feature.webcam.WebcamUiState
+import dev.mobilewebcam.sender.app.theme.MobileWebcamTheme
 
 @Composable
 fun PreviewActions(
-    state: WebcamUiState,
+    isScreenDimmed: Boolean,
+    connection: ConnectionUiState,
     isLandscape: Boolean,
     onAction: (SenderScreenAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val dimContentDescription = if (state.isScreenDimmed) {
+    val dimContentDescription = if (isScreenDimmed) {
         stringResource(R.string.brighten_screen)
     } else {
         stringResource(R.string.dim_screen)
@@ -41,6 +43,7 @@ fun PreviewActions(
     val settingsContentDescription = stringResource(R.string.settings)
     val zoomContentDescription = stringResource(R.string.zoom)
     val stopContentDescription = stringResource(R.string.stop_stream)
+    val startContentDescription = stringResource(R.string.start_stream)
 
     Surface(
         modifier = modifier,
@@ -56,11 +59,13 @@ fun PreviewActions(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 PreviewActionButtons(
-                    state = state,
+                    isScreenDimmed = isScreenDimmed,
+                    connection = connection,
                     dimContentDescription = dimContentDescription,
                     zoomContentDescription = zoomContentDescription,
                     settingsContentDescription = settingsContentDescription,
                     stopContentDescription = stopContentDescription,
+                    startContentDescription = startContentDescription,
                     onAction = onAction,
                 )
             }
@@ -71,11 +76,13 @@ fun PreviewActions(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 PreviewActionButtons(
-                    state = state,
+                    isScreenDimmed = isScreenDimmed,
+                    connection = connection,
                     dimContentDescription = dimContentDescription,
                     zoomContentDescription = zoomContentDescription,
                     settingsContentDescription = settingsContentDescription,
                     stopContentDescription = stopContentDescription,
+                    startContentDescription = startContentDescription,
                     onAction = onAction,
                 )
             }
@@ -85,15 +92,17 @@ fun PreviewActions(
 
 @Composable
 private fun PreviewActionButtons(
-    state: WebcamUiState,
+    isScreenDimmed: Boolean,
+    connection: ConnectionUiState,
     dimContentDescription: String,
     zoomContentDescription: String,
     settingsContentDescription: String,
     stopContentDescription: String,
+    startContentDescription: String,
     onAction: (SenderScreenAction) -> Unit,
 ) {
     PreviewActionButton(
-        icon = if (state.isScreenDimmed) {
+        icon = if (isScreenDimmed) {
             Icons.Outlined.Brightness7
         } else {
             Icons.Outlined.Brightness6
@@ -111,8 +120,15 @@ private fun PreviewActionButtons(
         contentDescription = settingsContentDescription,
         onClick = { onAction(SenderScreenAction.OpenSettings) },
     )
-    if (state.connection is ConnectionUiState.Streaming ||
-        state.connection is ConnectionUiState.Connecting
+    if (connection == ConnectionUiState.Waiting || connection is ConnectionUiState.Failed) {
+        PreviewActionButton(
+            icon = Icons.Outlined.PlayArrow,
+            contentDescription = startContentDescription,
+            onClick = { onAction(SenderScreenAction.StartStream) },
+        )
+    }
+    if (connection is ConnectionUiState.Streaming || connection is ConnectionUiState.Connecting ||
+        connection == ConnectionUiState.Stopping
     ) {
         PreviewActionButton(
             icon = Icons.Outlined.StopCircle,
@@ -127,8 +143,12 @@ private fun PreviewActionButton(
     icon: ImageVector,
     contentDescription: String,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    FilledTonalIconButton(onClick = onClick) {
+    FilledTonalIconButton(
+        onClick = onClick,
+        modifier = modifier,
+    ) {
         Icon(
             imageVector = icon,
             contentDescription = contentDescription,
@@ -136,7 +156,19 @@ private fun PreviewActionButton(
     }
 }
 
-private const val ACTION_TOOLBAR_CORNER_RADIUS = 28
+@Preview(name = "Portrait Actions")
+@Composable
+private fun PreviewActionsPortraitPreview() {
+    MobileWebcamTheme {
+        PreviewActions(
+            isScreenDimmed = false,
+            connection = ConnectionUiState.Waiting,
+            isLandscape = false,
+            onAction = {},
+        )
+    }
+}
+
 private const val ACTION_TOOLBAR_ALPHA = 0.92f
 private const val ACTION_TOOLBAR_TONAL_ELEVATION = 3
 private const val ACTION_TOOLBAR_PADDING = 8

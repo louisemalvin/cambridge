@@ -8,8 +8,6 @@ import dev.mobilewebcam.sender.app.model.SenderUiEffect
 import dev.mobilewebcam.sender.app.model.StreamPresentationSnapshot
 import dev.mobilewebcam.sender.connection.SenderConnectionCoordinator
 import dev.mobilewebcam.sender.media.camera.CameraController
-import dev.mobilewebcam.sender.session.VideoProfiles
-import dev.mobilewebcam.sender.model.CodecPreference
 import dev.mobilewebcam.sender.model.SenderSettingsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -42,7 +40,6 @@ class SettingsViewModel @Inject constructor(
     ) { streamState, receiverName, cameraInteraction, configuredSettings, validation ->
         SettingsUiStateMapper.map(
             snapshot = StreamPresentationSnapshot(
-                codecPreference = configuredSettings.codecPreference,
                 profile = configuredSettings.profile,
                 cameraInteraction = cameraInteraction,
                 streamState = streamState,
@@ -68,29 +65,16 @@ class SettingsViewModel @Inject constructor(
 
     fun onAction(action: SenderScreenAction) {
         when (action) {
-            is SenderScreenAction.CodecSelected -> updateCodecPreference(action.key)
-            is SenderScreenAction.ProfileSelected -> updateProfile(action.key)
             is SenderScreenAction.ZoomChanged -> setZoomRatio(action.ratio)
             SenderScreenAction.ResetZoom -> resetZoom()
             is SenderScreenAction.LensSelected -> selectPhysicalLens(action.key)
             is SenderScreenAction.StabilizationChanged -> setStabilizationEnabled(action.enabled)
+            SenderScreenAction.StartStream -> start()
             SenderScreenAction.StopStream -> stop()
             SenderScreenAction.ForgetReceiver -> forgetReceiver()
             SenderScreenAction.CopyDiagnostics -> copyDiagnostics()
             else -> Unit
         }
-    }
-
-    private fun updateCodecPreference(key: String) {
-        val preference = CodecPreference.entries.firstOrNull { it.name == key } ?: return
-        settings.updateCodecPreference(preference)
-        validationMessage.value = null
-    }
-
-    private fun updateProfile(key: String) {
-        val profile = VideoProfiles.all.firstOrNull { it.id == key } ?: return
-        settings.updateProfile(profile)
-        validationMessage.value = null
     }
 
     private fun setZoomRatio(zoomRatio: Float) {
@@ -122,6 +106,10 @@ class SettingsViewModel @Inject constructor(
 
     private fun stop() {
         viewModelScope.launch { coordinator.stop() }
+    }
+
+    private fun start() {
+        viewModelScope.launch { coordinator.startStream() }
     }
 
     private fun forgetReceiver() {

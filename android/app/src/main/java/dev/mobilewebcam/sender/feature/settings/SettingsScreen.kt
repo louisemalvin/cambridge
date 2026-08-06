@@ -29,8 +29,6 @@ import dev.mobilewebcam.sender.app.model.ConnectionUiState
 import dev.mobilewebcam.sender.app.model.SenderScreenAction
 import dev.mobilewebcam.sender.app.model.UiText
 import dev.mobilewebcam.sender.app.model.value
-import dev.mobilewebcam.sender.feature.settings.components.CodecSelector
-import dev.mobilewebcam.sender.feature.settings.components.VideoProfileSelector
 import dev.mobilewebcam.sender.feature.webcam.components.CameraLensControls
 import dev.mobilewebcam.sender.feature.webcam.components.CameraStabilizationControls
 import dev.mobilewebcam.sender.feature.webcam.components.CameraZoomControls
@@ -102,24 +100,6 @@ fun SettingsScreen(
                 HorizontalDivider()
             }
             item {
-                SettingsSectionHeader(R.string.stream_defaults)
-            }
-            item {
-                CodecSelector(
-                    options = state.codecOptions,
-                    onSelected = { key -> onAction(SenderScreenAction.CodecSelected(key)) },
-                )
-            }
-            item {
-                VideoProfileSelector(
-                    options = state.profileOptions,
-                    onSelected = { key -> onAction(SenderScreenAction.ProfileSelected(key)) },
-                )
-            }
-            item {
-                HorizontalDivider()
-            }
-            item {
                 SettingsSectionHeader(R.string.connection)
             }
             item {
@@ -165,7 +145,8 @@ fun SettingsScreen(
                 }
             }
             if (state.connection is ConnectionUiState.Streaming ||
-                state.connection is ConnectionUiState.Connecting
+                state.connection is ConnectionUiState.Connecting ||
+                state.connection == ConnectionUiState.Stopping
             ) {
                 item {
                     Button(
@@ -183,12 +164,15 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun SettingsSectionHeader(resourceId: Int) {
+private fun SettingsSectionHeader(
+    resourceId: Int,
+    modifier: Modifier = Modifier,
+) {
     Text(
         text = stringResource(resourceId),
         style = MaterialTheme.typography.titleSmall,
         color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(
+        modifier = modifier.padding(
             top = SETTINGS_SECTION_TOP_PADDING.dp,
             bottom = SETTINGS_SECTION_BOTTOM_PADDING.dp,
         ),
@@ -196,10 +180,13 @@ private fun SettingsSectionHeader(resourceId: Int) {
 }
 
 @Composable
-private fun SettingsConnectionDetails(state: SettingsUiState) {
+private fun SettingsConnectionDetails(
+    state: SettingsUiState,
+    modifier: Modifier = Modifier,
+) {
     val receiver = state.receiverName ?: UiText.Resource(R.string.not_connected)
     val status = state.connectionStatus ?: UiText.Resource(R.string.not_connected)
-    Column(modifier = Modifier.fillMaxWidth()) {
+    Column(modifier = modifier.fillMaxWidth()) {
         ListItem(
             headlineContent = { Text(stringResource(R.string.receiver)) },
             supportingContent = { Text(receiver.value()) },
@@ -207,6 +194,26 @@ private fun SettingsConnectionDetails(state: SettingsUiState) {
         ListItem(
             headlineContent = { Text(stringResource(R.string.stream_status)) },
             supportingContent = { Text(status.value()) },
+        )
+        state.sessionOrientation?.let { orientation ->
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.orientation)) },
+                supportingContent = { Text(orientation.value()) },
+            )
+        }
+    }
+}
+
+@androidx.compose.ui.tooling.preview.Preview(name = "Settings Screen")
+@Composable
+private fun SettingsScreenPreview() {
+    dev.mobilewebcam.sender.app.theme.MobileWebcamTheme {
+        SettingsScreen(
+            state = SettingsUiState(
+                receiverName = UiText.Plain("OBS Studio"),
+                hasConfiguredReceiver = true,
+            ),
+            onAction = {},
         )
     }
 }

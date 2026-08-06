@@ -1,10 +1,8 @@
 package dev.mobilewebcam.sender.feature.pairing
 
 import dev.mobilewebcam.sender.app.model.UiText
-import dev.mobilewebcam.sender.session.VideoProfiles
 import dev.mobilewebcam.sender.model.StreamFailure
 import dev.mobilewebcam.sender.model.StreamState
-import dev.mobilewebcam.sender.model.VideoCodec
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -13,110 +11,57 @@ class PairingViewModelTest {
     @Test
     fun idleStateMapsToSearching() {
         val state = PairingUiStateMapper.map(
-            PairingDomainSnapshot(
-                streamState = StreamState.Idle,
-                activeReceiverName = null,
-            ),
+            PairingDomainSnapshot(StreamState.Idle, null),
         )
 
-        assertEquals(PairingUiState.Searching(UiText.Plain("Looking for a nearby receiver")), state)
+        assertEquals(PairingUiState.Searching(UiText.Plain("Connect to your OBS computer")), state)
     }
 
     @Test
-    fun checkingNegotiatingPreparingAndStartingStatesMapToConnecting() {
-        val checking = PairingUiStateMapper.map(
-            PairingDomainSnapshot(
-                streamState = StreamState.CheckingReceiver,
-                activeReceiverName = null,
-            ),
+    fun connectingAndReconnectingStatesMapToConnecting() {
+        val connecting = PairingUiStateMapper.map(
+            PairingDomainSnapshot(StreamState.Connecting, null),
         )
-        val negotiating = PairingUiStateMapper.map(
-            PairingDomainSnapshot(
-                streamState = StreamState.Negotiating,
-                activeReceiverName = null,
-            ),
-        )
-        val preparing = PairingUiStateMapper.map(
-            PairingDomainSnapshot(
-                streamState = StreamState.Preparing(VideoCodec.H264, VideoProfiles.default),
-                activeReceiverName = null,
-            ),
-        )
-        val starting = PairingUiStateMapper.map(
-            PairingDomainSnapshot(
-                streamState = StreamState.Starting(
-                    session = dev.mobilewebcam.sender.model.NegotiatedSession(
-                        sessionId = "session",
-                        endpoint = dev.mobilewebcam.sender.model.ReceiverEndpoint("127.0.0.1", 50_000),
-                        selectedCodec = VideoCodec.H264,
-                        profile = VideoProfiles.default,
-                        bitrateBps = VideoProfiles.default.h264BitrateBps,
-                        mediaPort = 50_001,
-                        outputPixelFormat = dev.mobilewebcam.sender.model.OutputPixelFormat.YUY2,
-                        warnings = emptyList(),
-                    ),
-                ),
-                activeReceiverName = null,
-            ),
+        val reconnecting = PairingUiStateMapper.map(
+            PairingDomainSnapshot(StreamState.Reconnecting, null),
         )
 
-        assertTrue(checking is PairingUiState.Connecting)
-        assertTrue(negotiating is PairingUiState.Connecting)
-        assertTrue(preparing is PairingUiState.Connecting)
-        assertTrue(starting is PairingUiState.Connecting)
-    }
-
-    @Test
-    fun streamingStateMapsToConnected() {
-        val state = PairingUiStateMapper.map(
-            PairingDomainSnapshot(
-                streamState = StreamState.Streaming(
-                    session = dev.mobilewebcam.sender.model.NegotiatedSession(
-                        sessionId = "session",
-                        endpoint = dev.mobilewebcam.sender.model.ReceiverEndpoint("127.0.0.1", 50_000),
-                        selectedCodec = VideoCodec.H264,
-                        profile = VideoProfiles.default,
-                        bitrateBps = VideoProfiles.default.h264BitrateBps,
-                        mediaPort = 50_001,
-                        outputPixelFormat = dev.mobilewebcam.sender.model.OutputPixelFormat.YUY2,
-                        warnings = emptyList(),
-                    ),
-                    startedAtMillis = 1L,
-                ),
-                activeReceiverName = "Desktop PC",
-            ),
-        )
-
-        assertEquals(PairingUiState.Connected(UiText.Plain("Desktop PC")), state)
+        assertTrue(connecting is PairingUiState.Connecting)
+        assertTrue(reconnecting is PairingUiState.Connecting)
     }
 
     @Test
     fun failureStateMapsToFailureMessage() {
         val state = PairingUiStateMapper.map(
-            PairingDomainSnapshot(
-                streamState = StreamState.Failed(StreamFailure.NetworkDisconnected),
-                activeReceiverName = null,
-            ),
+            PairingDomainSnapshot(StreamState.Failed(StreamFailure.NetworkDisconnected), null),
         )
 
-        assertEquals(PairingUiState.Failed(UiText.Plain("The receiver connection was lost")), state)
+        assertEquals(PairingUiState.Failed(UiText.Plain("Connection changed - reconnecting")), state)
     }
 
     @Test
     fun streamingTransitionEmitsNavigationOnlyOnce() {
-        val session = dev.mobilewebcam.sender.model.NegotiatedSession(
+        assertEquals(
+            PairingUiEffect.NavigateToWebcam,
+            PairingUiEffectMapper.map(StreamState.Connecting, streamingState()),
+        )
+        assertEquals(
+            null,
+            PairingUiEffectMapper.map(streamingState(), streamingState()),
+        )
+    }
+
+    private fun streamingState() = StreamState.Streaming(
+        session = dev.mobilewebcam.sender.model.StreamSession(
             sessionId = "session",
             endpoint = dev.mobilewebcam.sender.model.ReceiverEndpoint("127.0.0.1", 50_000),
-            selectedCodec = VideoCodec.H264,
-            profile = VideoProfiles.default,
-            bitrateBps = VideoProfiles.default.h264BitrateBps,
+            selectedCodec = dev.mobilewebcam.sender.model.VideoCodec.H264,
+            profile = dev.mobilewebcam.sender.session.VideoProfiles.default,
+            bitrateBps = dev.mobilewebcam.sender.session.VideoProfiles.default.h264BitrateBps,
             mediaPort = 50_001,
-            outputPixelFormat = dev.mobilewebcam.sender.model.OutputPixelFormat.YUY2,
+            outputPixelFormat = dev.mobilewebcam.sender.model.OutputPixelFormat.NV12,
             warnings = emptyList(),
-        )
-        val streaming = StreamState.Streaming(session, startedAtMillis = 1L)
-
-        assertEquals(PairingUiEffect.NavigateToWebcam, PairingUiEffectMapper.map(StreamState.Idle, streaming))
-        assertEquals(null, PairingUiEffectMapper.map(streaming, streaming))
-    }
+        ),
+        startedAtMillis = 1L,
+    )
 }

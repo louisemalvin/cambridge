@@ -2,9 +2,8 @@ package dev.mobilewebcam.sender
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
-import dev.mobilewebcam.sender.session.VideoProfiles
-import dev.mobilewebcam.sender.model.CodecPreference
 import dev.mobilewebcam.sender.platform.preferences.SenderSettingsStore
+import dev.mobilewebcam.sender.session.VideoProfiles
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -14,15 +13,12 @@ class SenderSettingsStoreTest {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val store = SenderSettingsStore(context)
 
-        store.updateCodecPreference(CodecPreference.FORCE_H264)
-        store.updateProfile(VideoProfiles.PROFILE_1440P30)
+        store.updateProfile(VideoProfiles.PROFILE_2K30)
 
         try {
             val reloaded = SenderSettingsStore(context)
-            assertEquals(CodecPreference.FORCE_H264, reloaded.state.value.codecPreference)
-            assertEquals(VideoProfiles.PROFILE_1440P30, reloaded.state.value.profile)
+            assertEquals(VideoProfiles.PROFILE_2K30, reloaded.state.value.profile)
         } finally {
-            store.updateCodecPreference(CodecPreference.AUTO_PREFER_H265)
             store.updateProfile(VideoProfiles.default)
         }
     }

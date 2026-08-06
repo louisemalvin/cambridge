@@ -1,6 +1,7 @@
 package dev.mobilewebcam.sender.feature.webcam.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
@@ -64,7 +65,8 @@ fun PreviewStage(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Color.Black.copy(alpha = SCREEN_DIM_ALPHA)),
+                        .background(Color.Black)
+                        .clickable { onAction(SenderScreenAction.ToggleScreenDimmed) },
                 )
             }
 
@@ -91,8 +93,37 @@ fun PreviewStage(
                 )
             }
 
+            if (!state.isScreenDimmed && state.camera.lensOptions.size > 1) {
+                FloatingLensSelector(
+                    options = state.camera.lensOptions,
+                    onLensSelected = { key -> onAction(SenderScreenAction.LensSelected(key)) },
+                    modifier = Modifier
+                        .align(
+                            if (isLandscape) Alignment.BottomStart else Alignment.BottomCenter,
+                        )
+                        .then(
+                            if (isLandscape) {
+                                Modifier.systemBarsPadding()
+                            } else {
+                                Modifier.navigationBarsPadding()
+                            },
+                        )
+                        .padding(
+                            start = if (isLandscape) LENS_PILLS_LANDSCAPE_START_PADDING.dp else NO_PADDING_DP.dp,
+                            bottom = if (state.isZoomTrayOpen) {
+                                LENS_PILLS_ABOVE_ZOOM_TRAY_BOTTOM_PADDING.dp
+                            } else if (isLandscape) {
+                                LENS_PILLS_LANDSCAPE_BOTTOM_PADDING.dp
+                            } else {
+                                LENS_PILLS_PORTRAIT_BOTTOM_PADDING.dp
+                            },
+                        ),
+                )
+            }
+
             PreviewActions(
-                state = state,
+                isScreenDimmed = state.isScreenDimmed,
+                connection = state.connection,
                 isLandscape = isLandscape,
                 onAction = onAction,
                 modifier = Modifier
@@ -126,8 +157,11 @@ fun PreviewStage(
 private fun Float.reciprocal(): Float = UNIT_RATIO / this
 
 private const val UNIT_RATIO = 1.0f
-private const val SCREEN_DIM_ALPHA = 0.72f
 private const val ACTION_TOOLBAR_END_PADDING = 16
 private const val ACTION_TOOLBAR_BOTTOM_PADDING = 16
 private const val NO_PADDING_DP = 0
 private const val ZOOM_TRAY_BOTTOM_PADDING = 96
+private const val LENS_PILLS_PORTRAIT_BOTTOM_PADDING = 80
+private const val LENS_PILLS_LANDSCAPE_BOTTOM_PADDING = 16
+private const val LENS_PILLS_LANDSCAPE_START_PADDING = 16
+private const val LENS_PILLS_ABOVE_ZOOM_TRAY_BOTTOM_PADDING = 156

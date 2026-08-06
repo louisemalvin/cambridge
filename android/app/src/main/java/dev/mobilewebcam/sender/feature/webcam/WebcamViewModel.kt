@@ -42,7 +42,6 @@ class WebcamViewModel @Inject constructor(
     ) { streamState, receiverName, cameraInteraction, configuredSettings, local ->
         WebcamUiStateMapper.map(
             snapshot = StreamPresentationSnapshot(
-                codecPreference = configuredSettings.codecPreference,
                 profile = configuredSettings.profile,
                 cameraInteraction = cameraInteraction,
                 streamState = streamState,
@@ -84,6 +83,7 @@ class WebcamViewModel @Inject constructor(
                 it.copy(isPermissionDialogOpen = false)
             }
             SenderScreenAction.RequestCameraPermission -> requestCameraPermission()
+            SenderScreenAction.StartStream -> start()
             SenderScreenAction.StopStream -> stop()
             SenderScreenAction.CopyDiagnostics -> copyDiagnostics()
             else -> Unit
@@ -139,6 +139,10 @@ class WebcamViewModel @Inject constructor(
 
     private fun stop() {
         viewModelScope.launch { coordinator.stop() }
+    }
+
+    private fun start() {
+        viewModelScope.launch { coordinator.startStream() }
     }
 
     private fun copyDiagnostics() {

@@ -1,5 +1,6 @@
 package dev.mobilewebcam.sender.session
 
+import dev.mobilewebcam.sender.connection.control.direct.DirectStreamContract
 import dev.mobilewebcam.sender.model.StreamConfiguration
 
 object StreamConfigurationValidator {
@@ -13,7 +14,19 @@ object StreamConfigurationValidator {
         ) {
             return Result.failure(IllegalArgumentException("Video dimensions must be even"))
         }
-        if (configuration.bitrateBps <= ZERO_VALUE ||
+        val longEdge = maxOf(profile.width, profile.height)
+        val shortEdge = minOf(profile.width, profile.height)
+        if (longEdge > DirectStreamContract.MAXIMUM_LONG_EDGE ||
+            shortEdge > DirectStreamContract.MAXIMUM_SHORT_EDGE
+        ) {
+            return Result.failure(IllegalArgumentException("Video dimensions exceed the direct stream bounds"))
+        }
+        configuration.sessionTransform?.let { transform ->
+            if (transform.codedWidth != profile.width || transform.codedHeight != profile.height) {
+                return Result.failure(IllegalArgumentException("Session geometry does not match the selected profile"))
+            }
+        }
+        if (configuration.bitrateBps !in DirectStreamContract.MINIMUM_BITRATE_BPS..DirectStreamContract.MAXIMUM_BITRATE_BPS ||
             configuration.keyframeIntervalSeconds <= ZERO_VALUE
         ) {
             return Result.failure(IllegalArgumentException("Bitrate and keyframe interval must be positive"))

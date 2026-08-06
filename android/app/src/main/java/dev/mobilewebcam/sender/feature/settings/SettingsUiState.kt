@@ -1,14 +1,14 @@
 package dev.mobilewebcam.sender.feature.settings
 
+import androidx.compose.runtime.Immutable
 import dev.mobilewebcam.sender.app.model.CameraControlsUiState
 import dev.mobilewebcam.sender.app.model.ConnectionUiState
-import dev.mobilewebcam.sender.app.model.SelectOptionUi
 import dev.mobilewebcam.sender.app.model.UiText
 
+@Immutable
 data class SettingsUiState(
     val connection: ConnectionUiState = ConnectionUiState.Waiting,
-    val codecOptions: List<SelectOptionUi> = emptyList(),
-    val profileOptions: List<SelectOptionUi> = emptyList(),
+    val sessionOrientation: UiText? = null,
     val receiverName: UiText? = null,
     val connectionStatus: UiText? = null,
     val hasConfiguredReceiver: Boolean = false,

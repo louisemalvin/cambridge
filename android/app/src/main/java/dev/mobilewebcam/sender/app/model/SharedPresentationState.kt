@@ -1,8 +1,9 @@
 package dev.mobilewebcam.sender.app.model
 
+import androidx.compose.runtime.Immutable
 import dev.mobilewebcam.sender.media.camera.CameraZoom
-import dev.mobilewebcam.sender.model.ReceiverEndpoint
 
+@Immutable
 data class PreviewUiState(
     val landscapeAspectRatio: Float = DEFAULT_PREVIEW_ASPECT_RATIO,
     val isLive: Boolean = false,
@@ -21,16 +22,15 @@ enum class PreviewOrientation(
     LANDSCAPE(isPortrait = false),
 }
 
+@Immutable
 sealed interface ConnectionUiState {
     data object Waiting : ConnectionUiState
-
-    data class ConnectedStandby(val receiverName: UiText?) : ConnectionUiState
 
     data class Connecting(val status: UiText) : ConnectionUiState
 
     data class Streaming(
         val receiverName: UiText?,
-        val codec: UiText,
+        val status: UiText,
         val profile: UiText,
     ) : ConnectionUiState
 
@@ -39,12 +39,21 @@ sealed interface ConnectionUiState {
     data class Failed(val message: UiText) : ConnectionUiState
 }
 
+@Immutable
 data class CameraControlsUiState(
     val zoom: ZoomUiState = ZoomUiState(),
     val lensOptions: List<LensOptionUi> = emptyList(),
     val stabilization: StabilizationUiState = StabilizationUiState(),
 )
 
+@Immutable
+data class SelectOptionUi(
+    val key: String,
+    val label: UiText,
+    val isSelected: Boolean,
+)
+
+@Immutable
 data class ZoomUiState(
     val ratio: Float = CameraZoom.DEFAULT_ZOOM_RATIO,
     val minimumRatio: Float = CameraZoom.DEFAULT_ZOOM_RATIO,
@@ -67,23 +76,20 @@ data class ZoomUiState(
         get() = maximumRatio > minimumRatio
 }
 
+@Immutable
 data class LensOptionUi(
     val key: String,
     val label: UiText,
     val isSelected: Boolean,
 )
 
+@Immutable
 data class StabilizationUiState(
     val isSupported: Boolean = false,
     val isEnabled: Boolean = false,
 )
 
-data class SelectOptionUi(
-    val key: String,
-    val label: UiText,
-    val isSelected: Boolean,
-)
-
+@Immutable
 sealed interface SenderDialogUiState {
     data class CameraPermission(
         val title: UiText,
@@ -101,17 +107,14 @@ sealed interface SenderScreenAction {
     data object ResetZoom : SenderScreenAction
     data class LensSelected(val key: String) : SenderScreenAction
     data class StabilizationChanged(val enabled: Boolean) : SenderScreenAction
-    data class CodecSelected(val key: String) : SenderScreenAction
-    data class ProfileSelected(val key: String) : SenderScreenAction
     data object OpenPermissionDialog : SenderScreenAction
     data object DismissPermissionDialog : SenderScreenAction
     data object RequestCameraPermission : SenderScreenAction
     data class ReceiverNameChanged(val name: String) : SenderScreenAction
     data class ReceiverHostChanged(val host: String) : SenderScreenAction
     data class ReceiverControlPortChanged(val port: String) : SenderScreenAction
-    data class ReceiverTokenChanged(val token: String) : SenderScreenAction
-    data class DiscoveredReceiverSelected(val endpoint: ReceiverEndpoint) : SenderScreenAction
     data object ConnectReceiver : SenderScreenAction
+    data object StartStream : SenderScreenAction
     data object StopStream : SenderScreenAction
     data object ForgetReceiver : SenderScreenAction
     data object CopyDiagnostics : SenderScreenAction
