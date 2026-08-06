@@ -1,7 +1,6 @@
 package dev.mobilewebcam.sender.app
 
 import android.os.Bundle
-import android.content.pm.ActivityInfo
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -46,15 +45,6 @@ class MainActivity : ComponentActivity() {
             else -> null
         }
         streamOrientation?.let(settings::updateStreamOrientation)
-        requestedOrientation = when (rotationDegrees) {
-            PORTRAIT_ROTATION_DEGREES,
-            REVERSE_PORTRAIT_ROTATION_DEGREES,
-            -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-            LANDSCAPE_ROTATION_DEGREES,
-            REVERSE_LANDSCAPE_ROTATION_DEGREES,
-            -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-            else -> return
-        }
     }
 
     private fun configureReceiverOriginFromIntent() {

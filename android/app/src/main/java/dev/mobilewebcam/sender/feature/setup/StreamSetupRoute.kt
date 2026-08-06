@@ -17,6 +17,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.mobilewebcam.sender.app.lockStreamingOrientation
+import dev.mobilewebcam.sender.app.unlockStreamingOrientation
 import dev.mobilewebcam.sender.app.model.SenderScreenAction
 import dev.mobilewebcam.sender.model.StreamOrientation
 
@@ -37,20 +38,22 @@ fun StreamSetupRoute(
         cameraPermissionGranted = granted
         if (granted && pendingStart) {
             pendingStart = false
-            activity?.lockStreamingOrientation(state.selectedOrientation)
             viewModel.onAction(SenderScreenAction.StartStream)
         } else if (!granted) {
             pendingStart = false
         }
     }
 
-    LaunchedEffect(state.selectedOrientation) {
-        activity?.lockStreamingOrientation(state.selectedOrientation)
+    LaunchedEffect(Unit) {
+        activity?.unlockStreamingOrientation()
     }
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
             when (effect) {
-                StreamSetupUiEffect.NavigateToWebcam -> onNavigateToWebcam()
+                is StreamSetupUiEffect.NavigateToWebcam -> {
+                    activity?.lockStreamingOrientation(effect.orientation)
+                    onNavigateToWebcam()
+                }
             }
         }
     }
@@ -61,12 +64,10 @@ fun StreamSetupRoute(
         onAction = { action ->
             when (action) {
                 is SenderScreenAction.StreamOrientationSelected -> {
-                    activity?.lockStreamingOrientation(action.orientation)
                     viewModel.onAction(action)
                 }
                 SenderScreenAction.StartStream -> {
                     if (cameraPermissionGranted) {
-                        activity?.lockStreamingOrientation(state.selectedOrientation)
                         viewModel.onAction(action)
                     } else {
                         pendingStart = true

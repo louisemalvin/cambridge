@@ -88,7 +88,11 @@ class StreamSetupViewModel @Inject constructor(
             var previousState = coordinator.streamState.value
             coordinator.streamState.drop(FIRST_STATE_TO_SKIP).collect { currentState ->
                 if (currentState is StreamState.Streaming && previousState !is StreamState.Streaming) {
-                    effectFlow.emit(StreamSetupUiEffect.NavigateToWebcam)
+                    effectFlow.emit(
+                        StreamSetupUiEffect.NavigateToWebcam(
+                            orientation = settings.state.value.streamOrientation,
+                        ),
+                    )
                 }
                 previousState = currentState
             }
@@ -125,5 +129,5 @@ class StreamSetupViewModel @Inject constructor(
 }
 
 sealed interface StreamSetupUiEffect {
-    data object NavigateToWebcam : StreamSetupUiEffect
+    data class NavigateToWebcam(val orientation: StreamOrientation) : StreamSetupUiEffect
 }
