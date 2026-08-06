@@ -7,6 +7,8 @@ import dev.mobilewebcam.sender.model.StreamOrientation
 interface CameraInteractionController {
     val state: StateFlow<CameraInteractionState>
 
+    suspend fun prepareCamera()
+
     suspend fun setZoomRatio(zoomRatio: Float)
 
     suspend fun resetZoom()

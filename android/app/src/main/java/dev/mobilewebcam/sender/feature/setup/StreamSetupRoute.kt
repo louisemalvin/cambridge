@@ -47,6 +47,11 @@ fun StreamSetupRoute(
     LaunchedEffect(Unit) {
         activity?.unlockStreamingOrientation()
     }
+    LaunchedEffect(cameraPermissionGranted) {
+        if (cameraPermissionGranted) {
+            viewModel.prepareCamera()
+        }
+    }
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
             when (effect) {

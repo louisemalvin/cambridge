@@ -32,6 +32,7 @@ import dev.mobilewebcam.sender.app.model.SenderScreenAction
 import dev.mobilewebcam.sender.app.model.UiText
 import dev.mobilewebcam.sender.app.model.value
 import dev.mobilewebcam.sender.feature.settings.components.SettingsChoiceRow
+import dev.mobilewebcam.sender.feature.webcam.components.CameraStabilizationControls
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
@@ -99,6 +100,22 @@ fun StreamSetupScreen(
                         onAction(SenderScreenAction.ProfileSelected(profileId))
                     },
                 )
+            }
+            if (state.stabilization.isSupported) {
+                item {
+                    Text(
+                        text = stringResource(R.string.camera),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                }
+                item {
+                    CameraStabilizationControls(
+                        state = state.stabilization,
+                        onStabilizationEnabledChanged = { enabled ->
+                            onAction(SenderScreenAction.StabilizationChanged(enabled))
+                        },
+                    )
+                }
             }
             item {
                 SettingsChoiceRow(

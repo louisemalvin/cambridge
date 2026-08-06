@@ -48,6 +48,7 @@ internal class Camera2Capture(
     private var selectedCameraId: String? = null
     private var cameraCharacteristics: CameraCharacteristics? = null
     private var zoomRatio = CameraZoom.DEFAULT_ZOOM_RATIO
+    private var requestedStabilizationEnabled = true
     private var stabilizationEnabled = false
     private var loggedFirstCapture = false
     private var captureResultCount = 0L
@@ -115,6 +116,7 @@ internal class Camera2Capture(
         closeCamera()
         encoderSurface = null
         requestedFps = null
+        stabilizationEnabled = false
         loggedFirstCapture = false
         captureResultCount = 0L
         captureSummaryStartNs = 0L
@@ -144,8 +146,8 @@ internal class Camera2Capture(
     }
 
     suspend fun setStabilizationEnabled(enabled: Boolean) {
-        val supported = isStabilizationSupported()
-        stabilizationEnabled = enabled && supported
+        requestedStabilizationEnabled = enabled
+        stabilizationEnabled = enabled && isStabilizationSupported()
         submitRepeatingRequest()
         cameraState.value = cameraState.value.withStabilizationEnabled(stabilizationEnabled)
     }
@@ -272,6 +274,7 @@ internal class Camera2Capture(
             set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO)
             set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO)
             targetFpsRange()?.let { range -> set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, range) }
+            autoAntiBandingMode()?.let { mode -> set(CaptureRequest.CONTROL_AE_ANTIBANDING_MODE, mode) }
             cropRegion()?.let { crop -> set(CaptureRequest.SCALER_CROP_REGION, crop) }
             if (isStabilizationSupported()) {
                 set(
@@ -371,8 +374,16 @@ internal class Camera2Capture(
         return modes.contains(CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_ON)
     }
 
+    private fun autoAntiBandingMode(): Int? {
+        val modes = cameraCharacteristics?.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_ANTIBANDING_MODES)
+            ?: return null
+        return CaptureRequest.CONTROL_AE_ANTIBANDING_MODE_AUTO.takeIf { mode -> mode in modes }
+    }
+
     private fun updateCameraState() {
         val characteristics = cameraCharacteristics ?: return
+        val stabilizationSupported = isStabilizationSupported()
+        stabilizationEnabled = requestedStabilizationEnabled && stabilizationSupported
         val maximumZoom = characteristics.get(CameraCharacteristics.SCALER_AVAILABLE_MAX_DIGITAL_ZOOM)
             ?: CameraZoom.DEFAULT_ZOOM_RATIO
         val lensOptions = runCatching {
@@ -395,7 +406,8 @@ internal class Camera2Capture(
         cameraState.value = cameraState.value
             .withCameraBounds(CameraZoom.DEFAULT_ZOOM_RATIO, maximumZoom, zoomRatio)
             .withPhysicalLensOptions(lensOptions)
-            .withStabilizationSupport(isStabilizationSupported())
+            .withStabilizationSupport(stabilizationSupported)
+            .withStabilizationEnabled(stabilizationEnabled)
     }
 
     private fun getPhysicalLensLabel(physicalId: String): String {

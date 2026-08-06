@@ -5,15 +5,18 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.mobilewebcam.sender.R
 import dev.mobilewebcam.sender.app.model.SelectOptionUi
+import dev.mobilewebcam.sender.app.model.CameraControlsUiStateMapper
 import dev.mobilewebcam.sender.app.model.StreamPresentationMapper
 import dev.mobilewebcam.sender.app.model.StreamPresentationSnapshot
 import dev.mobilewebcam.sender.app.model.UiText
 import dev.mobilewebcam.sender.app.model.SenderScreenAction
 import dev.mobilewebcam.sender.connection.SenderConnectionCoordinator
+import dev.mobilewebcam.sender.media.camera.CameraController
 import dev.mobilewebcam.sender.model.StreamOrientation
 import dev.mobilewebcam.sender.model.StreamState
 import dev.mobilewebcam.sender.model.ReceiverCapabilities
 import dev.mobilewebcam.sender.model.SenderSettingsRepository
+import dev.mobilewebcam.sender.model.SenderSettings
 import dev.mobilewebcam.sender.model.ReceiverProbeState
 import dev.mobilewebcam.sender.model.VideoProfile
 import dev.mobilewebcam.sender.session.VideoProfiles
@@ -28,23 +31,43 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
 import javax.inject.Inject
 
 @HiltViewModel
 class StreamSetupViewModel @Inject constructor(
     private val coordinator: SenderConnectionCoordinator,
+    private val cameraController: CameraController,
     private val settings: SenderSettingsRepository,
 ) : ViewModel() {
     private val validationMessage = MutableStateFlow<String?>(null)
     private val effectFlow = MutableSharedFlow<StreamSetupUiEffect>(extraBufferCapacity = EFFECT_BUFFER_CAPACITY)
 
-    val uiState: StateFlow<StreamSetupUiState> = combine(
+    private val setupInputs = combine(
         coordinator.streamState,
         coordinator.activeReceiverName,
         settings.state,
         validationMessage,
         coordinator.receiverProbeState,
     ) { streamState, receiverName, configuredSettings, validation, receiverProbeState ->
+        SetupInputs(
+            streamState = streamState,
+            receiverName = receiverName,
+            configuredSettings = configuredSettings,
+            validation = validation,
+            receiverProbeState = receiverProbeState,
+        )
+    }
+
+    val uiState: StateFlow<StreamSetupUiState> = combine(
+        setupInputs,
+        cameraController.state,
+    ) { inputs, cameraInteraction ->
+        val streamState = inputs.streamState
+        val receiverName = inputs.receiverName
+        val configuredSettings = inputs.configuredSettings
+        val validation = inputs.validation
+        val receiverProbeState = inputs.receiverProbeState
         val receiverCapabilities = (receiverProbeState as? ReceiverProbeState.Available)?.capabilities
         val selectedProfileSupported = (receiverProbeState as? ReceiverProbeState.Available)
             ?.capabilities
@@ -73,6 +96,7 @@ class StreamSetupViewModel @Inject constructor(
                     isSelected = orientation == configuredSettings.streamOrientation,
                 )
             },
+            stabilization = CameraControlsUiStateMapper.map(cameraInteraction).stabilization,
             selectedProfile = configuredSettings.profile,
             selectedOrientation = configuredSettings.streamOrientation,
             selectedProfileSupported = selectedProfileSupported,
@@ -88,6 +112,12 @@ class StreamSetupViewModel @Inject constructor(
     )
 
     val effects = effectFlow.asSharedFlow()
+
+    fun prepareCamera() {
+        viewModelScope.launch(Dispatchers.Default) {
+            runCatching { cameraController.prepareCamera() }
+        }
+    }
 
     init {
         viewModelScope.launch {
@@ -112,6 +142,7 @@ class StreamSetupViewModel @Inject constructor(
         when (action) {
             is SenderScreenAction.ProfileSelected -> selectProfile(action.profileId)
             is SenderScreenAction.FrameRateSelected -> selectFrameRate(action.fps)
+            is SenderScreenAction.StabilizationChanged -> setStabilizationEnabled(action.enabled)
             is SenderScreenAction.StreamOrientationSelected -> settings.updateStreamOrientation(action.orientation)
             SenderScreenAction.CheckReceiver -> checkReceiver()
             SenderScreenAction.StartStream -> startStream()
@@ -138,6 +169,12 @@ class StreamSetupViewModel @Inject constructor(
             height = currentProfile.height,
             fps = fps,
         )?.let(settings::updateProfile)
+    }
+
+    private fun setStabilizationEnabled(enabled: Boolean) {
+        viewModelScope.launch(Dispatchers.Default) {
+            cameraController.setStabilizationEnabled(enabled)
+        }
     }
 
     private fun startStream() {
@@ -218,6 +255,14 @@ class StreamSetupViewModel @Inject constructor(
         const val EFFECT_BUFFER_CAPACITY = 1
         const val FIRST_STATE_TO_SKIP = 1
     }
+
+    private data class SetupInputs(
+        val streamState: StreamState,
+        val receiverName: String?,
+        val configuredSettings: SenderSettings,
+        val validation: String?,
+        val receiverProbeState: ReceiverProbeState,
+    )
 }
 
 sealed interface StreamSetupUiEffect {

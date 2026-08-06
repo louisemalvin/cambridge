@@ -242,6 +242,10 @@ class DirectRtpStreamEngine(
         camera.setPreviewSurface(surface)
     }
 
+    override suspend fun prepareCamera() = lifecycleMutex.withLock {
+        camera.prepare()
+    }
+
     override suspend fun setZoomRatio(zoomRatio: Float) = lifecycleMutex.withLock {
         camera.setZoomRatio(zoomRatio)
     }
