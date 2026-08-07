@@ -17,6 +17,13 @@ The emulator smoke test additionally uses an Android emulator, `adb`, `ffmpeg`,
 `jq`, and an installed OBS binary. Avahi development files are optional; they
 enable receiver discovery advertisement on Linux.
 
+## Repository layout
+
+- `sender/android/` — Android sender
+- `receiver/linux/obs/` — Linux OBS receiver
+- `protocol/` — shared wire contract, schema, and examples
+- `scripts/sender/` and `scripts/receiver/` — platform-specific checks and fixtures
+
 ## Repository checks
 
 Run the complete local check from the repository root:
@@ -33,13 +40,13 @@ debug APK, builds and tests the native plugin, and checks its linked libraries.
 From the repository root:
 
 ```bash
-cd android
+cd sender/android
 JAVA_HOME=/path/to/jdk-17 ./gradlew \
   testDebugUnitTest lint assembleDebug --console=plain
 ```
 
 The debug APK is written to
-`android/app/build/outputs/apk/debug/app-debug.apk` when referenced from the
+`sender/android/app/build/outputs/apk/debug/app-debug.apk` when referenced from the
 repository root.
 
 ## OBS plugin build
@@ -47,7 +54,7 @@ repository root.
 Build, test, and stage the native plugin with:
 
 ```bash
-./scripts/linux/build-direct-webcam-plugin.sh
+./scripts/receiver/linux/build-cambridge-obs-plugin.sh
 ```
 
 The staged module is written to:
@@ -70,7 +77,7 @@ Use an Android API 35 emulator with a camera input. Set
 `CAMBRIDGE_AVD_NAME` when more than one AVD is installed:
 
 ```bash
-CAMBRIDGE_AVD_NAME=your-api-35-avd ./scripts/android/test-emulator-direct-webcam.sh
+CAMBRIDGE_AVD_NAME=your-api-35-avd ./scripts/sender/android/test-emulator-cambridge.sh
 ```
 
 Replace `your-api-35-avd` with the AVD name on your machine. The harness
@@ -90,14 +97,14 @@ Run the contract-conformant native fixture with the default hardware/software
 decoder selection:
 
 ```bash
-DIRECT_WEBCAM_PROFILE_ID=2k30 \
-DIRECT_WEBCAM_DURATION_SECONDS=30 \
-bash scripts/linux/test-direct-webcam-fixture.sh
+CAMBRIDGE_PROFILE_ID=2k30 \
+CAMBRIDGE_DURATION_SECONDS=30 \
+bash scripts/receiver/linux/test-cambridge-fixture.sh
 ```
 
-Force the bounded CPU fallback with `DIRECT_WEBCAM_DECODER_MODE=cpu`. Set
-`DIRECT_WEBCAM_ROTATION_DEGREES=90` to exercise portrait display metadata. Set
-`DIRECT_WEBCAM_CAPTURE_OUTPUT=1` to save an isolated OBS recording and frame
+Force the bounded CPU fallback with `CAMBRIDGE_DECODER_MODE=cpu`. Set
+`CAMBRIDGE_ROTATION_DEGREES=90` to exercise portrait display metadata. Set
+`CAMBRIDGE_CAPTURE_OUTPUT=1` to save an isolated OBS recording and frame
 hashes.
 
 ## Diagnostics

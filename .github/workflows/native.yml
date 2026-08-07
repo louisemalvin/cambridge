@@ -3,15 +3,15 @@ name: Native OBS source
 on:
   push:
     paths:
-      - "desktop/hosts/obs/direct-webcam-source/**"
+      - "receiver/linux/obs/cambridge-obs-source/**"
       - "protocol/**"
-      - "scripts/linux/build-direct-webcam-plugin.sh"
+      - "scripts/receiver/linux/build-cambridge-obs-plugin.sh"
       - ".github/workflows/native.yml"
   pull_request:
     paths:
-      - "desktop/hosts/obs/direct-webcam-source/**"
+      - "receiver/linux/obs/cambridge-obs-source/**"
       - "protocol/**"
-      - "scripts/linux/build-direct-webcam-plugin.sh"
+      - "scripts/receiver/linux/build-cambridge-obs-plugin.sh"
       - ".github/workflows/native.yml"
 
 jobs:
@@ -27,6 +27,6 @@ jobs:
             libavcodec-dev libavutil-dev libswscale-dev \
             libva-dev libva-drm2 libdrm-dev libjansson-dev
       - name: Build and test native source
-        run: ./scripts/linux/build-direct-webcam-plugin.sh
+        run: ./scripts/receiver/linux/build-cambridge-obs-plugin.sh
       - name: Check native module dependencies
         run: ldd -r build/cambridge-obs-plugin/staging/obs-plugins/cambridge-obs-plugin/bin/64bit/cambridge-obs-plugin.so

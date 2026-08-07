@@ -4,9 +4,9 @@ set -euo pipefail
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_root=$(cd -- "${script_dir}/../.." && pwd)
 version=$(tr -d '[:space:]' <"${repo_root}/VERSION")
-artifact_dir=${DIRECT_WEBCAM_RELEASE_ARTIFACT_DIR:-"${repo_root}/build/release"}
-build_dir=${DIRECT_WEBCAM_BUILD_DIR:-"${repo_root}/build/cambridge-obs-plugin-release"}
-staging_dir=${DIRECT_WEBCAM_STAGING_DIR:-"${build_dir}/staging"}
+artifact_dir=${CAMBRIDGE_RELEASE_ARTIFACT_DIR:-"${repo_root}/build/release"}
+build_dir=${CAMBRIDGE_BUILD_DIR:-"${repo_root}/build/cambridge-obs-plugin-release"}
+staging_dir=${CAMBRIDGE_STAGING_DIR:-"${build_dir}/staging"}
 platform_id="linux-x86_64"
 package_name="cambridge-obs-plugin-${version}-${platform_id}"
 package_root="${artifact_dir}/${package_name}"
@@ -20,10 +20,10 @@ command -v file >/dev/null 2>&1 || { printf 'error: file is required\n' >&2; exi
 rm -rf "${package_root}"
 mkdir -p "${artifact_dir}" "${package_root}/obs-plugins/cambridge-obs-plugin/bin/64bit"
 
-DIRECT_WEBCAM_BUILD_DIR="${build_dir}" \
-DIRECT_WEBCAM_STAGING_DIR="${staging_dir}" \
-DIRECT_WEBCAM_BUILD_TYPE=Release \
-    "${repo_root}/scripts/linux/build-direct-webcam-plugin.sh"
+CAMBRIDGE_BUILD_DIR="${build_dir}" \
+CAMBRIDGE_STAGING_DIR="${staging_dir}" \
+CAMBRIDGE_BUILD_TYPE=Release \
+    "${repo_root}/scripts/receiver/linux/build-cambridge-obs-plugin.sh"
 
 [[ -f "${plugin_path}" ]] || {
     printf 'error: native plugin was not staged: %s\n' "${plugin_path}" >&2
@@ -40,13 +40,13 @@ cp "${repo_root}/LICENSE" "${package_root}/LICENSE"
 cp "${repo_root}/THIRD_PARTY_NOTICES.md" "${package_root}/THIRD_PARTY_NOTICES.md"
 cp "${repo_root}/SECURITY.md" "${package_root}/SECURITY.md"
 cp "${repo_root}/CONTRIBUTING.md" "${package_root}/CONTRIBUTING.md"
-cp "${repo_root}/desktop/hosts/obs/direct-webcam-source/LICENSE" "${package_root}/PLUGIN-LICENSE"
+cp "${repo_root}/receiver/linux/obs/cambridge-obs-source/LICENSE" "${package_root}/PLUGIN-LICENSE"
 mkdir -p "${package_root}/docs"
 cp "${repo_root}/docs/"*.md "${package_root}/docs/"
 mkdir -p "${package_root}/protocol/examples"
-cp "${repo_root}/protocol/direct-stream-contract.json" "${package_root}/protocol/"
-cp "${repo_root}/protocol/direct-stream.schema.json" "${package_root}/protocol/"
-cp "${repo_root}/protocol/direct-stream-deployment.json" "${package_root}/protocol/"
+cp "${repo_root}/protocol/cambridge-stream-contract.json" "${package_root}/protocol/"
+cp "${repo_root}/protocol/cambridge-stream.schema.json" "${package_root}/protocol/"
+cp "${repo_root}/protocol/cambridge-deployment.json" "${package_root}/protocol/"
 cp "${repo_root}/protocol/README.md" "${package_root}/protocol/README.md"
 cp "${repo_root}/protocol/examples/"*.json "${package_root}/protocol/examples/"
 

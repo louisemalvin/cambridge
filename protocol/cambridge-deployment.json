@@ -1,0 +1,9 @@
+{
+  "computer": {
+    "id": "cambridge-obs-source",
+    "displayName": "OBS receiver",
+    "address": "",
+    "interface": "",
+    "sourceCidr": ""
+  }
+}

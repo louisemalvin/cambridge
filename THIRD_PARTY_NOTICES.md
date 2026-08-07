@@ -1,6 +1,6 @@
 # Third-party notices
 
-This is an engineering inventory for the direct Android-to-OBS path.
+This is an engineering inventory for the CamBridge Android-to-OBS path.
 
 | Component | Use | License/source |
 | --- | --- | --- |

@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cambridge.invalid/protocol/cambridge-stream.schema.json",
+  "title": "CamBridge control messages v5",
+  "type": "object",
+  "required": ["protocolVersion", "type"],
+  "properties": {
+    "protocolVersion": {"const": 5},
+    "type": {"enum": ["probe", "capabilities", "hello", "accepted", "stop", "error"]},
+    "requestId": {"type": "string", "minLength": 1, "maxLength": 128},
+    "receiverId": {"type": "string", "minLength": 1, "maxLength": 128},
+    "displayName": {"type": "string", "minLength": 1, "maxLength": 128},
+    "profiles": {"type": "array", "items": {"type": "string", "minLength": 1, "maxLength": 64}, "uniqueItems": true},
+    "sessionId": {"type": "string", "minLength": 1, "maxLength": 128},
+    "generation": {"type": "integer", "minimum": 1},
+    "codec": {"const": "h264"},
+    "profileId": {"type": "string", "minLength": 1, "maxLength": 64},
+    "codedWidth": {"type": "integer", "minimum": 16, "maximum": 3840, "multipleOf": 2},
+    "codedHeight": {"type": "integer", "minimum": 16, "maximum": 3840, "multipleOf": 2},
+    "rotationDegrees": {"enum": [0, 90, 180, 270]},
+    "fps": {"type": "integer", "minimum": 1, "maximum": 120},
+    "bitrateBps": {"type": "integer", "minimum": 100000, "maximum": 100000000},
+    "mediaPort": {"type": "integer", "minimum": 1, "maximum": 65535},
+    "maxLongEdge": {"type": "integer", "minimum": 16, "maximum": 3840},
+    "maxShortEdge": {"type": "integer", "minimum": 16, "maximum": 2160},
+    "error": {"type": "string", "maxLength": 512}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"type": {"const": "probe"}}},
+      "then": {"required": ["requestId"]}
+    },
+    {
+      "if": {"properties": {"type": {"const": "capabilities"}}},
+      "then": {"required": ["requestId", "receiverId", "displayName", "profiles", "maxLongEdge", "maxShortEdge"]}
+    },
+    {
+      "if": {"properties": {"type": {"const": "hello"}}},
+      "then": {
+        "required": [
+          "sessionId", "generation", "profileId", "codec", "codedWidth", "codedHeight",
+          "rotationDegrees", "fps", "bitrateBps"
+        ],
+        "allOf": [
+          {
+            "anyOf": [
+              {
+                "properties": {
+                  "codedWidth": {"maximum": 3840},
+                  "codedHeight": {"maximum": 2160}
+              }
+              },
+              {
+                "properties": {
+                  "codedWidth": {"maximum": 2160},
+                  "codedHeight": {"maximum": 3840}
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "if": {"properties": {"type": {"const": "accepted"}}},
+      "then": {"required": ["sessionId", "generation", "profileId", "mediaPort", "maxLongEdge", "maxShortEdge"]}
+    },
+    {
+      "if": {"properties": {"type": {"const": "stop"}}},
+      "then": {"required": ["sessionId", "generation"]}
+    },
+    {
+      "if": {"properties": {"type": {"const": "error"}}},
+      "then": {"required": ["error"]}
+    }
+  ],
+  "additionalProperties": false
+}

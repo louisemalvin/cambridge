@@ -15,5 +15,5 @@ Before opening a pull request:
 5. Do not commit credentials, signing keys, local deployment configuration,
    generated build output, or private workspace files.
 
-Keep compatibility-sensitive protocol identifiers stable unless a protocol
-change is intentional and documented in the protocol fixtures.
+If the protocol changes, update the version, schema, examples, and both sender
+and receiver implementations together.

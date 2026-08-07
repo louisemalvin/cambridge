@@ -1,0 +1,72 @@
+package dev.cambridge.sender.app.navigation
+
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
+import androidx.navigation3.runtime.NavEntry
+import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
+import androidx.navigation3.ui.NavDisplay
+import dev.cambridge.sender.feature.pairing.PairingRoute
+import dev.cambridge.sender.feature.settings.SettingsRoute
+import dev.cambridge.sender.feature.setup.StreamSetupRoute
+import dev.cambridge.sender.feature.webcam.WebcamRoute
+
+@Composable
+fun AppNavigation(
+    backStack: AppBackStack,
+    onNavigateToWebcam: () -> Unit,
+    onNavigateToStreamSetup: () -> Unit,
+    onNavigateToSettings: () -> Unit,
+    onNavigateToPairing: () -> Unit,
+    onNavigateBack: () -> Unit,
+    onRequestStopStream: () -> Unit,
+    onNavigateBackFromWebcam: () -> Unit,
+    onCopyDiagnostics: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    NavDisplay(
+        backStack = backStack.elements,
+        modifier = modifier,
+        onBack = {
+            if (backStack.current == AppDestination.Webcam) {
+                onNavigateBackFromWebcam()
+            } else if (!backStack.pop()) {
+                onNavigateBack()
+            }
+        },
+        entryDecorators = listOf(
+            rememberSaveableStateHolderNavEntryDecorator(),
+            rememberViewModelStoreNavEntryDecorator(),
+        ),
+        entryProvider = { destination ->
+            when (destination) {
+                AppDestination.Pairing -> NavEntry(destination) {
+                    PairingRoute(onNavigateToStreamSetup = onNavigateToStreamSetup)
+                }
+                AppDestination.StreamSetup -> NavEntry(destination) {
+                    StreamSetupRoute(
+                        onNavigateToWebcam = onNavigateToWebcam,
+                        onNavigateBack = onNavigateBack,
+                    )
+                }
+                AppDestination.Webcam -> NavEntry(destination) {
+                    WebcamRoute(
+                        onNavigateToSettings = onNavigateToSettings,
+                        onNavigateToStreamSetup = onNavigateToStreamSetup,
+                        onRequestStopStream = onRequestStopStream,
+                        onNavigateBack = onNavigateBackFromWebcam,
+                        onCopyDiagnostics = onCopyDiagnostics,
+                    )
+                }
+                AppDestination.Settings -> NavEntry(destination) {
+                    SettingsRoute(
+                        onNavigateBack = onNavigateBack,
+                        onRequestStopStream = onRequestStopStream,
+                        onNavigateToPairing = onNavigateToPairing,
+                        onCopyDiagnostics = onCopyDiagnostics,
+                    )
+                }
+            }
+        },
+    )
+}

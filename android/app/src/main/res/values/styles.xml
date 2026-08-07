@@ -1,4 +1,0 @@
-<resources>
-    <style name="Theme.MobileWebcam" parent="android:style/Theme.Material.Light.NoActionBar" />
-</resources>
-

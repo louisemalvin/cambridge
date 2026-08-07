@@ -1,10 +1,18 @@
 # Changelog
 
+## 0.2.0 — CamBridge platform layout
+
+- Renamed sender, receiver, package, and protocol identifiers to CamBridge.
+- Organized implementation code under `sender/android` and
+  `receiver/linux/obs`.
+- Introduced CamBridge stream protocol version 5; it is intentionally
+  incompatible with earlier protocol releases.
+
 ## 0.1.1 — CamBridge branding update
 
 - Branded the Linux receiver as the CamBridge OBS Plugin.
 - Renamed downloadable APK and Linux plugin artifacts to use CamBridge names.
-- Kept the direct-webcam wire protocol identifiers stable for compatibility.
+- Preserved stream behavior while standardizing the public CamBridge branding.
 
 ## 0.1.0 — initial public release
 

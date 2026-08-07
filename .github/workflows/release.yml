@@ -45,8 +45,8 @@ jobs:
           signing_file="${RUNNER_TEMP}/cambridge-release.jks"
           printf '%s' "${ANDROID_KEYSTORE_BASE64}" | base64 --decode >"${signing_file}"
           export ANDROID_SIGNING_STORE_FILE="${signing_file}"
-          ./android/gradlew -p android assembleRelease --console=plain
-          apk="android/app/build/outputs/apk/release/app-release.apk"
+          ./sender/android/gradlew -p sender/android assembleRelease --console=plain
+          apk="sender/android/app/build/outputs/apk/release/app-release.apk"
           test -f "${apk}"
           mkdir -p dist
           cp "${apk}" "dist/cambridge-${GITHUB_REF_NAME}.apk"

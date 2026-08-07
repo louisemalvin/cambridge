@@ -3,11 +3,11 @@ name: Android
 on:
   push:
     paths:
-      - "android/**"
+      - "sender/android/**"
       - ".github/workflows/android.yml"
   pull_request:
     paths:
-      - "android/**"
+      - "sender/android/**"
       - ".github/workflows/android.yml"
 
 jobs:
@@ -24,4 +24,4 @@ jobs:
         run: sdkmanager "platforms;android-37.0" "build-tools;36.0.0" "platform-tools"
       - uses: gradle/actions/setup-gradle@v4
       - run: ./gradlew test lint assembleDebug
-        working-directory: android
+        working-directory: sender/android

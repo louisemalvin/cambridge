@@ -3,11 +3,11 @@
 
 # Android/Gradle
 /.gradle/
-/android/.gradle/
-/android/build/
-/android/app/build/
-/android/*/build/
-/android/local.properties
+/sender/android/.gradle/
+/sender/android/build/
+/sender/android/app/build/
+/sender/android/*/build/
+/sender/android/local.properties
 *.iml
 .idea/
 
@@ -18,9 +18,9 @@
 *.log
 *.swp
 **/__pycache__/
-protocol/direct-stream-deployment.local.json
+protocol/cambridge-deployment.local.json
 /.tasks/
-/android/skills/
+/sender/android/skills/
 /desktop-screen*.png
 /screenshot.png
 /AGENTS.md

@@ -1,9 +1,0 @@
-{
-  "computer": {
-    "id": "obs-direct-webcam-source",
-    "displayName": "OBS receiver",
-    "address": "",
-    "interface": "",
-    "sourceCidr": ""
-  }
-}
