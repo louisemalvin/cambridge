@@ -122,7 +122,7 @@ with `default`.
 4. What project name, repository URL, copyright holder, maintainer contact,
    and security-reporting address should appear in the public files?
    **Decision: project name `CamBridge`; public creator tag `@louisemalvin`;
-   repository `https://github.com/louisemalvin/phone-as-webcam`; security
+   repository `https://github.com/louisemalvin/cambridge`; security
    reports use
    GitHub's private vulnerability-reporting channel or a private channel
    arranged through the repository owner. No personal address is stored in
