@@ -4,7 +4,7 @@ set -euo pipefail
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_root=$(cd -- "${script_dir}/../.." && pwd)
 android_root="${repo_root}/android"
-plugin_build_dir="${repo_root}/build/direct-webcam-source"
+plugin_build_dir="${repo_root}/build/cambridge-obs-plugin"
 artifact_dir=$(mktemp -d "${repo_root}/build/direct-webcam-avd.XXXXXX")
 
 avd_name="codex-phone-webcam-api35"
@@ -103,7 +103,7 @@ camera_duration_seconds="${DIRECT_WEBCAM_CAMERA_ASSET_SECONDS:-${camera_duration
 JAVA_HOME="${JAVA_HOME:-/opt/android-studio/jbr}" "${android_root}/gradlew" -p "${android_root}" assembleDebug --console=plain >"${artifact_dir}/android-build.log"
 
 [[ -f "${apk}" ]] || fail "debug APK was not produced: ${apk}"
-plugin_so="${plugin_build_dir}/staging/obs-plugins/direct-webcam-source/bin/64bit/direct-webcam-source.so"
+plugin_so="${plugin_build_dir}/staging/obs-plugins/cambridge-obs-plugin/bin/64bit/cambridge-obs-plugin.so"
 [[ -f "${plugin_so}" ]] || fail "staged OBS plugin was not produced: ${plugin_so}"
 
 test_card_filter="drawtext=fontcolor=white:fontsize=${test_card_font_size}:box=1:boxcolor=black@0.70:boxborderw=8:text='direct webcam ${profile_id} ${profile_width}x${profile_height} frame %{n} pts %{pts\\:hms}':x=${test_card_margin}:y=${test_card_margin},drawbox=x=iw-${test_card_flash_width}-${test_card_margin}:y=${test_card_margin}:w=${test_card_flash_width}:h=${test_card_flash_height}:color=white@1.0:t=fill:enable='lt(mod(n\\,${profile_fps})\\,2)'"
@@ -123,10 +123,10 @@ ffmpeg -hide_banner -loglevel error \
     -movflags +faststart -f mp4 "${camera_video}"
 
 mkdir -p "${obs_config}/obs-studio/basic/scenes" \
-    "${obs_config}/obs-studio/plugins/direct-webcam-source/bin/64bit"
+    "${obs_config}/obs-studio/plugins/cambridge-obs-plugin/bin/64bit"
 cp "${scene_template}" "${obs_config}/obs-studio/basic/scenes/Untitled.json"
 cp "${plugin_so}" \
-    "${obs_config}/obs-studio/plugins/direct-webcam-source/bin/64bit/direct-webcam-source.so"
+    "${obs_config}/obs-studio/plugins/cambridge-obs-plugin/bin/64bit/cambridge-obs-plugin.so"
 
 obs_args=(
     --multi
@@ -140,7 +140,7 @@ start_obs() {
     XDG_CONFIG_HOME="${obs_config}" obs "${obs_args[@]}" >>"${obs_log}" 2>&1 &
     obs_pid=$!
     for ((attempt = 0; attempt < obs_wait_seconds; attempt += poll_interval_seconds)); do
-        rg -q 'loaded module=direct-webcam-source' "${obs_log}" && \
+        rg -q 'loaded module=cambridge-obs-plugin' "${obs_log}" && \
             rg -q 'listening:control=' "${obs_log}" && return
         sleep "${poll_interval_seconds}"
     done

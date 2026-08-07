@@ -13,7 +13,7 @@ supported.
 The release contains:
 
 - The Android sender using Camera2, MediaCodec H.264, and RTP/H.264 over UDP.
-- The native Linux OBS source using the direct-webcam protocol, FFmpeg,
+- The CamBridge OBS Plugin for Linux using the direct-webcam protocol, FFmpeg,
   VAAPI/DRM PRIME when available, and the bounded CPU NV12 fallback.
 - The versioned protocol contract, schemas, examples, build scripts, tests, and
   operational documentation.
@@ -110,7 +110,7 @@ advice; binary redistribution and FFmpeg/H.264 details still require review.
 Please answer these questions in order. The proposed default can be accepted
 with `default`.
 
-1. Is the public scope Android sender plus Linux OBS source only, with the
+1. Is the public scope CamBridge Android app plus CamBridge OBS Plugin only, with the
    removed Rust and iOS trees excluded? **Decision: yes.** iOS and other OBS
    operating systems remain future expansion work, not Release 1 support.
 2. Is the first release source-only, or should it include a signed Android

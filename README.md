@@ -1,10 +1,8 @@
 # CamBridge
 
 CamBridge sends camera video through one bounded, low-latency direct stream
-to a configured receiver. The current product is an Android sender and a
-native Linux OBS host:
-
-CamBridge by [@louisemalvin](https://github.com/louisemalvin).
+to a configured receiver. The current product is an Android app and the
+CamBridge OBS Plugin for Linux:
 
 ```text
 Camera2 -> MediaCodec H.264 -> RTP/H.264 over UDP -> FFmpeg H.264 decoder
@@ -20,11 +18,11 @@ smoke test.
 
 ## Release 1 support
 
-Release 1 supports an Android sender and a Linux x86_64/amd64 OBS source. The
-downloadable Linux plugin is built and tested against the latest OBS Studio
-version installed in the release environment; the exact version and native
-library requirements are recorded with each release. ARM/ARM64 builds are
-planned for a later release.
+Release 1 supports the CamBridge Android app and the CamBridge OBS Plugin on
+Linux x86_64/amd64. The downloadable plugin is built and tested against the
+latest OBS Studio version installed in the release environment; the exact
+version and native library requirements are recorded with each release.
+ARM/ARM64 builds are planned for a later release.
 
 The sender and OBS source communicate on a trusted local network without
 authentication or encryption. Do not expose the control or media ports to the
@@ -33,7 +31,7 @@ internet.
 ## Repository
 
 - `android/`: Kotlin/Compose phone app with a setup-first stream flow
-- `desktop/hosts/obs/direct-webcam-source/`: current native OBS host adapter
+- `desktop/hosts/obs/direct-webcam-source/`: CamBridge OBS Plugin implementation
 - `protocol/`: versioned TCP control and RTP contract
 - `docs/`: setup, architecture, verification, diagnostics, and limitations
 - `scripts/`: native build, emulator smoke, and repository checks
@@ -68,7 +66,7 @@ Every ADB command in that harness targets the explicit emulator serial
 
 ## Manual OBS setup
 
-Build and stage the plugin with:
+Build and stage the CamBridge OBS Plugin with:
 
 ```bash
 ./scripts/linux/build-direct-webcam-plugin.sh

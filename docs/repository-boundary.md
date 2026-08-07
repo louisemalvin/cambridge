@@ -17,8 +17,8 @@ These files describe, build, test, or support the released Phase 1 product:
 | Build and verification | `android/`, `desktop/hosts/obs/direct-webcam-source/`, and the active `scripts/` |
 | Release metadata | `VERSION` and the release workflows under `.github/workflows/` |
 
-Public documentation must describe the current Android sender and Linux
-x86_64/amd64 OBS source. It must not promise ARM, iOS, other OBS operating
+Public documentation must describe the current CamBridge Android app and the
+CamBridge OBS Plugin for Linux x86_64/amd64. It must not promise ARM, iOS, other OBS operating
 systems, virtual-camera output, SRT, or the removed Rust receiver.
 
 ## Workspace-only development material

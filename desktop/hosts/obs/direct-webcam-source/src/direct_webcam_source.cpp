@@ -189,7 +189,7 @@ bool DirectWebcamSource::start(std::string &error)
         report("discovery:service_type=" + std::string(contract::kDiscoveryServiceType));
     }
     started_ = true;
-    report("identity:module=direct-webcam-source version=" + std::string(kModuleVersion) +
+    report("identity:module=cambridge-obs-plugin version=" + std::string(kModuleVersion) +
            " commit=" + std::string(DIRECT_WEBCAM_GIT_COMMIT) + " build=plugin protocol=" +
            std::to_string(kModuleProtocolVersion) + " config=obs-properties");
     report("listening:control=" + std::to_string(config.control_port) +
@@ -311,7 +311,7 @@ void DirectWebcamSource::write_diagnostics()
         return;
     }
     output << "{\n"
-           << "  \"module\": \"direct-webcam-source\",\n"
+           << "  \"module\": \"cambridge-obs-plugin\",\n"
            << "  \"version\": \"" << kModuleVersion << "\",\n"
            << "  \"gitCommit\": \"" << DIRECT_WEBCAM_GIT_COMMIT << "\",\n"
            << "  \"protocolVersion\": " << kModuleProtocolVersion << ",\n"

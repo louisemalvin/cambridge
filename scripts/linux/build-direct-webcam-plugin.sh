@@ -3,7 +3,7 @@ set -euo pipefail
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_root=$(cd -- "${script_dir}/../.." && pwd)
-build_dir=${DIRECT_WEBCAM_BUILD_DIR:-"${repo_root}/build/direct-webcam-source"}
+build_dir=${DIRECT_WEBCAM_BUILD_DIR:-"${repo_root}/build/cambridge-obs-plugin"}
 staging_dir=${DIRECT_WEBCAM_STAGING_DIR:-"${build_dir}/staging"}
 build_type=${DIRECT_WEBCAM_BUILD_TYPE:-RelWithDebInfo}
 git_commit=$(git -C "${repo_root}" rev-parse HEAD)
@@ -19,7 +19,7 @@ cmake --build "${build_dir}" --parallel
 ctest --test-dir "${build_dir}" --output-on-failure
 cmake --install "${build_dir}"
 
-artifact="${build_dir}/direct-webcam-source.so"
+artifact="${build_dir}/cambridge-obs-plugin.so"
 printf 'module=%s\n' "${artifact}"
 printf 'commit=%s\n' "${git_commit}"
 printf 'sha256='; sha256sum "${artifact}" | awk '{print $1}'

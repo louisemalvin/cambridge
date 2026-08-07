@@ -3,7 +3,7 @@ set -euo pipefail
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_root=$(cd -- "${script_dir}/../.." && pwd)
-build_dir="${repo_root}/build/direct-webcam-source"
+build_dir="${repo_root}/build/cambridge-obs-plugin"
 artifact_dir=$(mktemp -d "${repo_root}/build/direct-webcam-fixture.XXXXXX")
 contract_json="${repo_root}/protocol/direct-stream-contract.json"
 scene_template="${repo_root}/scripts/linux/direct-webcam-test-scene.json"
@@ -93,7 +93,7 @@ profile_height=$(jq -er '.height' <<<"${profile_json}")
 profile_fps=$(jq -er '.fps' <<<"${profile_json}")
 
 "${repo_root}/scripts/linux/build-direct-webcam-plugin.sh" >"${artifact_dir}/plugin-build.log"
-plugin_so="${build_dir}/staging/obs-plugins/direct-webcam-source/bin/64bit/direct-webcam-source.so"
+plugin_so="${build_dir}/staging/obs-plugins/cambridge-obs-plugin/bin/64bit/cambridge-obs-plugin.so"
 [[ -f "${plugin_so}" ]] || fail "staged OBS plugin is missing: ${plugin_so}"
 
 jq --arg decoder_mode "${decoder_mode}" \
@@ -103,7 +103,7 @@ jq --arg decoder_mode "${decoder_mode}" \
         (.decoder_mode = $decoder_mode | .control_port = $control_port | .media_port = $media_port)' \
     "${scene_template}" >"${scene_config}"
 mkdir -p "${obs_config}/obs-studio/basic/scenes" \
-    "${obs_config}/obs-studio/plugins/direct-webcam-source/bin/64bit"
+    "${obs_config}/obs-studio/plugins/cambridge-obs-plugin/bin/64bit"
 if [[ "${capture_output}" == "1" ]]; then
     mkdir -p "${recording_dir}" "${obs_config}/obs-studio/basic/profiles/Untitled"
     sed \
@@ -115,7 +115,7 @@ if [[ "${capture_output}" == "1" ]]; then
         >"${obs_config}/obs-studio/basic/profiles/Untitled/basic.ini"
 fi
 cp "${scene_config}" "${obs_config}/obs-studio/basic/scenes/Untitled.json"
-cp "${plugin_so}" "${obs_config}/obs-studio/plugins/direct-webcam-source/bin/64bit/direct-webcam-source.so"
+cp "${plugin_so}" "${obs_config}/obs-studio/plugins/cambridge-obs-plugin/bin/64bit/cambridge-obs-plugin.so"
 
 obs_args=(
     --multi
@@ -133,7 +133,7 @@ for ((attempt = 0; attempt < obs_wait_seconds; attempt += poll_interval_seconds)
     rg -q 'listening:control=' "${obs_log}" && break
     sleep "${poll_interval_seconds}"
 done
-rg -q 'loaded module=direct-webcam-source' "${obs_log}" || fail "OBS did not load the exact direct webcam module"
+rg -q 'loaded module=cambridge-obs-plugin' "${obs_log}" || fail "OBS did not load the CamBridge OBS plugin"
 rg -q 'listening:control=' "${obs_log}" || fail "OBS source did not begin listening"
 
 printf 'timestamp_seconds\tresident_kib\tthreads\tfile_descriptors\tcpu_percent\n' >"${metrics_log}"

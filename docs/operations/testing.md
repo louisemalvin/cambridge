@@ -17,7 +17,7 @@ Kotlin/C++ profile values against the JSON contract.
 
 ```bash
 ./scripts/linux/build-direct-webcam-plugin.sh
-ldd -r build/direct-webcam-source/direct-webcam-source.so
+ldd -r build/cambridge-obs-plugin/cambridge-obs-plugin.so
 ```
 
 The CTest suite covers RTP parsing, H.264 single-NAL and FU-A packetization,

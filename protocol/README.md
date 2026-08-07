@@ -18,7 +18,7 @@ rotations `90` and `270` present portrait. The native source rotates both NV12
 planes during presentation.
 
 The v4 contract defines a receiver discovery service and a side-effect-free
-`probe`/`capabilities` exchange. The Linux OBS source advertises the service
+`probe`/`capabilities` exchange. The CamBridge OBS Plugin advertises the service
 through Avahi when that optional backend is available, and Android discovers it
 through `NsdManager`. A manually configured endpoint remains the fallback. The
 sender then sends `hello`, the receiver returns `accepted`, and the sender may

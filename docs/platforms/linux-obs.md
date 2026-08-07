@@ -1,6 +1,6 @@
-# Linux/OBS host setup
+# CamBridge OBS Plugin for Linux
 
-This document covers the current Linux/OBS host adapter. The receiver protocol
+This document covers the CamBridge OBS Plugin. The receiver protocol
 it implements is documented in [the baseline contract](../contract.md).
 
 The native source requires:
@@ -19,10 +19,10 @@ Build and test the source:
 ```
 
 The build prints the module path, source commit, SHA-256, and staging path.
-The OBS-compatible staged layout is:
+The CamBridge OBS Plugin staged layout is:
 
 ```text
-staging/obs-plugins/direct-webcam-source/bin/64bit/direct-webcam-source.so
+staging/obs-plugins/cambridge-obs-plugin/bin/64bit/cambridge-obs-plugin.so
 ```
 
 To create the downloadable Release 1 x86_64 package, run:
@@ -34,7 +34,7 @@ To create the downloadable Release 1 x86_64 package, run:
 For a local OBS profile, copy that file to:
 
 ```text
-~/.config/obs-studio/plugins/direct-webcam-source/bin/64bit/direct-webcam-source.so
+~/.config/obs-studio/plugins/cambridge-obs-plugin/bin/64bit/cambridge-obs-plugin.so
 ```
 
 Then add the `CamBridge` source in OBS. Its normal settings are already

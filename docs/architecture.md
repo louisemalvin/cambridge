@@ -1,7 +1,7 @@
 # Architecture
 
-The current product has one Android sender, one configured receiver, one
-active session, and one direct OBS host. The connection is deliberately boring
+The current product has one Android app, one configured receiver, one active
+session, and one CamBridge OBS Plugin host. The connection is deliberately boring
 and remains frozen while the implementation is organized around reusable
 boundaries.
 
@@ -65,7 +65,7 @@ The receiver core is the reusable part of a receiver implementation:
 - bounded queues and newest-frame presentation mailbox
 - terminal lifecycle and diagnostics
 
-The current native plugin contains these responsibilities in one build target.
+The current CamBridge OBS Plugin contains these responsibilities in one build target.
 The next structural step is to extract them without changing the wire
 behavior.
 
@@ -109,7 +109,7 @@ The repository is organized around four roles:
 ```text
 protocol/              machine-readable wire contract and fixtures
 android/               Android sender and platform adapters
-desktop/hosts/obs/      Linux OBS source and presentation adapter
+desktop/hosts/obs/      CamBridge OBS Plugin and presentation adapter
 docs/                  contract, architecture, platform, and operations docs
 ```
 

@@ -1,7 +1,8 @@
 # Preparing a release
 
-Release 1 is version `0.1.0` and targets Android plus a Linux x86_64/amd64
-OBS source. ARM/ARM64 is not in the first binary release. The release uses
+Release 1 is version `0.1.0` and targets the CamBridge Android app plus the
+CamBridge OBS Plugin for Linux x86_64/amd64. ARM/ARM64 is not in the first
+binary release. The release uses
 the latest OBS Studio version installed and tested in the release environment;
 the exact `libobs` version is recorded with the Linux artifact.
 
@@ -27,7 +28,7 @@ With those values configured:
 Without them, Gradle may produce an unsigned release APK for local inspection,
 but that file must not be published as the downloadable release APK.
 
-## Linux plugin artifact
+## CamBridge OBS Plugin artifact
 
 On the supported x86_64 build environment:
 

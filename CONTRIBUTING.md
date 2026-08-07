@@ -3,7 +3,7 @@
 Contributions are welcome for the supported Phase 1 path:
 
 - Android sender
-- Linux x86_64/amd64 OBS source
+- CamBridge OBS Plugin for Linux x86_64/amd64
 - Versioned control and RTP/H.264 protocol
 
 Use [the repository boundary](docs/repository-boundary.md) to distinguish

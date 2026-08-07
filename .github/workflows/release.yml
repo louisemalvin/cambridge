@@ -42,16 +42,16 @@ jobs:
           test -n "${ANDROID_SIGNING_STORE_PASSWORD}"
           test -n "${ANDROID_SIGNING_KEY_ALIAS}"
           test -n "${ANDROID_SIGNING_KEY_PASSWORD}"
-          signing_file="${RUNNER_TEMP}/mobile-webcam-release.jks"
+          signing_file="${RUNNER_TEMP}/cambridge-release.jks"
           printf '%s' "${ANDROID_KEYSTORE_BASE64}" | base64 --decode >"${signing_file}"
           export ANDROID_SIGNING_STORE_FILE="${signing_file}"
           ./android/gradlew -p android assembleRelease --console=plain
           apk="android/app/build/outputs/apk/release/app-release.apk"
           test -f "${apk}"
           mkdir -p dist
-          cp "${apk}" "dist/mobile-webcam-${GITHUB_REF_NAME}.apk"
-          sha256sum "dist/mobile-webcam-${GITHUB_REF_NAME}.apk" \
-            >"dist/mobile-webcam-${GITHUB_REF_NAME}.apk.sha256"
+          cp "${apk}" "dist/cambridge-${GITHUB_REF_NAME}.apk"
+          sha256sum "dist/cambridge-${GITHUB_REF_NAME}.apk" \
+            >"dist/cambridge-${GITHUB_REF_NAME}.apk.sha256"
       - uses: actions/upload-artifact@v4
         with:
           name: android-release
@@ -75,7 +75,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: linux-x86_64-release
-          path: build/release/*
+          path: |
+            build/release/*.tar.gz
+            build/release/*.tar.gz.sha256
 
   publish:
     if: github.ref_type == 'tag'

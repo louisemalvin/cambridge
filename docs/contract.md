@@ -4,7 +4,7 @@ Status: active product contract v4. Protocol v3 is frozen and is not extended.
 
 This document describes the supported direct stream connection. It is
 platform-neutral at the wire boundary: Android is the current sender and the
-native Linux OBS source is the current host, but neither operating system is
+CamBridge OBS Plugin for Linux is the current host, but neither operating system is
 part of the connection contract.
 
 The machine-readable values are defined in

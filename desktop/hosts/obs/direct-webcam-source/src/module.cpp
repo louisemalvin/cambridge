@@ -44,7 +44,7 @@ bool obs_module_load(void)
     info.video_render = direct_webcam::source_video_render;
     info.video_tick = direct_webcam::source_video_tick;
     obs_register_source(&info);
-    blog(LOG_INFO, "[direct-webcam] loaded module=direct-webcam-source version=%s commit=%s protocol=%u",
+    blog(LOG_INFO, "[cambridge-obs] loaded module=cambridge-obs-plugin version=%s commit=%s protocol=%u",
          DIRECT_WEBCAM_VERSION, DIRECT_WEBCAM_GIT_COMMIT,
          static_cast<unsigned int>(direct_webcam::contract::kProtocolVersion));
     return true;
@@ -52,5 +52,5 @@ bool obs_module_load(void)
 
 void obs_module_unload(void)
 {
-    blog(LOG_INFO, "[direct-webcam] unloaded");
+    blog(LOG_INFO, "[cambridge-obs] unloaded");
 }

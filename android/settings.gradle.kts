@@ -17,5 +17,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "mobile-webcam-android"
+rootProject.name = "cambridge-android"
 include(":app")
