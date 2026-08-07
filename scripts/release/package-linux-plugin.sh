@@ -38,8 +38,17 @@ cp "${plugin_path}" "${package_root}/obs-plugins/cambridge-obs-plugin/bin/64bit/
 cp "${repo_root}/README.md" "${package_root}/README.md"
 cp "${repo_root}/LICENSE" "${package_root}/LICENSE"
 cp "${repo_root}/THIRD_PARTY_NOTICES.md" "${package_root}/THIRD_PARTY_NOTICES.md"
+cp "${repo_root}/SECURITY.md" "${package_root}/SECURITY.md"
+cp "${repo_root}/CONTRIBUTING.md" "${package_root}/CONTRIBUTING.md"
 cp "${repo_root}/desktop/hosts/obs/direct-webcam-source/LICENSE" "${package_root}/PLUGIN-LICENSE"
-cp "${repo_root}/docs/platforms/linux-obs.md" "${package_root}/LINUX-OBS-SETUP.md"
+mkdir -p "${package_root}/docs"
+cp "${repo_root}/docs/"*.md "${package_root}/docs/"
+mkdir -p "${package_root}/protocol/examples"
+cp "${repo_root}/protocol/direct-stream-contract.json" "${package_root}/protocol/"
+cp "${repo_root}/protocol/direct-stream.schema.json" "${package_root}/protocol/"
+cp "${repo_root}/protocol/direct-stream-deployment.json" "${package_root}/protocol/"
+cp "${repo_root}/protocol/README.md" "${package_root}/protocol/README.md"
+cp "${repo_root}/protocol/examples/"*.json "${package_root}/protocol/examples/"
 
 obs_version=$(pkg-config --modversion libobs)
 printf 'artifact=cambridge-obs-plugin\nversion=%s\nplatform=%s\nobs_libobs=%s\n' \

@@ -1,9 +1,9 @@
 # Security policy
 
-## Supported release
+## Supported versions
 
-Security reports are accepted for the current supported release and the
-current `main` branch.
+Security reports are accepted for the current release and the current `main`
+branch.
 
 ## Reporting a vulnerability
 
@@ -16,5 +16,6 @@ Include the affected version, operating system, OBS version where relevant,
 steps to reproduce, and any logs needed to confirm the issue. Remove private
 IP addresses, credentials, and personal data from reports.
 
-Release 1 intentionally uses an unauthenticated trusted-LAN transport. Do not
-expose its control or media ports to an untrusted network or the internet.
+CamBridge currently uses an unauthenticated and unencrypted local-network
+transport. Use it only on a trusted network and do not expose its control or
+media ports to the internet.

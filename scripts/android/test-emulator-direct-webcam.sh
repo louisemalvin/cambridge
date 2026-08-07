@@ -5,11 +5,11 @@ script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_root=$(cd -- "${script_dir}/../.." && pwd)
 android_root="${repo_root}/android"
 plugin_build_dir="${repo_root}/build/cambridge-obs-plugin"
-artifact_dir=$(mktemp -d "${repo_root}/build/direct-webcam-avd.XXXXXX")
+artifact_dir=$(mktemp -d "${repo_root}/build/cambridge-emulator.XXXXXX")
 
-avd_name="codex-phone-webcam-api35"
-emulator_serial="emulator-5556"
-emulator_port=5556
+avd_name="${CAMBRIDGE_AVD_NAME:-}"
+emulator_port="${CAMBRIDGE_EMULATOR_PORT:-5556}"
+emulator_serial="${CAMBRIDGE_EMULATOR_SERIAL:-emulator-${emulator_port}}"
 receiver_host="10.0.2.2"
 camera_duration_seconds=10
 test_card_font_size=32
@@ -44,6 +44,7 @@ obs_config="${artifact_dir}/obs-config"
 obs_log="${artifact_dir}/obs.log"
 emulator_log="${artifact_dir}/emulator.log"
 app_log="${artifact_dir}/android.log"
+ui_dump_remote="/sdcard/cambridge-ui.xml"
 
 obs_pid=""
 emulator_pid=""
@@ -76,6 +77,14 @@ trap cleanup EXIT
 
 [[ -x "${adb}" ]] || fail "Android adb not found at ${adb}"
 [[ -x "${emulator}" ]] || fail "Android emulator not found at ${emulator}"
+[[ "${emulator_port}" =~ ^[0-9]+$ ]] || fail "emulator port must be numeric"
+if [[ -z "${avd_name}" ]]; then
+    mapfile -t available_avds < <("${emulator}" -list-avds)
+    if ((${#available_avds[@]} != 1)); then
+        fail "set CAMBRIDGE_AVD_NAME when zero or multiple Android AVDs are available"
+    fi
+    avd_name="${available_avds[0]}"
+fi
 [[ -f "${scene_template}" ]] || fail "OBS scene template is missing: ${scene_template}"
 [[ -f "${contract_json}" ]] || fail "direct stream contract is missing: ${contract_json}"
 command -v ffmpeg >/dev/null 2>&1 || fail "ffmpeg is required for the deterministic emulator camera input"
@@ -106,7 +115,7 @@ JAVA_HOME="${JAVA_HOME:-/opt/android-studio/jbr}" "${android_root}/gradlew" -p "
 plugin_so="${plugin_build_dir}/staging/obs-plugins/cambridge-obs-plugin/bin/64bit/cambridge-obs-plugin.so"
 [[ -f "${plugin_so}" ]] || fail "staged OBS plugin was not produced: ${plugin_so}"
 
-test_card_filter="drawtext=fontcolor=white:fontsize=${test_card_font_size}:box=1:boxcolor=black@0.70:boxborderw=8:text='direct webcam ${profile_id} ${profile_width}x${profile_height} frame %{n} pts %{pts\\:hms}':x=${test_card_margin}:y=${test_card_margin},drawbox=x=iw-${test_card_flash_width}-${test_card_margin}:y=${test_card_margin}:w=${test_card_flash_width}:h=${test_card_flash_height}:color=white@1.0:t=fill:enable='lt(mod(n\\,${profile_fps})\\,2)'"
+test_card_filter="drawtext=fontcolor=white:fontsize=${test_card_font_size}:box=1:boxcolor=black@0.70:boxborderw=8:text='CamBridge ${profile_id} ${profile_width}x${profile_height} frame %{n} pts %{pts\\:hms}':x=${test_card_margin}:y=${test_card_margin},drawbox=x=iw-${test_card_flash_width}-${test_card_margin}:y=${test_card_margin}:w=${test_card_flash_width}:h=${test_card_flash_height}:color=white@1.0:t=fill:enable='lt(mod(n\\,${profile_fps})\\,2)'"
 test_card_patch_y=$((test_card_margin + test_card_font_size + test_card_patch_gap))
 test_card_filter="${test_card_filter},drawbox=x=${test_card_margin}:y=${test_card_patch_y}:w=${test_card_patch_size}:h=${test_card_patch_size}:color=red@1.0:t=fill"
 test_card_filter="${test_card_filter},drawbox=x=$((test_card_margin + test_card_patch_size + test_card_patch_gap)):y=${test_card_patch_y}:w=${test_card_patch_size}:h=${test_card_patch_size}:color=green@1.0:t=fill"
@@ -144,7 +153,7 @@ start_obs() {
             rg -q 'listening:control=' "${obs_log}" && return
         sleep "${poll_interval_seconds}"
     done
-    fail "OBS did not load the direct webcam source"
+    fail "OBS did not load the CamBridge source"
 }
 
 stop_obs() {
@@ -233,8 +242,8 @@ click_stream_action() {
     local bottom=""
     local scroll_attempt
     for ((scroll_attempt = 0; scroll_attempt < ui_scroll_attempts; scroll_attempt += 1)); do
-        "${adb}" -s "${emulator_serial}" shell uiautomator dump /sdcard/direct-webcam-ui.xml >/dev/null 2>&1
-        "${adb}" -s "${emulator_serial}" exec-out cat /sdcard/direct-webcam-ui.xml >"${ui_dump}"
+        "${adb}" -s "${emulator_serial}" shell uiautomator dump "${ui_dump_remote}" >/dev/null 2>&1
+        "${adb}" -s "${emulator_serial}" exec-out cat "${ui_dump_remote}" >"${ui_dump}"
         node=$(rg -o "<node[^>]*content-desc=\"${content_description}\"[^>]*>" "${ui_dump}" | head -n 1 || true)
         if [[ -n "${node}" ]]; then
             bounds=$(sed -n 's/.*bounds="\[\([0-9][0-9]*\),\([0-9][0-9]*\)\]\[\([0-9][0-9]*\),\([0-9][0-9]*\)\]".*/\1 \2 \3 \4/p' <<<"${node}")
@@ -256,8 +265,8 @@ click_stream_action() {
 wait_for_stream_setup() {
     local ui_dump="${artifact_dir}/ui-after-stop.xml"
     for ((attempt = 0; attempt < app_event_wait_seconds; attempt += poll_interval_seconds)); do
-        "${adb}" -s "${emulator_serial}" shell uiautomator dump /sdcard/direct-webcam-ui.xml >/dev/null 2>&1
-        "${adb}" -s "${emulator_serial}" exec-out cat /sdcard/direct-webcam-ui.xml >"${ui_dump}"
+        "${adb}" -s "${emulator_serial}" shell uiautomator dump "${ui_dump_remote}" >/dev/null 2>&1
+        "${adb}" -s "${emulator_serial}" exec-out cat "${ui_dump_remote}" >"${ui_dump}"
         if rg -q 'text="Stream setup"' "${ui_dump}"; then
             return
         fi

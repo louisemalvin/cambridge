@@ -1,119 +1,76 @@
-# Architecture
+# CamBridge Architecture
 
-The current product has one Android app, one configured receiver, one active
-session, and one CamBridge OBS Plugin host. The connection is deliberately boring
-and remains frozen while the implementation is organized around reusable
-boundaries.
+CamBridge has an Android sender and a native Linux OBS receiver. A session is
+started explicitly by the user and the receiver handles one active session at
+a time.
 
-## Frozen connection
+## Data flow
 
 ```text
 Android camera
-  -> H.264 encoder
-  -> RTP/H.264 over UDP
-  -> portable receiver responsibilities
-  -> Linux/OBS presentation
+    → Camera2 capture
+    → MediaCodec H.264 encoder
+    → RTP/H.264 over UDP
+    → OBS source on Linux
+    → FFmpeg H.264 decoder
+    → VAAPI/DRM PRIME and DMA-BUF when available
+    → OBS texture
 ```
 
-The control plane is length-prefixed JSON over TCP. The media plane is
-best-effort RFC 6184 H.264 RTP over UDP. The sender makes one explicit
-connection attempt after the user confirms the session contract. A lagging
-pipeline drops work; it does not reconnect or request recovery.
+The receiver falls back to software decoding and a bounded NV12 texture upload
+when hardware decoding or direct DMA-BUF import is unavailable.
 
-This goal does not replace TCP, UDP, RTP, H.264, the manual endpoint, or the
-direct OBS source.
+## Components
+
+### Android sender
+
+The Android app owns camera discovery, preview, camera controls, capture
+surfaces, H.264 encoding, receiver discovery, and stream lifecycle. The
+session coordinator validates the selected profile and orientation before
+starting the camera and encoder. The selected session settings stay fixed
+until the user stops the stream.
+
+### Control and media transport
+
+The control plane uses length-prefixed UTF-8 JSON over TCP for receiver
+discovery, capability probing, session setup, and stop messages. The media
+plane carries H.264 access units as RFC 6184 RTP packets over UDP.
+
+The two planes share a session ID and generation. The receiver rejects stale
+or incompatible sessions before presenting their frames.
+
+### Linux OBS receiver
+
+The CamBridge OBS source starts the control and media listeners when an OBS
+source is created. It validates the session, reorders a bounded number of RTP
+packets, assembles H.264 access units, and passes them to FFmpeg. Decoded
+frames are presented through the OBS graphics API.
+
+VAAPI with a DRM render node is preferred. When the host cannot provide a
+usable hardware path, the decoder produces software frames and the renderer
+uploads NV12 data to an OBS texture.
 
 ## Ownership boundaries
 
-### Session coordinator
+- Android owns Camera2 and MediaCodec; it does not depend on OBS APIs.
+- The protocol layer owns message framing, session identity, profile data, and
+  RTP/H.264 rules.
+- The receiver owns network input, decoding, frame lifetime, and presentation
+  scheduling.
+- OBS integration owns source properties, graphics resources, and the output
+  texture.
 
-The session coordinator is the only application component that composes the
-camera, encoder, and transport ports. It owns the explicit lifecycle and the
-immutable session contract. UI code observes typed state and events; it does
-not call sockets, codecs, or camera devices directly.
+## Latency and buffering
 
-### Camera port
-
-The camera boundary owns camera discovery, capture surfaces, preview surfaces,
-camera capabilities, and live controls such as lens selection, zoom,
-stabilization, focus, and exposure.
-
-It does not know about RTP, UDP, receiver addresses, session IDs, or OBS. A
-capture-format change is a new session contract; live camera controls remain
-independent of transport.
-
-### Encoder port
-
-The encoder boundary accepts a locked capture configuration and publishes
-encoded H.264 access units. It owns codec configuration, keyframe policy, and
-bounded access-unit production. It does not own receiver addressing or host
-presentation.
-
-### Transport port
-
-The transport boundary consumes encoded access units and the session endpoint.
-It owns control framing, the TCP handshake, RTP packetization, UDP I/O, and
-transport events. It does not own Camera2, AVFoundation, UI state, or OBS.
-
-### Receiver core
-
-The receiver core is the reusable part of a receiver implementation:
-
-- control message validation and session identity
-- RTP parsing, ordering, and H.264 access-unit assembly
-- decoder coordination and frame metadata
-- bounded queues and newest-frame presentation mailbox
-- terminal lifecycle and diagnostics
-
-The current CamBridge OBS Plugin contains these responsibilities in one build target.
-The next structural step is to extract them without changing the wire
-behavior.
-
-### Host adapter
-
-The host adapter turns decoded frames into a platform output. The current
-adapter owns libobs graphics objects, VAAPI/DRM PRIME import, CPU NV12 upload,
-texture lifetime, and OBS properties. Those details must not leak into the
-receiver core.
-
-## Data flow and backpressure
+The media path is intentionally bounded:
 
 ```text
-camera -> encoder input surface -> bounded encoded queue -> RTP sender
-                                                |
-                                                v
-receiver UDP -> bounded reorder -> decoder queue -> newest-frame mailbox
-                                                        |
-                                                        v
-                                                   host adapter
+camera → encoder queue → RTP sender
+                         ↓
+receiver UDP → reorder window → decoder queue → newest-frame mailbox → OBS
 ```
 
-Every queue has a contract-backed bound. The media path is asynchronous and
-uses background workers. Camera controls, UI rendering, and diagnostics must
-remain responsive when transport or decoding is slow.
-
-## Cross-platform reuse
-
-Reusable artifacts are the protocol schema, typed session/profile models,
-capability rules, RTP/H.264 test vectors, lifecycle semantics, frame metadata,
-drop policy, and diagnostics events.
-
-Platform adapters provide Android Camera2/MediaCodec and Linux
-VAAPI/DRM/libobs. iOS and other host operating systems are future roadmap work
-and are not part of the current baseline.
-
-## Repository direction
-
-The repository is organized around four roles:
-
-```text
-protocol/              machine-readable wire contract and fixtures
-android/               Android sender and platform adapters
-desktop/hosts/obs/      CamBridge OBS Plugin and presentation adapter
-docs/                  contract, architecture, platform, and operations docs
-```
-
-The current native source is buildable at
-`desktop/hosts/obs/direct-webcam-source/`. Future platform adapters must be
-added behind the release contract and their own compatibility and integration
-tests.
+Late packets, incomplete access units, and stale decoded frames are dropped.
+The presentation mailbox keeps the newest frame rather than allowing backlog
+to grow. There is no media retransmission or automatic reconnect; after a
+terminal session failure, the user starts another session explicitly.

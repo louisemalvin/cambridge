@@ -1,24 +1,19 @@
 # Contributing
 
-Contributions are welcome for the supported Phase 1 path:
-
-- Android sender
-- CamBridge OBS Plugin for Linux x86_64/amd64
-- Versioned control and RTP/H.264 protocol
-
-Use [the repository boundary](docs/repository-boundary.md) to distinguish
-public product documentation from workspace-only task notes and tooling.
+Contributions are welcome for the Android sender, the Linux OBS receiver, the
+wire protocol, and the surrounding documentation.
 
 Before opening a pull request:
 
-1. Read the repository architecture and release contract.
-2. Keep Android, protocol, native OBS, and documentation changes in their
-   declared module boundaries.
+1. Read [Architecture](docs/architecture.md) when changing the streaming
+   pipeline.
+2. Follow [Protocol](docs/protocol.md) when changing anything on the wire.
 3. Run `./scripts/development/check-all.sh` when the required toolchains are
    available.
-4. Describe any platform, device, OBS, FFmpeg, VAAPI, or DRM limitations in
-   the pull request.
+4. Explain the platform, Android device or emulator, OBS version, and decoder
+   path used for testing.
+5. Do not commit credentials, signing keys, local deployment configuration,
+   generated build output, or private workspace files.
 
-Do not commit private deployment files, signing keys, generated screenshots,
-build directories, or credentials. Use the ignored
-`protocol/direct-stream-deployment.local.json` file for local network values.
+Keep compatibility-sensitive protocol identifiers stable unless a protocol
+change is intentional and documented in the protocol fixtures.
