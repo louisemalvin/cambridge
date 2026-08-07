@@ -20,6 +20,7 @@ constexpr std::size_t kTextureSlotCount = contract::kTexturePoolSlots;
 constexpr std::uint32_t kPlaceholderWidth = 2;
 constexpr std::uint32_t kPlaceholderHeight = 2;
 constexpr std::uint32_t kPlaceholderTextureLevels = 1;
+constexpr std::uint32_t kNv12TextureLevels = 1;
 constexpr std::uint32_t kNoTextureFlags = 0;
 constexpr std::uint32_t kDynamicTextureFlags = GS_DYNAMIC;
 constexpr std::uint32_t kNoFlip = 0;
@@ -164,7 +165,22 @@ bool Renderer::update_cpu_slot(TextureSlot &slot, const VideoFramePtr &frame)
     }
     gs_texture_t *y_texture = nullptr;
     gs_texture_t *uv_texture = nullptr;
-    if (!gs_texture_create_nv12(&y_texture, &uv_texture, frame->width, frame->height, kDynamicTextureFlags)) {
+    const std::uint32_t uv_width =
+        (frame->width + kNv12ChromaColumnsDivisor - 1U) / kNv12ChromaColumnsDivisor;
+    const std::uint32_t uv_height =
+        (frame->height + kNv12ChromaRowsDivisor - 1U) / kNv12ChromaRowsDivisor;
+    const std::uint8_t *no_initial_data[] = {nullptr};
+    y_texture = gs_texture_create(frame->width, frame->height, GS_R8, kNv12TextureLevels, no_initial_data,
+                                   kDynamicTextureFlags);
+    uv_texture = gs_texture_create(uv_width, uv_height, GS_R8G8, kNv12TextureLevels, no_initial_data,
+                                   kDynamicTextureFlags);
+    if (!y_texture || !uv_texture) {
+        if (y_texture) {
+            gs_texture_destroy(y_texture);
+        }
+        if (uv_texture) {
+            gs_texture_destroy(uv_texture);
+        }
         return false;
     }
     const std::size_t y_bytes = static_cast<std::size_t>(frame->nv12_y_stride) * frame->height;
