@@ -13,7 +13,7 @@
     <application
         android:name=".app.MobileWebcamApplication"
         android:allowBackup="false"
-        android:label="Mobile Webcam"
+        android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.MobileWebcam">
         <activity

@@ -98,9 +98,9 @@ Reusable artifacts are the protocol schema, typed session/profile models,
 capability rules, RTP/H.264 test vectors, lifecycle semantics, frame metadata,
 drop policy, and diagnostics events.
 
-Platform adapters provide Android Camera2/MediaCodec, future iOS
-AVFoundation/VideoToolbox, Linux VAAPI/DRM/libobs, and future host outputs.
-No iOS implementation is part of the current baseline work.
+Platform adapters provide Android Camera2/MediaCodec and Linux
+VAAPI/DRM/libobs. iOS and other host operating systems are future roadmap work
+and are not part of the current baseline.
 
 ## Repository direction
 
@@ -109,11 +109,11 @@ The repository is organized around four roles:
 ```text
 protocol/              machine-readable wire contract and fixtures
 android/               Android sender and platform adapters
-desktop/receiver-core/ portable receiver responsibilities
-desktop/hosts/          OBS and future presentation adapters
+desktop/hosts/obs/      Linux OBS source and presentation adapter
 docs/                  contract, architecture, platform, and operations docs
 ```
 
-The current native source remains buildable at
-`desktop/hosts/obs/direct-webcam-source/` while receiver-core extraction is
-carried out behind contract and integration tests.
+The current native source is buildable at
+`desktop/hosts/obs/direct-webcam-source/`. Future platform adapters must be
+added behind the release contract and their own compatibility and integration
+tests.

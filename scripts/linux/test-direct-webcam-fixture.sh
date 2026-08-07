@@ -83,9 +83,10 @@ esac
 [[ "${duration_seconds}" =~ ^[1-9][0-9]*$ ]] || fail "duration must be a positive integer"
 [[ "${rotation_degrees}" =~ ^(0|90|180|270)$ ]] || fail "rotation must be 0, 90, 180, or 270 degrees"
 
-control_port=$(jq -er '.defaults.controlPort' "${contract_json}")
+contract_control_port=$(jq -er '.defaults.controlPort' "${contract_json}")
 media_port_offset=$(jq -er '.defaults.mediaPortOffset' "${contract_json}")
-media_port=$((control_port + media_port_offset))
+control_port="${DIRECT_WEBCAM_CONTROL_PORT:-${contract_control_port}}"
+media_port="${DIRECT_WEBCAM_MEDIA_PORT:-$((control_port + media_port_offset))}"
 profile_json=$(jq -ce --arg profile_id "${profile_id}" '.profiles[] | select(.id == $profile_id)' "${contract_json}")
 profile_width=$(jq -er '.width' <<<"${profile_json}")
 profile_height=$(jq -er '.height' <<<"${profile_json}")
@@ -96,7 +97,10 @@ plugin_so="${build_dir}/staging/obs-plugins/direct-webcam-source/bin/64bit/direc
 [[ -f "${plugin_so}" ]] || fail "staged OBS plugin is missing: ${plugin_so}"
 
 jq --arg decoder_mode "${decoder_mode}" \
-    '(.sources[] | select(.id == "direct_android_rtp_webcam").settings.decoder_mode) = $decoder_mode' \
+    --argjson control_port "${control_port}" \
+    --argjson media_port "${media_port}" \
+    '(.sources[] | select(.id == "direct_android_rtp_webcam").settings) |=
+        (.decoder_mode = $decoder_mode | .control_port = $control_port | .media_port = $media_port)' \
     "${scene_template}" >"${scene_config}"
 mkdir -p "${obs_config}/obs-studio/basic/scenes" \
     "${obs_config}/obs-studio/plugins/direct-webcam-source/bin/64bit"

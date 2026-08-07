@@ -128,8 +128,13 @@ def main() -> int:
     profiles = contract["profiles"]
     computer = deployment.get("computer", {})
     expected_computer_keys = {"id", "displayName", "address", "interface", "sourceCidr"}
-    if set(computer) != expected_computer_keys or not all(computer.values()):
-        raise AssertionError("deployment must define exactly one complete computer endpoint")
+    if set(computer) != expected_computer_keys:
+        raise AssertionError("deployment must define exactly one computer entry")
+    if not computer["id"] or not computer["displayName"]:
+        raise AssertionError("deployment must define a receiver ID and display name")
+    network_values = [computer["address"], computer["interface"], computer["sourceCidr"]]
+    if any(network_values) and not all(network_values):
+        raise AssertionError("deployment network values must be all present or all blank")
     profile_ids = {profile["id"] for profile in profiles}
     if profile_ids != {"720p30", "1080p30", "1080p15", "2k30", "2k15"}:
         raise AssertionError(

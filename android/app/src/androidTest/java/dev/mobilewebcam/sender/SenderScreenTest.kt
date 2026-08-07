@@ -8,9 +8,10 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import dev.mobilewebcam.sender.app.model.CameraControlsUiState
 import dev.mobilewebcam.sender.feature.settings.SettingsUiState
+import dev.mobilewebcam.sender.feature.settings.SettingsScreen
 import dev.mobilewebcam.sender.feature.webcam.WebcamScreen
 import dev.mobilewebcam.sender.feature.webcam.WebcamUiState
-import dev.mobilewebcam.sender.feature.settings.SettingsScreen
+import dev.mobilewebcam.sender.feature.webcam.overlays.EndStreamConfirmationDialog
 import org.junit.Rule
 import org.junit.Test
 
@@ -70,5 +71,23 @@ class SenderScreenTest {
         composeRule.onNodeWithText("Connection").assertIsDisplayed()
         composeRule.onNodeWithText("Stream status").assertIsDisplayed()
         composeRule.onNodeWithText("Forget receiver").assertIsDisplayed()
+    }
+
+    @Test
+    fun endStreamConfirmationExplainsTheEffectAndOffersKeepStreaming() {
+        composeRule.setContent {
+            MaterialTheme {
+                EndStreamConfirmationDialog(
+                    onDismissRequest = {},
+                    onConfirm = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Stop streaming?").assertIsDisplayed()
+        composeRule.onNodeWithText("The camera will stop sending video to the computer.")
+            .assertIsDisplayed()
+        composeRule.onNodeWithText("Keep streaming").assertIsDisplayed()
+        composeRule.onNodeWithText("Stop stream").assertIsDisplayed()
     }
 }

@@ -10,3 +10,12 @@ sealed interface StreamState {
     data object Stopping : StreamState
     data class Failed(val failure: StreamFailure) : StreamState
 }
+
+val StreamState.isSessionActive: Boolean
+    get() = this is StreamState.Connecting ||
+        this is StreamState.Streaming ||
+        this is StreamState.Stopping
+
+val StreamState.requiresStopConfirmation: Boolean
+    get() = this is StreamState.Connecting ||
+        this is StreamState.Streaming

@@ -1,0 +1,94 @@
+name: Release artifacts
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  verify-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify tag version
+        if: github.ref_type == 'tag'
+        run: test "v$(tr -d '[:space:]' < VERSION)" = "${GITHUB_REF_NAME}"
+
+  android:
+    needs: verify-version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK packages
+        run: sdkmanager "platforms;android-37" "build-tools;36.0.0" "platform-tools"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build signed release APK
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_SIGNING_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_SIGNING_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          test -n "${ANDROID_KEYSTORE_BASE64}"
+          test -n "${ANDROID_SIGNING_STORE_PASSWORD}"
+          test -n "${ANDROID_SIGNING_KEY_ALIAS}"
+          test -n "${ANDROID_SIGNING_KEY_PASSWORD}"
+          signing_file="${RUNNER_TEMP}/mobile-webcam-release.jks"
+          printf '%s' "${ANDROID_KEYSTORE_BASE64}" | base64 --decode >"${signing_file}"
+          export ANDROID_SIGNING_STORE_FILE="${signing_file}"
+          ./android/gradlew -p android assembleRelease --console=plain
+          apk="android/app/build/outputs/apk/release/app-release.apk"
+          test -f "${apk}"
+          mkdir -p dist
+          cp "${apk}" "dist/mobile-webcam-${GITHUB_REF_NAME}.apk"
+          sha256sum "dist/mobile-webcam-${GITHUB_REF_NAME}.apk" \
+            >"dist/mobile-webcam-${GITHUB_REF_NAME}.apk.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-release
+          path: dist/
+
+  native:
+    needs: verify-version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake g++ pkg-config file tar \
+            libobs-dev \
+            libavcodec-dev libavutil-dev libswscale-dev \
+            libva-dev libva-drm2 libdrm-dev libjansson-dev
+      - name: Build Linux x86_64 plugin package
+        run: ./scripts/release/package-linux-plugin.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-x86_64-release
+          path: build/release/*
+
+  publish:
+    if: github.ref_type == 'tag'
+    needs:
+      - android
+      - native
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" dist/* --title "CamBridge ${GITHUB_REF_NAME}" --generate-notes

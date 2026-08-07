@@ -1,0 +1,32 @@
+name: Native OBS source
+
+on:
+  push:
+    paths:
+      - "desktop/hosts/obs/direct-webcam-source/**"
+      - "protocol/**"
+      - "scripts/linux/build-direct-webcam-plugin.sh"
+      - ".github/workflows/native.yml"
+  pull_request:
+    paths:
+      - "desktop/hosts/obs/direct-webcam-source/**"
+      - "protocol/**"
+      - "scripts/linux/build-direct-webcam-plugin.sh"
+      - ".github/workflows/native.yml"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake g++ pkg-config libobs-dev \
+            libavcodec-dev libavutil-dev libswscale-dev \
+            libva-dev libva-drm2 libdrm-dev libjansson-dev
+      - name: Build and test native source
+        run: ./scripts/linux/build-direct-webcam-plugin.sh
+      - name: Check native module dependencies
+        run: ldd -r build/direct-webcam-source/staging/obs-plugins/direct-webcam-source/bin/64bit/direct-webcam-source.so

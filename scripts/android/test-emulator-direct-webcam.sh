@@ -253,6 +253,19 @@ click_stream_action() {
     fail "Android action is not present: ${content_description}"
 }
 
+wait_for_stream_setup() {
+    local ui_dump="${artifact_dir}/ui-after-stop.xml"
+    for ((attempt = 0; attempt < app_event_wait_seconds; attempt += poll_interval_seconds)); do
+        "${adb}" -s "${emulator_serial}" shell uiautomator dump /sdcard/direct-webcam-ui.xml >/dev/null 2>&1
+        "${adb}" -s "${emulator_serial}" exec-out cat /sdcard/direct-webcam-ui.xml >"${ui_dump}"
+        if rg -q 'text="Stream setup"' "${ui_dump}"; then
+            return
+        fi
+        sleep "${poll_interval_seconds}"
+    done
+    fail "Android did not return to the Stream setup screen"
+}
+
 stream_started_count=0
 stream_released_count=0
 for ((cycle = 1; cycle <= lifecycle_cycles; cycle += 1)); do
@@ -260,9 +273,11 @@ for ((cycle = 1; cycle <= lifecycle_cycles; cycle += 1)); do
     stream_started_count=$((stream_started_count + 1))
     wait_for_event_count "stream_started" "${stream_started_count}"
     sleep "${stream_wait_seconds}"
-    click_stream_action "Stop camera"
+    click_stream_action "Stop stream"
+    click_stream_action "Confirm stop stream"
     stream_released_count=$((stream_released_count + 1))
     wait_for_event_count "stream_resources_released" "${stream_released_count}"
+    wait_for_stream_setup
 done
 refresh_app_log
 

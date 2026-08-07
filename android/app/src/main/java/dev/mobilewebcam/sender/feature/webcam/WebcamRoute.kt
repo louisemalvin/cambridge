@@ -3,6 +3,7 @@ package dev.mobilewebcam.sender.feature.webcam
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
@@ -22,6 +23,8 @@ import dev.mobilewebcam.sender.app.model.SenderUiEffect
 fun WebcamRoute(
     onNavigateToSettings: () -> Unit,
     onNavigateToStreamSetup: () -> Unit,
+    onRequestStopStream: () -> Unit,
+    onNavigateBack: () -> Unit,
     onCopyDiagnostics: (String) -> Unit,
 ) {
     val context = LocalContext.current
@@ -40,6 +43,7 @@ fun WebcamRoute(
     LaunchedEffect(cameraPermissionGranted) {
         viewModel.setCameraPermissionGranted(cameraPermissionGranted)
     }
+    BackHandler(onBack = onNavigateBack)
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
             when (effect) {
@@ -57,9 +61,8 @@ fun WebcamRoute(
         onAction = { action ->
             when (action) {
                 SenderScreenAction.OpenSettings -> onNavigateToSettings()
-                SenderScreenAction.StopStream -> {
-                    viewModel.onAction(action)
-                    onNavigateToStreamSetup()
+                SenderScreenAction.RequestStopStream -> {
+                    onRequestStopStream()
                 }
                 SenderScreenAction.StartStream -> onNavigateToStreamSetup()
                 else -> viewModel.onAction(action)

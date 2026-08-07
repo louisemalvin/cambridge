@@ -7,9 +7,13 @@ import android.widget.Toast
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -19,8 +23,11 @@ import dev.mobilewebcam.sender.app.navigation.AppNavigation
 import dev.mobilewebcam.sender.app.navigation.rememberAppBackStack
 import dev.mobilewebcam.sender.app.startup.StartupStateResolver
 import dev.mobilewebcam.sender.connection.SenderConnectionCoordinator
+import dev.mobilewebcam.sender.feature.webcam.overlays.EndStreamConfirmationDialog
 import dev.mobilewebcam.sender.model.SenderSettingsRepository
-import dev.mobilewebcam.sender.model.StreamState
+import dev.mobilewebcam.sender.model.isSessionActive
+import dev.mobilewebcam.sender.model.requiresStopConfirmation
+import kotlinx.coroutines.launch
 
 @Composable
 fun SenderApp(
@@ -30,16 +37,44 @@ fun SenderApp(
     val context = LocalContext.current
     val senderSettings by settings.state.collectAsState()
     val streamState by connectionCoordinator.streamState.collectAsState()
-    val isStreaming = streamState is StreamState.Streaming
-    val initialDestination = remember(senderSettings.receiverEndpoint, isStreaming) {
-        StartupStateResolver(
-            hasConfiguredReceiver = senderSettings.receiverEndpoint != null,
-            hasActiveStream = isStreaming,
-        ).resolveInitialDestination()
-    }
+    val initialDestination = StartupStateResolver(
+        hasConfiguredReceiver = senderSettings.receiverEndpoint != null,
+        hasActiveStream = streamState.isSessionActive,
+    ).resolveInitialDestination()
     val backStack = rememberAppBackStack(initialDestination)
+    val coroutineScope = rememberCoroutineScope()
+    var isEndStreamConfirmationVisible by rememberSaveable { mutableStateOf(false) }
     val diagnosticsClipboardLabel = stringResource(R.string.diagnostics_clipboard_label)
     val errorDetailsCopiedMessage = stringResource(R.string.error_details_copied)
+
+    LaunchedEffect(streamState) {
+        if (!streamState.requiresStopConfirmation) {
+            isEndStreamConfirmationVisible = false
+        }
+    }
+
+    fun requestStopStream() {
+        if (streamState.requiresStopConfirmation) {
+            isEndStreamConfirmationVisible = true
+        }
+    }
+
+    fun navigateBackFromWebcam() {
+        if (streamState.requiresStopConfirmation) {
+            isEndStreamConfirmationVisible = true
+        } else if (!streamState.isSessionActive) {
+            backStack.replaceWithStreamSetup()
+        }
+    }
+
+    fun confirmStopStream() {
+        isEndStreamConfirmationVisible = false
+        coroutineScope.launch {
+            if (connectionCoordinator.stop().isSuccess) {
+                backStack.replaceWithStreamSetup()
+            }
+        }
+    }
 
     dev.mobilewebcam.sender.app.theme.MobileWebcamTheme {
         Surface(modifier = Modifier.fillMaxSize()) {
@@ -50,6 +85,8 @@ fun SenderApp(
                 onNavigateToSettings = { backStack.navigateTo(AppDestination.Settings) },
                 onNavigateToPairing = { backStack.popToPairing() },
                 onNavigateBack = { backStack.pop() },
+                onRequestStopStream = ::requestStopStream,
+                onNavigateBackFromWebcam = ::navigateBackFromWebcam,
                 onCopyDiagnostics = { details ->
                     context.copyDiagnostics(
                         label = diagnosticsClipboardLabel,
@@ -57,6 +94,12 @@ fun SenderApp(
                         copiedMessage = errorDetailsCopiedMessage,
                     )
                 },
+            )
+        }
+        if (isEndStreamConfirmationVisible) {
+            EndStreamConfirmationDialog(
+                onDismissRequest = { isEndStreamConfirmationVisible = false },
+                onConfirm = ::confirmStopStream,
             )
         }
     }

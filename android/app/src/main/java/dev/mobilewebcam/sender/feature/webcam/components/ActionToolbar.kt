@@ -133,7 +133,7 @@ private fun PreviewActionButtons(
         PreviewActionButton(
             icon = Icons.Outlined.StopCircle,
             contentDescription = stopContentDescription,
-            onClick = { onAction(SenderScreenAction.StopStream) },
+            onClick = { onAction(SenderScreenAction.RequestStopStream) },
         )
     }
 }

@@ -71,7 +71,6 @@ class SettingsViewModel @Inject constructor(
             is SenderScreenAction.LensSelected -> selectPhysicalLens(action.key)
             is SenderScreenAction.StabilizationChanged -> setStabilizationEnabled(action.enabled)
             is SenderScreenAction.AntiFlickerChanged -> setAntiFlickerMode(action.mode)
-            SenderScreenAction.StopStream -> stop()
             SenderScreenAction.ForgetReceiver -> forgetReceiver()
             SenderScreenAction.CopyDiagnostics -> copyDiagnostics()
             else -> Unit
@@ -109,10 +108,6 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.Default) {
             cameraController.selectPhysicalLens(lens)
         }
-    }
-
-    private fun stop() {
-        viewModelScope.launch { coordinator.stop() }
     }
 
     private fun forgetReceiver() {

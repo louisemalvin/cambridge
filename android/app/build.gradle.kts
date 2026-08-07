@@ -8,8 +8,28 @@ plugins {
     alias(libs.plugins.hilt.android)
 }
 
-val deploymentJson = JsonSlurper().parse(rootProject.file("../protocol/direct-stream-deployment.json")) as Map<*, *>
+val deploymentFile = rootProject.file("../protocol/direct-stream-deployment.local.json")
+    .takeIf { it.isFile }
+    ?: rootProject.file("../protocol/direct-stream-deployment.json")
+val deploymentJson = JsonSlurper().parse(deploymentFile) as Map<*, *>
 val deploymentComputer = deploymentJson["computer"] as Map<*, *>
+val releaseVersion = rootProject.file("../VERSION").readText().trim()
+require(releaseVersion.isNotBlank()) { "VERSION must contain a release version" }
+
+val signingStoreFile = System.getenv("ANDROID_SIGNING_STORE_FILE")
+val signingStorePassword = System.getenv("ANDROID_SIGNING_STORE_PASSWORD")
+val signingKeyAlias = System.getenv("ANDROID_SIGNING_KEY_ALIAS")
+val signingKeyPassword = System.getenv("ANDROID_SIGNING_KEY_PASSWORD")
+val signingValues = listOf(
+    signingStoreFile,
+    signingStorePassword,
+    signingKeyAlias,
+    signingKeyPassword,
+)
+val releaseSigningConfigured = signingValues.all { !it.isNullOrBlank() }
+require(signingValues.all { it.isNullOrBlank() } || releaseSigningConfigured) {
+    "Android release signing requires all ANDROID_SIGNING_* values"
+}
 
 fun buildConfigString(value: Any?): String {
     val escaped = value.toString().replace("\\", "\\\\").replace("\"", "\\\"")
@@ -25,7 +45,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = 1
-        versionName = "0.1.0"
+        versionName = releaseVersion
 
         buildConfigField("String", "DIRECT_COMPUTER_ID", buildConfigString(deploymentComputer["id"]))
         buildConfigField(
@@ -39,9 +59,23 @@ android {
         vectorDrawables.useSupportLibrary = true
     }
 
+    signingConfigs {
+        if (releaseSigningConfigured) {
+            create("release") {
+                storeFile = file(signingStoreFile!!)
+                storePassword = signingStorePassword
+                keyAlias = signingKeyAlias
+                keyPassword = signingKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            if (releaseSigningConfigured) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",

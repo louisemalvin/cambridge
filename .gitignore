@@ -12,10 +12,19 @@
 .idea/
 
 # Generated and local files
+/build/
 .artifacts/
 .DS_Store
 *.log
 *.swp
+**/__pycache__/
+protocol/direct-stream-deployment.local.json
+/.tasks/
+/android/skills/
+/desktop-screen*.png
+/screenshot.png
+/AGENTS.md
+/desktop/receiver-core/README.md
 
 # Android signing material
 *.jks

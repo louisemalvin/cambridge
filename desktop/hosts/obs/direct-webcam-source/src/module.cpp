@@ -6,7 +6,7 @@ extern "C" {
 }
 
 OBS_DECLARE_MODULE()
-OBS_MODULE_AUTHOR("Mobile Webcam contributors")
+OBS_MODULE_AUTHOR("Louise Tanaka")
 
 namespace {
 
@@ -18,7 +18,7 @@ namespace {
 #endif
 
 constexpr char kSourceId[] = "direct_android_rtp_webcam";
-constexpr char kSourceName[] = "Phone Webcam";
+constexpr char kSourceName[] = "CamBridge";
 
 const char *source_name(void *)
 {

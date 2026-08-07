@@ -4,7 +4,10 @@ set -euo pipefail
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_root=$(cd -- "${script_dir}/../.." && pwd)
 contract_json="${repo_root}/protocol/direct-stream-contract.json"
-deployment_json="${repo_root}/protocol/direct-stream-deployment.json"
+deployment_json="${DIRECT_WEBCAM_DEPLOYMENT_FILE:-${repo_root}/protocol/direct-stream-deployment.local.json}"
+if [[ ! -f "${deployment_json}" ]]; then
+    deployment_json="${repo_root}/protocol/direct-stream-deployment.json"
+fi
 mode="check"
 
 usage() {
@@ -40,6 +43,10 @@ control_port=$(jq -er '.defaults.controlPort' "${contract_json}")
 media_port=$((control_port + $(jq -er '.defaults.mediaPortOffset' "${contract_json}")))
 computer_interface=$(jq -er '.computer.interface' "${deployment_json}")
 source_cidr=$(jq -er '.computer.sourceCidr' "${deployment_json}")
+[[ -n "${computer_interface}" && -n "${source_cidr}" ]] || {
+    printf 'error: configure protocol/direct-stream-deployment.local.json or set DIRECT_WEBCAM_DEPLOYMENT_FILE\n' >&2
+    exit 1
+}
 
 if ((EUID == 0)); then
     ufw_command=(ufw)

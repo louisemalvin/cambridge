@@ -19,8 +19,10 @@ The debug APK is written to:
 android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-The sender presents one configured OBS computer from
-[`protocol/direct-stream-deployment.json`](../../protocol/direct-stream-deployment.json).
+The public build contains no workstation address. It discovers the OBS source
+on the local network through the direct-webcam service. Developers who need a
+fixed local endpoint can create the ignored
+`protocol/direct-stream-deployment.local.json` override before building.
 If no computer is configured, the pairing screen leads to Stream setup. The
 setup screen lets the user choose the supported quality and one of four
 explicit orientations—Landscape, Landscape (Reversed), Portrait, or Portrait

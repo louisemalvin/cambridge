@@ -1,8 +1,10 @@
-# Mobile Webcam
+# CamBridge
 
-Mobile Webcam sends camera video through one bounded, low-latency direct stream
+CamBridge sends camera video through one bounded, low-latency direct stream
 to a configured receiver. The current product is an Android sender and a
 native Linux OBS host:
+
+CamBridge by [@louisemalvin](https://github.com/louisemalvin).
 
 ```text
 Camera2 -> MediaCodec H.264 -> RTP/H.264 over UDP -> FFmpeg H.264 decoder
@@ -15,6 +17,18 @@ session and drops stale work instead of building an unbounded queue.
 The normal quality choices are 1080p and 2K, each with 15 or 30 fps where the
 catalog provides that combination. 720p30 is retained only for the named AVD
 smoke test.
+
+## Release 1 support
+
+Release 1 supports an Android sender and a Linux x86_64/amd64 OBS source. The
+downloadable Linux plugin is built and tested against the latest OBS Studio
+version installed in the release environment; the exact version and native
+library requirements are recorded with each release. ARM/ARM64 builds are
+planned for a later release.
+
+The sender and OBS source communicate on a trusted local network without
+authentication or encryption. Do not expose the control or media ports to the
+internet.
 
 ## Repository
 
@@ -61,9 +75,9 @@ Build and stage the plugin with:
 ```
 
 Install the staged plugin using the OBS plugin directory layout documented in
-[Linux/OBS setup](docs/platforms/linux-obs.md), then add the `Phone Webcam`
+[Linux/OBS setup](docs/platforms/linux-obs.md), then add the `CamBridge`
 source in OBS.
-Its normal settings are already configured. Open the Phone Webcam app on the
+Its normal settings are already configured. Open the CamBridge app on the
 phone, choose the stream quality and orientation, and press Start stream. No
 OBS transport or decoder settings need to be changed.
 
@@ -76,3 +90,7 @@ OBS transport or decoder settings need to be changed.
 - [Testing](docs/operations/testing.md)
 - [Diagnostics](docs/operations/diagnostics.md)
 - [Known limitations](docs/operations/known-limitations.md)
+- [Open-source release contract](docs/release-contract.md)
+- [Release packaging](docs/release.md)
+- [Repository boundary](docs/repository-boundary.md)
+- [Security policy](SECURITY.md)

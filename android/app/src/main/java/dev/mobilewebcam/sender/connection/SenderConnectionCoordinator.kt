@@ -13,6 +13,7 @@ import dev.mobilewebcam.sender.model.ReceiverCapabilities
 import dev.mobilewebcam.sender.model.ReceiverProbeState
 import dev.mobilewebcam.sender.model.SenderSettingsRepository
 import dev.mobilewebcam.sender.model.StreamState
+import dev.mobilewebcam.sender.model.isSessionActive
 import dev.mobilewebcam.sender.session.StreamSessionController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
@@ -64,10 +65,7 @@ class SenderConnectionCoordinator(
             if (!receiverEndpoint.isValid()) {
                 return@withLock false
             }
-            if (stateFlow.value == StreamState.Connecting ||
-                stateFlow.value is StreamState.Streaming ||
-                stateFlow.value == StreamState.Stopping
-            ) {
+            if (stateFlow.value.isSessionActive) {
                 false
             } else {
                 endpoint = receiverEndpoint

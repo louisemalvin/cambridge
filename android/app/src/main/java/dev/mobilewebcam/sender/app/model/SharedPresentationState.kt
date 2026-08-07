@@ -129,7 +129,7 @@ sealed interface SenderScreenAction {
     data object CheckReceiver : SenderScreenAction
     data object OpenStreamSetup : SenderScreenAction
     data object StartStream : SenderScreenAction
-    data object StopStream : SenderScreenAction
+    data object RequestStopStream : SenderScreenAction
     data object ForgetReceiver : SenderScreenAction
     data object CopyDiagnostics : SenderScreenAction
 }

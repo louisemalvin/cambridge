@@ -9,6 +9,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import dev.mobilewebcam.sender.R
 
 class NotificationFactory(private val context: Context) {
     fun createStreamingNotification(): Notification {
@@ -23,7 +24,7 @@ class NotificationFactory(private val context: Context) {
         )
         return Notification.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.presence_video_online)
-            .setContentTitle("Mobile Webcam")
+            .setContentTitle(context.getString(R.string.app_name))
             .setContentText("Streaming camera video")
             .setOngoing(true)
             .setCategory(Notification.CATEGORY_SERVICE)

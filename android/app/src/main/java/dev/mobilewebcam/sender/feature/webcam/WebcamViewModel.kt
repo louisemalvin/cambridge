@@ -83,7 +83,6 @@ class WebcamViewModel @Inject constructor(
                 it.copy(isPermissionDialogOpen = false)
             }
             SenderScreenAction.RequestCameraPermission -> requestCameraPermission()
-            SenderScreenAction.StopStream -> stop()
             SenderScreenAction.CopyDiagnostics -> copyDiagnostics()
             else -> Unit
         }
@@ -134,10 +133,6 @@ class WebcamViewModel @Inject constructor(
     private fun requestCameraPermission() {
         localState.update { it.copy(isPermissionDialogOpen = false) }
         effectFlow.tryEmit(SenderUiEffect.RequestCameraPermission)
-    }
-
-    private fun stop() {
-        viewModelScope.launch { coordinator.stop() }
     }
 
     private fun copyDiagnostics() {

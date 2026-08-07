@@ -1,9 +1,9 @@
 {
   "computer": {
-    "id": "workstation-obs",
-    "displayName": "OBS computer",
-    "address": "192.168.1.149",
-    "interface": "eth0",
-    "sourceCidr": "192.168.1.0/24"
+    "id": "obs-direct-webcam-source",
+    "displayName": "OBS receiver",
+    "address": "",
+    "interface": "",
+    "sourceCidr": ""
   }
 }

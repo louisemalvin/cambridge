@@ -11,7 +11,7 @@ import dev.mobilewebcam.sender.app.model.SenderUiEffect
 @Composable
 fun SettingsRoute(
     onNavigateBack: () -> Unit,
-    onNavigateToStreamSetup: () -> Unit,
+    onRequestStopStream: () -> Unit,
     onNavigateToPairing: () -> Unit,
     onCopyDiagnostics: (String) -> Unit,
 ) {
@@ -33,9 +33,8 @@ fun SettingsRoute(
         onAction = { action ->
             if (action == SenderScreenAction.CloseSettings) {
                 onNavigateBack()
-            } else if (action == SenderScreenAction.StopStream) {
-                viewModel.onAction(action)
-                onNavigateToStreamSetup()
+            } else if (action == SenderScreenAction.RequestStopStream) {
+                onRequestStopStream()
             } else {
                 viewModel.onAction(action)
             }

@@ -25,13 +25,19 @@ The OBS-compatible staged layout is:
 staging/obs-plugins/direct-webcam-source/bin/64bit/direct-webcam-source.so
 ```
 
+To create the downloadable Release 1 x86_64 package, run:
+
+```bash
+./scripts/release/package-linux-plugin.sh
+```
+
 For a local OBS profile, copy that file to:
 
 ```text
 ~/.config/obs-studio/plugins/direct-webcam-source/bin/64bit/direct-webcam-source.so
 ```
 
-Then add the `Phone Webcam` source in OBS. Its normal settings are already
+Then add the `CamBridge` source in OBS. Its normal settings are already
 configured, so the user does not need to change decoder or network settings.
 The `scripts/linux/direct-webcam-test-scene.json` file is a valid isolated OBS
 scene collection template for smoke testing. It uses a 2560x1440 canvas and
@@ -40,8 +46,13 @@ stretch or crop.
 
 ## LAN firewall
 
-The source listens on the contract-backed control and media ports. Inspect the
-scoped UFW rules with:
+The source listens on the contract-backed control and media ports. The public
+repository does not contain a workstation interface or LAN address. To use the
+helper, create the ignored
+`protocol/direct-stream-deployment.local.json` file, or point the helper at a
+local deployment file with `DIRECT_WEBCAM_DEPLOYMENT_FILE`.
+
+Inspect the scoped UFW rules with:
 
 ```bash
 scripts/linux/setup-direct-webcam-firewall.sh --check

@@ -316,7 +316,10 @@ internal class Camera2Capture(
                         loggedFirstCapture = true
                         logger.event(
                             "camera_first_capture_result",
-                            mapOf("sensorTimestampNs" to sensorTimestampNs),
+                            mapOf(
+                                "sensorTimestampNs" to sensorTimestampNs,
+                                "antiFlickerMode" to cameraState.value.antiFlickerMode.name,
+                            ),
                         )
                     }
                     if (captureSummaryStartNs == 0L) {

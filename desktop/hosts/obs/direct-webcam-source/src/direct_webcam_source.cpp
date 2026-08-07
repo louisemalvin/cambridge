@@ -611,7 +611,7 @@ obs_properties_t *source_get_properties(void *data)
     auto *source = static_cast<DirectWebcamSource *>(data);
     obs_properties_t *properties = obs_properties_create();
     obs_properties_add_text(properties, kPropertySetupInfo,
-                             "Open the Phone Webcam app on your phone and start video. No OBS settings are required.",
+                             "Open the CamBridge app on your phone and start video. No OBS settings are required.",
                              OBS_TEXT_INFO);
     obs_properties_t *advanced_properties = obs_properties_create();
     obs_properties_add_int(advanced_properties, kPropertyControlPort, "Control port", contract::kMinimumPort,

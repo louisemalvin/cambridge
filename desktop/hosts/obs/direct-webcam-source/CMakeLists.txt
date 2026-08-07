@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(direct-webcam-source VERSION 0.2.0 LANGUAGES CXX)
+set(release_version_file "${CMAKE_CURRENT_SOURCE_DIR}/../../../../VERSION")
+file(READ "${release_version_file}" direct_webcam_release_version)
+string(STRIP "${direct_webcam_release_version}" direct_webcam_release_version)
+project(direct-webcam-source VERSION "${direct_webcam_release_version}" LANGUAGES CXX)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(OBS REQUIRED IMPORTED_TARGET libobs)

@@ -159,7 +159,7 @@ fun SettingsScreen(
             ) {
                 item {
                     Button(
-                        onClick = { onAction(SenderScreenAction.StopStream) },
+                        onClick = { onAction(SenderScreenAction.RequestStopStream) },
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(top = SETTINGS_STOP_TOP_PADDING.dp),

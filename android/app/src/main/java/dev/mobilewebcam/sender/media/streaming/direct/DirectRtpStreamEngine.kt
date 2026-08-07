@@ -359,7 +359,11 @@ class DirectRtpStreamEngine(
                     }
                 }
             }.onFailure { error -> emit("encoder_output_failed", mapOf("reason" to error.message)) }
-            codec.releaseOutputBuffer(index, false)
+            runCatching {
+                codec.releaseOutputBuffer(index, false)
+            }.onFailure { error ->
+                emit("encoder_output_release_failed", mapOf("reason" to error.message))
+            }
         }
 
         override fun onOutputFormatChanged(codec: MediaCodec, format: MediaFormat) {

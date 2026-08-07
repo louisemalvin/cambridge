@@ -19,6 +19,8 @@ fun AppNavigation(
     onNavigateToSettings: () -> Unit,
     onNavigateToPairing: () -> Unit,
     onNavigateBack: () -> Unit,
+    onRequestStopStream: () -> Unit,
+    onNavigateBackFromWebcam: () -> Unit,
     onCopyDiagnostics: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -26,7 +28,9 @@ fun AppNavigation(
         backStack = backStack.elements,
         modifier = modifier,
         onBack = {
-            if (!backStack.pop()) {
+            if (backStack.current == AppDestination.Webcam) {
+                onNavigateBackFromWebcam()
+            } else if (!backStack.pop()) {
                 onNavigateBack()
             }
         },
@@ -49,13 +53,15 @@ fun AppNavigation(
                     WebcamRoute(
                         onNavigateToSettings = onNavigateToSettings,
                         onNavigateToStreamSetup = onNavigateToStreamSetup,
+                        onRequestStopStream = onRequestStopStream,
+                        onNavigateBack = onNavigateBackFromWebcam,
                         onCopyDiagnostics = onCopyDiagnostics,
                     )
                 }
                 AppDestination.Settings -> NavEntry(destination) {
                     SettingsRoute(
                         onNavigateBack = onNavigateBack,
-                        onNavigateToStreamSetup = onNavigateToStreamSetup,
+                        onRequestStopStream = onRequestStopStream,
                         onNavigateToPairing = onNavigateToPairing,
                         onCopyDiagnostics = onCopyDiagnostics,
                     )

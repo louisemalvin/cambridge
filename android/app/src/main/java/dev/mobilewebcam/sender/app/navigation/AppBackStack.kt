@@ -44,7 +44,7 @@ class AppBackStack(
 
 @Composable
 fun rememberAppBackStack(initialDestination: AppDestination): AppBackStack {
-    return remember(initialDestination) {
+    return remember {
         AppBackStack(initialDestination)
     }
 }

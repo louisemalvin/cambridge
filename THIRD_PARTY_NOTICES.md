@@ -1,19 +1,17 @@
 # Third-party notices
 
-Phase 1 uses the following third-party components. This is an engineering
-inventory, not a final commercial distribution review.
+This is an engineering inventory for the direct Android-to-OBS path.
 
-| Component | Use | License | Source |
-| --- | --- | --- | --- |
-| RootEncoder 2.8.0 | Android hardware encode and MPEG-TS/SRT transport adapter | Apache-2.0 | https://github.com/pedroSG94/RootEncoder |
-| GStreamer | Desktop demux, parse, decode, convert, and sink pipeline | LGPL-2.1-or-later | https://gstreamer.freedesktop.org/ |
-| GStreamer Rust bindings | Rust API for the GStreamer pipeline and appsink | MIT or Apache-2.0, see each crate | https://gitlab.freedesktop.org/gstreamer/gstreamer-rs |
-| GTK 4 and gtk4-rs | Linux desktop receiver window and preview texture | GTK LGPL-2.1-or-later; gtk4-rs MIT or Apache-2.0 | https://www.gtk.org/ |
-| Ktor | Android HTTP control client | Apache-2.0 | https://ktor.io/ |
-| Axum, Tokio, Clap, Serde, tracing | Rust control server, CLI, serialization, and logging | MIT or Apache-2.0, see each crate | https://crates.io/ |
-| Rust crates | Other receiver implementation dependencies | See Cargo metadata and each crate license | https://crates.io/ |
-| AndroidX and Jetpack Compose | Android UI and lifecycle | Apache-2.0 | https://developer.android.com/ |
+| Component | Use | License/source |
+| --- | --- | --- |
+| Android Camera2 and MediaCodec | Camera capture and H.264 encoding | Android SDK terms |
+| AndroidX and Jetpack Compose | Android lifecycle and UI | Apache-2.0 |
+| Kotlin coroutines and serialization | Async work and control JSON | Apache-2.0 |
+| OBS Studio libobs | Native source host and texture API | GPL-2.0-or-later |
+| FFmpeg libavcodec/libavutil/libswscale | H.264 decode and software NV12 conversion | LGPL-2.1-or-later or GPL-2.0-or-later depending on build options |
+| Mesa/libva and libdrm | VAAPI decode and DRM PRIME/DMA-BUF handles | MIT and related component licenses |
+| jansson | Native control JSON parsing | MIT |
 
-Before distributing binaries commercially, generate a complete dependency
-notice report for both Gradle and Cargo artifacts and review codec licensing
-and system-plugin licensing separately.
+Before distributing binaries, generate complete dependency notices for the
+Gradle and native build environments and review the selected FFmpeg and OBS
+license configurations.

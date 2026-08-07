@@ -9,7 +9,7 @@ internal fun buildFailureDiagnostics(
     failure: StreamFailure,
     cause: Throwable?,
 ): String = buildString {
-    appendLine("Mobile Webcam Android diagnostic")
+    appendLine("CamBridge Android diagnostic")
     appendLine("User message: ${StreamPresentationMapper.failureMessage(failure)}")
     appendLine("Receiver: ${receiverName ?: "not connected"}")
     appendLine(
