@@ -29,7 +29,7 @@ DIRECT_WEBCAM_BUILD_TYPE=Release \
     printf 'error: native plugin was not staged: %s\n' "${plugin_path}" >&2
     exit 1
 }
-file -b "${plugin_path}" | rg -q 'x86-64' || {
+file -b "${plugin_path}" | grep -Eq 'ELF 64-bit.*x86-64' || {
     printf 'error: native plugin is not an x86_64 ELF module\n' >&2
     exit 1
 }
