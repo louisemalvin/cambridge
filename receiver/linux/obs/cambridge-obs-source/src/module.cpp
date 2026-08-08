@@ -18,6 +18,7 @@ namespace {
 #endif
 
 constexpr char kSourceId[] = "cambridge_android_source";
+constexpr char kLegacySourceId[] = "direct_android_rtp_webcam";
 constexpr char kSourceName[] = "CamBridge";
 
 const char *source_name(void *)
@@ -44,6 +45,12 @@ bool obs_module_load(void)
     info.video_render = cambridge::source_video_render;
     info.video_tick = cambridge::source_video_tick;
     obs_register_source(&info);
+
+    obs_source_info legacy_info = info;
+    legacy_info.id = kLegacySourceId;
+    legacy_info.output_flags |= OBS_SOURCE_DEPRECATED;
+    obs_register_source(&legacy_info);
+
     blog(LOG_INFO, "[cambridge-obs] loaded module=cambridge-obs-plugin version=%s commit=%s protocol=%u",
          CAMBRIDGE_VERSION, CAMBRIDGE_GIT_COMMIT,
          static_cast<unsigned int>(cambridge::contract::kProtocolVersion));

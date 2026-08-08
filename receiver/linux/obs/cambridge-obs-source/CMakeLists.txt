@@ -13,6 +13,12 @@ pkg_check_modules(DRM REQUIRED IMPORTED_TARGET libdrm)
 pkg_check_modules(JANSSON REQUIRED IMPORTED_TARGET jansson)
 pkg_check_modules(AVAHI QUIET IMPORTED_TARGET avahi-client)
 
+option(CAMBRIDGE_REQUIRE_AVAHI "Require Avahi mDNS support when configuring the plugin" OFF)
+
+if(CAMBRIDGE_REQUIRE_AVAHI AND NOT AVAHI_FOUND)
+    message(FATAL_ERROR "Avahi development files are required for this build")
+endif()
+
 if(AVAHI_FOUND)
     message(STATUS "mDNS advertisement enabled through Avahi")
 else()
@@ -41,7 +47,7 @@ if(AVAHI_FOUND)
     target_compile_definitions(cambridge-obs-plugin PRIVATE CAMBRIDGE_HAS_AVAHI=1)
 endif()
 target_compile_options(cambridge-obs-plugin PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
-target_include_directories(cambridge-obs-plugin PRIVATE
+target_include_directories(cambridge-obs-plugin SYSTEM PRIVATE
     ${OBS_INCLUDE_DIRS}
     ${FFMPEG_INCLUDE_DIRS}
     ${VA_INCLUDE_DIRS}

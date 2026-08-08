@@ -25,8 +25,9 @@ jobs:
           sudo apt-get install -y \
             cmake g++ pkg-config libobs-dev \
             libavcodec-dev libavutil-dev libswscale-dev \
-            libva-dev libva-drm2 libdrm-dev libjansson-dev
+            libva-dev libva-drm2 libdrm-dev libjansson-dev \
+            libavahi-client-dev
       - name: Build and test native source
-        run: ./scripts/receiver/linux/build-cambridge-obs-plugin.sh
+        run: CAMBRIDGE_REQUIRE_AVAHI=ON ./scripts/receiver/linux/build-cambridge-obs-plugin.sh
       - name: Check native module dependencies
         run: ldd -r build/cambridge-obs-plugin/staging/obs-plugins/cambridge-obs-plugin/bin/64bit/cambridge-obs-plugin.so

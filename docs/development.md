@@ -14,8 +14,9 @@ The full repository checks require:
 - `libva` with the DRM backend, `libdrm`, and `jansson`
 
 The emulator smoke test additionally uses an Android emulator, `adb`, `ffmpeg`,
-`jq`, and an installed OBS binary. Avahi development files are optional; they
-enable receiver discovery advertisement on Linux.
+`jq`, and an installed OBS binary. Avahi development files are optional for
+local builds, but required for the packaged Linux receiver because they enable
+receiver discovery advertisement.
 
 ## Repository layout
 

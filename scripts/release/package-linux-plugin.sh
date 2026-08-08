@@ -20,6 +20,7 @@ command -v file >/dev/null 2>&1 || { printf 'error: file is required\n' >&2; exi
 rm -rf "${package_root}"
 mkdir -p "${artifact_dir}" "${package_root}/obs-plugins/cambridge-obs-plugin/bin/64bit"
 
+CAMBRIDGE_REQUIRE_AVAHI=ON \
 CAMBRIDGE_BUILD_DIR="${build_dir}" \
 CAMBRIDGE_STAGING_DIR="${staging_dir}" \
 CAMBRIDGE_BUILD_TYPE=Release \

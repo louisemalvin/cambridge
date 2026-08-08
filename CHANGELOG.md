@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1 — Linux discovery fix
+
+- Require Avahi development support when building the packaged Linux receiver,
+  so the plugin advertises `_cambridge._tcp` discovery services.
+- Preserve the legacy OBS source ID for existing scenes during upgrades.
+
 ## 0.2.0 — CamBridge platform layout
 
 - Renamed sender, receiver, package, and protocol identifiers to CamBridge.
