@@ -59,7 +59,10 @@ printf 'artifact=cambridge-obs-plugin\nversion=%s\nplatform=%s\nobs_libobs=%s\n'
 archive_path="${artifact_dir}/${package_name}.tar.gz"
 rm -f "${archive_path}" "${archive_path}.sha256"
 tar -C "${artifact_dir}" -czf "${archive_path}" "${package_name}"
-sha256sum "${archive_path}" >"${archive_path}.sha256"
+(
+    cd "${artifact_dir}"
+    sha256sum "$(basename "${archive_path}")" >"$(basename "${archive_path}").sha256"
+)
 
 printf 'archive=%s\n' "${archive_path}"
 printf 'checksum=%s\n' "${archive_path}.sha256"

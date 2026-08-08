@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.2 — Portable release checksums
+
+- Write Linux plugin checksums with the archive filename instead of the build
+  runner's absolute path, so they can be verified on another laptop.
+
 ## 0.2.1 — Linux discovery fix
 
 - Require Avahi development support when building the packaged Linux receiver,
