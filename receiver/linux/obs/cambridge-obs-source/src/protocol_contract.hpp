@@ -2,12 +2,13 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <array>
 #include <string_view>
 
 namespace cambridge::contract {
 
-inline constexpr std::uint32_t kProtocolVersion = 5;
+inline constexpr std::uint32_t kProtocolVersion = 6;
+inline constexpr std::uint32_t kDiscoveryVersion = 1;
+inline constexpr std::size_t kMaximumDiscoveryAddressCount = 16;
 inline constexpr std::uint32_t kMinimumGeneration = 1;
 inline constexpr std::size_t kMaximumSessionIdBytes = 128;
 inline constexpr std::size_t kMaximumErrorBytes = 512;
@@ -37,8 +38,6 @@ inline constexpr std::uint32_t kDefaultMediaPortOffset = 1;
 inline constexpr std::uint32_t kDefaultMediaPort = kDefaultControlPort + kDefaultMediaPortOffset;
 inline constexpr std::uint32_t kDefaultMaximumLongEdge = kMaximumLongEdge;
 inline constexpr std::uint32_t kDefaultMaximumShortEdge = kMaximumShortEdge;
-inline constexpr std::uint32_t kDefaultCodedWidth = 2560;
-inline constexpr std::uint32_t kDefaultCodedHeight = 1440;
 inline constexpr std::uint32_t kDefaultReorderDeadlineMs = 20;
 inline constexpr std::uint32_t kDefaultMaximumDecoderQueueAgeMs = 100;
 inline constexpr std::uint32_t kDefaultMaximumLiveFrameAgeMs = 250;
@@ -55,10 +54,16 @@ inline constexpr std::uint32_t kH264IdrNalType = 5;
 inline constexpr std::size_t kTexturePoolSlots = 3;
 
 inline constexpr char kCodecH264[] = "h264";
-inline constexpr char kDefaultProfileId[] = "2k30";
 inline constexpr char kDefaultReceiverId[] = "cambridge-obs-source";
 inline constexpr char kDefaultReceiverDisplayName[] = "OBS receiver";
 inline constexpr char kDiscoveryServiceType[] = "_cambridge._tcp";
+inline constexpr char kDiscoveryReceiverIdKey[] = "id";
+inline constexpr char kDiscoveryReceiverNameKey[] = "name";
+inline constexpr char kDiscoveryProtocolVersionKey[] = "protocolVersion";
+inline constexpr char kDiscoveryCodecKey[] = "codec";
+inline constexpr char kDiscoveryVersionKey[] = "discoveryVersion";
+inline constexpr char kDiscoveryAddressKeyPrefix[] = "address";
+inline constexpr char kDiscoveryAddressFamily[] = "ipv4";
 inline constexpr char kDefaultDrmDevice[] = "/dev/dri/renderD128";
 inline constexpr char kDefaultDecoderMode[] = "auto";
 inline constexpr char kDefaultDiagnosticsPath[] = "cambridge-diagnostics.json";
@@ -68,35 +73,5 @@ inline constexpr char kMessageStop[] = "stop";
 inline constexpr char kMessageError[] = "error";
 inline constexpr char kMessageProbe[] = "probe";
 inline constexpr char kMessageCapabilities[] = "capabilities";
-
-struct ProfileContract {
-    std::string_view id;
-    std::uint32_t width;
-    std::uint32_t height;
-    std::uint32_t fps;
-    std::uint32_t bitrate_bps;
-};
-
-inline constexpr std::uint32_t kAlternateFps = 15;
-inline constexpr std::uint32_t kDefaultFps = 30;
-inline constexpr std::size_t kProfileCount = 5;
-
-inline constexpr std::array<ProfileContract, kProfileCount> kProfiles = {{
-    {"720p30", 1280, 720, kDefaultFps, 4'000'000},
-    {"1080p30", 1920, 1080, kDefaultFps, 8'000'000},
-    {"1080p15", 1920, 1080, kAlternateFps, 4'000'000},
-    {"2k30", 2560, 1440, kDefaultFps, 18'000'000},
-    {"2k15", 2560, 1440, kAlternateFps, 9'000'000},
-}};
-
-inline constexpr const ProfileContract *find_profile(std::string_view id)
-{
-    for (const ProfileContract &profile : kProfiles) {
-        if (profile.id == id) {
-            return &profile;
-        }
-    }
-    return nullptr;
-}
 
 } // namespace cambridge::contract

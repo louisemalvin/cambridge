@@ -35,6 +35,7 @@ add_library(cambridge-obs-plugin MODULE
     src/cambridge_source.cpp
     src/media_receiver.cpp
     src/module.cpp
+    src/network_address_candidates.cpp
     src/renderer.cpp
     src/rtp.cpp
 )
@@ -98,6 +99,16 @@ if(BUILD_TESTING)
     target_link_directories(cambridge-obs-plugin-contract-tests PRIVATE ${JANSSON_LIBRARY_DIRS})
     target_link_libraries(cambridge-obs-plugin-contract-tests PRIVATE ${JANSSON_LIBRARIES})
     add_test(NAME cambridge-obs-plugin-contract-tests COMMAND cambridge-obs-plugin-contract-tests)
+
+    add_executable(cambridge-obs-plugin-address-tests
+        tests/network_address_candidates_tests.cpp
+        src/network_address_candidates.cpp
+    )
+    target_compile_features(cambridge-obs-plugin-address-tests PRIVATE cxx_std_17)
+    target_compile_options(cambridge-obs-plugin-address-tests PRIVATE
+        -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror
+    )
+    add_test(NAME cambridge-obs-plugin-address-tests COMMAND cambridge-obs-plugin-address-tests)
 endif()
 
 install(TARGETS cambridge-obs-plugin

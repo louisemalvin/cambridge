@@ -12,7 +12,6 @@ import dev.cambridge.sender.app.model.SenderUiEffect
 fun SettingsRoute(
     onNavigateBack: () -> Unit,
     onRequestStopStream: () -> Unit,
-    onNavigateToPairing: () -> Unit,
     onCopyDiagnostics: (String) -> Unit,
 ) {
     val viewModel: SettingsViewModel = hiltViewModel()
@@ -23,7 +22,6 @@ fun SettingsRoute(
             when (effect) {
                 is SenderUiEffect.CopyDiagnostics -> onCopyDiagnostics(effect.details)
                 SenderUiEffect.RequestCameraPermission -> Unit
-                SenderUiEffect.NavigateToPairing -> onNavigateToPairing()
             }
         }
     }

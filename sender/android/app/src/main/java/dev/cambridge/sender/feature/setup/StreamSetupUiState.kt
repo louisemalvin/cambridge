@@ -13,6 +13,8 @@ import dev.cambridge.sender.model.VideoProfile
 sealed interface ReceiverReadinessUiState {
     data object Checking : ReceiverReadinessUiState
 
+    data object SelectionRequired : ReceiverReadinessUiState
+
     data class Ready(
         val receiverName: UiText,
         val address: UiText,
@@ -27,10 +29,14 @@ sealed interface ReceiverReadinessUiState {
 data class StreamSetupUiState(
     val connection: ConnectionUiState = ConnectionUiState.Waiting,
     val receiverReadiness: ReceiverReadinessUiState = ReceiverReadinessUiState.Checking,
-    val receiverName: UiText? = null,
-    val profileOptions: List<SelectOptionUi> = emptyList(),
+    val manualReceiverHost: String = "",
+    val manualReceiverHostError: UiText? = null,
+    val receiverOptions: List<SelectOptionUi> = emptyList(),
+    val isManualReceiverInputVisible: Boolean = false,
+    val resolutionOptions: List<SelectOptionUi> = emptyList(),
     val frameRateOptions: List<SelectOptionUi> = emptyList(),
     val orientationOptions: List<SelectOptionUi> = emptyList(),
+    val bitrate: BitrateUiState = BitrateUiState(),
     val stabilization: StabilizationUiState = StabilizationUiState(),
     val antiFlicker: AntiFlickerUiState = AntiFlickerUiState(),
     val selectedProfile: VideoProfile,
@@ -41,5 +47,36 @@ data class StreamSetupUiState(
     val canStart: Boolean
         get() = (connection is ConnectionUiState.Waiting || connection is ConnectionUiState.Failed) &&
             receiverReadiness is ReceiverReadinessUiState.Ready &&
-            selectedProfileSupported
+            selectedProfileSupported &&
+            bitrate.isAvailable
 }
+
+@Immutable
+data class BitrateUiState(
+    val isAvailable: Boolean = false,
+    val selectedBps: Int = EMPTY_BITRATE_BPS,
+    val minimumBps: Int = EMPTY_BITRATE_BPS,
+    val maximumBps: Int = EMPTY_BITRATE_BPS,
+    val stepBps: Int = EMPTY_BITRATE_BPS,
+) {
+    val lastIndex: Int
+        get() = if (isAvailable && stepBps > EMPTY_BITRATE_BPS) {
+            (maximumBps - minimumBps) / stepBps
+        } else {
+            EMPTY_SLIDER_INDEX
+        }
+
+    val selectedIndex: Int
+        get() = if (isAvailable && stepBps > EMPTY_BITRATE_BPS) {
+            (selectedBps - minimumBps) / stepBps
+        } else {
+            EMPTY_SLIDER_INDEX
+        }
+
+    val sliderSteps: Int
+        get() = (lastIndex - SLIDER_ENDPOINT_COUNT).coerceAtLeast(EMPTY_SLIDER_INDEX)
+}
+
+private const val EMPTY_BITRATE_BPS = 0
+private const val EMPTY_SLIDER_INDEX = 0
+private const val SLIDER_ENDPOINT_COUNT = 1

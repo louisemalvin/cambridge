@@ -6,10 +6,10 @@ import org.junit.Test
 
 class StartupStateResolverTest {
     @Test
-    fun configuredReceiverRestoresStreamSetupDestination() {
+    fun noActiveStreamRestoresStreamSetupDestination() {
         assertEquals(
             AppDestination.StreamSetup,
-            StartupStateResolver(hasConfiguredReceiver = true).resolveInitialDestination(),
+            StartupStateResolver().resolveInitialDestination(),
         )
     }
 
@@ -18,17 +18,9 @@ class StartupStateResolverTest {
         assertEquals(
             AppDestination.Webcam,
             StartupStateResolver(
-                hasConfiguredReceiver = true,
                 hasActiveStream = true,
             ).resolveInitialDestination(),
         )
     }
 
-    @Test
-    fun missingReceiverStartsPairingDestination() {
-        assertEquals(
-            AppDestination.Pairing,
-            StartupStateResolver(hasConfiguredReceiver = false).resolveInitialDestination(),
-        )
-    }
 }

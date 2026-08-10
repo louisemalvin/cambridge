@@ -5,6 +5,8 @@ sealed interface ReceiverProbeState {
 
     data object Checking : ReceiverProbeState
 
+    data object SelectionRequired : ReceiverProbeState
+
     data class Available(
         val endpoint: ReceiverEndpoint,
         val capabilities: ReceiverCapabilities,

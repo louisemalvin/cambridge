@@ -6,11 +6,13 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import dev.cambridge.discovery.AndroidReceiverDiscovery
+import dev.cambridge.discovery.ReceiverDiscovery
+import dev.cambridge.discovery.ReceiverDiscoveryConfig
 import dev.cambridge.sender.connection.SenderConnectionCoordinator
-import dev.cambridge.sender.connection.control.ReceiverDiscovery
 import dev.cambridge.sender.connection.control.ReceiverProbe
 import dev.cambridge.sender.connection.control.cambridge.CamBridgeReceiverProbe
-import dev.cambridge.sender.connection.discovery.AndroidReceiverDiscovery
+import dev.cambridge.sender.connection.control.cambridge.CamBridgeStreamContract
 import dev.cambridge.sender.model.SenderSettingsRepository
 import dev.cambridge.sender.deployment.CamBridgeDeployment
 import dev.cambridge.sender.session.StreamSessionController
@@ -27,7 +29,15 @@ object ConnectionModule {
     @Singleton
     fun provideReceiverDiscovery(
         @ApplicationContext context: Context,
-    ): ReceiverDiscovery = AndroidReceiverDiscovery(context)
+    ): ReceiverDiscovery = AndroidReceiverDiscovery(
+        context = context,
+        config = ReceiverDiscoveryConfig(
+            serviceType = CamBridgeStreamContract.DISCOVERY_SERVICE_TYPE,
+            addressAttributePrefix = CamBridgeStreamContract.DISCOVERY_ADDRESS_KEY_PREFIX,
+            maximumAddressAttributeCount = CamBridgeStreamContract.MAXIMUM_DISCOVERY_ADDRESS_COUNT,
+            addressFamily = CamBridgeStreamContract.DISCOVERY_ADDRESS_FAMILY,
+        ),
+    )
 
     @Provides
     @Singleton

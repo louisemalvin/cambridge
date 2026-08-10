@@ -1,8 +1,12 @@
 package dev.cambridge.sender
 
+import dev.cambridge.discovery.DiscoveredReceiverEndpoint
+import dev.cambridge.discovery.EmptyReceiverDiscovery
+import dev.cambridge.discovery.ReceiverDiscovery
+import dev.cambridge.discovery.ReceiverDiscoveryPhase
+import dev.cambridge.discovery.ReceiverDiscoverySnapshot
 import dev.cambridge.sender.connection.SenderConnectionCoordinator
 import dev.cambridge.sender.connection.control.ReceiverProbe
-import dev.cambridge.sender.connection.control.ReceiverDiscovery
 import dev.cambridge.sender.connection.control.cambridge.CamBridgeStreamContract
 import dev.cambridge.sender.logging.AppLogger
 import dev.cambridge.sender.model.OutputPixelFormat
@@ -24,10 +28,8 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -43,7 +45,6 @@ class SenderConnectionCoordinatorTest {
         assertEquals(1, controller.startCount)
         assertEquals(listOf(endpoint), controller.attemptedEndpoints)
         assertTrue(coordinator.streamState.value is StreamState.Streaming)
-        assertTrue(coordinator.hasConfiguredReceiver.value)
     }
 
     @Test
@@ -72,21 +73,6 @@ class SenderConnectionCoordinatorTest {
     }
 
     @Test
-    fun forgettingTheDesktopStopsMediaAndClearsTheEndpoint() = runTest {
-        val controller = FakeController()
-        val settings = FakeSettings()
-        val coordinator = coordinator(controller, backgroundScope, settings = settings)
-
-        assertTrue(coordinator.connectToReceiver(endpoint).isSuccess)
-        assertTrue(coordinator.forgetReceiver().isSuccess)
-
-        assertEquals(StreamState.Idle, coordinator.streamState.value)
-        assertFalse(coordinator.hasConfiguredReceiver.value)
-        assertEquals(null, settings.state.value.receiverEndpoint)
-        assertEquals(1, controller.stopCount)
-    }
-
-    @Test
     fun probingReportsReceiverCapabilities() = runTest {
         val receiverProbe = FakeReceiverProbe()
         val coordinator = coordinator(controller = FakeController(), scope = backgroundScope, receiverProbe = receiverProbe)
@@ -102,9 +88,7 @@ class SenderConnectionCoordinatorTest {
     fun probingPrefersDiscoveredReceiverWhenNoEndpointIsConfigured() = runTest {
         val discoveredEndpoint = ReceiverEndpoint("10.0.0.8", endpoint.controlPort, "Discovered OBS")
         val receiverProbe = FakeReceiverProbe()
-        val discovery = object : ReceiverDiscovery {
-            override fun discover() = flowOf(discoveredEndpoint)
-        }
+        val discovery = FakeReceiverDiscovery(discoveredEndpoint)
         val coordinator = coordinator(
             controller = FakeController(),
             scope = backgroundScope,
@@ -116,12 +100,113 @@ class SenderConnectionCoordinatorTest {
         assertEquals(discoveredEndpoint.host, receiverProbe.probedEndpoint?.host)
     }
 
+    @Test
+    fun configuringManualReceiverHostPersistsAndProbesIt() = runTest {
+        val settings = FakeSettings()
+        val receiverProbe = FakeReceiverProbe()
+        val coordinator = coordinator(
+            controller = FakeController(),
+            scope = backgroundScope,
+            settings = settings,
+            receiverProbe = receiverProbe,
+        )
+
+        assertTrue(coordinator.configureReceiverHost("10.0.0.24").isSuccess)
+
+        assertEquals("10.0.0.24", receiverProbe.probedEndpoint?.host)
+        assertEquals("10.0.0.24", settings.state.value.receiverEndpoint?.host)
+        assertEquals(endpoint.controlPort, settings.state.value.receiverEndpoint?.controlPort)
+        assertEquals("cambridge-obs-source", settings.state.value.receiverEndpoint?.receiverId)
+    }
+
+    @Test
+    fun multipleDiscoveredReceiversRequireAnExplicitSelection() = runTest {
+        val office = ReceiverEndpoint("10.0.0.8", endpoint.controlPort, "Office")
+        val studio = ReceiverEndpoint("10.0.0.9", endpoint.controlPort, "Studio")
+        val discovery = FakeReceiverDiscovery(office, studio)
+        val receiverProbe = FakeReceiverProbe { target ->
+            capabilities(
+                receiverId = "receiver-${target.host}",
+                displayName = target.displayName,
+            )
+        }
+        val coordinator = coordinator(
+            controller = FakeController(),
+            scope = backgroundScope,
+            receiverProbe = receiverProbe,
+            receiverDiscovery = discovery,
+        )
+
+        assertTrue(coordinator.probeReceiver().isFailure)
+
+        assertEquals(ReceiverProbeState.SelectionRequired, coordinator.receiverProbeState.value)
+        assertEquals(listOf("Office", "Studio"), coordinator.receiverCandidates.value.map {
+            it.capabilities.displayName
+        })
+        assertTrue(coordinator.startStream().isFailure)
+    }
+
+    @Test
+    fun selectedDiscoveredReceiverIsPersistedAndUsedForStart() = runTest {
+        val office = ReceiverEndpoint("10.0.0.8", endpoint.controlPort, "Office")
+        val studio = ReceiverEndpoint("10.0.0.9", endpoint.controlPort, "Studio")
+        val settings = FakeSettings()
+        val controller = FakeController()
+        val discovery = FakeReceiverDiscovery(office, studio)
+        val receiverProbe = FakeReceiverProbe { target ->
+            capabilities(
+                receiverId = "receiver-${target.host}",
+                displayName = target.displayName,
+            )
+        }
+        val coordinator = coordinator(
+            controller = controller,
+            scope = backgroundScope,
+            settings = settings,
+            receiverProbe = receiverProbe,
+            receiverDiscovery = discovery,
+        )
+        coordinator.probeReceiver()
+
+        assertTrue(coordinator.selectReceiver("receiver-${studio.host}").isSuccess)
+        assertTrue(coordinator.startStream().isSuccess)
+
+        assertEquals(studio.host, settings.state.value.receiverEndpoint?.host)
+        assertEquals("receiver-${studio.host}", settings.state.value.receiverEndpoint?.receiverId)
+        assertEquals(studio.host, controller.attemptedEndpoints.single().host)
+    }
+
+    @Test
+    fun activeDiscoveryProbesNewAddressesAndStopsWithTheSetupLifecycle() = runTest {
+        val discovery = FakeReceiverDiscovery()
+        val receiverProbe = FakeReceiverProbe()
+        val coordinator = coordinator(
+            controller = FakeController(),
+            scope = backgroundScope,
+            receiverProbe = receiverProbe,
+            receiverDiscovery = discovery,
+        )
+
+        coordinator.startReceiverDiscovery()
+        testScheduler.runCurrent()
+        discovery.publish(ReceiverEndpoint("100.64.0.10", endpoint.controlPort, "Studio OBS"))
+        testScheduler.runCurrent()
+
+        assertTrue(receiverProbe.probedEndpoints.any { probed -> probed.host == "100.64.0.10" })
+        assertEquals("OBS receiver", coordinator.activeReceiverName.value)
+
+        coordinator.stopReceiverDiscovery()
+
+        assertEquals(1, discovery.startCount)
+        assertEquals(1, discovery.stopCount)
+    }
+
     private fun coordinator(
         controller: FakeController,
         scope: kotlinx.coroutines.CoroutineScope,
         settings: FakeSettings = FakeSettings(),
         receiverProbe: ReceiverProbe = FakeReceiverProbe(),
-        receiverDiscovery: ReceiverDiscovery = dev.cambridge.sender.connection.control.EmptyReceiverDiscovery,
+        receiverDiscovery: ReceiverDiscovery = EmptyReceiverDiscovery,
     ) = SenderConnectionCoordinator(
         controller = controller,
         settings = settings,
@@ -132,19 +217,48 @@ class SenderConnectionCoordinatorTest {
         receiverDiscovery = receiverDiscovery,
     )
 
-    private class FakeReceiverProbe : ReceiverProbe {
+    private class FakeReceiverProbe(
+        private val response: (ReceiverEndpoint) -> ReceiverCapabilities = {
+            capabilities("cambridge-obs-source", "OBS receiver")
+        },
+    ) : ReceiverProbe {
         var probedEndpoint: ReceiverEndpoint? = null
+        val probedEndpoints = mutableListOf<ReceiverEndpoint>()
 
         override suspend fun probe(endpoint: ReceiverEndpoint): Result<ReceiverCapabilities> {
             probedEndpoint = endpoint
-            return Result.success(
-                ReceiverCapabilities(
-                    receiverId = "cambridge-obs-source",
-                    displayName = "OBS receiver",
-                    profileIds = listOf("1080p30", "2k30"),
-                    maxLongEdge = 3_840,
-                    maxShortEdge = 2_160,
-                ),
+            probedEndpoints += endpoint
+            return Result.success(response(endpoint))
+        }
+    }
+
+    private class FakeReceiverDiscovery(
+        vararg endpoints: ReceiverEndpoint,
+    ) : ReceiverDiscovery {
+        private val state = MutableStateFlow(
+            ReceiverDiscoverySnapshot(
+                phase = ReceiverDiscoveryPhase.RUNNING,
+                endpoints = endpoints.map { endpoint -> endpoint.toDiscoveredEndpoint() },
+            ),
+        )
+        override val snapshot: StateFlow<ReceiverDiscoverySnapshot> = state.asStateFlow()
+        var startCount = 0
+        var stopCount = 0
+
+        override fun start() {
+            startCount += 1
+            state.value = state.value.copy(phase = ReceiverDiscoveryPhase.RUNNING)
+        }
+
+        override fun stop() {
+            stopCount += 1
+            state.value = ReceiverDiscoverySnapshot.Stopped
+        }
+
+        fun publish(vararg endpoints: ReceiverEndpoint) {
+            state.value = ReceiverDiscoverySnapshot(
+                phase = ReceiverDiscoveryPhase.RUNNING,
+                endpoints = endpoints.map { endpoint -> endpoint.toDiscoveredEndpoint() },
             )
         }
     }
@@ -177,7 +291,7 @@ class SenderConnectionCoordinatorTest {
                     endpoint = endpoint,
                     selectedCodec = VideoCodec.H264,
                     profile = profile,
-                    bitrateBps = profile.h264BitrateBps,
+                    bitrateBps = profile.defaultBitrateBps,
                     mediaPort = CamBridgeStreamContract.DEFAULT_MEDIA_PORT,
                     outputPixelFormat = OutputPixelFormat.NV12,
                     warnings = emptyList(),
@@ -222,11 +336,24 @@ class SenderConnectionCoordinatorTest {
     }
 
     private companion object {
+        fun capabilities(receiverId: String, displayName: String) = ReceiverCapabilities(
+            receiverId = receiverId,
+            displayName = displayName,
+            maxLongEdge = 3_840,
+            maxShortEdge = 2_160,
+        )
+
         val endpoint = ReceiverEndpoint(
             "127.0.0.1",
             CamBridgeStreamContract.DEFAULT_CONTROL_PORT,
             "Test receiver",
         )
         const val STREAM_START_TIME = 100L
+
+        fun ReceiverEndpoint.toDiscoveredEndpoint() = DiscoveredReceiverEndpoint(
+            serviceName = displayName,
+            host = host,
+            port = controlPort,
+        )
     }
 }

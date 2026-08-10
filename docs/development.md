@@ -20,7 +20,8 @@ receiver discovery advertisement.
 
 ## Repository layout
 
-- `sender/android/` — Android sender
+- `sender/android/app/` — Android sender application
+- `sender/android/receiver-discovery/` — lifecycle-scoped Android DNS-SD library
 - `receiver/linux/obs/` — Linux OBS receiver
 - `protocol/` — shared wire contract, schema, and examples
 - `scripts/sender/` and `scripts/receiver/` — platform-specific checks and fixtures
@@ -98,7 +99,11 @@ Run the contract-conformant native fixture with the default hardware/software
 decoder selection:
 
 ```bash
-CAMBRIDGE_PROFILE_ID=2k30 \
+CAMBRIDGE_PROFILE_ID=fixture-2k30 \
+CAMBRIDGE_WIDTH=2560 \
+CAMBRIDGE_HEIGHT=1440 \
+CAMBRIDGE_FPS=30 \
+CAMBRIDGE_BITRATE_BPS=18000000 \
 CAMBRIDGE_DURATION_SECONDS=30 \
 bash scripts/receiver/linux/test-cambridge-fixture.sh
 ```
@@ -120,12 +125,19 @@ For an emulator run, use the log directory printed by the harness. Hardware
 decode may report VAAPI/DRM PRIME and direct DMA-BUF; software decode and NV12
 upload are valid fallback modes.
 
+Android camera mode ownership, stabilization behavior, and the physical A/B
+validation matrix are documented in [Android camera modes](android-camera.md).
+Receiver-discovery failures are exposed to the app coordinator and logged with
+the failed NSD operation and Android error code when one is available.
+
 ## Release packaging
 
-Maintainers create a release by updating `VERSION` and pushing a matching
-`v<version>` tag. The release workflow builds a signed Android APK named
-`cambridge-v<version>.apk` and a Linux archive named
-`cambridge-obs-plugin-<version>-linux-x86_64.tar.gz`.
+Maintainers prepare a release by updating `VERSION` and `CHANGELOG.md`, running
+the complete repository checks, and validating the Linux package with
+`./scripts/release/package-linux-plugin.sh`. Push the release commit before
+pushing its matching `v<version>` tag. The tag starts the release workflow,
+which builds a signed Android APK named `cambridge-v<version>.apk` and a Linux
+archive named `cambridge-obs-plugin-<version>-linux-x86_64.tar.gz`.
 
 Signing keys and passwords belong in the release environment or GitHub Actions
 secrets, never in the repository. The packaging script writes release files

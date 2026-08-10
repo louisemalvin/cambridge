@@ -1,7 +1,11 @@
 # CamBridge Protocol
 
-CamBridge uses protocol version **5**. The protocol identity is
+CamBridge uses protocol version **6**. The protocol identity is
 `cambridge-stream`.
+
+Protocol versions are strict compatibility boundaries. Version 6 is not
+compatible with the version 5 sender or receiver, so both release artifacts
+must be upgraded together.
 
 The authoritative machine-readable definition is
 [`protocol/cambridge-stream-contract.json`](../protocol/cambridge-stream-contract.json).
@@ -23,14 +27,23 @@ contract media-port offset, `55032` by default.
 
 When mDNS/Avahi is available, the receiver advertises `_cambridge._tcp`.
 Android can discover the service and probe it with a side-effect-free
-capabilities request before starting a stream.
+capabilities request before starting a stream. The DNS-SD SRV record supplies
+the exact control port; discovery does not scan or guess ports. Android probes
+every resolved IPv4 address for each service plus the bounded `address<N>` IPv4
+unicast candidates in its TXT metadata. The candidates let multi-homed receivers expose
+LAN and VPN routes when multicast resolution returns only one interface.
+Android deduplicates successful responses by receiver ID and requires an
+explicit choice when no saved receiver matches and more than one receiver is
+available. The default control port is used only for default or manually
+configured endpoints that have no DNS-SD record.
 
 ## Session messages
 
 The control exchange uses these message types:
 
-- `probe` and `capabilities` discover the receiver and supported profiles.
-- `hello` proposes one immutable stream session.
+- `probe` and `capabilities` discover receiver readiness, identity, and hard
+  geometry limits. Capabilities do not advertise video presets.
+- `hello` carries one immutable phone-authored stream session.
 - `accepted` returns the negotiated media port and receiver limits.
 - `stop` ends the active session.
 - `error` reports a rejected or invalid request.
@@ -39,19 +52,16 @@ Each session includes a session ID and monotonic generation. Resolution, frame
 rate, codec, bitrate, and rotation are fixed for the session; changing them
 requires a new Start after Stop.
 
-## Video profiles
+## Video configuration ownership
 
-Normal product profiles are:
+The Android sender selects a camera/encoder-supported resolution, frame rate,
+and bitrate. Those exact coded dimensions, FPS, and bitrate are carried in the
+v6 `hello` and are immutable for the session. `profileId` remains an opaque,
+sender-authored diagnostic mode ID; the receiver never looks it up.
 
-| Profile | Dimensions | Frame rate | Target bitrate |
-| --- | ---: | ---: | ---: |
-| `1080p15` | 1920×1080 | 15 fps | 4 Mbps |
-| `1080p30` | 1920×1080 | 30 fps | 8 Mbps |
-| `2k15` | 2560×1440 | 15 fps | 9 Mbps |
-| `2k30` | 2560×1440 | 30 fps | 18 Mbps |
-
-The contract also contains `720p30` for automated runtime testing; it is not
-a normal product quality choice.
+The receiver validates only the wire and configured resource bounds. It either
+accepts the exact values or returns an error; it does not negotiate presets or
+silently downgrade the stream.
 
 The sender reports clockwise rotation as `0`, `90`, `180`, or `270` degrees.
 Rotations of `90` and `270` present portrait geometry; the other rotations

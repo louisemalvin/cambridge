@@ -10,7 +10,11 @@ scene_template="${repo_root}/scripts/receiver/linux/cambridge-test-scene.json"
 profile_template="${repo_root}/scripts/receiver/linux/cambridge-test-profile.ini"
 fixture_script="${repo_root}/scripts/receiver/linux/cambridge-fixture.py"
 
-profile_id="${CAMBRIDGE_PROFILE_ID:-2k30}"
+profile_id="${CAMBRIDGE_PROFILE_ID:-fixture-2k30}"
+video_width="${CAMBRIDGE_WIDTH:-2560}"
+video_height="${CAMBRIDGE_HEIGHT:-1440}"
+video_fps="${CAMBRIDGE_FPS:-30}"
+video_bitrate_bps="${CAMBRIDGE_BITRATE_BPS:-18000000}"
 rotation_degrees="${CAMBRIDGE_ROTATION_DEGREES:-0}"
 duration_seconds="${CAMBRIDGE_DURATION_SECONDS:-60}"
 decoder_mode="${CAMBRIDGE_DECODER_MODE:-auto}"
@@ -87,10 +91,9 @@ contract_control_port=$(jq -er '.defaults.controlPort' "${contract_json}")
 media_port_offset=$(jq -er '.defaults.mediaPortOffset' "${contract_json}")
 control_port="${CAMBRIDGE_CONTROL_PORT:-${contract_control_port}}"
 media_port="${CAMBRIDGE_MEDIA_PORT:-$((control_port + media_port_offset))}"
-profile_json=$(jq -ce --arg profile_id "${profile_id}" '.profiles[] | select(.id == $profile_id)' "${contract_json}")
-profile_width=$(jq -er '.width' <<<"${profile_json}")
-profile_height=$(jq -er '.height' <<<"${profile_json}")
-profile_fps=$(jq -er '.fps' <<<"${profile_json}")
+profile_width="${video_width}"
+profile_height="${video_height}"
+profile_fps="${video_fps}"
 
 "${repo_root}/scripts/receiver/linux/build-cambridge-obs-plugin.sh" >"${artifact_dir}/plugin-build.log"
 plugin_so="${build_dir}/staging/obs-plugins/cambridge-obs-plugin/bin/64bit/cambridge-obs-plugin.so"
@@ -153,7 +156,11 @@ monitor_pid=$!
 fixture_args=(
     "${fixture_script}"
     --contract "${contract_json}"
-    --profile "${profile_id}"
+    --profile-id "${profile_id}"
+    --width "${profile_width}"
+    --height "${profile_height}"
+    --fps "${profile_fps}"
+    --bitrate-bps "${video_bitrate_bps}"
     --host 127.0.0.1
     --control-port "${control_port}"
     --media-port "${media_port}"

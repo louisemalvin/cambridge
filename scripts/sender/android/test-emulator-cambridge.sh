@@ -3,7 +3,7 @@ set -euo pipefail
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_root=$(cd -- "${script_dir}/../../.." && pwd)
-android_root="${repo_root}/android"
+android_root="${repo_root}/sender/android"
 plugin_build_dir="${repo_root}/build/cambridge-obs-plugin"
 artifact_dir=$(mktemp -d "${repo_root}/build/cambridge-emulator.XXXXXX")
 
@@ -95,13 +95,12 @@ protocol_version=$(jq -er '.protocolVersion' "${contract_json}")
 receiver_control_port=$(jq -er '.defaults.controlPort' "${contract_json}")
 media_port_offset=$(jq -er '.defaults.mediaPortOffset' "${contract_json}")
 receiver_media_port=$((receiver_control_port + media_port_offset))
-profile_id="${CAMBRIDGE_PROFILE_ID:-720p30}"
+profile_id="${CAMBRIDGE_PROFILE_ID:-fixture-720p30}"
+profile_width="${CAMBRIDGE_WIDTH:-1280}"
+profile_height="${CAMBRIDGE_HEIGHT:-720}"
+profile_fps="${CAMBRIDGE_FPS:-30}"
+camera_bitrate_bps="${CAMBRIDGE_BITRATE_BPS:-4000000}"
 rotation_degrees="${CAMBRIDGE_ROTATION_DEGREES:-0}"
-profile_json=$(jq -ce --arg profile_id "${profile_id}" '.profiles[] | select(.id == $profile_id)' "${contract_json}")
-profile_width=$(jq -er '.width' <<<"${profile_json}")
-profile_height=$(jq -er '.height' <<<"${profile_json}")
-profile_fps=$(jq -er '.fps' <<<"${profile_json}")
-camera_bitrate_bps=$(jq -er '.bitrateBps' <<<"${profile_json}")
 keyframe_interval_seconds=$(jq -er '.media.keyframeIntervalSeconds' "${contract_json}")
 camera_duration_seconds="${CAMBRIDGE_CAMERA_ASSET_SECONDS:-${camera_duration_seconds}}"
 [[ "${camera_duration_seconds}" =~ ^[1-9][0-9]*$ ]] || fail "camera asset duration must be a positive integer"
@@ -267,12 +266,12 @@ wait_for_stream_setup() {
     for ((attempt = 0; attempt < app_event_wait_seconds; attempt += poll_interval_seconds)); do
         "${adb}" -s "${emulator_serial}" shell uiautomator dump "${ui_dump_remote}" >/dev/null 2>&1
         "${adb}" -s "${emulator_serial}" exec-out cat "${ui_dump_remote}" >"${ui_dump}"
-        if rg -q 'text="Stream setup"' "${ui_dump}"; then
+        if rg -q 'text="Resolution"' "${ui_dump}"; then
             return
         fi
         sleep "${poll_interval_seconds}"
     done
-    fail "Android did not return to the Stream setup screen"
+    fail "Android did not return to the stream setup controls"
 }
 
 stream_started_count=0

@@ -6,3 +6,6 @@ plugins {
     alias(libs.plugins.ksp) apply false
     alias(libs.plugins.hilt.android) apply false
 }
+
+extra["androidCompileSdkVersion"] = 37
+extra["androidMinimumSdkVersion"] = 26

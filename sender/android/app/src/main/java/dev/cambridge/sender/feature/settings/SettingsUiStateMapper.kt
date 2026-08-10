@@ -10,7 +10,6 @@ import dev.cambridge.sender.model.StreamState
 object SettingsUiStateMapper {
     fun map(
         snapshot: StreamPresentationSnapshot,
-        hasConfiguredReceiver: Boolean,
     ): SettingsUiState {
         return SettingsUiState(
             connection = StreamPresentationMapper.connection(snapshot),
@@ -20,7 +19,6 @@ object SettingsUiStateMapper {
                 snapshot.streamState,
                 snapshot.activeReceiverName,
             ),
-            hasConfiguredReceiver = hasConfiguredReceiver,
             camera = CameraControlsUiStateMapper.map(snapshot.cameraInteraction),
             validationMessage = snapshot.validationMessage?.let(UiText::Plain),
             failureDiagnostics = (snapshot.streamState as? StreamState.Failed)?.let { failed ->

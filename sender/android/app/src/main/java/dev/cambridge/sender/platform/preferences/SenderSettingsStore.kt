@@ -2,6 +2,7 @@ package dev.cambridge.sender.platform.preferences
 
 import android.content.Context
 import dev.cambridge.sender.model.ReceiverEndpoint
+import dev.cambridge.sender.media.camera.CameraStabilizationMode
 import dev.cambridge.sender.model.SenderSettings
 import dev.cambridge.sender.model.SenderSettingsRepository
 import dev.cambridge.sender.model.StreamOrientation
@@ -24,12 +25,33 @@ class SenderSettingsStore(
 
     @Synchronized
     override fun updateProfile(profile: VideoProfile) {
-        persist(settingsFlow.value.copy(profile = profile))
+        persist(
+            settingsFlow.value.copy(
+                profile = profile,
+                bitrateBps = profile.defaultBitrateBps,
+            ),
+        )
+    }
+
+    @Synchronized
+    override fun updateBitrate(bitrateBps: Int) {
+        val current = settingsFlow.value
+        val validBitrate = current.profile.clampToStep(
+            valueBps = bitrateBps,
+            encoderMinimumBps = current.profile.minimumBitrateBps,
+            encoderMaximumBps = current.profile.maximumBitrateBps,
+        ) ?: return
+        persist(current.copy(bitrateBps = validBitrate))
     }
 
     @Synchronized
     override fun updateStreamOrientation(orientation: StreamOrientation) {
         persist(settingsFlow.value.copy(streamOrientation = orientation))
+    }
+
+    @Synchronized
+    override fun updateStabilizationMode(mode: CameraStabilizationMode) {
+        persist(settingsFlow.value.copy(stabilizationMode = mode))
     }
 
     @Synchronized
@@ -39,13 +61,24 @@ class SenderSettingsStore(
 
     private fun load(): SenderSettings {
         val profile = preferences.getString(PROFILE_KEY, null)
-            ?.let { stored -> VideoProfiles.normal.firstOrNull { it.id == stored } }
+            ?.let { stored -> VideoProfiles.all.firstOrNull { it.id == stored } }
             ?: VideoProfiles.default
+        val bitrate = preferences.getInt(BITRATE_KEY, profile.defaultBitrateBps).let { value ->
+            profile.clampToStep(
+                valueBps = value,
+                encoderMinimumBps = profile.minimumBitrateBps,
+                encoderMaximumBps = profile.maximumBitrateBps,
+            ) ?: profile.defaultBitrateBps
+        }
         return SenderSettings(
             profile = profile,
+            bitrateBps = bitrate,
             streamOrientation = preferences.getString(ORIENTATION_KEY, null)
                 ?.let { stored -> runCatching { StreamOrientation.valueOf(stored) }.getOrNull() }
                 ?: StreamOrientation.LANDSCAPE,
+            stabilizationMode = preferences.getString(STABILIZATION_MODE_KEY, null)
+                ?.let { stored -> runCatching { CameraStabilizationMode.valueOf(stored) }.getOrNull() }
+                ?: CameraStabilizationMode.OFF,
             receiverEndpoint = loadReceiverEndpoint(),
         )
     }
@@ -53,16 +86,22 @@ class SenderSettingsStore(
     private fun persist(settings: SenderSettings) {
         val editor = preferences.edit()
             .putString(PROFILE_KEY, settings.profile.id)
+            .putInt(BITRATE_KEY, settings.bitrateBps)
             .putString(ORIENTATION_KEY, settings.streamOrientation.name)
+            .putString(STABILIZATION_MODE_KEY, settings.stabilizationMode.name)
         val endpoint = settings.receiverEndpoint
         if (endpoint == null) {
             editor.remove(RECEIVER_HOST_KEY)
                 .remove(RECEIVER_PORT_KEY)
                 .remove(RECEIVER_NAME_KEY)
+                .remove(RECEIVER_ID_KEY)
         } else {
             editor.putString(RECEIVER_HOST_KEY, endpoint.host)
                 .putInt(RECEIVER_PORT_KEY, endpoint.controlPort)
                 .putString(RECEIVER_NAME_KEY, endpoint.displayName)
+            endpoint.receiverId?.let { receiverId ->
+                editor.putString(RECEIVER_ID_KEY, receiverId)
+            } ?: editor.remove(RECEIVER_ID_KEY)
         }
         editor.commit()
         settingsFlow.value = settings
@@ -77,16 +116,20 @@ class SenderSettingsStore(
             host = host,
             controlPort = port,
             displayName = displayName,
+            receiverId = preferences.getString(RECEIVER_ID_KEY, null),
         ).takeIf(ReceiverEndpoint::isValid)
     }
 
     private companion object {
         const val PREFERENCES_NAME = "sender-settings"
         const val PROFILE_KEY = "profile"
+        const val BITRATE_KEY = "bitrate-bps"
         const val ORIENTATION_KEY = "stream-orientation"
+        const val STABILIZATION_MODE_KEY = "stabilization-mode"
         const val RECEIVER_HOST_KEY = "receiver-host"
         const val RECEIVER_PORT_KEY = "receiver-port"
         const val RECEIVER_NAME_KEY = "receiver-name"
+        const val RECEIVER_ID_KEY = "receiver-id"
         const val INVALID_PORT = -1
         const val DEFAULT_RECEIVER_NAME = "Receiver"
     }

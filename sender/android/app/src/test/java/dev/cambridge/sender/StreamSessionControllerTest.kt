@@ -58,6 +58,24 @@ class StreamSessionControllerTest {
     }
 
     @Test
+    fun selectedBitrateIsPassedToTheEncoderConfiguration() = runTest {
+        val engine = FakeEngine()
+        val controller = controller(engine, FakeForeground(), backgroundScope)
+        val selectedBitrate = VideoProfiles.PROFILE_2K30.minimumBitrateBps
+
+        assertTrue(
+            controller.start(
+                endpoint = endpoint,
+                profile = VideoProfiles.PROFILE_2K30,
+                orientation = StreamOrientation.LANDSCAPE,
+                bitrateBps = selectedBitrate,
+            ).isSuccess,
+        )
+
+        assertEquals(selectedBitrate, engine.lastConfiguration?.bitrateBps)
+    }
+
+    @Test
     fun camBridgeEngineDisconnectFailsAndCleansUpTheSession() = runTest {
         val engine = FakeEngineWithEvents()
         val foreground = FakeForeground()
@@ -103,10 +121,12 @@ class StreamSessionControllerTest {
     ) : StreamEngine {
         var prepareCount = 0
         var stopCount = 0
+        var lastConfiguration: StreamConfiguration? = null
         override val events: Flow<StreamEngineEvent> = emptyFlow()
 
         override suspend fun prepare(configuration: StreamConfiguration): Result<Unit> {
             prepareCount += 1
+            lastConfiguration = configuration
             return prepareFailure?.let(Result.Companion::failure) ?: Result.success(Unit)
         }
 

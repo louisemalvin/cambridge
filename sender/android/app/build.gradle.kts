@@ -15,6 +15,21 @@ val deploymentJson = JsonSlurper().parse(deploymentFile) as Map<*, *>
 val deploymentComputer = deploymentJson["computer"] as Map<*, *>
 val releaseVersion = rootProject.file("../../VERSION").readText().trim()
 require(releaseVersion.isNotBlank()) { "VERSION must contain a release version" }
+val versionCodeComponentBase = 1_000
+val semanticVersionComponentCount = 3
+val releaseVersionComponents = releaseVersion.split('.').map { component ->
+    component.toIntOrNull() ?: error("VERSION must contain numeric semantic-version components")
+}
+require(releaseVersionComponents.size == semanticVersionComponentCount) {
+    "VERSION must use major.minor.patch format"
+}
+require(releaseVersionComponents.all { component -> component in 0 until versionCodeComponentBase }) {
+    "VERSION components must fit the Android version-code encoding"
+}
+val releaseVersionCode = releaseVersionComponents.fold(0) { encodedVersion, component ->
+    encodedVersion * versionCodeComponentBase + component
+}
+require(releaseVersionCode > 0) { "Android versionCode must be positive" }
 
 val signingStoreFile = System.getenv("ANDROID_SIGNING_STORE_FILE")
 val signingStorePassword = System.getenv("ANDROID_SIGNING_STORE_PASSWORD")
@@ -38,13 +53,13 @@ fun buildConfigString(value: Any?): String {
 
 android {
     namespace = "dev.cambridge.sender"
-    compileSdk = 37
+    compileSdk = rootProject.extra["androidCompileSdkVersion"] as Int
 
     defaultConfig {
         applicationId = "dev.cambridge.sender"
-        minSdk = 26
+        minSdk = rootProject.extra["androidMinimumSdkVersion"] as Int
         targetSdk = 35
-        versionCode = 1
+        versionCode = releaseVersionCode
         versionName = releaseVersion
 
         buildConfigField("String", "CAMBRIDGE_COMPUTER_ID", buildConfigString(deploymentComputer["id"]))
@@ -101,6 +116,7 @@ android {
 }
 
 dependencies {
+    implementation(project(":receiver-discovery"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime)

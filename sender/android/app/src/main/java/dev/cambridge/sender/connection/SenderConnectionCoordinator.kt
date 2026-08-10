@@ -1,13 +1,17 @@
 package dev.cambridge.sender.connection
 
+import dev.cambridge.discovery.DiscoveredReceiverEndpoint
+import dev.cambridge.discovery.EmptyReceiverDiscovery
+import dev.cambridge.discovery.ReceiverDiscovery
+import dev.cambridge.discovery.ReceiverDiscoveryFailure
+import dev.cambridge.discovery.ReceiverDiscoveryPhase
 import dev.cambridge.sender.deployment.CamBridgeDeployment
-import dev.cambridge.sender.connection.control.EmptyReceiverDiscovery
-import dev.cambridge.sender.connection.control.ReceiverDiscovery
 import dev.cambridge.sender.connection.control.ReceiverProbe
 import dev.cambridge.sender.connection.control.cambridge.CamBridgeReceiverProbe
 import dev.cambridge.sender.connection.control.cambridge.CamBridgeStreamContract
 import dev.cambridge.sender.logging.AndroidAppLogger
 import dev.cambridge.sender.logging.AppLogger
+import dev.cambridge.sender.model.ReceiverCandidate
 import dev.cambridge.sender.model.ReceiverEndpoint
 import dev.cambridge.sender.model.ReceiverCapabilities
 import dev.cambridge.sender.model.ReceiverProbeState
@@ -16,18 +20,19 @@ import dev.cambridge.sender.model.StreamState
 import dev.cambridge.sender.model.isSessionActive
 import dev.cambridge.sender.session.StreamSessionController
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withTimeoutOrNull
 
 class SenderConnectionCoordinator(
     private val controller: StreamSessionController,
@@ -41,16 +46,18 @@ class SenderConnectionCoordinator(
     private val mutex = Mutex()
     private val controllerOperationMutex = Mutex()
     private val receiverProbeMutex = Mutex()
+    private val receiverDiscoveryLifecycleLock = Any()
     private val stateFlow = MutableStateFlow<StreamState>(StreamState.Idle)
     private val activeReceiverNameFlow = MutableStateFlow(settings.state.value.receiverEndpoint?.displayName)
-    private val configuredReceiverFlow = MutableStateFlow(settings.state.value.receiverEndpoint != null)
     private val receiverProbeStateFlow = MutableStateFlow<ReceiverProbeState>(ReceiverProbeState.Idle)
+    private val receiverCandidatesFlow = MutableStateFlow<List<ReceiverCandidate>>(emptyList())
     private var endpoint: ReceiverEndpoint? = settings.state.value.receiverEndpoint
+    private var receiverDiscoveryJob: Job? = null
 
     val streamState: StateFlow<StreamState> = stateFlow.asStateFlow()
     val activeReceiverName: StateFlow<String?> = activeReceiverNameFlow.asStateFlow()
-    val hasConfiguredReceiver: StateFlow<Boolean> = configuredReceiverFlow.asStateFlow()
     val receiverProbeState: StateFlow<ReceiverProbeState> = receiverProbeStateFlow.asStateFlow()
+    val receiverCandidates: StateFlow<List<ReceiverCandidate>> = receiverCandidatesFlow.asStateFlow()
 
     init {
         scope.launch {
@@ -61,16 +68,15 @@ class SenderConnectionCoordinator(
     }
 
     suspend fun connectToReceiver(receiverEndpoint: ReceiverEndpoint): Result<Unit> {
+        if (!receiverEndpoint.isValid()) {
+            return Result.failure(IllegalArgumentException("Choose a valid OBS computer"))
+        }
         val canStart = mutex.withLock {
-            if (!receiverEndpoint.isValid()) {
-                return@withLock false
-            }
             if (stateFlow.value.isSessionActive) {
                 false
             } else {
                 endpoint = receiverEndpoint
                 settings.updateReceiverEndpoint(receiverEndpoint)
-                configuredReceiverFlow.value = true
                 activeReceiverNameFlow.value = receiverEndpoint.displayName
                 stateFlow.value = StreamState.Connecting
                 true
@@ -82,56 +88,246 @@ class SenderConnectionCoordinator(
         return startControllerOnce(receiverEndpoint)
     }
 
-    suspend fun connect(): Result<Unit> =
-        connectToReceiver(endpoint ?: defaultEndpoint)
+    suspend fun configureReceiverHost(host: String): Result<ReceiverCapabilities> {
+        val candidate = mutex.withLock {
+            val baseEndpoint = endpoint ?: settings.state.value.receiverEndpoint ?: defaultEndpoint
+            baseEndpoint.copy(host = host.trim(), receiverId = null)
+        }
+        if (!candidate.isValid()) {
+            val failure = IllegalArgumentException("Enter a valid receiver address")
+            receiverProbeStateFlow.value = ReceiverProbeState.Unavailable(
+                endpoint = candidate,
+                reason = failure.message.orEmpty(),
+            )
+            return Result.failure(failure)
+        }
+
+        val configured = mutex.withLock {
+            if (stateFlow.value.isSessionActive) {
+                false
+            } else {
+                endpoint = candidate
+                settings.updateReceiverEndpoint(candidate)
+                activeReceiverNameFlow.value = null
+                true
+            }
+        }
+        if (!configured) {
+            return Result.failure(IllegalStateException("A stream is already active"))
+        }
+        return probeSpecificReceiver(candidate)
+    }
+
+    suspend fun selectReceiver(receiverId: String): Result<ReceiverCapabilities> = receiverProbeMutex.withLock {
+        if (stateFlow.value.isSessionActive) {
+            return@withLock Result.failure(IllegalStateException("Stop streaming before changing computers"))
+        }
+        val candidate = receiverCandidatesFlow.value.firstOrNull {
+            it.capabilities.receiverId == receiverId
+        } ?: return@withLock Result.failure(IllegalArgumentException("The selected OBS computer is unavailable"))
+        applySelectedCandidate(candidate)
+        Result.success(candidate.capabilities)
+    }
+
+    suspend fun connect(): Result<Unit> {
+        val selectedEndpoint = mutex.withLock { endpoint }
+            ?: return Result.failure(IllegalStateException("Choose an OBS computer before starting"))
+        return connectToReceiver(selectedEndpoint)
+    }
 
     suspend fun startStream(): Result<Unit> = connect()
 
-    suspend fun probeReceiver(): Result<ReceiverCapabilities> = receiverProbeMutex.withLock {
-        val target = endpoint ?: settings.state.value.receiverEndpoint ?: discoverReceiver() ?: defaultEndpoint
-        if (!target.isValid()) {
-            val failure = IllegalArgumentException("The configured receiver endpoint is invalid")
-            receiverProbeStateFlow.value = ReceiverProbeState.Unavailable(target, failure.message.orEmpty())
-            return@withLock Result.failure(failure)
-        }
-        receiverProbeStateFlow.value = ReceiverProbeState.Checking
-        receiverProbe.probe(target).onSuccess { capabilities ->
-            val resolvedEndpoint = target.copy(displayName = capabilities.displayName)
-            mutex.withLock {
-                endpoint = resolvedEndpoint
-                activeReceiverNameFlow.value = capabilities.displayName
+    fun startReceiverDiscovery() {
+        synchronized(receiverDiscoveryLifecycleLock) {
+            if (receiverDiscoveryJob?.isActive == true) return
+            receiverDiscovery.start()
+            receiverDiscoveryJob = scope.launch {
+                var previousEndpoints: List<DiscoveredReceiverEndpoint>? = null
+                var previousFailure: ReceiverDiscoveryFailure? = null
+                receiverDiscovery.snapshot.collect { snapshot ->
+                    val newFailure = snapshot.failure?.takeIf { failure -> failure != previousFailure }
+                    previousFailure = snapshot.failure
+                    if (newFailure != null) {
+                        logger.warn(
+                            "receiver discovery reported an issue",
+                            fields = mapOf(
+                                "operation" to newFailure.operation,
+                                "errorCode" to newFailure.errorCode,
+                                "reason" to newFailure.message,
+                            ),
+                        )
+                    }
+                    if (snapshot.phase == ReceiverDiscoveryPhase.STOPPED ||
+                        snapshot.endpoints == previousEndpoints
+                    ) {
+                        return@collect
+                    }
+                    previousEndpoints = snapshot.endpoints
+                    probeReceiver()
+                }
             }
-            logger.info(
-                "receiver probe succeeded",
-                mapOf(
-                    "host" to target.host,
-                    "controlPort" to target.controlPort,
-                    "receiverId" to capabilities.receiverId,
-                    "profiles" to capabilities.profileIds.joinToString(","),
-                ),
-            )
-            receiverProbeStateFlow.value = ReceiverProbeState.Available(resolvedEndpoint, capabilities)
-        }.onFailure { failure ->
-            logger.warn(
-                "receiver probe failed",
-                failure,
-                mapOf("host" to target.host, "controlPort" to target.controlPort),
-            )
-            receiverProbeStateFlow.value = ReceiverProbeState.Unavailable(
-                endpoint = target,
-                reason = failure.message ?: "The receiver did not respond",
-            )
         }
     }
 
-    private suspend fun discoverReceiver(): ReceiverEndpoint? = try {
-        withTimeoutOrNull(CamBridgeStreamContract.REQUEST_TIMEOUT_MILLIS.toLong()) {
-            receiverDiscovery.discover().first()
+    fun stopReceiverDiscovery() {
+        val observation = synchronized(receiverDiscoveryLifecycleLock) {
+            receiverDiscoveryJob.also { receiverDiscoveryJob = null }
         }
-    } catch (cancelled: CancellationException) {
-        throw cancelled
-    } catch (_: Throwable) {
-        null
+        observation?.cancel()
+        receiverDiscovery.stop()
+    }
+
+    suspend fun probeReceiver(): Result<ReceiverCapabilities> = receiverProbeMutex.withLock {
+        receiverProbeStateFlow.value = ReceiverProbeState.Checking
+        val configuredEndpoint = mutex.withLock { endpoint } ?: settings.state.value.receiverEndpoint
+        val discoveredEndpoints = receiverDiscovery.snapshot.value.endpoints.map { discovered ->
+            discovered.toReceiverEndpoint()
+        }
+        val targets = buildList {
+            addAll(discoveredEndpoints)
+            configuredEndpoint?.let(::add)
+            if (isEmpty()) add(defaultEndpoint)
+        }.filter(ReceiverEndpoint::isValid)
+            .distinctBy { target -> target.host to target.controlPort }
+        val probeResults = coroutineScope {
+            targets.map { target ->
+                async { ProbedEndpoint(target, receiverProbe.probe(target)) }
+            }.awaitAll()
+        }
+        val candidates = probeResults.mapNotNull { probed ->
+            probed.result.fold(
+                onSuccess = { capabilities ->
+                    logProbeSuccess(probed.endpoint, capabilities)
+                    ReceiverCandidate(
+                        endpoint = probed.endpoint.copy(
+                            displayName = capabilities.displayName,
+                            receiverId = capabilities.receiverId,
+                        ),
+                        capabilities = capabilities,
+                    )
+                },
+                onFailure = { null },
+            )
+        }.distinctBy { candidate -> candidate.capabilities.receiverId }
+            .sortedWith(
+                compareBy<ReceiverCandidate> { it.capabilities.displayName }
+                    .thenBy { it.endpoint.host },
+            )
+        receiverCandidatesFlow.value = candidates
+
+        val preferredCandidate = configuredEndpoint?.let { configured ->
+            candidates.firstOrNull { candidate -> configured.matches(candidate) }
+        }
+        val selectedCandidate = preferredCandidate ?: candidates.singleOrNull()
+        if (selectedCandidate != null) {
+            applySelectedCandidate(selectedCandidate)
+            return@withLock Result.success(selectedCandidate.capabilities)
+        }
+        mutex.withLock {
+            endpoint = null
+            activeReceiverNameFlow.value = null
+        }
+        if (candidates.isNotEmpty()) {
+            receiverProbeStateFlow.value = ReceiverProbeState.SelectionRequired
+            return@withLock Result.failure(IllegalStateException("Choose an OBS computer"))
+        }
+
+        probeResults.forEach { probed ->
+            probed.result.exceptionOrNull()?.let { failure ->
+                logProbeFailure(probed.endpoint, failure)
+            }
+        }
+
+        val target = configuredEndpoint ?: targets.firstOrNull() ?: defaultEndpoint
+        val failure = probeResults.firstNotNullOfOrNull { it.result.exceptionOrNull() }
+            ?: IllegalStateException("No OBS computer was found")
+        receiverProbeStateFlow.value = ReceiverProbeState.Unavailable(
+            endpoint = target,
+            reason = failure.message ?: "The receiver did not respond",
+        )
+        Result.failure(failure)
+    }
+
+    private suspend fun probeSpecificReceiver(target: ReceiverEndpoint): Result<ReceiverCapabilities> =
+        receiverProbeMutex.withLock {
+            receiverProbeStateFlow.value = ReceiverProbeState.Checking
+            receiverProbe.probe(target).onSuccess { capabilities ->
+                logProbeSuccess(target, capabilities)
+                val candidate = ReceiverCandidate(
+                    endpoint = target.copy(
+                        displayName = capabilities.displayName,
+                        receiverId = capabilities.receiverId,
+                    ),
+                    capabilities = capabilities,
+                )
+                receiverCandidatesFlow.value = (receiverCandidatesFlow.value + candidate)
+                    .distinctBy { it.capabilities.receiverId }
+                    .sortedWith(
+                        compareBy<ReceiverCandidate> { it.capabilities.displayName }
+                            .thenBy { it.endpoint.host },
+                    )
+                applySelectedCandidate(candidate)
+            }.onFailure { failure ->
+                logProbeFailure(target, failure)
+                mutex.withLock {
+                    endpoint = null
+                    activeReceiverNameFlow.value = null
+                }
+                receiverProbeStateFlow.value = if (receiverCandidatesFlow.value.isEmpty()) {
+                    ReceiverProbeState.Unavailable(
+                        endpoint = target,
+                        reason = failure.message ?: "The receiver did not respond",
+                    )
+                } else {
+                    ReceiverProbeState.SelectionRequired
+                }
+            }
+        }
+
+    private suspend fun applySelectedCandidate(candidate: ReceiverCandidate) {
+        mutex.withLock {
+            endpoint = candidate.endpoint
+            settings.updateReceiverEndpoint(candidate.endpoint)
+            activeReceiverNameFlow.value = candidate.capabilities.displayName
+        }
+        receiverProbeStateFlow.value = ReceiverProbeState.Available(
+            endpoint = candidate.endpoint,
+            capabilities = candidate.capabilities,
+        )
+    }
+
+    private fun ReceiverEndpoint.matches(candidate: ReceiverCandidate): Boolean =
+        receiverId?.let { it == candidate.capabilities.receiverId }
+            ?: (host == candidate.endpoint.host && controlPort == candidate.endpoint.controlPort)
+
+    private fun DiscoveredReceiverEndpoint.toReceiverEndpoint(): ReceiverEndpoint = ReceiverEndpoint(
+        host = host,
+        controlPort = port,
+        displayName = serviceName,
+    )
+
+    private fun logProbeSuccess(
+        target: ReceiverEndpoint,
+        capabilities: ReceiverCapabilities,
+    ) {
+        logger.info(
+            "receiver probe succeeded",
+            mapOf(
+                "host" to target.host,
+                "controlPort" to target.controlPort,
+                "receiverId" to capabilities.receiverId,
+                "maxLongEdge" to capabilities.maxLongEdge,
+                "maxShortEdge" to capabilities.maxShortEdge,
+            ),
+        )
+    }
+
+    private fun logProbeFailure(target: ReceiverEndpoint, failure: Throwable) {
+        logger.warn(
+            "receiver probe failed",
+            failure,
+            mapOf("host" to target.host, "controlPort" to target.controlPort),
+        )
     }
 
     suspend fun stop(): Result<Unit> {
@@ -148,20 +344,6 @@ class SenderConnectionCoordinator(
         return Result.success(Unit)
     }
 
-    suspend fun forgetReceiver(): Result<Unit> {
-        val stopped = stop()
-        if (stopped.isFailure) return stopped
-        mutex.withLock {
-            endpoint = null
-            activeReceiverNameFlow.value = null
-            configuredReceiverFlow.value = false
-            receiverProbeStateFlow.value = ReceiverProbeState.Idle
-            settings.updateReceiverEndpoint(null)
-            stateFlow.value = StreamState.Idle
-        }
-        return Result.success(Unit)
-    }
-
     private suspend fun startControllerOnce(receiverEndpoint: ReceiverEndpoint): Result<Unit> {
         val result = controllerOperationMutex.withLock {
             val configured = settings.state.value
@@ -169,6 +351,7 @@ class SenderConnectionCoordinator(
                 endpoint = receiverEndpoint,
                 profile = configured.profile,
                 orientation = configured.streamOrientation,
+                bitrateBps = configured.bitrateBps,
             )
         }
         mutex.withLock { stateFlow.value = controller.state.value }
@@ -178,4 +361,9 @@ class SenderConnectionCoordinator(
         )
         return result
     }
+
+    private data class ProbedEndpoint(
+        val endpoint: ReceiverEndpoint,
+        val result: Result<ReceiverCapabilities>,
+    )
 }

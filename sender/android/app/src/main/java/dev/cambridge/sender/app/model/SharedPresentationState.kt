@@ -3,6 +3,8 @@ package dev.cambridge.sender.app.model
 import androidx.compose.runtime.Immutable
 import dev.cambridge.sender.media.camera.AntiFlickerMode
 import dev.cambridge.sender.media.camera.CameraZoom
+import dev.cambridge.sender.media.camera.CameraStabilizationApplyStatus
+import dev.cambridge.sender.media.camera.CameraStabilizationMode
 import dev.cambridge.sender.model.StreamOrientation
 
 @Immutable
@@ -89,8 +91,11 @@ data class LensOptionUi(
 
 @Immutable
 data class StabilizationUiState(
-    val isSupported: Boolean = false,
-    val isEnabled: Boolean = false,
+    val supportedModes: List<CameraStabilizationMode> = listOf(CameraStabilizationMode.OFF),
+    val requestedMode: CameraStabilizationMode = CameraStabilizationMode.OFF,
+    val selectedMode: CameraStabilizationMode = CameraStabilizationMode.OFF,
+    val applyStatus: CameraStabilizationApplyStatus = CameraStabilizationApplyStatus.IDLE,
+    val appliedMode: CameraStabilizationMode = CameraStabilizationMode.OFF,
 )
 
 @Immutable
@@ -115,22 +120,28 @@ sealed interface SenderScreenAction {
     data class ZoomChanged(val ratio: Float) : SenderScreenAction
     data object ResetZoom : SenderScreenAction
     data class LensSelected(val key: String) : SenderScreenAction
-    data class StabilizationChanged(val enabled: Boolean) : SenderScreenAction
+    data class StabilizationModeChanged(
+        val mode: dev.cambridge.sender.media.camera.CameraStabilizationMode,
+    ) : SenderScreenAction
     data class AntiFlickerChanged(val mode: AntiFlickerMode) : SenderScreenAction
     data class ProfileSelected(val profileId: String) : SenderScreenAction
     data class FrameRateSelected(val fps: Int) : SenderScreenAction
+    data class BitrateSelected(val bitrateBps: Int) : SenderScreenAction
     data class StreamOrientationSelected(val orientation: StreamOrientation) : SenderScreenAction
     data object OpenPermissionDialog : SenderScreenAction
     data object DismissPermissionDialog : SenderScreenAction
     data object RequestCameraPermission : SenderScreenAction
     data class ReceiverNameChanged(val name: String) : SenderScreenAction
     data class ReceiverHostChanged(val host: String) : SenderScreenAction
+    data class ReceiverSelected(val receiverId: String) : SenderScreenAction
+    data object ShowManualReceiverInput : SenderScreenAction
+    data object HideManualReceiverInput : SenderScreenAction
     data class ReceiverControlPortChanged(val port: String) : SenderScreenAction
+    data object UseManualReceiverHost : SenderScreenAction
     data object CheckReceiver : SenderScreenAction
     data object OpenStreamSetup : SenderScreenAction
     data object StartStream : SenderScreenAction
     data object RequestStopStream : SenderScreenAction
-    data object ForgetReceiver : SenderScreenAction
     data object CopyDiagnostics : SenderScreenAction
 }
 
@@ -139,7 +150,6 @@ sealed interface SenderUiEffect {
 
     data class CopyDiagnostics(val details: String) : SenderUiEffect
 
-    data object NavigateToPairing : SenderUiEffect
 }
 
 private const val DEFAULT_PREVIEW_ASPECT_RATIO = 16.0f / 9.0f

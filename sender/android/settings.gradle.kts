@@ -19,3 +19,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "cambridge-android"
 include(":app")
+include(":receiver-discovery")

@@ -26,15 +26,24 @@ when hardware decoding or direct DMA-BUF import is unavailable.
 
 The Android app owns camera discovery, preview, camera controls, capture
 surfaces, H.264 encoding, receiver discovery, and stream lifecycle. The
-session coordinator validates the selected profile and orientation before
-starting the camera and encoder. The selected session settings stay fixed
-until the user stops the stream.
+session coordinator validates the selected phone mode, bitrate, and orientation
+before starting the camera and encoder. The selected session settings stay
+fixed until the user stops the stream.
+
+Receiver discovery is isolated in the Android `:receiver-discovery` library.
+It runs for the Stream Setup lifecycle, retains every IPv4 address resolved for
+each DNS-SD service, combines them with the receiver's bounded IPv4 unicast
+address metadata, and removes addresses when the service is lost. The
+app coordinator probes those addresses and deduplicates successful responses
+by receiver ID; discovery itself never establishes readiness or starts a
+stream.
 
 ### Control and media transport
 
-The control plane uses length-prefixed UTF-8 JSON over TCP for receiver
-discovery, capability probing, session setup, and stop messages. The media
-plane carries H.264 access units as RFC 6184 RTP packets over UDP.
+DNS-SD proposes receiver control endpoints. The control plane then uses
+length-prefixed UTF-8 JSON over TCP for capability probing, session setup, and
+stop messages. The media plane carries H.264 access units as RFC 6184 RTP
+packets over UDP.
 
 The two planes share a session ID and generation. The receiver rejects stale
 or incompatible sessions before presenting their frames.
@@ -53,8 +62,8 @@ uploads NV12 data to an OBS texture.
 ## Ownership boundaries
 
 - Android owns Camera2 and MediaCodec; it does not depend on OBS APIs.
-- The protocol layer owns message framing, session identity, profile data, and
-  RTP/H.264 rules.
+- The protocol layer owns message framing, session identity, wire bounds, and
+  RTP/H.264 rules; the Android sender owns its camera/encoder mode catalog.
 - The receiver owns network input, decoding, frame lifetime, and presentation
   scheduling.
 - OBS integration owns source properties, graphics resources, and the output

@@ -1,16 +1,15 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://cambridge.invalid/protocol/cambridge-stream.schema.json",
-  "title": "CamBridge control messages v5",
+  "title": "CamBridge control messages v6",
   "type": "object",
   "required": ["protocolVersion", "type"],
   "properties": {
-    "protocolVersion": {"const": 5},
+    "protocolVersion": {"const": 6},
     "type": {"enum": ["probe", "capabilities", "hello", "accepted", "stop", "error"]},
     "requestId": {"type": "string", "minLength": 1, "maxLength": 128},
     "receiverId": {"type": "string", "minLength": 1, "maxLength": 128},
     "displayName": {"type": "string", "minLength": 1, "maxLength": 128},
-    "profiles": {"type": "array", "items": {"type": "string", "minLength": 1, "maxLength": 64}, "uniqueItems": true},
     "sessionId": {"type": "string", "minLength": 1, "maxLength": 128},
     "generation": {"type": "integer", "minimum": 1},
     "codec": {"const": "h264"},
@@ -32,7 +31,7 @@
     },
     {
       "if": {"properties": {"type": {"const": "capabilities"}}},
-      "then": {"required": ["requestId", "receiverId", "displayName", "profiles", "maxLongEdge", "maxShortEdge"]}
+      "then": {"required": ["requestId", "receiverId", "displayName", "maxLongEdge", "maxShortEdge"]}
     },
     {
       "if": {"properties": {"type": {"const": "hello"}}},

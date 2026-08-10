@@ -28,7 +28,7 @@ class MainActivity : ComponentActivity() {
         configureProfileFromIntent()
         configureReceiverOriginFromIntent()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        setContent { SenderApp(settings, connectionCoordinator) }
+        setContent { SenderApp(connectionCoordinator) }
     }
 
     private fun configureProfileFromIntent() {

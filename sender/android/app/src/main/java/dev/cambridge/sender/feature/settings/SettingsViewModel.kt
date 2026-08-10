@@ -9,6 +9,7 @@ import dev.cambridge.sender.app.model.StreamPresentationSnapshot
 import dev.cambridge.sender.connection.SenderConnectionCoordinator
 import dev.cambridge.sender.media.camera.CameraController
 import dev.cambridge.sender.media.camera.AntiFlickerMode
+import dev.cambridge.sender.media.camera.CameraStabilizationMode
 import dev.cambridge.sender.model.SenderSettingsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -47,16 +48,10 @@ class SettingsViewModel @Inject constructor(
                 activeReceiverName = receiverName,
                 validationMessage = validation,
             ),
-            hasConfiguredReceiver = false,
         )
     }
 
-    val uiState: StateFlow<SettingsUiState> = combine(
-        baseUiState,
-        coordinator.hasConfiguredReceiver,
-    ) { state, hasConfiguredReceiver ->
-        state.copy(hasConfiguredReceiver = hasConfiguredReceiver)
-    }.stateIn(
+    val uiState: StateFlow<SettingsUiState> = baseUiState.stateIn(
         scope = viewModelScope,
         started = SharingStarted.Eagerly,
         initialValue = SettingsUiState(),
@@ -69,9 +64,8 @@ class SettingsViewModel @Inject constructor(
             is SenderScreenAction.ZoomChanged -> setZoomRatio(action.ratio)
             SenderScreenAction.ResetZoom -> resetZoom()
             is SenderScreenAction.LensSelected -> selectPhysicalLens(action.key)
-            is SenderScreenAction.StabilizationChanged -> setStabilizationEnabled(action.enabled)
+            is SenderScreenAction.StabilizationModeChanged -> setStabilizationMode(action.mode)
             is SenderScreenAction.AntiFlickerChanged -> setAntiFlickerMode(action.mode)
-            SenderScreenAction.ForgetReceiver -> forgetReceiver()
             SenderScreenAction.CopyDiagnostics -> copyDiagnostics()
             else -> Unit
         }
@@ -89,9 +83,10 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    private fun setStabilizationEnabled(enabled: Boolean) {
+    private fun setStabilizationMode(mode: CameraStabilizationMode) {
         viewModelScope.launch(Dispatchers.Default) {
-            cameraController.setStabilizationEnabled(enabled)
+            settings.updateStabilizationMode(mode)
+            cameraController.setStabilizationMode(mode)
         }
     }
 
@@ -107,18 +102,6 @@ class SettingsViewModel @Inject constructor(
             ?: return
         viewModelScope.launch(Dispatchers.Default) {
             cameraController.selectPhysicalLens(lens)
-        }
-    }
-
-    private fun forgetReceiver() {
-        viewModelScope.launch {
-            val result = coordinator.forgetReceiver()
-            if (result.isSuccess) {
-                effectFlow.tryEmit(SenderUiEffect.NavigateToPairing)
-            } else {
-                validationMessage.value = result.exceptionOrNull()?.message
-                    ?: "Could not forget the receiver"
-            }
         }
     }
 

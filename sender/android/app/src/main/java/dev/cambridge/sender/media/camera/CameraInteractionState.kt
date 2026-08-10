@@ -1,11 +1,48 @@
 package dev.cambridge.sender.media.camera
 
-
 @ConsistentCopyVisibility
 data class PhysicalLensOption internal constructor(
     val label: String,
     internal val cameraId: String?,
 )
+
+enum class CameraStabilizationMode {
+    OFF,
+    OPTICAL,
+    ELECTRONIC,
+    PREVIEW,
+}
+
+enum class CameraStabilizationApplyStatus {
+    IDLE,
+    APPLYING,
+    APPLIED,
+    UNAVAILABLE_FOR_STREAM,
+}
+
+data class CameraStabilizationState(
+    val supportedModes: List<CameraStabilizationMode> = listOf(CameraStabilizationMode.OFF),
+    val requestedMode: CameraStabilizationMode = CameraStabilizationMode.OFF,
+    val selectedMode: CameraStabilizationMode = CameraStabilizationMode.OFF,
+    val applyStatus: CameraStabilizationApplyStatus = CameraStabilizationApplyStatus.IDLE,
+    val appliedMode: CameraStabilizationMode = CameraStabilizationMode.OFF,
+    val requestedAtMillis: Long? = null,
+    val confirmationDeadlineMillis: Long? = null,
+    val timeToConfirmationMillis: Long? = null,
+) {
+    init {
+        require(CameraStabilizationMode.OFF in supportedModes) {
+            "Off must always be an available stabilization choice"
+        }
+        require(supportedModes.distinct().size == supportedModes.size) {
+            "Stabilization modes must be unique"
+        }
+        require(selectedMode in supportedModes || applyStatus == CameraStabilizationApplyStatus.UNAVAILABLE_FOR_STREAM) {
+            "Selected stabilization mode must be advertised or unavailable"
+        }
+    }
+
+}
 
 /** Coarse camera state exposed to the UI without camera framework objects. */
 data class CameraInteractionState(
@@ -13,8 +50,7 @@ data class CameraInteractionState(
     val minZoomRatio: Float = CameraZoom.DEFAULT_ZOOM_RATIO,
     val maxZoomRatio: Float = CameraZoom.DEFAULT_ZOOM_RATIO,
     val isCameraActive: Boolean = false,
-    val isStabilizationSupported: Boolean = false,
-    val isStabilizationEnabled: Boolean = false,
+    val stabilization: CameraStabilizationState = CameraStabilizationState(),
     val supportedAntiFlickerModes: List<AntiFlickerMode> = emptyList(),
     val antiFlickerMode: AntiFlickerMode = AntiFlickerMode.AUTO,
     val physicalLensOptions: List<PhysicalLensOption> = emptyList(),
@@ -59,17 +95,8 @@ data class CameraInteractionState(
 
     fun resetZoom(): CameraInteractionState = withZoomRatio(CameraZoom.DEFAULT_ZOOM_RATIO)
 
-    fun withStabilizationSupport(supported: Boolean): CameraInteractionState = copy(
-        isStabilizationSupported = supported,
-        isStabilizationEnabled = isStabilizationEnabled && supported,
-    )
-
-    fun withStabilizationEnabled(enabled: Boolean): CameraInteractionState {
-        require(!enabled || isStabilizationSupported) {
-            "Stabilization cannot be enabled when unsupported"
-        }
-        return copy(isStabilizationEnabled = enabled)
-    }
+    fun withStabilizationState(value: CameraStabilizationState): CameraInteractionState =
+        copy(stabilization = value)
 
     fun withAntiFlickerSupport(modes: List<AntiFlickerMode>): CameraInteractionState {
         val supportedModes = modes.distinct()
@@ -111,24 +138,3 @@ data class CameraInteractionState(
 }
 
 private const val POSITIVE_FLOAT_BOUND = 0.0f
-
-internal data class CameraStabilizationSupport(
-    val opticalSupported: Boolean,
-    val electronicSupported: Boolean,
-) {
-    val isSupported: Boolean
-        get() = opticalSupported || electronicSupported
-}
-
-internal enum class CameraStabilizationMode {
-    OPTICAL,
-    ELECTRONIC,
-}
-
-internal fun preferredStabilizationMode(
-    support: CameraStabilizationSupport,
-): CameraStabilizationMode? = when {
-    support.opticalSupported -> CameraStabilizationMode.OPTICAL
-    support.electronicSupported -> CameraStabilizationMode.ELECTRONIC
-    else -> null
-}

@@ -27,6 +27,11 @@ object StreamConfigurationValidator {
             }
         }
         if (configuration.bitrateBps !in CamBridgeStreamContract.MINIMUM_BITRATE_BPS..CamBridgeStreamContract.MAXIMUM_BITRATE_BPS ||
+            profile.clampToStep(
+                valueBps = configuration.bitrateBps,
+                encoderMinimumBps = profile.minimumBitrateBps,
+                encoderMaximumBps = profile.maximumBitrateBps,
+            ) != configuration.bitrateBps ||
             configuration.keyframeIntervalSeconds <= ZERO_VALUE
         ) {
             return Result.failure(IllegalArgumentException("Bitrate and keyframe interval must be positive"))

@@ -43,7 +43,7 @@ fun PreviewActions(
     val settingsContentDescription = stringResource(R.string.settings)
     val zoomContentDescription = stringResource(R.string.zoom)
     val stopContentDescription = stringResource(R.string.stop_stream)
-    val startContentDescription = stringResource(R.string.setup_stream)
+    val startContentDescription = stringResource(R.string.open_stream_setup)
 
     Surface(
         modifier = modifier,

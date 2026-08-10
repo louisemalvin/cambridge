@@ -10,7 +10,7 @@ class AppBackStack(
     val elements: SnapshotStateList<AppDestination> = mutableStateListOf(initialDestination),
 ) {
     val current: AppDestination
-        get() = elements.lastOrNull() ?: AppDestination.Pairing
+        get() = elements.lastOrNull() ?: AppDestination.StreamSetup
 
     fun navigateTo(destination: AppDestination) {
         if (current != destination) {
@@ -24,11 +24,6 @@ class AppBackStack(
             return true
         }
         return false
-    }
-
-    fun popToPairing() {
-        elements.clear()
-        elements.add(AppDestination.Pairing)
     }
 
     fun replaceWithWebcam() {

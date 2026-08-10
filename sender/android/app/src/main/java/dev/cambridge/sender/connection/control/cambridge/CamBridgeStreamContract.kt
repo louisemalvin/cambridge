@@ -1,7 +1,7 @@
 package dev.cambridge.sender.connection.control.cambridge
 
+import dev.cambridge.discovery.ReceiverDiscoveryAddressFamily
 import dev.cambridge.sender.model.ReceiverCapabilities
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.JsonPrimitive
@@ -9,7 +9,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
 internal object CamBridgeStreamContract {
-    const val PROTOCOL_VERSION = 5
+    const val PROTOCOL_VERSION = 6
     const val CONTROL_HEADER_BYTES = 4
     const val MAXIMUM_CONTROL_MESSAGE_BYTES = 8_192
     const val RTP_PAYLOAD_TYPE = 96
@@ -30,9 +30,6 @@ internal object CamBridgeStreamContract {
     const val MAXIMUM_SHORT_EDGE = 2_160
     const val MINIMUM_FPS = 1
     const val MAXIMUM_FPS = 120
-    const val DEFAULT_CODED_WIDTH = 2_560
-    const val DEFAULT_CODED_HEIGHT = 1_440
-    const val DEFAULT_PROFILE_ID = "2k30"
     const val MINIMUM_BITRATE_BPS = 100_000
     const val MAXIMUM_BITRATE_BPS = 100_000_000
     const val MINIMUM_PORT = 1
@@ -46,6 +43,10 @@ internal object CamBridgeStreamContract {
     const val MESSAGE_STOP = "stop"
     const val MESSAGE_ERROR = "error"
     const val DISCOVERY_SERVICE_TYPE = "_cambridge._tcp"
+    const val DISCOVERY_VERSION = 1
+    const val DISCOVERY_ADDRESS_KEY_PREFIX = "address"
+    val DISCOVERY_ADDRESS_FAMILY = ReceiverDiscoveryAddressFamily.IPV4
+    const val MAXIMUM_DISCOVERY_ADDRESS_COUNT = 16
 
     fun hello(
         sessionId: String,
@@ -100,17 +101,6 @@ internal object CamBridgeStreamContract {
     fun JsonObject.intField(name: String): Int = (this[name] as? JsonPrimitive)?.content?.toIntOrNull()
         ?: error("Control field is missing or not an integer: $name")
 
-    fun JsonObject.stringListField(name: String): List<String> {
-        val values = this[name] as? JsonArray
-            ?: error("Control field is missing or not an array: $name")
-        return values.map { value ->
-            (value as? JsonPrimitive)
-                ?.takeIf(JsonPrimitive::isString)
-                ?.content
-                ?: error("Control array field contains a non-string value: $name")
-        }
-    }
-
     fun JsonObject.requireCapabilities(requestId: String): ReceiverCapabilities {
         requireProtocolVersion()
         check(stringField("type") == MESSAGE_CAPABILITIES) {
@@ -122,7 +112,6 @@ internal object CamBridgeStreamContract {
         return ReceiverCapabilities(
             receiverId = stringField("receiverId"),
             displayName = stringField("displayName"),
-            profileIds = stringListField("profiles"),
             maxLongEdge = intField("maxLongEdge"),
             maxShortEdge = intField("maxShortEdge"),
         )

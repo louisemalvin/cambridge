@@ -83,8 +83,8 @@ fun SettingsScreen(
             item {
                 CameraStabilizationControls(
                     state = state.camera.stabilization,
-                    onStabilizationEnabledChanged = { enabled ->
-                        onAction(SenderScreenAction.StabilizationChanged(enabled))
+                    onStabilizationModeChanged = { mode ->
+                        onAction(SenderScreenAction.StabilizationModeChanged(mode))
                     },
                 )
             }
@@ -113,16 +113,6 @@ fun SettingsScreen(
             }
             item {
                 SettingsConnectionDetails(state)
-            }
-            if (state.hasConfiguredReceiver) {
-                item {
-                    TextButton(
-                        onClick = { onAction(SenderScreenAction.ForgetReceiver) },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(stringResource(R.string.forget_receiver))
-                    }
-                }
             }
             state.validationMessage?.let { validationMessage ->
                 item {
@@ -220,7 +210,6 @@ private fun SettingsScreenPreview() {
         SettingsScreen(
             state = SettingsUiState(
                 receiverName = UiText.Plain("OBS Studio"),
-                hasConfiguredReceiver = true,
             ),
             onAction = {},
         )

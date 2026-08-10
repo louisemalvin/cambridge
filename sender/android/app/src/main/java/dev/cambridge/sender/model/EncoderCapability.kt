@@ -7,4 +7,6 @@ data class EncoderCapability(
     val acceleration: EncoderAcceleration,
     val encoderName: String?,
     val reason: String? = null,
+    val minimumBitrateBps: Int? = null,
+    val maximumBitrateBps: Int? = null,
 )

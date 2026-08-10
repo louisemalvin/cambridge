@@ -87,7 +87,10 @@ class CameraPresentationTest {
             width = 1920,
             height = 1080,
             fps = 30,
-            h264BitrateBps = 10_000_000,
+            minimumBitrateBps = 10_000_000,
+            defaultBitrateBps = 10_000_000,
+            maximumBitrateBps = 10_000_000,
+            bitrateStepBps = 10_000_000,
             keyframeIntervalSeconds = 1,
         )
     }

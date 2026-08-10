@@ -33,15 +33,35 @@ TEST_CARD_PATCH_Y = TEST_CARD_MARGIN + TEST_CARD_FONT_SIZE + TEST_CARD_PATCH_GAP
 DEFAULT_CONTRACT = Path(__file__).resolve().parents[3] / "protocol" / "cambridge-stream-contract.json"
 
 
-def load_contract(path: Path, requested_profile_id: str | None) -> tuple[dict[str, Any], dict[str, Any], str]:
+def load_contract(
+    path: Path,
+    width: int,
+    height: int,
+    fps: int,
+    bitrate_bps: int,
+    profile_id: str,
+) -> tuple[dict[str, Any], dict[str, Any], str]:
     contract = json.loads(path.read_text(encoding="utf-8"))
-    profiles = {profile["id"]: profile for profile in contract["profiles"]}
-    profile_id = requested_profile_id or contract["defaults"]["profileId"]
-    try:
-        profile = profiles[profile_id]
-    except KeyError as error:
-        raise ValueError(f"unknown profile: {profile_id}") from error
-    return contract, profile, profile_id
+    geometry = contract["geometry"]
+    video_bounds = contract["video"]
+    if width < geometry["minimumDimension"] or height < geometry["minimumDimension"]:
+        raise ValueError("fixture dimensions are below the contract minimum")
+    if width % geometry["dimensionAlignment"] or height % geometry["dimensionAlignment"]:
+        raise ValueError("fixture dimensions must satisfy the contract alignment")
+    if max(width, height) > geometry["maximumLongEdge"] or min(width, height) > geometry["maximumShortEdge"]:
+        raise ValueError("fixture dimensions exceed the contract geometry bounds")
+    if not video_bounds["minimumFps"] <= fps <= video_bounds["maximumFps"]:
+        raise ValueError("fixture FPS is outside the contract bounds")
+    if not contract["bitrate"]["minimumBps"] <= bitrate_bps <= contract["bitrate"]["maximumBps"]:
+        raise ValueError("fixture bitrate is outside the contract bounds")
+    video = {
+        "id": profile_id,
+        "width": width,
+        "height": height,
+        "fps": fps,
+        "bitrateBps": bitrate_bps,
+    }
+    return contract, video, profile_id
 
 
 def send_frame(connection: socket.socket, message: dict[str, Any]) -> None:
@@ -86,7 +106,7 @@ def connect_control(
     host: str,
     port: int,
     contract: dict[str, Any],
-    profile: dict[str, Any],
+    video: dict[str, Any],
     generation: int,
     rotation_degrees: int,
 ) -> tuple[socket.socket, str, dict[str, Any]]:
@@ -99,13 +119,13 @@ def connect_control(
             "type": "hello",
             "sessionId": session_id,
             "generation": generation,
-            "profileId": profile["id"],
+            "profileId": video["id"],
             "codec": "h264",
-            "codedWidth": profile["width"],
-            "codedHeight": profile["height"],
+            "codedWidth": video["width"],
+            "codedHeight": video["height"],
             "rotationDegrees": rotation_degrees,
-            "fps": profile["fps"],
-            "bitrateBps": profile["bitrateBps"],
+            "fps": video["fps"],
+            "bitrateBps": video["bitrateBps"],
         },
     )
     accepted = receive_frame(connection, time.monotonic() + CONTROL_TIMEOUT_SECONDS)
@@ -122,18 +142,19 @@ def start_ffmpeg(
     ffmpeg: str,
     media_host: str,
     media_port: int,
-    profile: dict[str, Any],
+    video: dict[str, Any],
     contract: dict[str, Any],
     stderr_path: Path,
 ) -> tuple[subprocess.Popen[bytes], Any]:
     media = contract["media"]
+    keyframe_interval_frames = video["fps"] * media["keyframeIntervalSeconds"]
     test_card_filter = (
         f"drawtext=fontcolor=white:fontsize={TEST_CARD_FONT_SIZE}:box=1:boxcolor=black@0.70:"
-        f"boxborderw=8:text='CamBridge {profile['id']} {profile['width']}x{profile['height']} "
+        f"boxborderw=8:text='CamBridge {video['id']} {video['width']}x{video['height']} "
         f"frame %{{n}} pts %{{pts\\:hms}}':x={TEST_CARD_MARGIN}:y={TEST_CARD_MARGIN},"
         f"drawbox=x=iw-{TEST_CARD_FLASH_WIDTH}-{TEST_CARD_MARGIN}:y={TEST_CARD_MARGIN}:"
         f"w={TEST_CARD_FLASH_WIDTH}:h={TEST_CARD_FLASH_HEIGHT}:color=white@1.0:t=fill:"
-        f"enable='lt(mod(n\\,{profile['fps']})\\,2)',"
+        f"enable='lt(mod(n\\,{video['fps']})\\,2)',"
         f"drawbox=x={TEST_CARD_MARGIN}:y={TEST_CARD_PATCH_Y}:w={TEST_CARD_PATCH_SIZE}:"
         f"h={TEST_CARD_PATCH_SIZE}:color=red@1.0:t=fill,"
         f"drawbox=x={TEST_CARD_MARGIN + TEST_CARD_PATCH_SIZE + TEST_CARD_PATCH_GAP}:"
@@ -161,7 +182,7 @@ def start_ffmpeg(
         "-f",
         "lavfi",
         "-i",
-        f"testsrc2=size={profile['width']}x{profile['height']}:rate={profile['fps']}",
+        f"testsrc2=size={video['width']}x{video['height']}:rate={video['fps']}",
         "-vf",
         test_card_filter,
         "-an",
@@ -174,15 +195,15 @@ def start_ffmpeg(
         "-tune",
         "zerolatency",
         "-b:v",
-        str(profile["bitrateBps"]),
+        str(video["bitrateBps"]),
         "-maxrate",
-        str(profile["bitrateBps"]),
+        str(video["bitrateBps"]),
         "-bufsize",
-        str(profile["bitrateBps"] * 2),
+        str(video["bitrateBps"] * 2),
         "-g",
-        str(profile["fps"]),
+        str(keyframe_interval_frames),
         "-keyint_min",
-        str(profile["fps"]),
+        str(keyframe_interval_frames),
         "-sc_threshold",
         "0",
         "-bf",
@@ -217,7 +238,11 @@ def stop_process(process: subprocess.Popen[bytes] | None, stderr: Any | None) ->
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--contract", type=Path, default=DEFAULT_CONTRACT)
-    parser.add_argument("--profile", default=None)
+    parser.add_argument("--profile-id", default="fixture-2k30")
+    parser.add_argument("--width", type=int, default=2560)
+    parser.add_argument("--height", type=int, default=1440)
+    parser.add_argument("--fps", type=int, default=30)
+    parser.add_argument("--bitrate-bps", type=int, default=18_000_000)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--control-port", type=int, default=None)
     parser.add_argument("--media-port", type=int, default=None)
@@ -240,11 +265,18 @@ def main() -> int:
         raise ValueError("duration must be at least one second")
     if args.startup_delay < DEFAULT_STARTUP_DELAY_SECONDS:
         raise ValueError("startup delay cannot be negative")
-    contract, profile, profile_id = load_contract(args.contract, args.profile)
+    contract, video, profile_id = load_contract(
+        args.contract,
+        args.width,
+        args.height,
+        args.fps,
+        args.bitrate_bps,
+        args.profile_id,
+    )
     control_port = args.control_port or contract["defaults"]["controlPort"]
     media_port = args.media_port or control_port + contract["defaults"]["mediaPortOffset"]
     summary: dict[str, Any] = {
-        "profile": profile,
+        "video": video,
         "durationSeconds": args.duration,
         "controlConnections": 0,
         "receiverErrors": [],
@@ -261,7 +293,7 @@ def main() -> int:
             args.host,
             control_port,
             contract,
-            profile,
+            video,
             generation,
             args.rotation_degrees,
         )
@@ -269,7 +301,7 @@ def main() -> int:
         if args.startup_delay > DEFAULT_STARTUP_DELAY_SECONDS:
             time.sleep(args.startup_delay)
         ffmpeg_process, ffmpeg_stderr = start_ffmpeg(
-            args.ffmpeg, args.host, media_port, profile, contract, stderr_path
+            args.ffmpeg, args.host, media_port, video, contract, stderr_path
         )
         while time.monotonic() - started < args.duration:
             if ffmpeg_process.poll() is not None:
@@ -294,7 +326,7 @@ def main() -> int:
             connection.close()
         summary["elapsedSeconds"] = time.monotonic() - started
         summary["rotationDegrees"] = args.rotation_degrees
-        summary["displayWidth"], summary["displayHeight"] = display_geometry(profile, args.rotation_degrees)
+        summary["displayWidth"], summary["displayHeight"] = display_geometry(video, args.rotation_degrees)
         summary["ffmpegLog"] = str(stderr_path)
         if args.output:
             args.output.parent.mkdir(parents=True, exist_ok=True)

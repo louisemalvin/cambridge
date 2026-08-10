@@ -4,9 +4,6 @@ import kotlinx.serialization.Serializable
 
 sealed interface AppDestination {
     @Serializable
-    data object Pairing : AppDestination
-
-    @Serializable
     data object StreamSetup : AppDestination
 
     @Serializable

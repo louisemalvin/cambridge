@@ -24,7 +24,6 @@ import dev.cambridge.sender.model.StreamOrientation
 @Composable
 fun StreamSetupRoute(
     onNavigateToWebcam: () -> Unit,
-    onNavigateBack: () -> Unit,
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
@@ -65,7 +64,6 @@ fun StreamSetupRoute(
 
     StreamSetupScreen(
         state = state,
-        onNavigateBack = onNavigateBack,
         onAction = { action ->
             when (action) {
                 is SenderScreenAction.StreamOrientationSelected -> {

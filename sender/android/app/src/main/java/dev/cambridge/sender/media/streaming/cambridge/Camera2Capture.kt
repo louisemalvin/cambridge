@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Rect
+import android.graphics.SurfaceTexture
 import android.hardware.camera2.CameraCaptureSession
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraDevice
@@ -12,9 +13,14 @@ import android.hardware.camera2.CameraManager
 import android.hardware.camera2.CaptureRequest
 import android.hardware.camera2.CaptureResult
 import android.hardware.camera2.TotalCaptureResult
+import android.hardware.camera2.params.OutputConfiguration
+import android.hardware.camera2.params.SessionConfiguration
+import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
+import android.os.SystemClock
 import android.util.Range
+import android.util.Size
 import android.view.Surface
 import androidx.core.content.ContextCompat
 import dev.cambridge.sender.logging.AndroidAppLogger
@@ -23,15 +29,29 @@ import dev.cambridge.sender.media.camera.AntiFlickerMode
 import dev.cambridge.sender.media.camera.CameraInteractionState
 import dev.cambridge.sender.media.camera.CameraPreviewSurface
 import dev.cambridge.sender.media.camera.CameraZoom
+import dev.cambridge.sender.media.camera.AppliedVideoStabilizationMode
+import dev.cambridge.sender.media.camera.CameraStabilizationApplyStatus
+import dev.cambridge.sender.media.camera.CameraStabilizationMode
+import dev.cambridge.sender.media.camera.CameraStabilizationObservation
+import dev.cambridge.sender.media.camera.CameraStabilizationReducer
+import dev.cambridge.sender.media.camera.CameraStabilizationState
+import dev.cambridge.sender.media.camera.RequestedVideoStabilizationMode
 import dev.cambridge.sender.media.camera.PhysicalLensOption
 import dev.cambridge.sender.media.camera.CameraLensFacing
 import dev.cambridge.sender.media.camera.SessionTransform
 import dev.cambridge.sender.media.camera.toDisplayOrientation
 import dev.cambridge.sender.connection.control.cambridge.CamBridgeStreamContract
 import dev.cambridge.sender.model.StreamOrientation
+import dev.cambridge.sender.model.VideoProfile
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import java.util.concurrent.Executor
+
+private data class StabilizationRequest(
+    val videoMode: Int,
+    val opticalMode: Int,
+)
 
 internal class Camera2Capture(
     context: Context,
@@ -45,12 +65,15 @@ internal class Camera2Capture(
     private var captureSession: CameraCaptureSession? = null
     private var encoderSurface: Surface? = null
     private var requestedFps: Int? = null
+    private var requestedWidth: Int? = null
+    private var requestedHeight: Int? = null
     private var previewSurface: CameraPreviewSurface? = null
     private var selectedCameraId: String? = null
     private var cameraCharacteristics: CameraCharacteristics? = null
     private var zoomRatio = CameraZoom.DEFAULT_ZOOM_RATIO
-    private var requestedStabilizationEnabled = true
-    private var stabilizationEnabled = false
+    private var requestedStabilizationPreference = CameraStabilizationMode.OFF
+    private var diagnosticsRunId: String? = null
+    private var diagnosticsSessionId: String? = null
     private var requestedAntiFlickerMode = AntiFlickerMode.AUTO
     private var loggedFirstCapture = false
     private var captureResultCount = 0L
@@ -68,6 +91,11 @@ internal class Camera2Capture(
         val cameraId = selectedCameraId ?: selectDefaultCameraId().also { selectedCameraId = it }
         cameraCharacteristics = cameraManager.getCameraCharacteristics(cameraId)
         updateCameraState()
+    }
+
+    fun setDiagnosticsContext(runId: String?, sessionId: String?) {
+        diagnosticsRunId = runId
+        diagnosticsSessionId = sessionId
     }
 
     suspend fun snapshotSessionTransform(
@@ -97,16 +125,58 @@ internal class Camera2Capture(
         )
     }
 
-    suspend fun start(surface: Surface, targetFps: Int) {
+    suspend fun supportedVideoModes(modes: List<VideoProfile>): Set<String> {
+        if (cameraCharacteristics == null) prepare()
+        val characteristics = cameraCharacteristics ?: return emptySet()
+        val map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
+            ?: return emptySet()
+        val supportedSizes = map.getOutputSizes(SurfaceTexture::class.java)
+            ?.map { size -> size.width to size.height }
+            ?.toSet()
+            .orEmpty()
+        val supportedFpsRanges = characteristics
+            .get(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES)
+            ?.toList()
+            .orEmpty()
+        return modes.filter { mode ->
+            val outputSize = when {
+                (mode.width to mode.height) in supportedSizes -> Size(mode.width, mode.height)
+                (mode.height to mode.width) in supportedSizes -> Size(mode.height, mode.width)
+                else -> null
+            }
+            val fpsSupported = supportedFpsRanges.any { range ->
+                range.lower == mode.fps && range.upper == mode.fps ||
+                    mode.fps in range.lower..range.upper
+            }
+            val frameDurationSupported = outputSize?.let { size ->
+                val minimumFrameDurationNanos = map.getOutputMinFrameDuration(
+                    SurfaceTexture::class.java,
+                    size,
+                )
+                minimumFrameDurationNanos <= NANOSECONDS_PER_SECOND / mode.fps
+            } == true
+            outputSize != null && fpsSupported && frameDurationSupported
+        }.mapTo(linkedSetOf()) { mode -> mode.id }
+    }
+
+    suspend fun start(
+        surface: Surface,
+        targetFps: Int,
+        codedWidth: Int? = null,
+        codedHeight: Int? = null,
+    ) {
         require(targetFps in CamBridgeStreamContract.MINIMUM_FPS..CamBridgeStreamContract.MAXIMUM_FPS) {
             "Requested frame rate is outside the CamBridge stream contract"
         }
         requestedFps = targetFps
+        requestedWidth = codedWidth ?: requestedWidth
+        requestedHeight = codedHeight ?: requestedHeight
         encoderSurface = surface
         startThread()
         val cameraId = selectedCameraId ?: selectDefaultCameraId().also { selectedCameraId = it }
         val device = openCamera(cameraId)
         cameraDevice = device
+        beginStabilizationApplication()
         configureCaptureSession(device)
     }
 
@@ -114,7 +184,10 @@ internal class Camera2Capture(
         closeCamera()
         encoderSurface = null
         requestedFps = null
-        stabilizationEnabled = false
+        requestedWidth = null
+        requestedHeight = null
+        diagnosticsRunId = null
+        diagnosticsSessionId = null
         loggedFirstCapture = false
         captureResultCount = 0L
         captureSummaryStartNs = 0L
@@ -129,6 +202,7 @@ internal class Camera2Capture(
         if (cameraDevice != null && encoderSurface != null) {
             captureSession?.close()
             captureSession = null
+            beginStabilizationApplication()
             configureCaptureSession(cameraDevice ?: return)
         }
     }
@@ -143,11 +217,41 @@ internal class Camera2Capture(
         setZoomRatio(CameraZoom.DEFAULT_ZOOM_RATIO)
     }
 
-    suspend fun setStabilizationEnabled(enabled: Boolean) {
-        requestedStabilizationEnabled = enabled
-        stabilizationEnabled = enabled && isStabilizationSupported()
-        submitRepeatingRequest()
-        cameraState.value = cameraState.value.withStabilizationEnabled(stabilizationEnabled)
+    suspend fun setStabilizationMode(mode: CameraStabilizationMode) {
+        if (mode == requestedStabilizationPreference &&
+            cameraState.value.stabilization.selectedMode == mode
+        ) return
+        requestedStabilizationPreference = mode
+        val supportedModes = availableStabilizationModes()
+        val supportedState = CameraStabilizationReducer.withSupportedModes(
+            current = cameraState.value.stabilization,
+            supportedModes = supportedModes,
+            persistedPreference = mode,
+        )
+        val effectiveMode = mode.takeIf { it in supportedModes } ?: CameraStabilizationMode.OFF
+        val captureSessionActive = cameraDevice != null && encoderSurface != null
+        val requestedState = if (!captureSessionActive ||
+            (effectiveMode == CameraStabilizationMode.OFF && mode != effectiveMode)
+        ) {
+            supportedState
+        } else {
+            CameraStabilizationReducer.request(
+                current = supportedState,
+                requestedMode = effectiveMode,
+                nowMillis = SystemClock.elapsedRealtime(),
+            )
+        }
+        cameraState.value = cameraState.value.withStabilizationState(requestedState)
+        loggerStabilizationRequest(mode)
+        if (captureSessionActive) {
+            if (usesStabilizationSessionParameters()) {
+                captureSession?.close()
+                captureSession = null
+                configureCaptureSession(cameraDevice ?: return)
+            } else {
+                submitRepeatingRequest()
+            }
+        }
     }
 
     suspend fun setAntiFlickerMode(mode: AntiFlickerMode) {
@@ -169,6 +273,14 @@ internal class Camera2Capture(
         if (wasRunning) closeCamera()
         selectedCameraId = requestedId
         cameraCharacteristics = cameraManager.getCameraCharacteristics(requestedId)
+        val supportedModes = availableStabilizationModes()
+        cameraState.value = cameraState.value.withStabilizationState(
+            CameraStabilizationReducer.withSupportedModes(
+                current = cameraState.value.stabilization,
+                supportedModes = supportedModes,
+                persistedPreference = requestedStabilizationPreference,
+            ),
+        )
         updateCameraState()
         if (wasRunning) {
             val surface = encoderSurface ?: return
@@ -176,6 +288,8 @@ internal class Camera2Capture(
                 surface,
                 targetFps = requestedFps
                     ?: error("Requested frame rate is unavailable while switching lenses"),
+                codedWidth = requestedWidth,
+                codedHeight = requestedHeight,
             )
         }
     }
@@ -241,7 +355,6 @@ internal class Camera2Capture(
         continuation.invokeOnCancellation { cameraDevice?.close() }
     }
 
-    @Suppress("DEPRECATION")
     private suspend fun configureCaptureSession(device: CameraDevice) = suspendCancellableCoroutine<Unit> { continuation ->
         val encoder = encoderSurface ?: run {
             continuation.resumeWithException(IllegalStateException("Encoder surface is unavailable"))
@@ -255,22 +368,35 @@ internal class Camera2Capture(
             continuation.resumeWithException(IllegalStateException("Camera handler is not running"))
             return@suspendCancellableCoroutine
         }
-        device.createCaptureSession(
-            outputs,
-            object : CameraCaptureSession.StateCallback() {
-                override fun onConfigured(session: CameraCaptureSession) {
-                    captureSession = session
-                    runCatching { submitRepeatingRequest() }
-                        .onSuccess { continuation.resume(Unit) }
-                        .onFailure(continuation::resumeWithException)
-                }
+        val callback = object : CameraCaptureSession.StateCallback() {
+            override fun onConfigured(session: CameraCaptureSession) {
+                captureSession = session
+                runCatching { submitRepeatingRequest() }
+                    .onSuccess { continuation.resume(Unit) }
+                    .onFailure(continuation::resumeWithException)
+            }
 
-                override fun onConfigureFailed(session: CameraCaptureSession) {
-                    continuation.resumeWithException(IllegalStateException("Camera capture session configuration failed"))
-                }
-            },
-            handler,
-        )
+            override fun onConfigureFailed(session: CameraCaptureSession) {
+                continuation.resumeWithException(IllegalStateException("Camera capture session configuration failed"))
+            }
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            val sessionConfiguration = SessionConfiguration(
+                SessionConfiguration.SESSION_REGULAR,
+                outputs.map { surface -> OutputConfiguration(surface) },
+                Executor { command -> handler.post(command) },
+                callback,
+            )
+            sessionConfiguration.setSessionParameters(
+                device.createCaptureRequest(CameraDevice.TEMPLATE_RECORD).apply {
+                    applyStabilizationSettings(this, sessionParametersOnly = true)
+                }.build(),
+            )
+            device.createCaptureSession(sessionConfiguration)
+        } else {
+            @Suppress("DEPRECATION")
+            device.createCaptureSession(outputs, callback, handler)
+        }
         continuation.invokeOnCancellation { captureSession?.close() }
     }
 
@@ -288,16 +414,7 @@ internal class Camera2Capture(
                 set(CaptureRequest.CONTROL_AE_ANTIBANDING_MODE, mode)
             }
             cropRegion()?.let { crop -> set(CaptureRequest.SCALER_CROP_REGION, crop) }
-            if (isStabilizationSupported()) {
-                set(
-                    CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE,
-                    if (stabilizationEnabled) {
-                        CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_ON
-                    } else {
-                        CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_OFF
-                    },
-                )
-            }
+            applyStabilizationSettings(this)
         }
         session.setRepeatingRequest(
             builder.build(),
@@ -308,6 +425,7 @@ internal class Camera2Capture(
                     result: TotalCaptureResult,
                 ) {
                     val nowNs = System.nanoTime()
+                    observeStabilizationResult(result)
                     val sensorTimestampNs = result.get(CaptureResult.SENSOR_TIMESTAMP) ?: 0L
                     val previousSensorTimestampNs = lastSensorTimestampNs
                     captureResultCount += 1L
@@ -383,11 +501,180 @@ internal class Camera2Capture(
             ?: error("Camera does not support the requested target frame rate: $target")
     }
 
-    private fun isStabilizationSupported(): Boolean {
-        val modes = cameraCharacteristics?.get(CameraCharacteristics.CONTROL_AVAILABLE_VIDEO_STABILIZATION_MODES)
-            ?: return false
-        return modes.contains(CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_ON)
+    private fun availableStabilizationModes(): List<CameraStabilizationMode> {
+        val characteristics = cameraCharacteristics ?: return emptyList()
+        val videoModes = characteristics
+            .get(CameraCharacteristics.CONTROL_AVAILABLE_VIDEO_STABILIZATION_MODES)
+            ?.toSet()
+            .orEmpty()
+        val opticalModes = characteristics
+            .get(CameraCharacteristics.LENS_INFO_AVAILABLE_OPTICAL_STABILIZATION)
+            ?.toSet()
+            .orEmpty()
+        return buildList {
+            if (CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE_ON in opticalModes) {
+                add(CameraStabilizationMode.OPTICAL)
+            }
+            if (CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_ON in videoModes) {
+                add(CameraStabilizationMode.ELECTRONIC)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_PREVIEW_STABILIZATION in videoModes
+            ) {
+                add(CameraStabilizationMode.PREVIEW)
+            }
+        }
     }
+
+    private fun effectiveStabilizationMode(): CameraStabilizationMode =
+        cameraState.value.stabilization.selectedMode
+
+    private fun beginStabilizationApplication() {
+        val state = cameraState.value.stabilization
+        if (state.applyStatus == CameraStabilizationApplyStatus.UNAVAILABLE_FOR_STREAM &&
+            state.requestedMode != CameraStabilizationMode.OFF
+        ) return
+        if (state.selectedMode !in state.supportedModes) return
+        cameraState.value = cameraState.value.withStabilizationState(
+            CameraStabilizationReducer.request(
+                current = state,
+                requestedMode = state.selectedMode,
+                nowMillis = SystemClock.elapsedRealtime(),
+            ),
+        )
+    }
+
+    private fun applyStabilizationSettings(
+        builder: CaptureRequest.Builder,
+        sessionParametersOnly: Boolean = false,
+    ) {
+        val mode = effectiveStabilizationMode()
+        val videoModes = cameraCharacteristics
+            ?.get(CameraCharacteristics.CONTROL_AVAILABLE_VIDEO_STABILIZATION_MODES)
+            ?.toSet()
+            .orEmpty()
+        val opticalModes = cameraCharacteristics
+            ?.get(CameraCharacteristics.LENS_INFO_AVAILABLE_OPTICAL_STABILIZATION)
+            ?.toSet()
+            .orEmpty()
+        val sessionKeys = if (sessionParametersOnly && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            cameraCharacteristics?.getAvailableSessionKeys()?.toSet().orEmpty()
+        } else {
+            emptySet()
+        }
+        val request = stabilizationRequest(mode)
+        if (request.videoMode in videoModes &&
+            (!sessionParametersOnly || CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE in sessionKeys)
+        ) {
+            builder.set(CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE, request.videoMode)
+        }
+        if (request.opticalMode in opticalModes &&
+            (!sessionParametersOnly || CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE in sessionKeys)
+        ) {
+            builder.set(CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE, request.opticalMode)
+        }
+    }
+
+    private fun stabilizationRequest(mode: CameraStabilizationMode): StabilizationRequest {
+        val request = CameraStabilizationReducer.requestFor(mode)
+        return StabilizationRequest(
+            videoMode = when (request.videoMode) {
+                RequestedVideoStabilizationMode.OFF -> CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_OFF
+                RequestedVideoStabilizationMode.ELECTRONIC -> CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_ON
+                RequestedVideoStabilizationMode.PREVIEW ->
+                    CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_PREVIEW_STABILIZATION
+            },
+            opticalMode = if (request.opticalOn) {
+                CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE_ON
+            } else {
+                CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE_OFF
+            },
+        )
+    }
+
+    private fun usesStabilizationSessionParameters(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return false
+        val keys = cameraCharacteristics?.getAvailableSessionKeys()?.toSet().orEmpty()
+        return CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE in keys ||
+            CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE in keys
+    }
+
+    private fun observeStabilizationResult(result: TotalCaptureResult) {
+        val videoMode = when (result.get(CaptureResult.CONTROL_VIDEO_STABILIZATION_MODE)) {
+            CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_PREVIEW_STABILIZATION ->
+                AppliedVideoStabilizationMode.PREVIEW
+            CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_ON -> AppliedVideoStabilizationMode.ELECTRONIC
+            else -> AppliedVideoStabilizationMode.OFF
+        }
+        val opticalOn = result.get(CaptureResult.LENS_OPTICAL_STABILIZATION_MODE) ==
+            CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE_ON
+        val current = cameraState.value.stabilization
+        val observation = CameraStabilizationObservation(videoMode, opticalOn)
+        val next = CameraStabilizationReducer.observe(
+            current = current,
+            observation = observation,
+            nowMillis = SystemClock.elapsedRealtime(),
+        )
+        if (next != current) {
+            cameraState.value = cameraState.value.withStabilizationState(next)
+            if (next.applyStatus == CameraStabilizationApplyStatus.APPLIED ||
+                next.applyStatus == CameraStabilizationApplyStatus.UNAVAILABLE_FOR_STREAM
+            ) {
+                loggerStabilizationApplied(next, observation)
+            }
+        }
+    }
+
+    private fun loggerStabilizationRequest(mode: CameraStabilizationMode) {
+        logger.event(
+            "camera_stabilization_requested",
+            stabilizationFields(
+                requestedMode = mode,
+                appliedMode = cameraState.value.stabilization.appliedMode,
+                timeToConfirmationMillis = null,
+                observation = null,
+            ),
+        )
+    }
+
+    private fun loggerStabilizationApplied(
+        state: CameraStabilizationState,
+        observation: CameraStabilizationObservation,
+    ) {
+        logger.event(
+            "camera_stabilization_applied",
+            stabilizationFields(
+                requestedMode = state.requestedMode,
+                appliedMode = state.appliedMode,
+                timeToConfirmationMillis = state.timeToConfirmationMillis,
+                observation = observation,
+            ) + mapOf("applyStatus" to state.applyStatus.name),
+        )
+    }
+
+    private fun stabilizationFields(
+        requestedMode: CameraStabilizationMode,
+        appliedMode: CameraStabilizationMode,
+        timeToConfirmationMillis: Long?,
+        observation: CameraStabilizationObservation?,
+    ): Map<String, Any?> = mapOf(
+        "runId" to diagnosticsRunId,
+        "sessionId" to diagnosticsSessionId,
+        "cameraId" to selectedCameraId,
+        "lens" to cameraState.value.selectedPhysicalLens?.label,
+        "resolution" to if (requestedWidth != null && requestedHeight != null) {
+            "${requestedWidth}x${requestedHeight}"
+        } else {
+            null
+        },
+        "fps" to requestedFps,
+        "zoom" to zoomRatio,
+        "requestedMode" to requestedMode.name,
+        "appliedMode" to appliedMode.name,
+        "appliedVideoMode" to observation?.videoMode?.name,
+        "appliedOpticalMode" to observation?.let { if (it.opticalOn) OPTICAL_MODE_ON else OPTICAL_MODE_OFF },
+        "timeToConfirmationMillis" to timeToConfirmationMillis,
+    ).filterValues { it != null }
 
     private fun antiFlickerCaptureRequestMode(): Int? {
         val supportedModes = availableAntiFlickerModes()
@@ -417,9 +704,8 @@ internal class Camera2Capture(
 
     private fun updateCameraState() {
         val characteristics = cameraCharacteristics ?: return
-        val stabilizationSupported = isStabilizationSupported()
+        val availableStabilizationModes = availableStabilizationModes()
         val antiFlickerModes = availableAntiFlickerModes()
-        stabilizationEnabled = requestedStabilizationEnabled && stabilizationSupported
         val maximumZoom = characteristics.get(CameraCharacteristics.SCALER_AVAILABLE_MAX_DIGITAL_ZOOM)
             ?: CameraZoom.DEFAULT_ZOOM_RATIO
         val lensOptions = runCatching {
@@ -439,11 +725,24 @@ internal class Camera2Capture(
                 }
             }
         }.getOrDefault(emptyList())
+        val currentStabilization = cameraState.value.stabilization
+        val stabilizationState = if (
+            currentStabilization.supportedModes != (listOf(CameraStabilizationMode.OFF) + availableStabilizationModes).distinct() ||
+            (requestedStabilizationPreference != CameraStabilizationMode.OFF &&
+                requestedStabilizationPreference !in availableStabilizationModes)
+        ) {
+            CameraStabilizationReducer.withSupportedModes(
+                current = currentStabilization,
+                supportedModes = availableStabilizationModes,
+                persistedPreference = requestedStabilizationPreference,
+            )
+        } else {
+            currentStabilization
+        }
         cameraState.value = cameraState.value
             .withCameraBounds(CameraZoom.DEFAULT_ZOOM_RATIO, maximumZoom, zoomRatio)
             .withPhysicalLensOptions(lensOptions)
-            .withStabilizationSupport(stabilizationSupported)
-            .withStabilizationEnabled(stabilizationEnabled)
+            .withStabilizationState(stabilizationState)
             .withAntiFlickerSupport(antiFlickerModes)
     }
 
@@ -489,5 +788,7 @@ internal class Camera2Capture(
         const val MINIMUM_CROP_DIMENSION = 2
         const val CROP_CENTER_DIVISOR = 2
         const val DEFAULT_SENSOR_ORIENTATION_DEGREES = 90
+        const val OPTICAL_MODE_ON = "ON"
+        const val OPTICAL_MODE_OFF = "OFF"
     }
 }

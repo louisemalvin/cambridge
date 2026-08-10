@@ -198,7 +198,6 @@ std::string encode_accepted_message(const std::string &session_id, std::uint64_t
 
 std::string encode_capabilities_message(const std::string &request_id, const std::string &receiver_id,
                                         const std::string &display_name,
-                                        const std::vector<std::string> &profile_ids,
                                         std::uint32_t maximum_long_edge,
                                         std::uint32_t maximum_short_edge)
 {
@@ -208,11 +207,6 @@ std::string encode_capabilities_message(const std::string &request_id, const std
     json_object_set_new(root, "requestId", json_string(request_id.c_str()));
     json_object_set_new(root, "receiverId", json_string(receiver_id.c_str()));
     json_object_set_new(root, "displayName", json_string(display_name.c_str()));
-    json_t *profiles = json_array();
-    for (const std::string &profile_id : profile_ids) {
-        json_array_append_new(profiles, json_string(profile_id.c_str()));
-    }
-    json_object_set_new(root, "profiles", profiles);
     json_object_set_new(root, "maxLongEdge", json_integer(maximum_long_edge));
     json_object_set_new(root, "maxShortEdge", json_integer(maximum_short_edge));
     const std::string result = dump_json(root);

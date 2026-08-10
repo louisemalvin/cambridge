@@ -1,5 +1,6 @@
 #include "discovery_advertiser.hpp"
 
+#include "network_address_candidates.hpp"
 #include "protocol_contract.hpp"
 
 #include <chrono>
@@ -39,6 +40,18 @@ struct DiscoveryAdvertiser::Impl {
 
 #ifdef CAMBRIDGE_HAS_AVAHI
 namespace {
+
+constexpr auto kNoAvahiPublishFlags = static_cast<AvahiPublishFlags>(0);
+
+bool add_txt_pair(AvahiStringList *&txt, const std::string &key, const std::string &value)
+{
+    AvahiStringList *updated = avahi_string_list_add_pair(txt, key.c_str(), value.c_str());
+    if (!updated) {
+        return false;
+    }
+    txt = updated;
+    return true;
+}
 
 void mark_failure(DiscoveryAdvertiser::Impl &impl, const std::string &reason)
 {
@@ -84,21 +97,34 @@ bool register_service(DiscoveryAdvertiser::Impl &impl, AvahiClient *client)
     }
 
     const std::string protocol_version = std::to_string(contract::kProtocolVersion);
+    const std::string discovery_version = std::to_string(contract::kDiscoveryVersion);
     AvahiStringList *txt = nullptr;
-    txt = avahi_string_list_add_pair(txt, "id", contract::kDefaultReceiverId);
-    txt = avahi_string_list_add_pair(txt, "name", contract::kDefaultReceiverDisplayName);
-    txt = avahi_string_list_add_pair(txt, "protocolVersion", protocol_version.c_str());
-    txt = avahi_string_list_add_pair(txt, "codec", contract::kCodecH264);
-    if (!txt) {
+    const bool base_metadata_added =
+        add_txt_pair(txt, contract::kDiscoveryReceiverIdKey, contract::kDefaultReceiverId) &&
+        add_txt_pair(txt, contract::kDiscoveryReceiverNameKey, contract::kDefaultReceiverDisplayName) &&
+        add_txt_pair(txt, contract::kDiscoveryProtocolVersionKey, protocol_version) &&
+        add_txt_pair(txt, contract::kDiscoveryCodecKey, contract::kCodecH264) &&
+        add_txt_pair(txt, contract::kDiscoveryVersionKey, discovery_version);
+    if (!base_metadata_added) {
+        avahi_string_list_free(txt);
         mark_failure(impl, "could not allocate mDNS service metadata");
         return false;
+    }
+    const auto addresses = discoverable_ipv4_addresses(contract::kMaximumDiscoveryAddressCount);
+    for (std::size_t index{}; index < addresses.size(); ++index) {
+        const std::string key = std::string(contract::kDiscoveryAddressKeyPrefix) + std::to_string(index);
+        if (!add_txt_pair(txt, key, addresses[index])) {
+            avahi_string_list_free(txt);
+            mark_failure(impl, "could not allocate mDNS address metadata");
+            return false;
+        }
     }
 
     const int add_result = avahi_entry_group_add_service_strlst(
         impl.entry_group,
         AVAHI_IF_UNSPEC,
         AVAHI_PROTO_INET,
-        static_cast<AvahiPublishFlags>(0),
+        kNoAvahiPublishFlags,
         impl.service_name.c_str(),
         contract::kDiscoveryServiceType,
         nullptr,
@@ -106,12 +132,12 @@ bool register_service(DiscoveryAdvertiser::Impl &impl, AvahiClient *client)
         impl.control_port,
         txt);
     avahi_string_list_free(txt);
-    if (add_result < 0) {
+    if (add_result < AVAHI_OK) {
         mark_failure(impl, avahi_strerror(add_result));
         return false;
     }
     const int commit_result = avahi_entry_group_commit(impl.entry_group);
-    if (commit_result < 0) {
+    if (commit_result < AVAHI_OK) {
         mark_failure(impl, avahi_strerror(commit_result));
         return false;
     }
@@ -144,7 +170,7 @@ void run(DiscoveryAdvertiser::Impl &impl)
         impl.simple_poll = simple_poll;
     }
 
-    int client_error = 0;
+    int client_error = AVAHI_OK;
     AvahiClient *client = avahi_client_new(
         avahi_simple_poll_get(simple_poll), AVAHI_CLIENT_NO_FAIL, client_callback, &impl, &client_error);
     if (!client) {

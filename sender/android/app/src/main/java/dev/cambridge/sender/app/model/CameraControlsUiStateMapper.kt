@@ -21,8 +21,11 @@ object CameraControlsUiStateMapper {
                 )
             },
             stabilization = StabilizationUiState(
-                isSupported = cameraInteraction.isStabilizationSupported,
-                isEnabled = cameraInteraction.isStabilizationEnabled,
+                supportedModes = cameraInteraction.stabilization.supportedModes,
+                requestedMode = cameraInteraction.stabilization.requestedMode,
+                selectedMode = cameraInteraction.stabilization.selectedMode,
+                applyStatus = cameraInteraction.stabilization.applyStatus,
+                appliedMode = cameraInteraction.stabilization.appliedMode,
             ),
             antiFlicker = AntiFlickerUiState(
                 options = cameraInteraction.supportedAntiFlickerModes.map { mode ->

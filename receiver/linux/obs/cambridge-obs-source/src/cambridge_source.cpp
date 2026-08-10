@@ -27,6 +27,7 @@ namespace {
 #endif
 
 constexpr std::uint32_t kDimensionStep = 16;
+constexpr std::uint32_t kUnsetDimension = 0;
 constexpr std::uint32_t kMaximumLongEdge = contract::kDefaultMaximumLongEdge;
 constexpr std::uint32_t kMaximumShortEdge = contract::kDefaultMaximumShortEdge;
 constexpr std::uint32_t kMinimumDeadlineMs = 1;
@@ -363,13 +364,13 @@ void CamBridgeSource::write_diagnostics()
 std::uint32_t CamBridgeSource::width() const
 {
     std::lock_guard<std::mutex> lock(session_mutex_);
-    return active_display_width_ == 0 ? contract::kDefaultCodedWidth : active_display_width_;
+    return active_display_width_ == kUnsetDimension ? contract::kMinimumDimension : active_display_width_;
 }
 
 std::uint32_t CamBridgeSource::height() const
 {
     std::lock_guard<std::mutex> lock(session_mutex_);
-    return active_display_height_ == 0 ? contract::kDefaultCodedHeight : active_display_height_;
+    return active_display_height_ == kUnsetDimension ? contract::kMinimumDimension : active_display_height_;
 }
 
 bool CamBridgeSource::on_hello(const HelloMessage &hello, const std::string &peer_address, std::string &error)
@@ -384,10 +385,7 @@ bool CamBridgeSource::on_hello(const HelloMessage &hello, const std::string &pee
     const bool swaps_geometry = hello.rotation_degrees == 90 || hello.rotation_degrees == 270;
     const std::uint32_t display_width = swaps_geometry ? hello.coded_height : hello.coded_width;
     const std::uint32_t display_height = swaps_geometry ? hello.coded_width : hello.coded_height;
-    const contract::ProfileContract *profile = contract::find_profile(hello.profile_id);
-    if (profile == nullptr || hello.codec != contract::kCodecH264 ||
-        hello.coded_width != profile->width || hello.coded_height != profile->height ||
-        hello.fps != profile->fps || hello.bitrate_bps != profile->bitrate_bps ||
+    if (hello.codec != contract::kCodecH264 ||
         long_edge(hello.coded_width, hello.coded_height) > config.maximum_long_edge ||
         short_edge(hello.coded_width, hello.coded_height) > config.maximum_short_edge ||
         long_edge(display_width, display_height) > config.maximum_long_edge ||
@@ -439,16 +437,10 @@ bool CamBridgeSource::on_hello(const HelloMessage &hello, const std::string &pee
 std::string CamBridgeSource::on_probe(const std::string &request_id) const
 {
     const SourceConfig config = configuration();
-    std::vector<std::string> profile_ids;
-    profile_ids.reserve(contract::kProfiles.size());
-    for (const contract::ProfileContract &profile : contract::kProfiles) {
-        profile_ids.emplace_back(profile.id);
-    }
     return encode_capabilities_message(
         request_id,
         contract::kDefaultReceiverId,
         contract::kDefaultReceiverDisplayName,
-        profile_ids,
         config.maximum_long_edge,
         config.maximum_short_edge);
 }

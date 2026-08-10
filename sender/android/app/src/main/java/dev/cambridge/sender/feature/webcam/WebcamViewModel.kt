@@ -9,6 +9,7 @@ import dev.cambridge.sender.app.model.StreamPresentationSnapshot
 import dev.cambridge.sender.connection.SenderConnectionCoordinator
 import dev.cambridge.sender.media.camera.CameraController
 import dev.cambridge.sender.media.camera.CameraPreviewSurface
+import dev.cambridge.sender.media.camera.CameraStabilizationMode
 import dev.cambridge.sender.model.SenderSettingsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -75,7 +76,7 @@ class WebcamViewModel @Inject constructor(
             is SenderScreenAction.ZoomChanged -> setZoomRatio(action.ratio)
             SenderScreenAction.ResetZoom -> resetZoom()
             is SenderScreenAction.LensSelected -> selectPhysicalLens(action.key)
-            is SenderScreenAction.StabilizationChanged -> setStabilizationEnabled(action.enabled)
+            is SenderScreenAction.StabilizationModeChanged -> setStabilizationMode(action.mode)
             SenderScreenAction.OpenPermissionDialog -> localState.update {
                 it.copy(isPermissionDialogOpen = true)
             }
@@ -115,9 +116,10 @@ class WebcamViewModel @Inject constructor(
         }
     }
 
-    private fun setStabilizationEnabled(enabled: Boolean) {
+    private fun setStabilizationMode(mode: CameraStabilizationMode) {
         viewModelScope.launch(Dispatchers.Default) {
-            cameraController.setStabilizationEnabled(enabled)
+            settings.updateStabilizationMode(mode)
+            cameraController.setStabilizationMode(mode)
         }
     }
 

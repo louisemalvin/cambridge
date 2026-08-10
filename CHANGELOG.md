@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.3.0 — Sender-owned video modes and resilient receiver discovery
+
+- Introduced CamBridge stream protocol version 6. It is intentionally
+  incompatible with version 5, so the Android app and OBS plugin must be
+  upgraded together.
+- Moved video-mode ownership to the phone. CamBridge now offers the 1080p and
+  2K modes supported by the selected camera and H.264 encoder at 30 or 60 fps,
+  with a bounded, persistent bitrate control.
+- Added lifecycle-scoped receiver discovery, explicit selection when multiple
+  OBS receivers are available, manual address entry, and probing of bounded
+  IPv4 candidates advertised by multi-homed receivers.
+- Added explicit Off, optical, electronic, and camera-managed preview
+  stabilization choices, including capture-result confirmation and structured
+  diagnostics when a requested mode is unavailable for the active stream.
+- Expanded contract, Android, native receiver, discovery, UI, and end-to-end
+  coverage for the new session and discovery behavior.
+
 ## 0.2.2 — Portable release checksums
 
 - Write Linux plugin checksums with the archive filename instead of the build

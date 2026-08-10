@@ -6,7 +6,6 @@ import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDe
 import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
-import dev.cambridge.sender.feature.pairing.PairingRoute
 import dev.cambridge.sender.feature.settings.SettingsRoute
 import dev.cambridge.sender.feature.setup.StreamSetupRoute
 import dev.cambridge.sender.feature.webcam.WebcamRoute
@@ -17,7 +16,6 @@ fun AppNavigation(
     onNavigateToWebcam: () -> Unit,
     onNavigateToStreamSetup: () -> Unit,
     onNavigateToSettings: () -> Unit,
-    onNavigateToPairing: () -> Unit,
     onNavigateBack: () -> Unit,
     onRequestStopStream: () -> Unit,
     onNavigateBackFromWebcam: () -> Unit,
@@ -40,13 +38,9 @@ fun AppNavigation(
         ),
         entryProvider = { destination ->
             when (destination) {
-                AppDestination.Pairing -> NavEntry(destination) {
-                    PairingRoute(onNavigateToStreamSetup = onNavigateToStreamSetup)
-                }
                 AppDestination.StreamSetup -> NavEntry(destination) {
                     StreamSetupRoute(
                         onNavigateToWebcam = onNavigateToWebcam,
-                        onNavigateBack = onNavigateBack,
                     )
                 }
                 AppDestination.Webcam -> NavEntry(destination) {
@@ -62,7 +56,6 @@ fun AppNavigation(
                     SettingsRoute(
                         onNavigateBack = onNavigateBack,
                         onRequestStopStream = onRequestStopStream,
-                        onNavigateToPairing = onNavigateToPairing,
                         onCopyDiagnostics = onCopyDiagnostics,
                     )
                 }

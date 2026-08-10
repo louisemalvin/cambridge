@@ -1,6 +1,6 @@
 # CamBridge Protocol
 
-The active wire protocol is version 5 with identity `cambridge-stream`,
+The active wire protocol is version 6 with identity `cambridge-stream`,
 defined in [`cambridge-stream-contract.json`](cambridge-stream-contract.json).
 The human-readable specification is [`docs/protocol.md`](../docs/protocol.md).
 

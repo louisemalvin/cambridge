@@ -5,7 +5,6 @@ import dev.cambridge.sender.connection.control.cambridge.CamBridgeStreamContract
 import dev.cambridge.sender.connection.control.cambridge.CamBridgeStreamContract.requireProtocolVersion
 import dev.cambridge.sender.connection.control.cambridge.CamBridgeStreamContract.stringField
 import dev.cambridge.sender.connection.control.cambridge.CamBridgeStreamContract.requireCapabilities
-import dev.cambridge.sender.connection.control.cambridge.CamBridgeStreamContract.stringListField
 import dev.cambridge.sender.model.ReceiverCapabilities
 import dev.cambridge.sender.session.VideoProfiles
 import kotlinx.serialization.json.Json
@@ -16,7 +15,7 @@ import org.junit.Test
 
 class CamBridgeStreamContractTest {
     @Test
-    fun helloUsesV5ProfileAndResolvedRotation() {
+    fun helloUsesV6PhoneAuthoredValuesAndResolvedRotation() {
         val hello = CamBridgeStreamContract.hello(
             sessionId = "test-session",
             generation = 1,
@@ -46,12 +45,11 @@ class CamBridgeStreamContractTest {
         val response = Json.parseToJsonElement(
             """
             {
-              "protocolVersion": 5,
+              "protocolVersion": 6,
               "type": "capabilities",
               "requestId": "probe-1",
               "receiverId": "cambridge-obs-source",
               "displayName": "OBS receiver",
-              "profiles": ["1080p30", "2k30"],
               "maxLongEdge": 3840,
               "maxShortEdge": 2160
             }
@@ -60,9 +58,7 @@ class CamBridgeStreamContractTest {
         val capabilities: ReceiverCapabilities = response.requireCapabilities("probe-1")
 
         assertEquals("OBS receiver", capabilities.displayName)
-        assertEquals(listOf("1080p30", "2k30"), capabilities.profileIds)
-        assertTrue(capabilities.supports(VideoProfiles.PROFILE_1080P30))
-        assertEquals(listOf("1080p30", "2k30"), response.stringListField("profiles"))
+        assertTrue(capabilities.supportsGeometry(1_920, 1_080))
     }
 
     @Test
@@ -72,19 +68,19 @@ class CamBridgeStreamContractTest {
             VideoProfiles.qualityProfiles.map { profile -> profile.id },
         )
         assertEquals(
-            listOf(15, 30),
+            listOf(30, 60),
             VideoProfiles.profilesForResolution(VideoProfiles.PROFILE_1080P30)
                 .map { profile -> profile.fps }
                 .distinct()
                 .sorted(),
         )
         assertEquals(
-            VideoProfiles.PROFILE_1080P15,
-            VideoProfiles.profileForResolution(width = 1_920, height = 1_080, fps = 15),
+            VideoProfiles.PROFILE_1080P60,
+            VideoProfiles.profileForResolution(width = 1_920, height = 1_080, fps = 60),
         )
         assertEquals(
-            VideoProfiles.PROFILE_2K15,
-            VideoProfiles.profileForResolution(width = 2_560, height = 1_440, fps = 15),
+            VideoProfiles.PROFILE_2K60,
+            VideoProfiles.profileForResolution(width = 2_560, height = 1_440, fps = 60),
         )
     }
 }

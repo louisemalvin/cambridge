@@ -15,6 +15,13 @@ interface StreamSessionController {
         orientation: StreamOrientation,
     ): Result<Unit>
 
+    suspend fun start(
+        endpoint: ReceiverEndpoint,
+        profile: VideoProfile,
+        orientation: StreamOrientation,
+        bitrateBps: Int,
+    ): Result<Unit> = start(endpoint, profile, orientation)
+
     suspend fun stop(): Result<Unit>
 
     suspend fun updateBitrate(bitrateBps: Int): Result<Unit>

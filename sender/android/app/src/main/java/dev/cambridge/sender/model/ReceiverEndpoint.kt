@@ -4,10 +4,12 @@ data class ReceiverEndpoint(
     val host: String,
     val controlPort: Int,
     val displayName: String = DEFAULT_DISPLAY_NAME,
+    val receiverId: String? = null,
 ) {
     fun isValid(): Boolean = host.isNotBlank() &&
         controlPort in MIN_VALID_NETWORK_PORT..MAX_VALID_NETWORK_PORT &&
-        displayName.isNotBlank()
+        displayName.isNotBlank() &&
+        receiverId?.isNotBlank() != false
 
     private companion object {
         const val DEFAULT_DISPLAY_NAME = "Receiver"

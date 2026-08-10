@@ -8,13 +8,13 @@ import org.junit.Test
 class AppBackStackTest {
     @Test
     fun initialDestinationIsSet() {
-        val backStack = AppBackStack(AppDestination.Pairing)
-        assertEquals(AppDestination.Pairing, backStack.current)
+        val backStack = AppBackStack(AppDestination.StreamSetup)
+        assertEquals(AppDestination.StreamSetup, backStack.current)
     }
 
     @Test
     fun navigateToPushesNewDestination() {
-        val backStack = AppBackStack(AppDestination.Pairing)
+        val backStack = AppBackStack(AppDestination.StreamSetup)
         backStack.navigateTo(AppDestination.Webcam)
         assertEquals(AppDestination.Webcam, backStack.current)
         assertEquals(2, backStack.elements.size)
@@ -30,34 +30,14 @@ class AppBackStackTest {
 
     @Test
     fun popOnSingleItemReturnsFalse() {
-        val backStack = AppBackStack(AppDestination.Pairing)
+        val backStack = AppBackStack(AppDestination.StreamSetup)
         assertFalse(backStack.pop())
-        assertEquals(AppDestination.Pairing, backStack.current)
-    }
-
-    @Test
-    fun popToPairingResetsToPairing() {
-        val backStack = AppBackStack(AppDestination.Webcam)
-        backStack.navigateTo(AppDestination.Settings)
-        backStack.popToPairing()
-        assertEquals(AppDestination.Pairing, backStack.current)
-        assertEquals(1, backStack.elements.size)
-    }
-
-    @Test
-    fun pairingRouteDoesNotDuplicateIt() {
-        val backStack = AppBackStack(AppDestination.Webcam)
-
-        backStack.navigateTo(AppDestination.Pairing)
-        backStack.navigateTo(AppDestination.Pairing)
-
-        assertEquals(AppDestination.Pairing, backStack.current)
-        assertEquals(2, backStack.elements.size)
+        assertEquals(AppDestination.StreamSetup, backStack.current)
     }
 
     @Test
     fun replaceWithWebcamResetsToWebcam() {
-        val backStack = AppBackStack(AppDestination.Pairing)
+        val backStack = AppBackStack(AppDestination.StreamSetup)
         backStack.replaceWithWebcam()
         assertEquals(AppDestination.Webcam, backStack.current)
         assertEquals(1, backStack.elements.size)

@@ -1,5 +1,6 @@
 package dev.cambridge.sender.app
 
+import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -24,21 +25,18 @@ import dev.cambridge.sender.app.navigation.rememberAppBackStack
 import dev.cambridge.sender.app.startup.StartupStateResolver
 import dev.cambridge.sender.connection.SenderConnectionCoordinator
 import dev.cambridge.sender.feature.webcam.overlays.EndStreamConfirmationDialog
-import dev.cambridge.sender.model.SenderSettingsRepository
 import dev.cambridge.sender.model.isSessionActive
 import dev.cambridge.sender.model.requiresStopConfirmation
 import kotlinx.coroutines.launch
 
 @Composable
 fun SenderApp(
-    settings: SenderSettingsRepository,
     connectionCoordinator: SenderConnectionCoordinator,
 ) {
     val context = LocalContext.current
-    val senderSettings by settings.state.collectAsState()
+    val activity = context as? Activity
     val streamState by connectionCoordinator.streamState.collectAsState()
     val initialDestination = StartupStateResolver(
-        hasConfiguredReceiver = senderSettings.receiverEndpoint != null,
         hasActiveStream = streamState.isSessionActive,
     ).resolveInitialDestination()
     val backStack = rememberAppBackStack(initialDestination)
@@ -83,8 +81,7 @@ fun SenderApp(
                 onNavigateToWebcam = { backStack.replaceWithWebcam() },
                 onNavigateToStreamSetup = { backStack.replaceWithStreamSetup() },
                 onNavigateToSettings = { backStack.navigateTo(AppDestination.Settings) },
-                onNavigateToPairing = { backStack.popToPairing() },
-                onNavigateBack = { backStack.pop() },
+                onNavigateBack = { activity?.finish() },
                 onRequestStopStream = ::requestStopStream,
                 onNavigateBackFromWebcam = ::navigateBackFromWebcam,
                 onCopyDiagnostics = { details ->

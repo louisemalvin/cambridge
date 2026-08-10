@@ -1,5 +1,5 @@
 {
-  "protocolVersion": 5,
+  "protocolVersion": 6,
   "type": "hello",
   "sessionId": "run-example-session",
   "generation": 1,

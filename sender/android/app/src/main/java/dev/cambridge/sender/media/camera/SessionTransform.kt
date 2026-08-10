@@ -1,6 +1,6 @@
 package dev.cambridge.sender.media.camera
 
-import dev.cambridge.sender.connection.control.cambridge.CamBridgeStreamContract
+import dev.cambridge.sender.session.VideoProfiles
 
 enum class CameraLensFacing {
     BACK,
@@ -75,8 +75,8 @@ data class SessionTransform(
 
         fun forProfile(
             displayOrientation: DisplayOrientation = DisplayOrientation.LANDSCAPE,
-            codedWidth: Int = CamBridgeStreamContract.DEFAULT_CODED_WIDTH,
-            codedHeight: Int = CamBridgeStreamContract.DEFAULT_CODED_HEIGHT,
+            codedWidth: Int = VideoProfiles.default.width,
+            codedHeight: Int = VideoProfiles.default.height,
         ): SessionTransform = calculate(
             displayOrientation = displayOrientation,
             sensorOrientationDegrees = DEFAULT_SENSOR_ORIENTATION_DEGREES,

@@ -11,9 +11,10 @@ with hardware-accelerated decoding where supported.
 
 - Android phone as an OBS camera source
 - Low-latency H.264 streaming over a local network
-- Native OBS source with automatic receiver discovery where supported
+- Automatic receiver discovery, explicit receiver selection, and manual fallback
 - Portrait and landscape orientations
-- Configurable 1080p and 2K resolution at 15 or 30 fps
+- Phone-supported 1080p and 2K modes at 30 or 60 fps with bitrate control
+- Explicit optical, electronic, and camera-managed stabilization controls
 - Hardware decoding with a software fallback where hardware acceleration is unavailable
 
 ## Quick Start
@@ -24,12 +25,15 @@ with hardware-accelerated decoding where supported.
    `cambridge-obs-plugin-<version>-linux-x86_64.tar.gz`.
 2. Install the APK on the Android phone and install the plugin on the Linux
    computer as described in [Installation](docs/installation.md).
+   Always install both artifacts from the same release because protocol
+   compatibility is versioned.
 3. Restart OBS, add a `CamBridge` source, and leave its default settings in
    place.
 4. Put the phone and computer on the same trusted network, open CamBridge,
    and allow camera access.
-5. Open Stream setup, wait for the OBS receiver check, choose resolution,
-   frame rate, and orientation, then press **Start stream**.
+5. Open Stream setup, choose the OBS computer when more than one is available,
+   choose resolution, frame rate, bitrate, and orientation, then press
+   **Start stream**.
 
 ## Current Platform Support
 
@@ -37,7 +41,8 @@ with hardware-accelerated decoding where supported.
 | --- | --- | --- |
 | Android | Linux x86_64/amd64 + OBS Studio | Supported |
 
-Windows, macOS, iOS, and ARM Linux receivers are not currently supported.
+An iOS sender and Windows, macOS, and ARM Linux receivers are not currently
+supported.
 
 ## How It Works
 
@@ -76,6 +81,7 @@ should also read [CONTRIBUTING.md](CONTRIBUTING.md).
 - [Architecture](docs/architecture.md)
 - [Protocol](docs/protocol.md)
 - [Known limitations](docs/known-limitations.md)
+- [Android camera modes](docs/android-camera.md)
 - [Development](docs/development.md)
 - [Security policy](SECURITY.md)
 

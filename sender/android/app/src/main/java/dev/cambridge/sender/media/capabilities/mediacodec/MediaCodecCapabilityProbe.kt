@@ -63,6 +63,7 @@ class MediaCodecCapabilityProbe : EncoderCapabilityProbe {
                 profile.height,
                 profile.fps.toDouble(),
             )
+            val bitrateRange = runCatching { video.bitrateRange }.getOrNull()
             EncoderCapability(
                 codec = codec,
                 profileId = profile.id,
@@ -70,6 +71,8 @@ class MediaCodecCapabilityProbe : EncoderCapabilityProbe {
                 acceleration = acceleration(info),
                 encoderName = info.name,
                 reason = if (supported) null else "Resolution or frame rate is outside codec capabilities",
+                minimumBitrateBps = bitrateRange?.lower,
+                maximumBitrateBps = bitrateRange?.upper,
             )
         }
         return candidates

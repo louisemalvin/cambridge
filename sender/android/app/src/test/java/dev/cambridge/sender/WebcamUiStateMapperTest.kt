@@ -47,7 +47,7 @@ class WebcamUiStateMapperTest {
                     endpoint = ReceiverEndpoint("desktop", 50_000),
                     selectedCodec = VideoCodec.H264,
                     profile = VideoProfiles.default,
-                    bitrateBps = VideoProfiles.default.h264BitrateBps,
+                    bitrateBps = VideoProfiles.default.defaultBitrateBps,
                     mediaPort = 50_001,
                     outputPixelFormat = OutputPixelFormat.NV12,
                     warnings = emptyList(),

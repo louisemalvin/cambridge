@@ -11,7 +11,6 @@ data class SettingsUiState(
     val sessionOrientation: UiText? = null,
     val receiverName: UiText? = null,
     val connectionStatus: UiText? = null,
-    val hasConfiguredReceiver: Boolean = false,
     val camera: CameraControlsUiState = CameraControlsUiState(),
     val validationMessage: UiText? = null,
     val failureDiagnostics: String? = null,

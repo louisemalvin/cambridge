@@ -28,6 +28,7 @@ import dev.cambridge.sender.media.streaming.StreamEngineEvent
 import dev.cambridge.sender.model.CamBridgeStreamEndpoint
 import dev.cambridge.sender.model.StreamConfiguration
 import dev.cambridge.sender.model.StreamOrientation
+import dev.cambridge.sender.model.VideoProfile
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -110,12 +111,17 @@ class CamBridgeRtpStreamEngine(
         }
     }
 
+    override suspend fun supportedVideoModes(modes: List<VideoProfile>): Set<String> = lifecycleMutex.withLock {
+        camera.supportedVideoModes(modes)
+    }
+
     override suspend fun prepare(configuration: StreamConfiguration): Result<Unit> = lifecycleMutex.withLock {
         try {
             check(!prepared) { "The CamBridge sender is already prepared" }
             require(configuration.codec.protocolId == H264_CODEC) { "The CamBridge sender supports H.264 only" }
             resetTelemetry()
             this.configuration = configuration
+            camera.setDiagnosticsContext(configuration.runId, configuration.sessionId)
             prepareCodec(configuration)
             camera.prepare()
             prepared = true
@@ -200,6 +206,8 @@ class CamBridgeRtpStreamEngine(
             camera.start(
                 encoderSurface ?: error("Encoder surface is unavailable"),
                 targetFps = streamConfiguration.profile.fps,
+                codedWidth = streamConfiguration.profile.width,
+                codedHeight = streamConfiguration.profile.height,
             )
             running = true
             startSenderLoop(socket)
@@ -255,9 +263,10 @@ class CamBridgeRtpStreamEngine(
         camera.resetZoom()
     }
 
-    override suspend fun setStabilizationEnabled(enabled: Boolean) = lifecycleMutex.withLock {
-        camera.setStabilizationEnabled(enabled)
-    }
+    override suspend fun setStabilizationMode(mode: dev.cambridge.sender.media.camera.CameraStabilizationMode) =
+        lifecycleMutex.withLock {
+            camera.setStabilizationMode(mode)
+        }
 
     override suspend fun setAntiFlickerMode(mode: AntiFlickerMode) = lifecycleMutex.withLock {
         camera.setAntiFlickerMode(mode)

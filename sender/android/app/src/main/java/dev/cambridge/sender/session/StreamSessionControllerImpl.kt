@@ -63,6 +63,13 @@ class StreamSessionControllerImpl(
         endpoint: ReceiverEndpoint,
         profile: VideoProfile,
         orientation: StreamOrientation,
+    ): Result<Unit> = start(endpoint, profile, orientation, profile.defaultBitrateBps)
+
+    override suspend fun start(
+        endpoint: ReceiverEndpoint,
+        profile: VideoProfile,
+        orientation: StreamOrientation,
+        bitrateBps: Int,
     ): Result<Unit> = lifecycleMutex.withLock {
         if (activeSession != null) {
             return@withLock failure(StreamFailure.StreamStartFailed(IllegalStateException("A stream is already active")))
@@ -111,6 +118,14 @@ class StreamSessionControllerImpl(
             if (encoderCapability?.supported != true) {
                 throw StreamFailureException(StreamFailure.VideoQualityUnsupported(profile))
             }
+            val encoderMinimumBitrate = encoderCapability.minimumBitrateBps ?: profile.minimumBitrateBps
+            val encoderMaximumBitrate = encoderCapability.maximumBitrateBps ?: profile.maximumBitrateBps
+            if (profile.clampToStep(bitrateBps, encoderMinimumBitrate, encoderMaximumBitrate) != bitrateBps) {
+                throw StreamFailureException(
+                    StreamFailure.VideoQualityUnsupported(profile),
+                    IllegalArgumentException("Selected bitrate is outside the phone encoder capability range"),
+                )
+            }
             val mediaPort = endpoint.controlPort + CamBridgeStreamContract.DEFAULT_MEDIA_PORT_OFFSET
             require(mediaPort in CamBridgeStreamContract.MINIMUM_PORT..CamBridgeStreamContract.MAXIMUM_PORT) {
                 "The configured control port cannot derive a media port"
@@ -120,7 +135,7 @@ class StreamSessionControllerImpl(
                 endpoint = endpoint,
                 selectedCodec = VideoCodec.H264,
                 profile = profile,
-                bitrateBps = profile.h264BitrateBps,
+                bitrateBps = bitrateBps,
                 mediaPort = mediaPort,
                 outputPixelFormat = OutputPixelFormat.NV12,
                 warnings = emptyList(),

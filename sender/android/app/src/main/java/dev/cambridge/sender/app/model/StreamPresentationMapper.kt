@@ -51,9 +51,9 @@ object StreamPresentationMapper {
 
     fun videoProfileLabel(profile: VideoProfile): UiText = when (profile.id) {
         VideoProfiles.PROFILE_2K30.id -> UiText.Resource(R.string.profile_2k30)
-        VideoProfiles.PROFILE_2K15.id -> UiText.Resource(R.string.profile_2k30)
+        VideoProfiles.PROFILE_2K60.id -> UiText.Resource(R.string.profile_2k30)
         VideoProfiles.PROFILE_1080P30.id -> UiText.Resource(R.string.profile_1080p30)
-        VideoProfiles.PROFILE_1080P15.id -> UiText.Resource(R.string.profile_1080p30)
+        VideoProfiles.PROFILE_1080P60.id -> UiText.Resource(R.string.profile_1080p30)
         VideoProfiles.PROFILE_720P30.id -> UiText.Resource(R.string.profile_720p30)
         else -> UiText.Plain(profile.id)
     }
@@ -65,7 +65,6 @@ object StreamPresentationMapper {
         is StreamFailure.ReceiverUnavailable -> "OBS is not available"
         is StreamFailure.NoCompatibleCodec -> qualityFailureMessage(failure.requestedProfile)
         is StreamFailure.ForcedCodecUnsupported -> qualityFailureMessage(failure.requestedProfile)
-        is StreamFailure.ReceiverRejectedProfile -> "The computer cannot use the selected video quality"
         is StreamFailure.EncoderPreparationFailed -> "This phone cannot use the selected video quality"
         is StreamFailure.StreamStartFailed -> "OBS is not available"
         StreamFailure.NetworkDisconnected -> "Connection lost. Open stream setup to try again"
@@ -86,10 +85,10 @@ object StreamPresentationMapper {
     private fun qualityFailureMessage(profile: VideoProfile): String =
         when (profile.id) {
             VideoProfiles.PROFILE_2K30.id,
-            VideoProfiles.PROFILE_2K15.id,
+            VideoProfiles.PROFILE_2K60.id,
             -> "This phone cannot use 2K video"
             VideoProfiles.PROFILE_1080P30.id,
-            VideoProfiles.PROFILE_1080P15.id,
+            VideoProfiles.PROFILE_1080P60.id,
             -> "This phone cannot use 1080p video"
             else -> "This phone cannot use the selected video quality"
         }
