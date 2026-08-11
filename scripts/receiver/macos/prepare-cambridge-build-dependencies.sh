@@ -96,6 +96,7 @@ cmake -S "${obs_source}" -B "${obs_build}" -G Xcode \
     -DCMAKE_OSX_ARCHITECTURES="${architecture}" \
     -DCMAKE_PREFIX_PATH="${simde_prefix};${uthash_prefix};${jansson_prefix}" \
     -DCMAKE_INSTALL_PREFIX="${obs_prefix}" \
+    -DENABLE_FRONTEND=OFF \
     -DENABLE_UI=OFF \
     -DENABLE_SCRIPTING=OFF \
     -DENABLE_PLUGINS=OFF \
