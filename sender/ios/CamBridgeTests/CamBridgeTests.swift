@@ -34,8 +34,8 @@ final class CamBridgeTests: XCTestCase {
         let formats = [
             CameraFormatDescriptor(
                 formatID: "wrong-dimensions",
-                width: VideoMode.mode1080p30.codedWidth,
-                height: VideoMode.mode1080p60.codedHeight,
+                width: VideoMode.mode720p30.codedWidth,
+                height: VideoMode.mode720p30.codedHeight,
                 minimumFrameRate: 30,
                 maximumFrameRate: 60
             ),
@@ -254,9 +254,9 @@ final class CamBridgeTests: XCTestCase {
         settingsModel.updatePreferences(settingsPreferences)
         XCTAssertEqual(model.selectedOrientation, .ninety)
 
-        model.selectMode(VideoMode.mode720p30.id)
-        XCTAssertEqual(settingsModel.preferences.modeId, VideoMode.mode720p30.id)
-        XCTAssertEqual(settingsModel.preferences.bitrateBps, VideoMode.mode720p30.defaultBitrateBps)
+        model.selectMode(VideoMode.mode1080p30.id)
+        XCTAssertEqual(settingsModel.preferences.modeId, VideoMode.mode1080p30.id)
+        XCTAssertEqual(settingsModel.preferences.bitrateBps, VideoMode.mode1080p30.defaultBitrateBps)
 
         let beforeActiveMutation = settingsModel.preferences
         preferencesState.setStreamActive(true)

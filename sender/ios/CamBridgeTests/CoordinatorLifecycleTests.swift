@@ -531,6 +531,7 @@ private actor BlockingCaptureService: StreamCaptureControlling {
 
 private actor FakeSessionControl: CamBridgeControlConnectionProtocol {
     private var response: ControlMessage?
+    private let configuredResponse: ControlMessage?
     private var continuation: AsyncThrowingStream<ControlMessage, Error>.Continuation?
     private var connected = false
     private var closed = false
@@ -538,11 +539,14 @@ private actor FakeSessionControl: CamBridgeControlConnectionProtocol {
     private var stops = 0
 
     init(response: ControlMessage? = nil) {
+        self.configuredResponse = response
         self.response = response
     }
 
     func connect() async throws {
         connected = true
+        closed = false
+        response = configuredResponse
     }
 
     func send(_ message: ControlMessage) async throws {
@@ -581,8 +585,11 @@ private actor FakeSessionControl: CamBridgeControlConnectionProtocol {
     }
 
     func close() async {
-        closed = true
-        closes += 1
+        if connected {
+            connected = false
+            closed = true
+            closes += 1
+        }
         continuation?.finish()
         continuation = nil
     }
@@ -617,8 +624,10 @@ private actor FakeDatagramSender: RTPDatagramSending {
     }
 
     func close() async {
-        connected = false
-        closes += 1
+        if connected {
+            connected = false
+            closes += 1
+        }
     }
 
     func metrics() async -> RTPDatagramMetrics {
