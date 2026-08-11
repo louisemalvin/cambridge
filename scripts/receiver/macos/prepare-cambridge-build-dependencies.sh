@@ -16,7 +16,7 @@ case "${architecture}" in
 esac
 
 command -v brew >/dev/null 2>&1 || { printf 'error: Homebrew is required for build tools\n' >&2; exit 1; }
-brew install cmake ninja pkg-config jq yasm nasm jansson simde uthash
+brew install cmake pkg-config jq yasm nasm jansson simde uthash
 
 buildspec="${repo_root}/receiver/obs/cambridge-obs-source/buildspec.json"
 temp_root=${CAMBRIDGE_DEPENDENCY_BUILD_ROOT:-${RUNNER_TEMP:-}}
@@ -78,8 +78,7 @@ curl --fail --location --retry "${download_retry_limit}" \
     "${obs_url}" --output "${obs_archive}"
 echo "${obs_hash}  ${obs_archive}" | shasum -a 256 -c -
 tar -xf "${obs_archive}" -C "${temp_root}"
-cmake -S "${obs_source}" -B "${obs_build}" -G Ninja \
-    -DCMAKE_BUILD_TYPE=Release \
+cmake -S "${obs_source}" -B "${obs_build}" -G Xcode \
     -DCMAKE_OSX_DEPLOYMENT_TARGET="$(jq -er '.baseline.macosDeploymentTarget' "${buildspec}")" \
     -DCMAKE_OSX_ARCHITECTURES="${architecture}" \
     -DCMAKE_PREFIX_PATH="${simde_prefix};${uthash_prefix};${jansson_prefix}" \
@@ -88,8 +87,8 @@ cmake -S "${obs_source}" -B "${obs_build}" -G Ninja \
     -DENABLE_SCRIPTING=OFF \
     -DENABLE_PLUGINS=OFF \
     -DENABLE_HEVC=OFF
-cmake --build "${obs_build}" --target libobs --parallel
-cmake --install "${obs_build}"
+cmake --build "${obs_build}" --config Release --target libobs --parallel
+cmake --install "${obs_build}" --config Release
 
 obs_pc_dir="${temp_root}/cambridge-pkgconfig-${architecture}"
 mkdir -p "${obs_pc_dir}"
