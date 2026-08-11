@@ -386,9 +386,9 @@ public final class VideoToolboxEncoder {
         _ session: VTCompressionSession,
         key: CFString
     ) -> (status: OSStatus, value: CFTypeRef?) {
-        var value: CFTypeRef?
-        let status = VTSessionCopyProperty(session, key: key, allocator: nil, valueOut: &value)
-        return (status, value)
+        var unmanagedValue: Unmanaged<AnyObject>?
+        let status = VTSessionCopyProperty(session, key: key, allocator: nil, valueOut: &unmanagedValue)
+        return (status, unmanagedValue?.takeRetainedValue())
     }
 
     private static func stringValue(_ value: CFTypeRef?) -> String? {
