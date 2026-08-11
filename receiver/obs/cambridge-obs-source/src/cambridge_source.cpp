@@ -1,6 +1,8 @@
 #include "cambridge_source.hpp"
 
 #include "control_protocol.hpp"
+#include "discovery_metadata.hpp"
+#include "platform/interfaces/source_properties.hpp"
 #include "protocol_contract.generated.hpp"
 
 #include <obs/obs-data.h>
@@ -57,7 +59,6 @@ constexpr char kPropertyReorderDeadline[] = "reorder_deadline_ms";
 constexpr char kPropertyQueueAge[] = "maximum_decoder_queue_age_ms";
 constexpr char kPropertyLiveAge[] = "maximum_live_frame_age_ms";
 constexpr char kPropertySocketBuffer[] = "receive_buffer_bytes";
-constexpr char kPropertyDrmDevice[] = "drm_device";
 constexpr char kPropertyDecoderMode[] = "decoder_mode";
 constexpr char kPropertyTransparentPlaceholder[] = "transparent_placeholder";
 constexpr char kPropertyDiagnosticsPath[] = "diagnostics_path";
@@ -189,13 +190,14 @@ bool CamBridgeSource::start(std::string &error)
         control_server_.reset();
         return false;
     }
-    discovery_advertiser_ = std::make_unique<DiscoveryAdvertiser>(config.control_port);
+    discovery_advertiser_ = create_discovery_advertiser();
+    const DiscoveryConfig discovery_config = build_discovery_config(config.control_port);
     std::string discovery_error;
-    if (!discovery_advertiser_->start(discovery_error)) {
+    if (!discovery_advertiser_->start(discovery_config, discovery_error)) {
         report("discovery_unavailable:" + discovery_error);
         discovery_advertiser_.reset();
     } else {
-        report("discovery:service_type=" + std::string(contract::kDiscoveryServiceType));
+        report("discovery:service_type=" + std::string(discovery_service_type()));
     }
     started_ = true;
     report("identity:module=cambridge-obs-plugin version=" + std::string(kModuleVersion) +
@@ -748,7 +750,7 @@ SourceConfig source_config_from_settings(obs_data_t *settings)
     config.receive_buffer_bytes = static_cast<std::size_t>(bounded_setting(
         settings, kPropertySocketBuffer, receiver::kDefaultReceiveBufferBytes, kMinimumSocketBufferBytes,
         kMaximumSocketBufferBytes));
-    config.drm_device = setting_string(settings, kPropertyDrmDevice, receiver::kDefaultDrmDevice);
+    read_platform_source_settings(settings, config);
     config.decoder_mode = setting_string(settings, kPropertyDecoderMode, receiver::kDefaultDecoderMode);
     config.diagnostics_path = setting_string(settings, kPropertyDiagnosticsPath, receiver::kDefaultDiagnosticsPath);
     config.transparent_placeholder = obs_data_get_bool(settings, kPropertyTransparentPlaceholder);
@@ -765,7 +767,6 @@ void source_get_defaults(obs_data_t *settings)
     obs_data_set_default_int(settings, kPropertyQueueAge, contract::kDefaultMaximumDecoderQueueAgeMs);
     obs_data_set_default_int(settings, kPropertyLiveAge, contract::kDefaultMaximumLiveFrameAgeMs);
     obs_data_set_default_int(settings, kPropertySocketBuffer, receiver::kDefaultReceiveBufferBytes);
-    obs_data_set_default_string(settings, kPropertyDrmDevice, receiver::kDefaultDrmDevice);
     obs_data_set_default_string(settings, kPropertyDecoderMode, receiver::kDefaultDecoderMode);
     obs_data_set_default_string(settings, kPropertyDiagnosticsPath, receiver::kDefaultDiagnosticsPath);
     obs_data_set_default_bool(settings, kPropertyTransparentPlaceholder, false);
@@ -795,8 +796,7 @@ obs_properties_t *source_get_properties(void *data)
                            kMaximumLiveAgeMs, kLiveAgeStep);
     obs_properties_add_int(advanced_properties, kPropertySocketBuffer, "UDP receive buffer (bytes)", kMinimumSocketBufferBytes,
                            kMaximumSocketBufferBytes, kSocketBufferStepBytes);
-    obs_properties_add_path(advanced_properties, kPropertyDrmDevice, "DRM render device", OBS_PATH_FILE, "DRM device (*)",
-                             receiver::kDefaultDrmDevice);
+    add_platform_source_properties(advanced_properties);
     obs_property_t *decoder_mode = obs_properties_add_list(advanced_properties, kPropertyDecoderMode, "Decoder mode",
                                                             OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_STRING);
     obs_property_list_add_string(decoder_mode, "Automatic: native when supported, otherwise software at session start",

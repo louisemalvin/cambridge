@@ -31,7 +31,7 @@ add_library(cambridge-obs-plugin MODULE
     src/control_protocol.cpp
     src/control_server.cpp
     src/decoder.cpp
-    src/discovery_advertiser.cpp
+    src/discovery_metadata.cpp
     src/cambridge_source.cpp
     src/media_receiver.cpp
     src/media_path.cpp
@@ -40,9 +40,13 @@ add_library(cambridge-obs-plugin MODULE
     src/platform/interfaces/native_decoder_adapter.hpp
     src/platform/interfaces/native_frame.hpp
     src/platform/interfaces/native_frame_importer.hpp
+    src/platform/interfaces/discovery_advertiser.hpp
+    src/platform/interfaces/source_properties.hpp
     src/platform/linux/native_decoder_linux.cpp
+    src/platform/linux/discovery_advertiser_linux.cpp
     src/platform/linux/native_frame_linux.hpp
     src/platform/linux/native_frame_importer_linux.cpp
+    src/platform/linux/source_properties_linux.cpp
     src/platform/posix/posix_compat.cpp
     src/protocol_contract.generated.hpp
     src/receiver_constants.hpp
@@ -187,6 +191,18 @@ if(BUILD_TESTING)
     )
     add_test(NAME cambridge-obs-plugin-native-importer-policy-tests
         COMMAND cambridge-obs-plugin-native-importer-policy-tests)
+
+    add_executable(cambridge-obs-plugin-discovery-metadata-tests
+        tests/discovery_metadata_tests.cpp
+        src/discovery_metadata.cpp
+        src/network_address_candidates.cpp
+    )
+    target_compile_features(cambridge-obs-plugin-discovery-metadata-tests PRIVATE cxx_std_17)
+    target_compile_options(cambridge-obs-plugin-discovery-metadata-tests PRIVATE
+        -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror
+    )
+    add_test(NAME cambridge-obs-plugin-discovery-metadata-tests
+        COMMAND cambridge-obs-plugin-discovery-metadata-tests)
 endif()
 
 install(TARGETS cambridge-obs-plugin

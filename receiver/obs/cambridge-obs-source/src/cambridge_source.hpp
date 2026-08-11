@@ -2,9 +2,9 @@
 
 #include "control_server.hpp"
 #include "decoder.hpp"
-#include "discovery_advertiser.hpp"
 #include "latest_frame_mailbox.hpp"
 #include "media_receiver.hpp"
+#include "platform/interfaces/discovery_advertiser.hpp"
 #include "protocol_contract.generated.hpp"
 #include "receiver_constants.hpp"
 #include "renderer.hpp"
