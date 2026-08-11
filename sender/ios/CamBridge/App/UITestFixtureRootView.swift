@@ -48,11 +48,11 @@ private final class UITestFixtureModel {
 
     var route: AppModel.Route = .setup
     var permission: CameraPermission = .notDetermined
-    var selectedCameraID = Self.cameraID
+    var selectedCameraID = UITestFixtureModel.cameraID
     var selectedReceiverID: String?
     var manualHost = ""
     var manualProbeMessage = "Manual receiver not probed"
-    var selectedModeID = Self.unsupportedModeID
+    var selectedModeID = UITestFixtureModel.unsupportedModeID
     var selectedOrientation = StreamRotation.zero
     var selectedStabilization = CameraStabilizationPreference.auto
     var streamPhase = StreamPhase.idle
