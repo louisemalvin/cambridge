@@ -2,7 +2,11 @@
 
 #include "protocol_contract.generated.hpp"
 
+#if defined(__APPLE__)
+#include <obs.h>
+#else
 #include <obs/obs.h>
+#endif
 
 #include <time.h>
 

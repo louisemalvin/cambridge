@@ -3,7 +3,7 @@
 #include "native_frame_macos.hpp"
 #include "../../protocol_contract.generated.hpp"
 
-#include <obs/obs-module.h>
+#include <obs-module.h>
 
 #import <CoreVideo/CoreVideo.h>
 #import <Foundation/Foundation.h>

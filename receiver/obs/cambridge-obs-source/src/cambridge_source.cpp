@@ -6,8 +6,13 @@
 #include "platform/interfaces/source_properties.hpp"
 #include "protocol_contract.generated.hpp"
 
+#if defined(__APPLE__)
+#include <obs-data.h>
+#include <obs-properties.h>
+#else
 #include <obs/obs-data.h>
 #include <obs/obs-properties.h>
+#endif
 
 #include <algorithm>
 #include <cerrno>

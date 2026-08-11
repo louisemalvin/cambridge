@@ -15,7 +15,11 @@
 #include <string>
 
 extern "C" {
+#if defined(__APPLE__)
+#include <obs-module.h>
+#else
 #include <obs/obs-module.h>
+#endif
 }
 
 namespace cambridge {

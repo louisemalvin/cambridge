@@ -1,8 +1,13 @@
 #pragma once
 
 extern "C" {
+#if defined(__APPLE__)
+#include <obs-data.h>
+#include <obs-properties.h>
+#else
 #include <obs/obs-data.h>
 #include <obs/obs-properties.h>
+#endif
 }
 
 namespace cambridge {

@@ -2,7 +2,11 @@
 #include "protocol_contract.generated.hpp"
 
 extern "C" {
+#if defined(__APPLE__)
+#include <obs-module.h>
+#else
 #include <obs/obs-module.h>
+#endif
 }
 
 OBS_DECLARE_MODULE()

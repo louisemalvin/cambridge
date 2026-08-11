@@ -8,7 +8,11 @@
 #include <string>
 
 extern "C" {
+#if defined(__APPLE__)
+#include <graphics/graphics.h>
+#else
 #include <obs/graphics/graphics.h>
+#endif
 }
 
 namespace cambridge {
