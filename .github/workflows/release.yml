@@ -80,11 +80,93 @@ jobs:
             build/release/*.tar.gz
             build/release/*.tar.gz.sha256
 
+  macos-build:
+    needs: verify-version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            architecture: arm64
+          - runner: macos-15-intel
+            architecture: x86_64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare pinned macOS build dependencies
+        env:
+          CAMBRIDGE_MACOS_ARCHITECTURE: ${{ matrix.architecture }}
+        run: ./scripts/receiver/macos/prepare-cambridge-build-dependencies.sh
+      - name: Build macOS plugin slice
+        env:
+          CAMBRIDGE_BUILD_DIR: build/cambridge-obs-plugin-macos-release
+          CAMBRIDGE_STAGING_DIR: build/cambridge-obs-plugin-macos-release/staging
+          CAMBRIDGE_BUILD_TYPE: Release
+          CAMBRIDGE_MACOS_ARCHITECTURES: ${{ matrix.architecture }}
+          CAMBRIDGE_REQUIRE_UNIVERSAL: OFF
+        run: ./scripts/receiver/macos/build-cambridge-obs-plugin.sh
+      - name: Stage macOS plugin slice
+        env:
+          CAMBRIDGE_ARCHITECTURE: ${{ matrix.architecture }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          plugin="build/cambridge-obs-plugin-macos-release/staging/obs-plugins/cambridge-obs-plugin/bin/64bit/cambridge-obs-plugin.so"
+          metallib="build/cambridge-obs-plugin-macos-release/staging/obs-plugins/cambridge-obs-plugin/bin/64bit/nv12_to_bgra.metallib"
+          lipo -verify_arch "${CAMBRIDGE_ARCHITECTURE}" "${plugin}"
+          mkdir -p "dist/${CAMBRIDGE_ARCHITECTURE}"
+          cp "${plugin}" "dist/${CAMBRIDGE_ARCHITECTURE}/cambridge-obs-plugin.so"
+          cp "${metallib}" "dist/${CAMBRIDGE_ARCHITECTURE}/nv12_to_bgra.metallib"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-plugin-${{ matrix.architecture }}
+          path: dist/${{ matrix.architecture }}/
+
+  macos-package:
+    needs: macos-build
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: macos-plugin-arm64
+          path: dist-input/arm64
+      - uses: actions/download-artifact@v4
+        with:
+          name: macos-plugin-x86_64
+          path: dist-input/x86_64
+      - name: Assemble, sign, notarize, and staple macOS universal package
+        env:
+          CAMBRIDGE_BUILD_DIR: build/cambridge-obs-plugin-macos-release
+          CAMBRIDGE_STAGING_DIR: build/cambridge-obs-plugin-macos-release/staging
+          CAMBRIDGE_SKIP_BUILD: ON
+          CAMBRIDGE_DEVELOPER_ID_APPLICATION: ${{ secrets.CAMBRIDGE_DEVELOPER_ID_APPLICATION }}
+          CAMBRIDGE_DEVELOPER_ID_INSTALLER: ${{ secrets.CAMBRIDGE_DEVELOPER_ID_INSTALLER }}
+          CAMBRIDGE_NOTARY_PROFILE: ${{ secrets.CAMBRIDGE_NOTARY_PROFILE }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          plugin_dir="${CAMBRIDGE_STAGING_DIR}/obs-plugins/cambridge-obs-plugin/bin/64bit"
+          mkdir -p "${plugin_dir}"
+          lipo -create \
+            dist-input/arm64/cambridge-obs-plugin.so \
+            dist-input/x86_64/cambridge-obs-plugin.so \
+            -output "${plugin_dir}/cambridge-obs-plugin.so"
+          cp dist-input/arm64/nv12_to_bgra.metallib "${plugin_dir}/nv12_to_bgra.metallib"
+          ./scripts/release/package-macos-plugin.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-universal-release
+          path: |
+            build/release/*.pkg
+            build/release/*.pkg.sha256
+
   publish:
     if: github.ref_type == 'tag'
     needs:
       - android
       - native
+      - macos-package
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

@@ -7,6 +7,7 @@ build_dir=${CAMBRIDGE_BUILD_DIR:-"${repo_root}/build/cambridge-obs-plugin-macos"
 staging_dir=${CAMBRIDGE_STAGING_DIR:-"${build_dir}/staging"}
 build_type=${CAMBRIDGE_BUILD_TYPE:-RelWithDebInfo}
 enable_test_faults=${CAMBRIDGE_ENABLE_TEST_FAULTS:-OFF}
+require_universal=${CAMBRIDGE_REQUIRE_UNIVERSAL:-ON}
 buildspec_file="${repo_root}/receiver/obs/cambridge-obs-source/buildspec.json"
 git_commit=$(git -C "${repo_root}" rev-parse HEAD)
 if [[ -n "$(git -C "${repo_root}" status --porcelain --untracked-files=all)" ]]; then
@@ -18,6 +19,10 @@ command -v jq >/dev/null 2>&1 || { printf 'error: jq is required\n' >&2; exit 1;
 command -v xcrun >/dev/null 2>&1 || { printf 'error: Xcode xcrun is required\n' >&2; exit 1; }
 command -v lipo >/dev/null 2>&1 || { printf 'error: lipo is required\n' >&2; exit 1; }
 command -v otool >/dev/null 2>&1 || { printf 'error: otool is required\n' >&2; exit 1; }
+case "${require_universal}" in
+    ON|OFF) ;;
+    *) printf 'error: CAMBRIDGE_REQUIRE_UNIVERSAL must be ON or OFF\n' >&2; exit 1 ;;
+esac
 deployment_target=${CAMBRIDGE_MACOS_DEPLOYMENT_TARGET:-$(jq -er '.baseline.macosDeploymentTarget' "${buildspec_file}")}
 architectures=${CAMBRIDGE_MACOS_ARCHITECTURES:-$(jq -er '.baseline.architectures | join(";")' "${buildspec_file}")}
 
@@ -40,12 +45,15 @@ plugin_path="${staging_dir}/obs-plugins/cambridge-obs-plugin/bin/64bit/cambridge
 metallib_path="${staging_dir}/obs-plugins/cambridge-obs-plugin/bin/64bit/nv12_to_bgra.metallib"
 [[ -f "${plugin_path}" ]] || { printf 'error: plugin was not staged: %s\n' "${plugin_path}" >&2; exit 1; }
 [[ -f "${metallib_path}" ]] || { printf 'error: Metal library was not staged: %s\n' "${metallib_path}" >&2; exit 1; }
-lipo -verify_arch arm64 x86_64 "${plugin_path}"
+IFS=';' read -r -a architecture_list <<<"${architectures}"
+lipo -verify_arch "${architecture_list[@]}" "${plugin_path}"
 plugin_architectures=$(lipo -archs "${plugin_path}")
-[[ "${plugin_architectures}" == *arm64* && "${plugin_architectures}" == *x86_64* ]] || {
-    printf 'error: plugin is not universal: %s\n' "${plugin_architectures}" >&2
-    exit 1
-}
+if [[ "${require_universal}" == "ON" ]]; then
+    [[ "${plugin_architectures}" == *arm64* && "${plugin_architectures}" == *x86_64* ]] || {
+        printf 'error: plugin is not universal: %s\n' "${plugin_architectures}" >&2
+        exit 1
+    }
+fi
 if otool -L "${plugin_path}" | rg -q '/opt/homebrew|/usr/local/opt|/usr/local/Cellar|/opt/homebrew/Cellar'; then
     printf 'error: plugin contains an unintended Homebrew load command\n' >&2
     exit 1

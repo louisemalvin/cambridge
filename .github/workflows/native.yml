@@ -6,12 +6,14 @@ on:
       - "receiver/obs/cambridge-obs-source/**"
       - "protocol/**"
       - "scripts/receiver/linux/build-cambridge-obs-plugin.sh"
+      - "scripts/receiver/macos/**"
       - ".github/workflows/native.yml"
   pull_request:
     paths:
       - "receiver/obs/cambridge-obs-source/**"
       - "protocol/**"
       - "scripts/receiver/linux/build-cambridge-obs-plugin.sh"
+      - "scripts/receiver/macos/**"
       - ".github/workflows/native.yml"
 
 jobs:
@@ -31,3 +33,41 @@ jobs:
         run: CAMBRIDGE_REQUIRE_AVAHI=ON ./scripts/receiver/linux/build-cambridge-obs-plugin.sh
       - name: Check native module dependencies
         run: ldd -r build/cambridge-obs-plugin/staging/obs-plugins/cambridge-obs-plugin/bin/64bit/cambridge-obs-plugin.so
+
+  macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            architecture: arm64
+          - runner: macos-15-intel
+            architecture: x86_64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build pinned FFmpeg and OBS libobs prerequisites
+        env:
+          CAMBRIDGE_MACOS_ARCHITECTURE: ${{ matrix.architecture }}
+        shell: bash
+        run: ./scripts/receiver/macos/prepare-cambridge-build-dependencies.sh
+      - name: Check generated contract
+        run: python3 scripts/development/check-cambridge-stream-contract.py
+      - name: Build and test macOS native receiver for ${{ matrix.architecture }}
+        env:
+          CAMBRIDGE_MACOS_ARCHITECTURES: ${{ matrix.architecture }}
+          CAMBRIDGE_REQUIRE_UNIVERSAL: OFF
+        run: ./scripts/receiver/macos/build-cambridge-obs-plugin.sh
+      - name: Check macOS module architecture and load commands
+        env:
+          CAMBRIDGE_ARCHITECTURE: ${{ matrix.architecture }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          plugin="build/cambridge-obs-plugin-macos/staging/obs-plugins/cambridge-obs-plugin/bin/64bit/cambridge-obs-plugin.so"
+          test -f "${plugin}"
+          lipo -verify_arch "${CAMBRIDGE_ARCHITECTURE}" "${plugin}"
+          if otool -L "${plugin}" | grep -Eq '/opt/homebrew|/usr/local/opt|/usr/local/Cellar|/opt/homebrew/Cellar'; then
+            echo "unexpected Homebrew load command in ${plugin}" >&2
+            exit 1
+          fi
