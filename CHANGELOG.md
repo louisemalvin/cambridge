@@ -44,8 +44,8 @@
 ## 0.2.0 — CamBridge platform layout
 
 - Renamed sender, receiver, package, and protocol identifiers to CamBridge.
-- Organized implementation code under `sender/android` and
-  `receiver/linux/obs`.
+- Organized implementation code under `sender/android` and the native
+  `receiver/obs` tree.
 - Introduced CamBridge stream protocol version 5; it is intentionally
   incompatible with earlier protocol releases.
 
