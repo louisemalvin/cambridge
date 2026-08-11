@@ -11,6 +11,28 @@ public struct EncoderCapability: Equatable, Sendable {
     public let encoderUsesHardwareAccelerated: Bool? = nil
     public let encoderHardwareAvailabilityReason: String? = nil
     public let reason: String?
+
+    public init(
+        modeId: String,
+        supported: Bool,
+        minimumBitrateBps: Int,
+        maximumBitrateBps: Int,
+        encoderIdentity: String?,
+        encoderIdentityUnavailableReason: String? = nil,
+        encoderUsesHardwareAccelerated: Bool? = nil,
+        encoderHardwareAvailabilityReason: String? = nil,
+        reason: String?
+    ) {
+        self.modeId = modeId
+        self.supported = supported
+        self.minimumBitrateBps = minimumBitrateBps
+        self.maximumBitrateBps = maximumBitrateBps
+        self.encoderIdentity = encoderIdentity
+        self.encoderIdentityUnavailableReason = encoderIdentityUnavailableReason
+        self.encoderUsesHardwareAccelerated = encoderUsesHardwareAccelerated
+        self.encoderHardwareAvailabilityReason = encoderHardwareAvailabilityReason
+        self.reason = reason
+    }
 }
 
 public protocol EncoderCapabilityProbing: Sendable {

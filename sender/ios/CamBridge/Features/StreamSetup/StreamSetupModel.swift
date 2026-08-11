@@ -41,14 +41,26 @@ public final class StreamSetupModel {
     public private(set) var cameraDevices: [CameraDeviceDescriptor] = []
     public var selectedCameraID: String?
     public private(set) var modeCapabilities: [CameraModeCapability] = []
-    public var selectedModeID: String = VideoMode.defaultMode.id
-    public var selectedBitrateBps: Int = VideoMode.defaultMode.defaultBitrateBps
-    public var selectedOrientation: StreamRotation = .zero
-    public var selectedStabilization: CameraStabilizationPreference = .auto
+    public var selectedModeID: String {
+        get { preferencesState.preferences.modeId }
+        set { selectMode(newValue) }
+    }
+    public var selectedBitrateBps: Int {
+        get { preferencesState.preferences.bitrateBps }
+        set { setBitrate(newValue) }
+    }
+    public var selectedOrientation: StreamRotation {
+        get { preferencesState.preferences.orientation }
+        set { selectOrientation(newValue) }
+    }
+    public var selectedStabilization: CameraStabilizationPreference {
+        get { CameraStabilizationPreference(rawValue: preferencesState.preferences.stabilizationPreference) ?? .auto }
+        set { setStabilization(newValue) }
+    }
     public private(set) var stabilizationOptions: [CameraStabilizationPreference] = CameraState.initial.supportedStabilization
     public private(set) var cameraAuthorization: CameraAuthorizationState = .notDetermined
     public private(set) var isStarting = false
-    public private(set) var isStreamActive = false
+    public var isStreamActive: Bool { preferencesState.isStreamActive }
     public private(set) var statusMessage = "Checking for OBS receivers…"
     public private(set) var capabilityReport: CapabilityReport?
     public var failure: StreamFailure?
@@ -71,7 +83,7 @@ public final class StreamSetupModel {
         !isStarting && !isStreamActive && cameraAuthorization == .authorized && receiverStatus == .ready && selectedReceiver != nil && selectedModeCapability?.supported == true && selectedCameraID != nil && bitrateOptions.contains(selectedBitrateBps)
     }
 
-    private let settingsStore: any SenderSettingsStoring
+    private let preferencesState: SenderPreferencesState
     private let browser: any ReceiverBrowsing
     private let probe: any ReceiverProbing
     private let capture: any CameraSetupServicing
@@ -86,6 +98,7 @@ public final class StreamSetupModel {
     private let preferredReceiverID: String?
     @ObservationIgnored private var discoveryTask: Task<Void, Never>?
     @ObservationIgnored private var capabilityTask: Task<Void, Never>?
+    @ObservationIgnored private var preferenceTask: Task<Void, Never>?
     private var cameraRefreshID: UUID?
     private var capabilityRefreshID: UUID?
     private var hasExplicitReceiverSelection = false
@@ -104,7 +117,7 @@ public final class StreamSetupModel {
         operatingSystem: String? = nil,
         deviceModel: String? = nil
     ) {
-        self.settingsStore = settingsStore
+        self.preferencesState = SenderPreferencesState(settingsStore: settingsStore)
         self.browser = browser
         self.probe = probe
         self.capture = capture
@@ -116,12 +129,40 @@ public final class StreamSetupModel {
         self.buildVersion = buildVersion ?? (Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown")
         self.operatingSystem = operatingSystem ?? ProcessInfo.processInfo.operatingSystemVersionString
         self.deviceModel = deviceModel ?? UIDevice.current.model
-        let preferences = settingsStore.load()
+        let preferences = self.preferencesState.preferences
+        self.preferredReceiverID = preferences.receiverId
+        self.manualHost = preferences.receiverHost ?? ""
+        self.selectedReceiverID = preferences.receiverId
+    }
+
+    public init(
+        preferencesState: SenderPreferencesState,
+        browser: any ReceiverBrowsing,
+        probe: any ReceiverProbing,
+        capture: any CameraSetupServicing,
+        encoderProbe: any EncoderCapabilityProbing,
+        sessionCoordinator: any StreamSessionStarting,
+        logger: CamBridgeLogger,
+        capabilityReportBuilder: any CapabilityReportBuilding = CapabilityReportBuilder(),
+        appVersion: String? = nil,
+        buildVersion: String? = nil,
+        operatingSystem: String? = nil,
+        deviceModel: String? = nil
+    ) {
+        self.preferencesState = preferencesState
+        self.browser = browser
+        self.probe = probe
+        self.capture = capture
+        self.encoderProbe = encoderProbe
+        self.sessionCoordinator = sessionCoordinator
+        self.logger = logger
+        self.capabilityReportBuilder = capabilityReportBuilder
+        self.appVersion = appVersion ?? (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown")
+        self.buildVersion = buildVersion ?? (Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown")
+        self.operatingSystem = operatingSystem ?? ProcessInfo.processInfo.operatingSystemVersionString
+        self.deviceModel = deviceModel ?? UIDevice.current.model
+        let preferences = preferencesState.preferences
         preferredReceiverID = preferences.receiverId
-        selectedModeID = preferences.modeId
-        selectedBitrateBps = preferences.bitrateBps
-        selectedOrientation = preferences.orientation
-        selectedStabilization = CameraStabilizationPreference(rawValue: preferences.stabilizationPreference) ?? .auto
         manualHost = preferences.receiverHost ?? ""
         selectedReceiverID = preferences.receiverId
     }
@@ -129,6 +170,7 @@ public final class StreamSetupModel {
     public func startDiscovery() {
         discoveryTask?.cancel()
         capabilityTask?.cancel()
+        preferenceTask?.cancel()
         cameraRefreshID = nil
         capabilityRefreshID = nil
         logger.event("discovery_started", category: .discovery)
@@ -144,6 +186,14 @@ public final class StreamSetupModel {
             guard let self else { return }
             await self.refreshCameraAndModes()
         }
+        preferenceTask = Task { [weak self] in
+            guard let self else { return }
+            let changes = self.preferencesState.changes()
+            for await _ in changes {
+                guard !Task.isCancelled else { return }
+                await self.refreshModeCapabilities()
+            }
+        }
     }
 
     public func stopDiscovery() {
@@ -151,6 +201,8 @@ public final class StreamSetupModel {
         discoveryTask = nil
         capabilityTask?.cancel()
         capabilityTask = nil
+        preferenceTask?.cancel()
+        preferenceTask = nil
         cameraRefreshID = nil
         capabilityRefreshID = nil
         logger.event("discovery_stopped", category: .discovery)
@@ -174,7 +226,7 @@ public final class StreamSetupModel {
         stabilizationOptions = await capture.cameraState().supportedStabilization
         guard cameraRefreshID == refreshID else { return }
         if !stabilizationOptions.contains(selectedStabilization) {
-            selectedStabilization = stabilizationOptions.first ?? .off
+            setStabilization(stabilizationOptions.first ?? .off)
         }
         await refreshModeCapabilities()
     }
@@ -283,19 +335,27 @@ public final class StreamSetupModel {
             )
         }
         if selectedModeCapability?.supported != true {
-            selectedModeID = modeCapabilities.first(where: { $0.supported })?.mode.id ?? selectedModeID
+            if let fallbackModeID = modeCapabilities.first(where: { $0.supported })?.mode.id,
+               fallbackModeID != selectedModeID {
+                updatePreferences { preferences in
+                    preferences.modeId = fallbackModeID
+                    if let mode = VideoMode.productModes.first(where: { $0.id == fallbackModeID }) {
+                        preferences.bitrateBps = mode.defaultBitrateBps
+                    }
+                }
+            }
         }
         if let selectedModeCapability, selectedModeCapability.supported {
             stabilizationOptions = selectedModeCapability.supportedStabilization
             if !stabilizationOptions.contains(selectedStabilization) {
-                selectedStabilization = stabilizationOptions.first ?? .off
+                setStabilization(stabilizationOptions.first ?? .off)
             }
         } else {
             stabilizationOptions = [.off]
-            selectedStabilization = .off
+            setStabilization(.off)
         }
         if let firstBitrate = bitrateOptions.first, !bitrateOptions.contains(selectedBitrateBps) {
-            selectedBitrateBps = min(max(selectedBitrateBps, firstBitrate), bitrateOptions.last ?? firstBitrate)
+            setBitrate(min(max(selectedBitrateBps, firstBitrate), bitrateOptions.last ?? firstBitrate))
         }
     }
 
@@ -309,14 +369,27 @@ public final class StreamSetupModel {
 
     public func selectMode(_ modeID: String) {
         guard VideoMode.productModes.contains(where: { $0.id == modeID }) else { return }
-        selectedModeID = modeID
-        if let defaultBitrate = selectedMode?.defaultBitrateBps { selectedBitrateBps = defaultBitrate }
-        scheduleModeCapabilityRefresh()
+        let changed = updatePreferences { preferences in
+            preferences.modeId = modeID
+            if let defaultBitrate = VideoMode.productModes.first(where: { $0.id == modeID })?.defaultBitrateBps {
+                preferences.bitrateBps = defaultBitrate
+            }
+        }
+        if changed { scheduleModeCapabilityRefresh() }
     }
 
     public func selectOrientation(_ orientation: StreamRotation) {
-        selectedOrientation = orientation
-        scheduleModeCapabilityRefresh()
+        if updatePreferences({ $0.orientation = orientation }) {
+            scheduleModeCapabilityRefresh()
+        }
+    }
+
+    public func setBitrate(_ bitrateBps: Int) {
+        _ = updatePreferences { $0.bitrateBps = bitrateBps }
+    }
+
+    public func setStabilization(_ stabilization: CameraStabilizationPreference) {
+        _ = updatePreferences { $0.stabilizationPreference = stabilization.rawValue }
     }
 
     public func selectCamera(_ cameraID: String) {
@@ -335,7 +408,7 @@ public final class StreamSetupModel {
     }
 
     public func setStreamActive(_ active: Bool) {
-        isStreamActive = active
+        preferencesState.setStreamActive(active)
     }
 
     public func probeManualReceiver() async {
@@ -394,7 +467,7 @@ public final class StreamSetupModel {
         switch result {
         case .success:
             logger.event("stream_start_succeeded", category: .session, fields: ["mode": mode.id])
-            settingsStore.save(SenderPreferences(modeId: mode.id, bitrateBps: selectedBitrateBps, orientation: selectedOrientation, stabilizationPreference: selectedStabilization.rawValue, receiverId: receiver.id, receiverDisplayName: receiver.displayName, receiverHost: receiver.endpoint.host, receiverControlPort: receiver.endpoint.controlPort))
+            preferencesState.commitAccepted(SenderPreferences(modeId: mode.id, bitrateBps: selectedBitrateBps, orientation: selectedOrientation, stabilizationPreference: selectedStabilization.rawValue, receiverId: receiver.id, receiverDisplayName: receiver.displayName, receiverHost: receiver.endpoint.host, receiverControlPort: receiver.endpoint.controlPort))
             statusMessage = "Streaming to \(receiver.displayName)"
         case let .failure(failure):
             logger.event("stream_start_failed", category: .session, fields: ["failure": failure.recoverySummary])
@@ -412,6 +485,7 @@ public final class StreamSetupModel {
     deinit {
         discoveryTask?.cancel()
         capabilityTask?.cancel()
+        preferenceTask?.cancel()
     }
 
     private func scheduleModeCapabilityRefresh() {
@@ -420,6 +494,13 @@ public final class StreamSetupModel {
             guard let self else { return }
             await self.refreshModeCapabilities()
         }
+    }
+
+    @discardableResult
+    private func updatePreferences(_ mutate: (inout SenderPreferences) -> Void) -> Bool {
+        var preferences = preferencesState.preferences
+        mutate(&preferences)
+        return preferencesState.update(preferences)
     }
 
     private var selectedModeCapability: CameraModeCapability? {

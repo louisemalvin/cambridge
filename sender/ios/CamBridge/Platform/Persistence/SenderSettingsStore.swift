@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import CamBridgeCore
 
 public struct SenderPreferences: Codable, Equatable, Sendable {
@@ -86,4 +87,55 @@ public final class SenderSettingsStore: SenderSettingsStoring {
     }
 
     private static let preferencesKey = "cambridge.sender.preferences.v1"
+}
+
+@MainActor
+@Observable
+public final class SenderPreferencesState {
+    public private(set) var preferences: SenderPreferences
+    public private(set) var isStreamActive = false
+
+    private let settingsStore: any SenderSettingsStoring
+    private var changeContinuation: AsyncStream<SenderPreferences>.Continuation?
+
+    public init(settingsStore: any SenderSettingsStoring) {
+        self.settingsStore = settingsStore
+        preferences = settingsStore.load()
+    }
+
+    public func changes() -> AsyncStream<SenderPreferences> {
+        AsyncStream(bufferingPolicy: .bufferingNewest(Self.preferenceChangeCapacity)) { continuation in
+            changeContinuation = continuation
+            continuation.yield(preferences)
+            continuation.onTermination = { [weak self] _ in
+                Task { @MainActor in
+                    self?.changeContinuation = nil
+                }
+            }
+        }
+    }
+
+    @discardableResult
+    public func update(_ nextPreferences: SenderPreferences) -> Bool {
+        guard !isStreamActive else { return false }
+        guard preferences != nextPreferences else { return false }
+        preferences = nextPreferences
+        settingsStore.save(nextPreferences)
+        changeContinuation?.yield(preferences)
+        return true
+    }
+
+    // The coordinator has accepted this exact configuration. This is a state
+    // commit, not an interactive mutation while the active stream is running.
+    public func commitAccepted(_ nextPreferences: SenderPreferences) {
+        preferences = nextPreferences
+        settingsStore.save(nextPreferences)
+        changeContinuation?.yield(preferences)
+    }
+
+    public func setStreamActive(_ active: Bool) {
+        isStreamActive = active
+    }
+
+    private static let preferenceChangeCapacity = 1
 }

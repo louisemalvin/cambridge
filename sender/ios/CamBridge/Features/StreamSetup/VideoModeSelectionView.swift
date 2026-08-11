@@ -14,9 +14,6 @@ struct VideoModeSelectionView: View {
                         .disabled(capability?.supported == false)
                 }
             }
-            .onChange(of: model.selectedModeID) { _, modeID in
-                model.selectMode(modeID)
-            }
             .accessibilityIdentifier("video-mode-picker")
 
             Picker("Orientation", selection: $model.selectedOrientation) {
@@ -24,9 +21,6 @@ struct VideoModeSelectionView: View {
                 Text("Portrait clockwise").tag(StreamRotation.ninety)
                 Text("Landscape reversed").tag(StreamRotation.oneEighty)
                 Text("Portrait counter-clockwise").tag(StreamRotation.twoSeventy)
-            }
-            .onChange(of: model.selectedOrientation) { _, orientation in
-                model.selectOrientation(orientation)
             }
             .accessibilityIdentifier("orientation-picker")
 

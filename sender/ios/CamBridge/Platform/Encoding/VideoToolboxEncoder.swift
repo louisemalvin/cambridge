@@ -367,14 +367,18 @@ public final class VideoToolboxEncoder {
             encoderIdentityUnavailableReason = "VideoToolbox encoder identity unavailable (status: \(encoderProperty.status))"
         }
 
-        let hardwareProperty = Self.copySessionProperty(
-            session,
-            key: kVTCompressionPropertyKey_UsingHardwareAcceleratedVideoEncoder
-        )
-        if hardwareProperty.status == noErr, let value = hardwareProperty.value as? NSNumber {
-            encoderUsesHardwareAccelerated = value.boolValue
+        if #available(iOS 17.4, *) {
+            let hardwareProperty = Self.copySessionProperty(
+                session,
+                key: kVTCompressionPropertyKey_UsingHardwareAcceleratedVideoEncoder
+            )
+            if hardwareProperty.status == noErr, let value = hardwareProperty.value as? NSNumber {
+                encoderUsesHardwareAccelerated = value.boolValue
+            } else {
+                encoderHardwareAvailabilityReason = "VideoToolbox hardware-use property unavailable (status: \(hardwareProperty.status))"
+            }
         } else {
-            encoderHardwareAvailabilityReason = "VideoToolbox hardware-use property unavailable (status: \(hardwareProperty.status))"
+            encoderHardwareAvailabilityReason = "VideoToolbox hardware-use property is unavailable before iOS 17.4"
         }
     }
 
@@ -400,9 +404,9 @@ public final class VideoToolboxEncoder {
                 kVTVideoEncoderSpecification_RequireHardwareAcceleratedVideoEncoder as String: true
             ]
         }
-        return [
-            kVTVideoEncoderSpecification_EnableHardwareAcceleratedVideoEncoder as String: true
-        ]
+        // The SDK exposes this key as an iOS 17.4 symbol, but VideoToolbox
+        // accepts the documented key on earlier supported deployment targets.
+        return [Self.legacyHardwareSpecificationKey: true]
     }
 
     private func set(session: VTCompressionSession, key: CFString, value: Any, name: String) throws {
@@ -495,6 +499,7 @@ public final class VideoToolboxEncoder {
     private static let bitsPerByte = 8
     private static let byteIncrement = 1
     private static let dataRateLimitsPropertyName = kVTCompressionPropertyKey_DataRateLimits as String
+    private static let legacyHardwareSpecificationKey = "EnableHardwareAcceleratedVideoEncoder"
     private static let inputQueueKey = DispatchSpecificKey<UInt8>()
     private static let inputQueueMarker: UInt8 = 1
     private static let counterIncrement = 1

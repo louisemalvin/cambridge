@@ -6,33 +6,26 @@ import CamBridgeCore
 @MainActor
 @Observable
 public final class SettingsModel {
-    public private(set) var preferences: SenderPreferences
-    public private(set) var isStreamActive = false
+    public var preferences: SenderPreferences { preferencesState.preferences }
+    public var isStreamActive: Bool { preferencesState.isStreamActive }
     public private(set) var diagnosticsText = "No stream diagnostics yet."
     public private(set) var capabilityReportText = "No capability report generated yet."
 
-    private let settingsStore: any SenderSettingsStoring
+    private let preferencesState: SenderPreferencesState
     private let logger: CamBridgeLogger
 
-    public init(settingsStore: any SenderSettingsStoring, logger: CamBridgeLogger) {
-        self.settingsStore = settingsStore
+    public init(preferencesState: SenderPreferencesState, logger: CamBridgeLogger) {
+        self.preferencesState = preferencesState
         self.logger = logger
-        preferences = settingsStore.load()
     }
 
-    public func setStreamActive(_ active: Bool) {
-        isStreamActive = active
-    }
-
-    public func reloadPreferences() {
-        guard !isStreamActive else { return }
-        preferences = settingsStore.load()
+    public init(settingsStore: any SenderSettingsStoring, logger: CamBridgeLogger) {
+        self.preferencesState = SenderPreferencesState(settingsStore: settingsStore)
+        self.logger = logger
     }
 
     public func updatePreferences(_ preferences: SenderPreferences) {
-        guard !isStreamActive else { return }
-        self.preferences = preferences
-        settingsStore.save(preferences)
+        _ = preferencesState.update(preferences)
     }
 
     public func copyDiagnostics() {

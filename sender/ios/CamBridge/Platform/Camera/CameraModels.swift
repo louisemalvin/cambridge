@@ -147,17 +147,17 @@ public enum CameraStabilizationPreference: String, Codable, CaseIterable, Equata
     public var avFoundationMode: AVCaptureVideoStabilizationMode? {
         switch self {
         case .auto:
-            .auto
+            return AVCaptureVideoStabilizationMode.auto
         case .off:
-            .off
+            return AVCaptureVideoStabilizationMode.off
         case .standard:
-            .standard
+            return AVCaptureVideoStabilizationMode.standard
         case .cinematic:
-            .cinematic
+            return AVCaptureVideoStabilizationMode.cinematic
         case .cinematicExtended:
-            .cinematicExtended
+            return AVCaptureVideoStabilizationMode.cinematicExtended
         case .previewOptimized:
-            .previewOptimized
+            return AVCaptureVideoStabilizationMode.previewOptimized
         case .cinematicExtendedEnhanced:
             guard #available(iOS 18.0, *) else { return nil }
             return .cinematicExtendedEnhanced

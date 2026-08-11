@@ -19,6 +19,7 @@ public final class AppModel {
     public let setupModel: StreamSetupModel
     public let webcamModel: WebcamModel
     public let settingsModel: SettingsModel
+    public let preferencesState: SenderPreferencesState
 
     private let sessionCoordinator: StreamSessionCoordinator
     @ObservationIgnored private var snapshotTask: Task<Void, Never>?
@@ -34,9 +35,10 @@ public final class AppModel {
     ) {
         self.sessionCoordinator = sessionCoordinator
         streamSnapshot = StreamSessionSnapshot(state: .idle, runId: nil, identity: nil)
-        setupModel = StreamSetupModel(settingsStore: settingsStore, browser: browser, probe: probe, capture: capture, encoderProbe: encoderProbe, sessionCoordinator: sessionCoordinator, logger: logger)
+        preferencesState = SenderPreferencesState(settingsStore: settingsStore)
+        setupModel = StreamSetupModel(preferencesState: preferencesState, browser: browser, probe: probe, capture: capture, encoderProbe: encoderProbe, sessionCoordinator: sessionCoordinator, logger: logger)
         webcamModel = WebcamModel(capture: capture, sessionCoordinator: sessionCoordinator, logger: logger)
-        settingsModel = SettingsModel(settingsStore: settingsStore, logger: logger)
+        settingsModel = SettingsModel(preferencesState: preferencesState, logger: logger)
         snapshotTask = Task { [weak self] in
             guard let self else { return }
             let stream = await sessionCoordinator.snapshots()
@@ -50,8 +52,7 @@ public final class AppModel {
                 case .idle, .failed:
                     active = false
                 }
-                self.settingsModel.setStreamActive(active)
-                self.setupModel.setStreamActive(active)
+                self.preferencesState.setStreamActive(active)
                 if case let .failed(failure) = snapshot.state {
                     self.lastFailure = failure
                     self.setupModel.failure = failure
@@ -64,7 +65,6 @@ public final class AppModel {
                     self.settingsModel.setDiagnostics(diagnostics)
                 }
                 if case .streaming = snapshot.state {
-                    self.settingsModel.reloadPreferences()
                     self.route = .webcam
                 }
                 if case .idle = snapshot.state, self.route == .webcam {
