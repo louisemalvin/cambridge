@@ -321,6 +321,8 @@ private struct UITestFixtureSetupView: View {
                 }
 
                 Section("Diagnostics") {
+                    Text("Local diagnostic report: camera identifiers are included; receiver hosts are redacted.")
+                        .font(.caption)
                     Button("Copy capability report", action: model.copyCapabilityReport)
                         .accessibilityIdentifier("copy-capability-report")
                     Text(model.capabilityReportCopied ? "Capability report copied" : "No capability report copied")

@@ -70,6 +70,9 @@ struct SettingsScreen: View {
                         .textSelection(.enabled)
                     Button("Copy diagnostics") { model.copyDiagnostics() }
                         .accessibilityIdentifier("copy-diagnostics")
+                    Text("Local diagnostic report: camera identifiers are included; receiver hosts are redacted.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     Text(model.capabilityReportText)
                         .font(.system(.footnote, design: .monospaced))
                         .textSelection(.enabled)

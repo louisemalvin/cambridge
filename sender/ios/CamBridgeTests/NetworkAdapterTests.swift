@@ -36,7 +36,8 @@ final class NetworkAdapterTests: XCTestCase {
 
         let result = await probe.probe(target: .manual(endpoint))
 
-        XCTAssertEqual(result, .failure(.incompatibleProtocol))
+        let expectedFailure: Result<ReceiverCapabilities, StreamFailure> = .failure(.incompatibleProtocol)
+        XCTAssertEqual(result, expectedFailure)
         let didClose = await connection.didClose()
         XCTAssertTrue(didClose)
     }
@@ -45,7 +46,7 @@ final class NetworkAdapterTests: XCTestCase {
         let endpoint = try ReceiverEndpoint(host: "127.0.0.1")
         let connection = FakeControlConnection(response: .hello(
             sessionId: "unexpected-session",
-            generation: CamBridgeContract.Validation.minimumGeneration,
+            generation: UInt64(CamBridgeContract.Validation.minimumGeneration),
             profileId: VideoMode.mode1080p30.id,
             codedWidth: VideoMode.mode1080p30.codedWidth,
             codedHeight: VideoMode.mode1080p30.codedHeight,
@@ -57,7 +58,8 @@ final class NetworkAdapterTests: XCTestCase {
 
         let result = await probe.probe(target: .manual(endpoint))
 
-        XCTAssertEqual(result, .failure(.incompatibleProtocol))
+        let expectedFailure: Result<ReceiverCapabilities, StreamFailure> = .failure(.incompatibleProtocol)
+        XCTAssertEqual(result, expectedFailure)
         let didClose = await connection.didClose()
         XCTAssertTrue(didClose)
     }

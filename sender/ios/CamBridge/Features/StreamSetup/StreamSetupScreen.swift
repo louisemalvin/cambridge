@@ -44,7 +44,7 @@ struct StreamSetupScreen: View {
                     .accessibilityIdentifier("start-stream")
                 }
                 Section("Diagnostics") {
-                    Text("Capability reports can be copied before Start. Receiver hosts are redacted.")
+                    Text("Local diagnostic report: camera identifiers are included; receiver hosts are redacted. It can be copied before Start.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                     Button("Copy capability report") {
