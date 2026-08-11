@@ -175,9 +175,16 @@ includedir=\${frameworkdir}/Headers
 Name: libobs
 Description: OBS Studio libobs pinned CamBridge build baseline
 Version: ${obs_version}
-Cflags: -F\${prefix}/Frameworks -I\${includedir}
+Cflags: -F\${prefix}/Frameworks -I\${includedir} -I${simde_prefix}/include
 Libs: -L\${libdir} -lobs
 EOF
+
+obs_cflags=$(PKG_CONFIG_PATH="${obs_pc_dir}:${obs_pkg_config_path}" \
+    pkg-config --cflags-only-I libobs)
+grep -Fq -- "-I${simde_prefix}/include" <<<"${obs_cflags}" || {
+    printf 'error: generated libobs metadata omits the pinned SIMDe include path\n' >&2
+    exit 1
+}
 
 resolved_obs_version=$(PKG_CONFIG_PATH="${obs_pc_dir}:${obs_pkg_config_path}" \
     pkg-config --modversion libobs)
