@@ -109,6 +109,15 @@ if(BUILD_TESTING)
         -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror
     )
     add_test(NAME cambridge-obs-plugin-address-tests COMMAND cambridge-obs-plugin-address-tests)
+
+    add_executable(cambridge-obs-plugin-mailbox-tests
+        tests/latest_frame_mailbox_tests.cpp
+    )
+    target_compile_features(cambridge-obs-plugin-mailbox-tests PRIVATE cxx_std_17)
+    target_compile_options(cambridge-obs-plugin-mailbox-tests PRIVATE
+        -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror
+    )
+    add_test(NAME cambridge-obs-plugin-mailbox-tests COMMAND cambridge-obs-plugin-mailbox-tests)
 endif()
 
 install(TARGETS cambridge-obs-plugin
