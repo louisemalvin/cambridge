@@ -285,8 +285,10 @@ final class CoordinatorLifecycleTests: XCTestCase {
             stabilization: CameraStabilizationPreference.off
         )
 
-        let expectedResult: Result<Void, StreamFailure> = .failure(.receiverRejected("unsupported exact mode"))
-        XCTAssertEqual(result, expectedResult)
+        guard case let .failure(resultFailure) = result else {
+            return XCTFail("receiver rejection must fail Start")
+        }
+        XCTAssertEqual(resultFailure, StreamFailure.receiverRejected("unsupported exact mode"))
         let snapshot = await coordinator.snapshotStream()
         guard case let .failed(failure) = snapshot.state else {
             return XCTFail("receiver rejection must produce a failed stream state")
