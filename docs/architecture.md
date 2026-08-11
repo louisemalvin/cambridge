@@ -20,6 +20,17 @@ Android camera
 The receiver falls back to software decoding and a bounded NV12 texture upload
 when hardware decoding or direct DMA-BUF import is unavailable.
 
+The iOS sender follows the same wire path and does not add a second receiver
+or transport:
+
+```text
+iPhone AVFoundation camera
+    → VideoToolbox hardware H.264
+    → bounded newest-access-unit queue
+    → RFC 6184 RTP/H.264 over UDP
+    → unchanged CamBridge OBS source
+```
+
 ## Components
 
 ### Android sender
@@ -37,6 +48,21 @@ address metadata, and removes addresses when the service is lost. The
 app coordinator probes those addresses and deduplicates successful responses
 by receiver ID; discovery itself never establishes readiness or starts a
 stream.
+
+### iOS sender candidate
+
+The iOS project is under `sender/ios/` and targets iOS 17 or later. Its
+platform-neutral `CamBridgeCore` package owns the generated v6 contract,
+control framing, H.264 normalization, RTP packetization, session state, and
+bounded queue policy. The app target owns AVFoundation, VideoToolbox,
+Network.framework, SwiftUI, persistence, and diagnostics.
+
+The iOS sender uses exact AVFoundation formats and a temporary hardware
+VideoToolbox probe before offering a shared sender mode. It keeps coded video
+geometry separate from the four clockwise wire rotations; preview orientation
+is configured independently. Bonjour TXT addresses are candidates only: each
+selected receiver is probed over TCP before Start, and the accepted media port
+is used for the connected UDP path.
 
 ### Control and media transport
 
@@ -62,8 +88,10 @@ uploads NV12 data to an OBS texture.
 ## Ownership boundaries
 
 - Android owns Camera2 and MediaCodec; it does not depend on OBS APIs.
+- iOS owns AVFoundation and VideoToolbox; it does not depend on OBS APIs or
+  the POSIX interoperability fixture.
 - The protocol layer owns message framing, session identity, wire bounds, and
-  RTP/H.264 rules; the Android sender owns its camera/encoder mode catalog.
+  RTP/H.264 rules; the shared sender catalog owns phone mode definitions.
 - The receiver owns network input, decoding, frame lifetime, and presentation
   scheduling.
 - OBS integration owns source properties, graphics resources, and the output

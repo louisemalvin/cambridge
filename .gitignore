@@ -13,6 +13,7 @@
 
 # Generated and local files
 /build/
+**/.build/
 .artifacts/
 .DS_Store
 *.log

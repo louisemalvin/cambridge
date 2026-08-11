@@ -1,0 +1,37 @@
+name: iOS app
+
+on:
+  push:
+    paths:
+      - "sender/ios/**"
+      - "sender/cambridge-video-modes.json"
+      - "protocol/**"
+      - "scripts/development/generate-cambridge-*.py"
+      - "scripts/development/generate-ios-version.py"
+      - "scripts/sender/ios/**"
+      - "scripts/receiver/linux/test-cambridge-fixture.sh"
+      - ".github/workflows/ios.yml"
+  pull_request:
+    paths:
+      - "sender/ios/**"
+      - "sender/cambridge-video-modes.json"
+      - "protocol/**"
+      - "scripts/development/generate-cambridge-*.py"
+      - "scripts/development/generate-ios-version.py"
+      - "scripts/sender/ios/**"
+      - "scripts/receiver/linux/test-cambridge-fixture.sh"
+      - ".github/workflows/ios.yml"
+
+jobs:
+  xcode:
+    runs-on: macos-14
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v4
+      - name: Record selected Xcode
+        run: xcodebuild -version
+      - name: Run CamBridgeCore package and parity checks
+        run: ./scripts/sender/ios/check-core.sh
+      - name: Build and test unsigned simulator app
+        run: ./scripts/sender/ios/check-xcode.sh

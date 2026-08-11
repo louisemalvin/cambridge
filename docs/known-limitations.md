@@ -30,3 +30,17 @@
   orientation changes take effect after Stop and a new Start.
 - The control and media transport is unauthenticated and unencrypted. Use
   CamBridge only on a trusted local network.
+
+## iOS sender status
+
+The native iOS sender project and Linux Swift interoperability fixture are
+present, but iOS support remains an install candidate until macOS Xcode checks
+and physical-device validation are retained. Linux cannot establish whether a
+particular iPhone exposes an exact shared mode, a usable hardware H.264
+encoder, the requested stabilization modes, or the expected preview/OBS
+orientation.
+
+iOS streaming is foreground-only. Backgrounding, camera interruption, system
+pressure, terminal control loss, and terminal UDP failure end the session; the
+app does not reconnect automatically. Unsupported exact camera modes are
+omitted rather than scaled or silently downgraded.

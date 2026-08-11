@@ -9,6 +9,8 @@ contract_json="${repo_root}/protocol/cambridge-stream-contract.json"
 scene_template="${repo_root}/scripts/receiver/linux/cambridge-test-scene.json"
 profile_template="${repo_root}/scripts/receiver/linux/cambridge-test-profile.ini"
 fixture_script="${repo_root}/scripts/receiver/linux/cambridge-fixture.py"
+swift_fixture_package="${repo_root}/scripts/sender/ios/cambridge-swift-fixture"
+swift_container_image="swift:6.0.3-jammy"
 
 profile_id="${CAMBRIDGE_PROFILE_ID:-fixture-2k30}"
 video_width="${CAMBRIDGE_WIDTH:-2560}"
@@ -19,6 +21,7 @@ rotation_degrees="${CAMBRIDGE_ROTATION_DEGREES:-0}"
 duration_seconds="${CAMBRIDGE_DURATION_SECONDS:-60}"
 decoder_mode="${CAMBRIDGE_DECODER_MODE:-auto}"
 capture_output="${CAMBRIDGE_CAPTURE_OUTPUT:-0}"
+sender_mode="${CAMBRIDGE_SENDER_MODE:-python}"
 poll_interval_seconds=1
 obs_wait_seconds=30
 obs_shutdown_wait_seconds=5
@@ -39,6 +42,7 @@ monitor_pid=""
 
 fail() {
     printf 'error: %s\n' "$1" >&2
+    printf 'artifacts=%s\n' "${artifact_dir}" >&2
     exit 1
 }
 
@@ -72,6 +76,9 @@ trap cleanup EXIT
 [[ -f "${scene_template}" ]] || fail "OBS scene template is missing: ${scene_template}"
 [[ -f "${profile_template}" ]] || fail "OBS profile template is missing: ${profile_template}"
 [[ -f "${fixture_script}" ]] || fail "fixture script is missing: ${fixture_script}"
+if [[ "${sender_mode}" == "swift" ]]; then
+    [[ -f "${swift_fixture_package}/Package.swift" ]] || fail "Swift fixture package is missing"
+fi
 command -v jq >/dev/null 2>&1 || fail "jq is required"
 command -v obs >/dev/null 2>&1 || fail "OBS is required"
 ffmpeg_path=$(command -v ffmpeg) || fail "ffmpeg is required"
@@ -83,6 +90,10 @@ esac
 case "${capture_output}" in
     0|1) ;;
     *) fail "capture output must be 0 or 1" ;;
+esac
+case "${sender_mode}" in
+    python|swift) ;;
+    *) fail "sender mode must be python or swift" ;;
 esac
 [[ "${duration_seconds}" =~ ^[1-9][0-9]*$ ]] || fail "duration must be a positive integer"
 [[ "${rotation_degrees}" =~ ^(0|90|180|270)$ ]] || fail "rotation must be 0, 90, 180, or 270 degrees"
@@ -173,7 +184,46 @@ if [[ "${capture_output}" == "1" ]]; then
     fixture_args+=(--startup-delay "${obs_recording_settle_seconds}")
 fi
 
-"${python_path}" "${fixture_args[@]}"
+if [[ "${sender_mode}" == "python" ]]; then
+    "${python_path}" "${fixture_args[@]}"
+else
+    swift_access_unit="${artifact_dir}/swift-fixture.h264"
+    "${ffmpeg_path}" -hide_banner -loglevel error -nostdin \
+        -f lavfi -i "testsrc2=size=${profile_width}x${profile_height}:rate=${profile_fps}" \
+        -frames:v 1 -an -c:v libx264 -preset ultrafast -tune zerolatency \
+        -x264-params repeat-headers=1 -f h264 "${swift_access_unit}"
+    [[ -s "${swift_access_unit}" ]] || fail "FFmpeg did not produce a Swift Annex-B fixture"
+    swift_access_unit_argument="${swift_access_unit}"
+    if ! command -v swift >/dev/null 2>&1; then
+        swift_access_unit_argument="/workspace/${swift_access_unit#${repo_root}/}"
+    fi
+    swift_fixture_args=(
+        --host 127.0.0.1
+        --control-port "${control_port}"
+        --profile-id "${profile_id}"
+        --width "${profile_width}"
+        --height "${profile_height}"
+        --fps "${profile_fps}"
+        --bitrate-bps "${video_bitrate_bps}"
+        --rotation-degrees "${rotation_degrees}"
+        --access-unit "${swift_access_unit_argument}"
+        --repeat 3
+        --linger-ms 1000
+    )
+    if command -v swift >/dev/null 2>&1; then
+        (
+            cd "${swift_fixture_package}"
+            swift run --disable-sandbox cambridge-swift-fixture "${swift_fixture_args[@]}"
+        )
+    else
+        command -v docker >/dev/null 2>&1 || fail "Swift or Docker is required for the Swift fixture"
+        docker run --rm --network host \
+            --mount "type=bind,source=${repo_root},target=/workspace" \
+            --workdir /workspace/scripts/sender/ios/cambridge-swift-fixture \
+            "${swift_container_image}" \
+            swift run --disable-sandbox cambridge-swift-fixture "${swift_fixture_args[@]}"
+    fi
+fi
 
 if [[ "${capture_output}" == "1" ]]; then
     if [[ -n "${monitor_pid}" ]]; then
@@ -205,6 +255,8 @@ if [[ "${rotation_degrees}" == "90" || "${rotation_degrees}" == "270" ]]; then
 fi
 rg -q "session_accepted:.*:display=${display_width}x${display_height}:rotation=${rotation_degrees}@${profile_fps}" "${obs_log}" \
     || fail "native source did not accept the requested fixture profile"
+rg -q 'control_disconnected_session_invalidated' "${obs_log}" \
+    || fail "native source did not invalidate the sender session after stop"
 rg -q 'decoder_ready:h264/(VAAPI|software)' "${obs_log}" \
     || fail "native decoder did not become ready"
 rg -q "first_frame_published:mode=.*profile=${profile_width}x${profile_height}" "${obs_log}" \

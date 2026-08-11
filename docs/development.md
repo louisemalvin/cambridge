@@ -12,6 +12,11 @@ The full repository checks require:
 - OBS Studio development headers (`libobs`)
 - FFmpeg development libraries (`libavcodec`, `libavutil`, and `libswscale`)
 - `libva` with the DRM backend, `libdrm`, and `jansson`
+- Swift 6.0.3 or Docker for the Linux `CamBridgeCore` and Swift fixture checks
+
+The Xcode project requires macOS with Xcode 16.4 (or a compatible newer Xcode)
+for Apple-target compilation. A physical iPhone is required for hardware
+camera, local-network permission, signing, and glass-to-glass validation.
 
 The emulator smoke test additionally uses an Android emulator, `adb`, `ffmpeg`,
 `jq`, and an installed OBS binary. Avahi development files are optional for
@@ -25,6 +30,7 @@ receiver discovery advertisement.
 - `receiver/linux/obs/` — Linux OBS receiver
 - `protocol/` — shared wire contract, schema, and examples
 - `scripts/sender/` and `scripts/receiver/` — platform-specific checks and fixtures
+- `sender/cambridge-video-modes.json` — shared Android/iOS phone mode catalog
 
 ## Repository checks
 
@@ -36,6 +42,27 @@ JAVA_HOME=/path/to/jdk-17 ./scripts/development/check-all.sh
 
 This validates contract parity, runs Android unit tests and lint, assembles a
 debug APK, builds and tests the native plugin, and checks its linked libraries.
+
+Run the iOS-independent checks separately from the repository root:
+
+```bash
+./scripts/sender/ios/check-core.sh
+./scripts/sender/ios/check-fixture.sh
+```
+
+These commands check generated contract, sender-mode, and version outputs,
+run the Swift 6 package tests, and build the Linux Swift interoperability
+fixture. They do not claim that Apple-only app code compiles.
+
+On macOS, run the committed unsigned Xcode project and scheme:
+
+```bash
+./scripts/sender/ios/check-xcode.sh
+```
+
+The script selects the first available iPhone simulator deterministically and
+uses `CODE_SIGNING_ALLOWED=NO`. It intentionally does not test a real camera
+or hardware H.264 encoder.
 
 ## Android build
 
@@ -113,6 +140,25 @@ Force the bounded CPU fallback with `CAMBRIDGE_DECODER_MODE=cpu`. Set
 `CAMBRIDGE_CAPTURE_OUTPUT=1` to save an isolated OBS recording and frame
 hashes.
 
+Use the Swift transport fixture against the same unchanged native receiver by
+setting `CAMBRIDGE_SENDER_MODE=swift`. For a software-only local run:
+
+```bash
+CAMBRIDGE_SENDER_MODE=swift \
+CAMBRIDGE_DECODER_MODE=cpu \
+CAMBRIDGE_PROFILE_ID=fixture-720p30 \
+CAMBRIDGE_WIDTH=1280 \
+CAMBRIDGE_HEIGHT=720 \
+CAMBRIDGE_FPS=30 \
+CAMBRIDGE_BITRATE_BPS=4000000 \
+CAMBRIDGE_DURATION_SECONDS=1 \
+bash scripts/receiver/linux/test-cambridge-fixture.sh
+```
+
+The Swift fixture performs a probe, validates the returned capabilities,
+sends hello plus Annex-B H.264 RTP, and sends a matching explicit stop. The
+native harness requires OBS, FFmpeg, `jq`, and the Linux plugin environment.
+
 ## Diagnostics
 
 The Android app records structured stream events in its process log. The OBS
@@ -129,6 +175,12 @@ Android camera mode ownership, stabilization behavior, and the physical A/B
 validation matrix are documented in [Android camera modes](android-camera.md).
 Receiver-discovery failures are exposed to the app coordinator and logged with
 the failed NSD operation and Android error code when one is available.
+
+The iOS physical validation matrix is deliberately not reported as complete
+on Linux. Before calling iOS supported, a Mac-lab run must retain the Xcode
+version, iPhone model/iOS version, offered exact formats, encoder identity,
+all four orientations, camera controls, interruption/background behavior,
+queue/drop/thermal diagnostics, and OBS hardware plus CPU-fallback results.
 
 ## Release packaging
 

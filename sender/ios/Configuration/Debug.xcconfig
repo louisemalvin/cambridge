@@ -1,0 +1,5 @@
+#include "Shared.xcconfig"
+#include "GeneratedVersion.xcconfig"
+
+SWIFT_OPTIMIZATION_LEVEL = -Onone
+GCC_PREPROCESSOR_DEFINITIONS = $(inherited) DEBUG=1

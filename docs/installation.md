@@ -4,6 +4,11 @@ CamBridge currently requires an Android phone and a Linux x86_64/amd64
 computer running OBS Studio. Put both devices on the same trusted local
 network.
 
+The repository also contains an iOS 17 sender install candidate. It is not a
+released or supported platform yet: Apple-target compilation, signing, a real
+iPhone camera/encoder, and glass-to-glass behavior must be validated on macOS
+before the public support statement changes.
+
 Install the Android APK and OBS plugin from the same CamBridge release. The
 wire protocol is versioned and incompatible releases do not connect; in
 particular, the protocol v6 artifacts in CamBridge 0.3.0 are not compatible
@@ -73,3 +78,13 @@ port is used directly; CamBridge does not scan ports.
 
 CamBridge is not encrypted or authenticated. Do not expose these ports to the
 internet; see [Known limitations](known-limitations.md).
+
+## iOS development install candidate
+
+On a Mac with Xcode 16.4 or newer, open `sender/ios/CamBridge.xcodeproj`
+directly. Select the local Personal Team or paid team in Xcode for a device
+run; no team, certificate, profile, or account information is committed.
+Choose an iPhone destination, grant camera and local-network permission, and
+run the pre-install and physical validation matrix from the development
+handoff. The unsigned simulator check cannot validate the camera, hardware
+VideoToolbox, or local-network behavior.

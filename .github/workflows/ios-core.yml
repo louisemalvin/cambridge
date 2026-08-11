@@ -1,0 +1,34 @@
+name: iOS core
+
+on:
+  push:
+    paths:
+      - "sender/ios/**"
+      - "sender/cambridge-video-modes.json"
+      - "protocol/**"
+      - "scripts/development/generate-cambridge-*.py"
+      - "scripts/development/generate-ios-version.py"
+      - "scripts/sender/ios/**"
+      - "scripts/receiver/linux/test-cambridge-fixture.sh"
+      - ".github/workflows/ios-core.yml"
+  pull_request:
+    paths:
+      - "sender/ios/**"
+      - "sender/cambridge-video-modes.json"
+      - "protocol/**"
+      - "scripts/development/generate-cambridge-*.py"
+      - "scripts/development/generate-ios-version.py"
+      - "scripts/sender/ios/**"
+      - "scripts/receiver/linux/test-cambridge-fixture.sh"
+      - ".github/workflows/ios-core.yml"
+
+jobs:
+  core:
+    runs-on: ubuntu-24.04
+    container: swift:6.0.3-jammy
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run CamBridgeCore and parity checks
+        run: ./scripts/sender/ios/check-core.sh
+      - name: Build the Linux Swift interoperability fixture
+        run: ./scripts/sender/ios/check-fixture.sh

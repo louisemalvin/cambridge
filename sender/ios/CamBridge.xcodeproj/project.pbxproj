@@ -1,0 +1,291 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		CB1000000000000000000001 /* CamBridgeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB2000000000000000000001 /* CamBridgeApp.swift */; };
+		CB1000000000000000000002 /* CamBridgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB2000000000000000000002 /* CamBridgeTests.swift */; };
+		CB1000000000000000000003 /* CamBridgeUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB2000000000000000000003 /* CamBridgeUITests.swift */; };
+		CB1000000000000000000004 /* CamBridgeCore in Frameworks */ = {isa = PBXBuildFile; productRef = CB7000000000000000000001 /* CamBridgeCore */; };
+		CB1000000000000000000005 /* CamBridgeCore in Frameworks */ = {isa = PBXBuildFile; productRef = CB7000000000000000000001 /* CamBridgeCore */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		CB2000000000000000000001 /* CamBridgeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CamBridgeApp.swift; sourceTree = "<group>"; };
+		CB2000000000000000000002 /* CamBridgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CamBridgeTests.swift; sourceTree = "<group>"; };
+		CB2000000000000000000003 /* CamBridgeUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CamBridgeUITests.swift; sourceTree = "<group>"; };
+		CB2000000000000000000004 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		CB2000000000000000000005 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
+		CB2000000000000000000006 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
+		CB2000000000000000000007 /* CamBridge.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CamBridge.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CB2000000000000000000008 /* CamBridgeTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CamBridgeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		CB2000000000000000000009 /* CamBridgeUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CamBridgeUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		CB3000000000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CB1000000000000000000004 /* CamBridgeCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CB3000000000000000000002 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CB1000000000000000000005 /* CamBridgeCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CB3000000000000000000003 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		CB4000000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				CB4000000000000000000002 /* CamBridge */,
+				CB4000000000000000000003 /* CamBridgeTests */,
+				CB4000000000000000000004 /* CamBridgeUITests */,
+				CB4000000000000000000005 /* Configuration */,
+				CB4000000000000000000006 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		CB4000000000000000000002 /* CamBridge */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			path = CamBridge;
+			sourceTree = "<group>";
+		};
+		CB4000000000000000000003 /* CamBridgeTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			path = CamBridgeTests;
+			sourceTree = "<group>";
+		};
+		CB4000000000000000000004 /* CamBridgeUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			path = CamBridgeUITests;
+			sourceTree = "<group>";
+		};
+		CB4000000000000000000005 /* Configuration */ = {
+			isa = PBXGroup;
+			children = (
+				CB2000000000000000000005 /* Debug.xcconfig */,
+				CB2000000000000000000006 /* Release.xcconfig */,
+			);
+			path = Configuration;
+			sourceTree = "<group>";
+		};
+		CB4000000000000000000006 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				CB2000000000000000000007 /* CamBridge.app */,
+				CB2000000000000000000008 /* CamBridgeTests.xctest */,
+				CB2000000000000000000009 /* CamBridgeUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		CB4000000000000000000007 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				CB2000000000000000000001 /* CamBridgeApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		CB4000000000000000000008 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				CB2000000000000000000004 /* Info.plist */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		CB5000000000000000000001 /* CamBridge */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CB6000000000000000000001 /* Build configuration list for PBXNativeTarget "CamBridge" */;
+			buildPhases = (
+				CB3000000000000000000004 /* Sources */,
+				CB3000000000000000000001 /* Frameworks */,
+				CB3000000000000000000005 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				CB4000000000000000000002 /* CamBridge */,
+			);
+			name = CamBridge;
+			packageProductDependencies = (
+				CB7000000000000000000001 /* CamBridgeCore */,
+			);
+			productName = CamBridge;
+			productReference = CB2000000000000000000007 /* CamBridge.app */;
+			productType = "com.apple.product-type.application";
+		};
+		CB5000000000000000000002 /* CamBridgeTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CB6000000000000000000002 /* Build configuration list for PBXNativeTarget "CamBridgeTests" */;
+			buildPhases = (
+				CB3000000000000000000006 /* Sources */,
+				CB3000000000000000000002 /* Frameworks */,
+				CB3000000000000000000007 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				CB8000000000000000000001 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				CB4000000000000000000003 /* CamBridgeTests */,
+			);
+			name = CamBridgeTests;
+			packageProductDependencies = (
+				CB7000000000000000000001 /* CamBridgeCore */,
+			);
+			productName = CamBridgeTests;
+			productReference = CB2000000000000000000008 /* CamBridgeTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		CB5000000000000000000003 /* CamBridgeUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CB6000000000000000000003 /* Build configuration list for PBXNativeTarget "CamBridgeUITests" */;
+			buildPhases = (
+				CB3000000000000000000008 /* Sources */,
+				CB3000000000000000000003 /* Frameworks */,
+				CB3000000000000000000009 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				CB8000000000000000000002 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				CB4000000000000000000004 /* CamBridgeUITests */,
+			);
+			name = CamBridgeUITests;
+			productName = CamBridgeUITests;
+			productReference = CB2000000000000000000009 /* CamBridgeUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		CB9000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastSwiftUpdateCheck = 1600;
+				TargetAttributes = {
+					CB5000000000000000000001 = { CreatedOnToolsVersion = 16.0; };
+					CB5000000000000000000002 = { CreatedOnToolsVersion = 16.0; TestTargetID = CB5000000000000000000001; };
+					CB5000000000000000000003 = { CreatedOnToolsVersion = 16.0; TestTargetID = CB5000000000000000000001; };
+				};
+			};
+			buildConfigurationList = CB6000000000000000000004 /* Build configuration list for PBXProject "CamBridge" */;
+			compatibilityVersion = "Xcode 16.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = CB4000000000000000000001;
+			packageReferences = (
+				CBA000000000000000000001 /* CamBridgeCore */,
+			);
+			productRefGroup = CB4000000000000000000006 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				CB5000000000000000000001 /* CamBridge */,
+				CB5000000000000000000002 /* CamBridgeTests */,
+				CB5000000000000000000003 /* CamBridgeUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		CB3000000000000000000005 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		CB3000000000000000000007 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		CB3000000000000000000009 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		CB3000000000000000000004 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		CB3000000000000000000006 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		CB3000000000000000000008 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		CB8000000000000000000001 /* PBXTargetDependency */ = {isa = PBXTargetDependency; target = CB5000000000000000000001 /* CamBridge */; targetProxy = CB8000000000000000000003 /* PBXContainerItemProxy */; };
+		CB8000000000000000000002 /* PBXTargetDependency */ = {isa = PBXTargetDependency; target = CB5000000000000000000001 /* CamBridge */; targetProxy = CB8000000000000000000004 /* PBXContainerItemProxy */; };
+/* End PBXTargetDependency section */
+
+/* Begin PBXContainerItemProxy section */
+		CB8000000000000000000003 /* PBXContainerItemProxy */ = {isa = PBXContainerItemProxy; containerPortal = CB9000000000000000000001 /* Project object */; proxyType = 1; remoteGlobalIDString = CB5000000000000000000001; remoteInfo = CamBridge; };
+		CB8000000000000000000004 /* PBXContainerItemProxy */ = {isa = PBXContainerItemProxy; containerPortal = CB9000000000000000000001 /* Project object */; proxyType = 1; remoteGlobalIDString = CB5000000000000000000001; remoteInfo = CamBridge; };
+/* End PBXContainerItemProxy section */
+
+/* Begin XCBuildConfiguration section */
+		CB6000000000000000000010 /* Debug */ = {isa = XCBuildConfiguration; baseConfigurationReference = CB2000000000000000000005 /* Debug.xcconfig */; buildSettings = { INFOPLIST_FILE = CamBridge/Resources/Info.plist; }; name = Debug; };
+		CB6000000000000000000011 /* Release */ = {isa = XCBuildConfiguration; baseConfigurationReference = CB2000000000000000000006 /* Release.xcconfig */; buildSettings = { INFOPLIST_FILE = CamBridge/Resources/Info.plist; }; name = Release; };
+		CB6000000000000000000012 /* Debug */ = {isa = XCBuildConfiguration; baseConfigurationReference = CB2000000000000000000005 /* Debug.xcconfig */; buildSettings = { GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = dev.cambridge.sender.tests; PRODUCT_NAME = CamBridgeTests; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/CamBridge.app/CamBridge"; BUNDLE_LOADER = "$(TEST_HOST)"; }; name = Debug; };
+		CB6000000000000000000013 /* Release */ = {isa = XCBuildConfiguration; baseConfigurationReference = CB2000000000000000000006 /* Release.xcconfig */; buildSettings = { GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = dev.cambridge.sender.tests; PRODUCT_NAME = CamBridgeTests; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/CamBridge.app/CamBridge"; BUNDLE_LOADER = "$(TEST_HOST)"; }; name = Release; };
+		CB6000000000000000000014 /* Debug */ = {isa = XCBuildConfiguration; baseConfigurationReference = CB2000000000000000000005 /* Debug.xcconfig */; buildSettings = { GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = dev.cambridge.sender.uitests; PRODUCT_NAME = CamBridgeUITests; TEST_TARGET_NAME = CamBridge; }; name = Debug; };
+		CB6000000000000000000015 /* Release */ = {isa = XCBuildConfiguration; baseConfigurationReference = CB2000000000000000000006 /* Release.xcconfig */; buildSettings = { GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = dev.cambridge.sender.uitests; PRODUCT_NAME = CamBridgeUITests; TEST_TARGET_NAME = CamBridge; }; name = Release; };
+		CB6000000000000000000016 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = { ALWAYS_SEARCH_USER_PATHS = NO; CLANG_CXX_LANGUAGE_STANDARD = "gnu++17"; SWIFT_VERSION = 6.0; }; name = Debug; };
+		CB6000000000000000000017 /* Release */ = {isa = XCBuildConfiguration; buildSettings = { ALWAYS_SEARCH_USER_PATHS = NO; CLANG_CXX_LANGUAGE_STANDARD = "gnu++17"; SWIFT_VERSION = 6.0; }; name = Release; };
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		CB6000000000000000000001 /* Build configuration list for PBXNativeTarget "CamBridge" */ = {isa = XCConfigurationList; buildConfigurations = (CB6000000000000000000010 /* Debug */, CB6000000000000000000011 /* Release */); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		CB6000000000000000000002 /* Build configuration list for PBXNativeTarget "CamBridgeTests" */ = {isa = XCConfigurationList; buildConfigurations = (CB6000000000000000000012 /* Debug */, CB6000000000000000000013 /* Release */); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		CB6000000000000000000003 /* Build configuration list for PBXNativeTarget "CamBridgeUITests" */ = {isa = XCConfigurationList; buildConfigurations = (CB6000000000000000000014 /* Debug */, CB6000000000000000000015 /* Release */); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		CB6000000000000000000004 /* Build configuration list for PBXProject "CamBridge" */ = {isa = XCConfigurationList; buildConfigurations = (CB6000000000000000000016 /* Debug */, CB6000000000000000000017 /* Release */); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		CBA000000000000000000001 /* CamBridgeCore */ = {isa = XCLocalSwiftPackageReference; relativePath = Packages/CamBridgeCore; };
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		CB7000000000000000000001 /* CamBridgeCore */ = {isa = XCSwiftPackageProductDependency; package = CBA000000000000000000001 /* CamBridgeCore */; productName = CamBridgeCore; };
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = CB9000000000000000000001 /* Project object */;
+}
