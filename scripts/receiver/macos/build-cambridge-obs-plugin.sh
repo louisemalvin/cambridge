@@ -66,7 +66,7 @@ plutil -lint "${info_plist}" >/dev/null
     exit 1
 }
 IFS=';' read -r -a architecture_list <<<"${architectures}"
-lipo -verify_arch "${architecture_list[@]}" "${plugin_path}"
+lipo "${plugin_path}" -verify_arch "${architecture_list[@]}"
 plugin_architectures=$(lipo -archs "${plugin_path}")
 if [[ "${require_universal}" == "ON" ]]; then
     [[ "${plugin_architectures}" == *arm64* && "${plugin_architectures}" == *x86_64* ]] || {

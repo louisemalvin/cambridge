@@ -100,7 +100,7 @@ for ffmpeg_library_name in "${ffmpeg_library_names[@]}"; do
         printf 'error: installed FFmpeg library is missing: %s\n' "${ffmpeg_library}" >&2
         exit 1
     }
-    lipo -verify_arch "${architecture}" "${ffmpeg_library}" >/dev/null
+    lipo "${ffmpeg_library}" -verify_arch "${architecture}" >/dev/null
 done
 
 obs_version=$(jq -er '.baseline.obsStudio' "${buildspec}")
@@ -143,7 +143,7 @@ obs_framework_binary="${obs_framework}/Versions/A/libobs"
         "${obs_framework_binary}" >&2
     exit 1
 }
-lipo -verify_arch "${architecture}" "${obs_framework_binary}" >/dev/null
+lipo "${obs_framework_binary}" -verify_arch "${architecture}" >/dev/null
 printf 'resolved OBS version: %s\n' "${obs_version}"
 printf 'resolved FFmpeg version: %s\n' "${ffmpeg_version}"
 printf 'libobs architecture: %s\n' "${architecture}"

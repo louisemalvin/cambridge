@@ -73,7 +73,7 @@ jobs:
           test -f "${metallib}"
           plutil -lint "${plist}"
           codesign --verify --strict --verbose=2 "${bundle}"
-          lipo -verify_arch "${CAMBRIDGE_ARCHITECTURE}" "${plugin}"
+          lipo "${plugin}" -verify_arch "${CAMBRIDGE_ARCHITECTURE}"
           if otool -L "${plugin}" | grep -Eq '/opt/homebrew|/usr/local/opt|/usr/local/Cellar|/opt/homebrew/Cellar'; then
             echo "unexpected Homebrew load command in ${plugin}" >&2
             exit 1
