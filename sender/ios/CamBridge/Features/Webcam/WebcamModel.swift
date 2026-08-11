@@ -15,7 +15,7 @@ public final class WebcamModel {
     public let capture: CaptureService
     private let sessionCoordinator: StreamSessionCoordinator
     private let logger: CamBridgeLogger
-    private var monitorTask: Task<Void, Never>?
+    @ObservationIgnored private var monitorTask: Task<Void, Never>?
 
     public init(capture: CaptureService, sessionCoordinator: StreamSessionCoordinator, logger: CamBridgeLogger) {
         self.capture = capture

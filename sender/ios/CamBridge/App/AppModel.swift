@@ -20,7 +20,7 @@ public final class AppModel {
     public let settingsModel: SettingsModel
 
     private let sessionCoordinator: StreamSessionCoordinator
-    private var snapshotTask: Task<Void, Never>?
+    @ObservationIgnored private var snapshotTask: Task<Void, Never>?
 
     public init(
         settingsStore: SenderSettingsStore,

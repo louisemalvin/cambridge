@@ -77,8 +77,8 @@ public final class StreamSetupModel {
     private let sessionCoordinator: any StreamSessionStarting
     private let logger: CamBridgeLogger
     private let preferredReceiverID: String?
-    private var discoveryTask: Task<Void, Never>?
-    private var capabilityTask: Task<Void, Never>?
+    @ObservationIgnored private var discoveryTask: Task<Void, Never>?
+    @ObservationIgnored private var capabilityTask: Task<Void, Never>?
     private var cameraRefreshID: UUID?
     private var capabilityRefreshID: UUID?
     private var hasExplicitReceiverSelection = false
