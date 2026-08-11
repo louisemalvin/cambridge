@@ -235,6 +235,7 @@ if(CAMBRIDGE_BUILD_TESTS AND BUILD_TESTING)
         )
 
         find_program(CAMBRIDGE_FFMPEG_EXECUTABLE NAMES ffmpeg REQUIRED)
+        set(CAMBRIDGE_NATIVE_TEST_ENCODER h264_videotoolbox)
         set(CAMBRIDGE_NATIVE_TEST_WIDTH 16)
         set(CAMBRIDGE_NATIVE_TEST_HEIGHT 16)
         set(CAMBRIDGE_NATIVE_TEST_FPS 1)
@@ -250,13 +251,10 @@ if(CAMBRIDGE_BUILD_TESTS AND BUILD_TESTING)
                 -i "testsrc2=size=${CAMBRIDGE_NATIVE_TEST_WIDTH}x${CAMBRIDGE_NATIVE_TEST_HEIGHT}:rate=${CAMBRIDGE_NATIVE_TEST_FPS}"
                 -frames:v 1
                 -an
-                -c:v libx264
+                -c:v ${CAMBRIDGE_NATIVE_TEST_ENCODER}
                 -pix_fmt yuv420p
                 -colorspace bt709
                 -color_range tv
-                -preset ultrafast
-                -tune zerolatency
-                -x264-params repeat-headers=1
                 -f h264
                 "${CAMBRIDGE_NATIVE_TEST_SAMPLE}"
             VERBATIM

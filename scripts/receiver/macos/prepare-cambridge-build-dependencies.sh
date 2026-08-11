@@ -6,6 +6,7 @@ repo_root=$(cd -- "${script_dir}/../../.." && pwd)
 architecture=${CAMBRIDGE_MACOS_ARCHITECTURE:-}
 readonly download_retry_limit=3
 readonly download_retry_delay_seconds=2
+readonly ffmpeg_binary_name=ffmpeg
 readonly ffmpeg_library_names=(libavcodec libavformat libavutil libswresample libswscale)
 if [[ -z "${architecture}" ]]; then
     printf 'error: CAMBRIDGE_MACOS_ARCHITECTURE must be arm64 or x86_64\n' >&2
@@ -72,7 +73,8 @@ tar -xf "${ffmpeg_archive}" -C "${temp_root}"
         --arch="${architecture}" \
         --target-os=darwin \
         --cc=clang \
-        --disable-programs \
+        --disable-ffplay \
+        --disable-ffprobe \
         --disable-doc \
         --disable-debug \
         --disable-static \
@@ -84,11 +86,25 @@ tar -xf "${ffmpeg_archive}" -C "${temp_root}"
         --enable-decoder=h264 \
         --enable-parser=h264 \
         --enable-videotoolbox \
+        --enable-encoder=h264_videotoolbox \
         --enable-hwaccel=h264_videotoolbox \
         --install-name-dir='@rpath'
     make -j"${build_jobs}"
     make install
 )
+ffmpeg_binary="${ffmpeg_prefix}/bin/${ffmpeg_binary_name}"
+[[ -x "${ffmpeg_binary}" ]] || {
+    printf 'error: pinned FFmpeg executable is missing: %s\n' "${ffmpeg_binary}" >&2
+    exit 1
+}
+ffmpeg_runtime_library_path="${ffmpeg_prefix}/lib${DYLD_LIBRARY_PATH:+:${DYLD_LIBRARY_PATH}}"
+ffmpeg_version_output=$(DYLD_LIBRARY_PATH="${ffmpeg_runtime_library_path}" \
+    "${ffmpeg_binary}" -version)
+grep -Fq "ffmpeg version ${ffmpeg_version}" <<<"${ffmpeg_version_output}" || {
+    printf 'error: installed FFmpeg executable does not match %s\n' \
+        "${ffmpeg_version}" >&2
+    exit 1
+}
 ffmpeg_version_header="${ffmpeg_prefix}/include/libavutil/ffversion.h"
 grep -Fq "#define FFMPEG_VERSION \"${ffmpeg_version}\"" "${ffmpeg_version_header}" || {
     printf 'error: installed FFmpeg version does not match %s\n' "${ffmpeg_version}" >&2
@@ -179,9 +195,11 @@ done
 
 export_lines=(
     "CAMBRIDGE_FFMPEG_PREFIX=${ffmpeg_prefix}"
+    "CAMBRIDGE_FFMPEG_EXECUTABLE=${ffmpeg_binary}"
     "CAMBRIDGE_OBS_PREFIX=${obs_prefix}"
     "CMAKE_PREFIX_PATH=${obs_prefix};${ffmpeg_prefix};${simde_prefix};${uthash_prefix};${jansson_prefix}"
     "PKG_CONFIG_PATH=${obs_pc_dir}:${ffmpeg_prefix}/lib/pkgconfig:${simde_prefix}/lib/pkgconfig:${uthash_prefix}/lib/pkgconfig:${jansson_prefix}/lib/pkgconfig"
+    "DYLD_LIBRARY_PATH=${ffmpeg_runtime_library_path}"
 )
 if [[ -n "${GITHUB_ENV:-}" ]]; then
     for export_line in "${export_lines[@]}"; do
@@ -189,9 +207,9 @@ if [[ -n "${GITHUB_ENV:-}" ]]; then
     done
 fi
 if [[ -n "${GITHUB_PATH:-}" ]]; then
-    printf '%s\n' "${cmake_root}/bin" >>"${GITHUB_PATH}"
+    printf '%s\n' "${cmake_root}/bin" "${ffmpeg_prefix}/bin" >>"${GITHUB_PATH}"
 fi
 if [[ -z "${GITHUB_ENV:-}" || -z "${GITHUB_PATH:-}" ]]; then
-    printf 'PATH=%s/bin:${PATH}\n' "${cmake_root}"
+    printf 'PATH=%s/bin:%s/bin:${PATH}\n' "${cmake_root}" "${ffmpeg_prefix}"
     printf '%s\n' "${export_lines[@]}"
 fi

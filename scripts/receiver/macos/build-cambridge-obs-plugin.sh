@@ -28,6 +28,10 @@ esac
 deployment_target=${CAMBRIDGE_MACOS_DEPLOYMENT_TARGET:-$(jq -er '.baseline.macosDeploymentTarget' "${buildspec_file}")}
 architectures=${CAMBRIDGE_MACOS_ARCHITECTURES:-$(jq -er '.baseline.architectures | join(";")' "${buildspec_file}")}
 discovery_service_type=$(jq -er '.discovery.serviceType' "${repo_root}/protocol/cambridge-stream-contract.json")
+cmake_dependency_arguments=()
+if [[ -n "${CAMBRIDGE_FFMPEG_EXECUTABLE:-}" ]]; then
+    cmake_dependency_arguments+=("-DCAMBRIDGE_FFMPEG_EXECUTABLE=${CAMBRIDGE_FFMPEG_EXECUTABLE}")
+fi
 
 cmake --fresh -S "${repo_root}/receiver/obs/cambridge-obs-source" -B "${build_dir}" \
     -G "Unix Makefiles" \
@@ -39,7 +43,8 @@ cmake --fresh -S "${repo_root}/receiver/obs/cambridge-obs-source" -B "${build_di
     -DCAMBRIDGE_VALIDATE_MACOS_DEPENDENCIES=ON \
     -DCAMBRIDGE_ENABLE_TEST_FAULTS="${enable_test_faults}" \
     -DCAMBRIDGE_GIT_COMMIT="${git_commit}" \
-    -DCMAKE_INSTALL_PREFIX="${staging_dir}"
+    -DCMAKE_INSTALL_PREFIX="${staging_dir}" \
+    "${cmake_dependency_arguments[@]}"
 cmake --build "${build_dir}" --parallel
 ctest --test-dir "${build_dir}" --output-on-failure
 cmake --install "${build_dir}"
