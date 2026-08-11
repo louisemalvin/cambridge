@@ -129,6 +129,17 @@ build/cambridge-obs-plugin-macos/staging/obs-plugins/cambridge-obs-plugin.plugin
 Its executable is under `Contents/MacOS`, while the Info.plist and compiled
 Metal library are under `Contents/Info.plist` and `Contents/Resources`.
 
+The preparation script reads the pinned CMake, OBS, and FFmpeg URLs and SHA-256
+values from `receiver/obs/cambridge-obs-source/buildspec.json`, then uses the
+committed libobs-only OBS entry point to build only `libobs` and install only
+the `Development` component. It verifies the resolved pinned versions and
+architecture before exporting the CMake and pkg-config paths used by the
+plugin build. The Native workflow repeats those checks for arm64 and x86_64
+and uploads each verified `.plugin` bundle. The native decoder CTest runs its
+VideoToolbox assertions when H.264 hardware decoding is available and reports
+an explicit CTest skip on hosts without that capability; the native-required
+fixture remains the physical acceptance gate.
+
 Run the native acceptance fixture with the mode required for native assertions:
 
 ```bash
