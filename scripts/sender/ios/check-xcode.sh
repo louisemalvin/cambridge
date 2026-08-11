@@ -26,6 +26,15 @@ developer_directory=$(xcode-select -p)
 echo "Using Xcode developer directory: ${developer_directory}"
 xcodebuild -version
 
+simulator_architecture=$(uname -m)
+case "${simulator_architecture}" in
+    arm64|x86_64) ;;
+    *)
+        echo "Unsupported simulator host architecture: ${simulator_architecture}" >&2
+        exit 2
+        ;;
+esac
+
 destination_id=$(xcrun simctl list devices available -j | python3 -c '
 import json
 import sys
@@ -47,7 +56,7 @@ print(candidates[0][1])
 xcodebuild \
     -project "${project_path}" \
     -scheme "${scheme_name}" \
-    -destination "platform=iOS Simulator,id=${destination_id}" \
+    -destination "platform=iOS Simulator,arch=${simulator_architecture},id=${destination_id}" \
     -derivedDataPath "${repo_root}/build/ios-derived-data" \
     CODE_SIGNING_ALLOWED=NO \
     CODE_SIGNING_REQUIRED=NO \
