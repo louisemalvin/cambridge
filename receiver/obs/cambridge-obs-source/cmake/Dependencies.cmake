@@ -50,6 +50,12 @@ function(cambridge_configure_dependencies)
         pkg_check_modules(CAMBRIDGE_FFMPEG REQUIRED
             libavcodec libavutil libswscale)
 
+        if(APPLE AND DEFINED ENV{CAMBRIDGE_OBS_PREFIX})
+            list(APPEND CAMBRIDGE_OBS_INCLUDE_DIRS
+                "$ENV{CAMBRIDGE_OBS_PREFIX}/Frameworks/libobs.framework/Headers"
+            )
+        endif()
+
         if(APPLE AND CAMBRIDGE_VALIDATE_MACOS_DEPENDENCIES)
             set(expected_obs_version "${CAMBRIDGE_PINNED_OBS_VERSION}")
             set(expected_ffmpeg_version "${CAMBRIDGE_PINNED_FFMPEG_VERSION}")
@@ -103,6 +109,7 @@ function(cambridge_configure_dependencies)
         list(APPEND CAMBRIDGE_PLUGIN_INCLUDE_DIRS
             ${CAMBRIDGE_OBS_INCLUDE_DIRS}
             ${CAMBRIDGE_FFMPEG_INCLUDE_DIRS}
+            ${CAMBRIDGE_JSON_INCLUDE_DIRS}
         )
         list(APPEND CAMBRIDGE_PLUGIN_LIBRARY_DIRS
             ${CAMBRIDGE_OBS_LIBRARY_DIRS}
