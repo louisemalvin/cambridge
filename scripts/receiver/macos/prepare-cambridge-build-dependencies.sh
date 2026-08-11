@@ -35,6 +35,12 @@ build_jobs=$(sysctl -n hw.ncpu)
 simde_prefix=$(brew --prefix simde)
 uthash_prefix=$(brew --prefix uthash)
 jansson_prefix=$(brew --prefix jansson)
+jansson_static_library="${jansson_prefix}/lib/libjansson.a"
+[[ -f "${jansson_static_library}" ]] || {
+    printf 'error: Homebrew Jansson static library is missing: %s\n' \
+        "${jansson_static_library}" >&2
+    exit 1
+}
 
 download_and_verify_dependency() {
     local dependency_name=$1
@@ -204,6 +210,7 @@ export_lines=(
     "CAMBRIDGE_FFMPEG_PREFIX=${ffmpeg_prefix}"
     "CAMBRIDGE_FFMPEG_EXECUTABLE=${ffmpeg_binary}"
     "CAMBRIDGE_OBS_PREFIX=${obs_prefix}"
+    "CAMBRIDGE_JANSSON_PREFIX=${jansson_prefix}"
     "CMAKE_PREFIX_PATH=${obs_prefix};${ffmpeg_prefix};${simde_prefix};${uthash_prefix};${jansson_prefix}"
     "PKG_CONFIG_PATH=${obs_pc_dir}:${ffmpeg_prefix}/lib/pkgconfig:${simde_prefix}/lib/pkgconfig:${uthash_prefix}/lib/pkgconfig:${jansson_prefix}/lib/pkgconfig"
     "DYLD_LIBRARY_PATH=${ffmpeg_runtime_library_path}"

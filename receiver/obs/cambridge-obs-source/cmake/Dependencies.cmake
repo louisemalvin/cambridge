@@ -114,6 +114,7 @@ function(cambridge_configure_dependencies)
         list(APPEND CAMBRIDGE_PLUGIN_LIBRARY_DIRS
             ${CAMBRIDGE_OBS_LIBRARY_DIRS}
             ${CAMBRIDGE_FFMPEG_LIBRARY_DIRS}
+            ${CAMBRIDGE_JSON_LIBRARY_DIRS}
         )
         if(APPLE AND DEFINED ENV{CAMBRIDGE_OBS_PREFIX})
             set(cambridge_obs_framework_binary
@@ -127,9 +128,21 @@ function(cambridge_configure_dependencies)
         else()
             list(APPEND CAMBRIDGE_PLUGIN_LINK_LIBRARIES ${CAMBRIDGE_OBS_LIBRARIES})
         endif()
+        if(APPLE AND DEFINED ENV{CAMBRIDGE_JANSSON_PREFIX})
+            set(cambridge_jansson_static_library
+                "$ENV{CAMBRIDGE_JANSSON_PREFIX}/lib/libjansson.a")
+            if(NOT EXISTS "${cambridge_jansson_static_library}")
+                message(FATAL_ERROR
+                    "Pinned static Jansson library was not found: "
+                    "${cambridge_jansson_static_library}")
+            endif()
+            list(APPEND CAMBRIDGE_PLUGIN_LINK_LIBRARIES
+                "${cambridge_jansson_static_library}")
+        else()
+            list(APPEND CAMBRIDGE_PLUGIN_LINK_LIBRARIES ${CAMBRIDGE_JANSSON_LIBRARIES})
+        endif()
         list(APPEND CAMBRIDGE_PLUGIN_LINK_LIBRARIES
             ${CAMBRIDGE_FFMPEG_LIBRARIES}
-            ${CAMBRIDGE_JANSSON_LIBRARIES}
         )
 
         if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
