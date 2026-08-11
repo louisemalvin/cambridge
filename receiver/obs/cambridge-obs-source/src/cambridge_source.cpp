@@ -616,7 +616,7 @@ void CamBridgeSource::on_decoder_frame(VideoFramePtr frame)
         }
         active_path = active_media_path_;
     }
-    const bool native_frame = frame->storage_kind == FrameStorageKind::Native;
+    const bool native_frame = std::holds_alternative<NativeFrameStorage>(frame->storage);
     if ((active_path == SessionMediaPath::Native) != native_frame) {
         post_media_path_failure({frame->stream_generation, MediaPathFailureCode::Decode,
                                  "decoder published storage for the wrong locked media path"});

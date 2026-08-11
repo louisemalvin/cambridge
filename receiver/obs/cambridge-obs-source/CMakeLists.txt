@@ -37,6 +37,7 @@ add_library(cambridge-obs-plugin MODULE
     src/media_path.cpp
     src/module.cpp
     src/network_address_candidates.cpp
+    src/linux_native_frame_temporary.hpp
     src/platform/posix/posix_compat.cpp
     src/protocol_contract.generated.hpp
     src/receiver_constants.hpp
@@ -162,6 +163,15 @@ if(BUILD_TESTING)
         -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror
     )
     add_test(NAME cambridge-obs-plugin-posix-compat-tests COMMAND cambridge-obs-plugin-posix-compat-tests)
+
+    add_executable(cambridge-obs-plugin-frame-lifetime-tests
+        tests/frame_lifetime_tests.cpp
+    )
+    target_compile_features(cambridge-obs-plugin-frame-lifetime-tests PRIVATE cxx_std_17)
+    target_compile_options(cambridge-obs-plugin-frame-lifetime-tests PRIVATE
+        -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror
+    )
+    add_test(NAME cambridge-obs-plugin-frame-lifetime-tests COMMAND cambridge-obs-plugin-frame-lifetime-tests)
 endif()
 
 install(TARGETS cambridge-obs-plugin

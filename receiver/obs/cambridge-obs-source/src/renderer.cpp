@@ -1,5 +1,6 @@
 #include "renderer.hpp"
 
+#include "linux_native_frame_temporary.hpp"
 #include "protocol_contract.generated.hpp"
 
 #include <drm_fourcc.h>
@@ -216,7 +217,8 @@ void Renderer::end_session()
 
 bool Renderer::update_cpu_slot(TextureSlot &slot, const VideoFramePtr &frame)
 {
-    if (!frame || frame->nv12.empty() || !nv12_effect_) {
+    const auto *storage = frame ? std::get_if<CpuNv12Storage>(&frame->storage) : nullptr;
+    if (!storage || storage->bytes.empty() || !nv12_effect_) {
         return false;
     }
     gs_texture_t *y_texture = nullptr;
@@ -239,18 +241,18 @@ bool Renderer::update_cpu_slot(TextureSlot &slot, const VideoFramePtr &frame)
         }
         return false;
     }
-    const std::size_t y_bytes = static_cast<std::size_t>(frame->nv12_y_stride) * frame->height;
-    const std::size_t uv_bytes = static_cast<std::size_t>(frame->nv12_uv_stride) *
+    const std::size_t y_bytes = static_cast<std::size_t>(storage->y_stride) * frame->height;
+    const std::size_t uv_bytes = static_cast<std::size_t>(storage->uv_stride) *
                                  ((frame->height + kNv12ChromaRowsDivisor - 1U) /
                                   kNv12ChromaRowsDivisor);
-    if (frame->nv12_y_stride == 0 || frame->nv12_uv_stride == 0 ||
-        y_bytes > frame->nv12.size() || uv_bytes > frame->nv12.size() - y_bytes) {
+    if (storage->y_stride == 0 || storage->uv_stride == 0 ||
+        y_bytes > storage->bytes.size() || uv_bytes > storage->bytes.size() - y_bytes) {
         gs_texture_destroy(y_texture);
         gs_texture_destroy(uv_texture);
         return false;
     }
-    gs_texture_set_image(y_texture, frame->nv12.data(), frame->nv12_y_stride, false);
-    gs_texture_set_image(uv_texture, frame->nv12.data() + y_bytes, frame->nv12_uv_stride, false);
+    gs_texture_set_image(y_texture, storage->bytes.data(), storage->y_stride, false);
+    gs_texture_set_image(uv_texture, storage->bytes.data() + y_bytes, storage->uv_stride, false);
     destroy_slot(slot);
     slot.texture = y_texture;
     slot.uv_texture = uv_texture;
@@ -262,11 +264,15 @@ bool Renderer::update_cpu_slot(TextureSlot &slot, const VideoFramePtr &frame)
 
 bool Renderer::update_dmabuf_slot(TextureSlot &slot, const VideoFramePtr &frame)
 {
-    if (!frame || !frame->drm_frame || !dma_buf_supported_) {
+    const auto *storage = frame ? std::get_if<NativeFrameStorage>(&frame->storage) : nullptr;
+    const auto *native_frame = storage && storage->frame
+                                   ? dynamic_cast<const LinuxNativeFrame *>(storage->frame.get())
+                                   : nullptr;
+    if (!native_frame || !native_frame->drm_frame() || !dma_buf_supported_) {
         report("dma_buf_frame_unavailable");
         return false;
     }
-    auto *descriptor = reinterpret_cast<AVDRMFrameDescriptor *>(frame->drm_frame->data[0]);
+    auto *descriptor = reinterpret_cast<AVDRMFrameDescriptor *>(native_frame->drm_frame()->data[0]);
     if (!descriptor || descriptor->nb_layers == 0 || descriptor->layers[0].nb_planes == 0) {
         report("dma_buf_descriptor_empty");
         return false;
@@ -358,7 +364,7 @@ bool Renderer::update_slot(TextureSlot &slot, const VideoFramePtr &frame)
         return false;
     }
     if (active_media_path_ == SessionMediaPath::Native) {
-        if (frame->storage_kind != FrameStorageKind::Native) {
+        if (!std::holds_alternative<NativeFrameStorage>(frame->storage)) {
             fail(frame, MediaPathFailureCode::NativeImport, "native session received CPU frame storage");
             return false;
         }
@@ -372,7 +378,7 @@ bool Renderer::update_slot(TextureSlot &slot, const VideoFramePtr &frame)
         fail(frame, MediaPathFailureCode::NativeImport, "DMA-BUF texture import failed");
         return false;
     }
-    if (frame->storage_kind != FrameStorageKind::CpuNv12) {
+    if (!std::holds_alternative<CpuNv12Storage>(frame->storage)) {
         fail(frame, MediaPathFailureCode::SoftwareUpload, "software session received native frame storage");
         return false;
     }

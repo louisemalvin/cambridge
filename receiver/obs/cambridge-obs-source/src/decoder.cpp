@@ -1,5 +1,6 @@
 #include "decoder.hpp"
 
+#include "linux_native_frame_temporary.hpp"
 #include "platform/posix/posix_compat.hpp"
 #include "protocol_contract.generated.hpp"
 
@@ -487,11 +488,10 @@ void Decoder::publish_frame(AVFrame *decoded, const AccessUnit &access_unit, std
                                    static_cast<std::uint64_t>(config.maximum_live_frame_age_ms) *
                                        kNanosecondsPerMillisecond;
         frame->render_mode = RenderMode::Native;
-        frame->storage_kind = FrameStorageKind::Native;
         frame->pixel_format = "drm-prime";
         frame->color_range = decoded->color_range == AVCOL_RANGE_JPEG ? "full" : "limited";
         frame->color_space = decoded->colorspace == AVCOL_SPC_BT709 ? "bt709" : "unspecified";
-        frame->drm_frame = owned_frame(drm);
+        frame->storage = NativeFrameStorage{std::make_shared<LinuxNativeFrame>(owned_frame(drm))};
         on_frame_(std::move(frame));
         frames_decoded_.fetch_add(1);
         return;
@@ -517,10 +517,11 @@ void Decoder::publish_nv12(AVFrame *decoded, const AccessUnit &access_unit, std:
         return;
     }
     auto frame = std::make_shared<VideoFrame>();
-    frame->nv12.resize(static_cast<std::size_t>(buffer_size));
+    CpuNv12Storage storage;
+    storage.bytes.resize(static_cast<std::size_t>(buffer_size));
     std::uint8_t *destination_data[4]{};
     int destination_linesize[4]{};
-    if (av_image_fill_arrays(destination_data, destination_linesize, frame->nv12.data(), kOutputPixelFormat,
+    if (av_image_fill_arrays(destination_data, destination_linesize, storage.bytes.data(), kOutputPixelFormat,
                              decoded->width, decoded->height, 1) < 0) {
         decode_failures_.fetch_add(1);
         fail(stream_generation, MediaPathFailureCode::Decode, "could not prepare the NV12 output");
@@ -546,12 +547,12 @@ void Decoder::publish_nv12(AVFrame *decoded, const AccessUnit &access_unit, std:
                                static_cast<std::uint64_t>(config.maximum_live_frame_age_ms) *
                                    kNanosecondsPerMillisecond;
     frame->render_mode = RenderMode::CpuNv12;
-    frame->storage_kind = FrameStorageKind::CpuNv12;
     frame->pixel_format = "nv12";
     frame->color_range = decoded->color_range == AVCOL_RANGE_JPEG ? "full" : "limited";
     frame->color_space = decoded->colorspace == AVCOL_SPC_BT709 ? "bt709" : "unspecified";
-    frame->nv12_y_stride = static_cast<std::uint32_t>(destination_linesize[0]);
-    frame->nv12_uv_stride = static_cast<std::uint32_t>(destination_linesize[1]);
+    storage.y_stride = static_cast<std::uint32_t>(destination_linesize[0]);
+    storage.uv_stride = static_cast<std::uint32_t>(destination_linesize[1]);
+    frame->storage = std::move(storage);
     on_frame_(std::move(frame));
     frames_decoded_.fetch_add(1);
 }

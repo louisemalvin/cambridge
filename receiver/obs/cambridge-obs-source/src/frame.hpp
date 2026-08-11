@@ -1,13 +1,12 @@
 #pragma once
 
+#include "platform/interfaces/native_frame.hpp"
+
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <variant>
 #include <vector>
-
-extern "C" {
-#include <libavutil/frame.h>
-}
 
 namespace cambridge {
 
@@ -22,6 +21,18 @@ enum class RenderMode {
     Placeholder,
 };
 
+struct CpuNv12Storage {
+    std::vector<std::uint8_t> bytes;
+    std::uint32_t y_stride = 0;
+    std::uint32_t uv_stride = 0;
+};
+
+struct NativeFrameStorage {
+    NativeFramePtr frame;
+};
+
+using FrameStorage = std::variant<CpuNv12Storage, NativeFrameStorage>;
+
 struct VideoFrame {
     std::uint64_t stream_generation = 0;
     std::uint64_t frame_generation = 0;
@@ -34,15 +45,11 @@ struct VideoFrame {
     std::uint64_t decode_time_ns = 0;
     std::uint64_t publish_time_ns = 0;
     std::uint64_t stale_deadline_ns = 0;
-    FrameStorageKind storage_kind = FrameStorageKind::CpuNv12;
     RenderMode render_mode = RenderMode::Placeholder;
     std::string pixel_format;
     std::string color_range;
     std::string color_space;
-    std::shared_ptr<AVFrame> drm_frame;
-    std::vector<std::uint8_t> nv12;
-    std::uint32_t nv12_y_stride = 0;
-    std::uint32_t nv12_uv_stride = 0;
+    FrameStorage storage = CpuNv12Storage{};
 };
 
 using VideoFramePtr = std::shared_ptr<VideoFrame>;
