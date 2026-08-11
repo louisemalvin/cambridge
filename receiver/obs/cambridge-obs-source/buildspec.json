@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "project": "cambridge-obs-plugin",
+  "baseline": {
+    "obsStudio": "32.1.2",
+    "ffmpeg": "7.1.1",
+    "macosDeploymentTarget": "12.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ]
+  },
+  "dependencies": [
+    {
+      "name": "obs-studio",
+      "version": "32.1.2",
+      "url": "https://github.com/obsproject/obs-studio/releases/download/32.1.2/OBS-Studio-32.1.2-Sources.tar.gz",
+      "sha256": "c6532380c68a75327fe8b551461adeca8f184dcbe4015096251a6de76362a554"
+    },
+    {
+      "name": "ffmpeg",
+      "version": "7.1.1",
+      "url": "https://ffmpeg.org/releases/ffmpeg-7.1.1.tar.xz",
+      "sha256": "733984395e0dbbe5c046abda2dc49a5544e7e0e1e2366bba849222ae9e3a03b1"
+    }
+  ],
+  "appleFrameworks": [
+    "VideoToolbox",
+    "CoreVideo",
+    "IOSurface",
+    "Metal",
+    "Foundation",
+    "dns_sd"
+  ]
+}

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+    "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>com.cambridge.obs-plugin</string>
+    <key>CFBundleName</key>
+    <string>CamBridge OBS Plugin</string>
+    <key>CFBundleDisplayName</key>
+    <string>CamBridge OBS Plugin</string>
+    <key>CFBundlePackageType</key>
+    <string>BNDL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>@CAMBRIDGE_VERSION@</string>
+    <key>CFBundleVersion</key>
+    <string>@CAMBRIDGE_VERSION@</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>@CAMBRIDGE_MACOS_DEPLOYMENT_TARGET@</string>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>CamBridge uses the local network to receive video from the phone.</string>
+    <key>NSBonjourServices</key>
+    <array>
+        <string>_cambridge._tcp</string>
+    </array>
+</dict>
+</plist>

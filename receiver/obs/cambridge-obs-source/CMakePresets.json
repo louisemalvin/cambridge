@@ -1,0 +1,38 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "macos-shared-tests",
+      "displayName": "CamBridge macOS shared tests",
+      "description": "Compile shared receiver tests without linking the macOS OBS plugin",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/../../../build/cambridge-macos-shared-tests",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_OSX_DEPLOYMENT_TARGET": "12.0",
+        "CMAKE_OSX_ARCHITECTURES": "arm64;x86_64",
+        "CAMBRIDGE_BUILD_PLUGIN": "OFF",
+        "CAMBRIDGE_BUILD_TESTS": "ON",
+        "CAMBRIDGE_BUILD_SHARED_TESTS_ONLY": "ON",
+        "CAMBRIDGE_VALIDATE_MACOS_DEPENDENCIES": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "macos-shared-tests",
+      "configurePreset": "macos-shared-tests",
+      "configuration": "RelWithDebInfo"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "macos-shared-tests",
+      "configurePreset": "macos-shared-tests",
+      "configuration": "RelWithDebInfo",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}

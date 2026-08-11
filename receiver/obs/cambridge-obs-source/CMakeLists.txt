@@ -5,29 +5,25 @@ file(READ "${release_version_file}" cambridge_release_version)
 string(STRIP "${cambridge_release_version}" cambridge_release_version)
 project(cambridge-obs-plugin VERSION "${cambridge_release_version}" LANGUAGES CXX)
 
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(OBS REQUIRED IMPORTED_TARGET libobs)
-pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET libavcodec libavutil libswscale)
-pkg_check_modules(VA REQUIRED IMPORTED_TARGET libva libva-drm)
-pkg_check_modules(DRM REQUIRED IMPORTED_TARGET libdrm)
-pkg_check_modules(JANSSON REQUIRED IMPORTED_TARGET jansson)
-pkg_check_modules(AVAHI QUIET IMPORTED_TARGET avahi-client)
-
+option(CAMBRIDGE_BUILD_PLUGIN "Build the OBS source module" ON)
+option(CAMBRIDGE_BUILD_TESTS "Build CamBridge tests" ON)
+option(CAMBRIDGE_BUILD_SHARED_TESTS_ONLY
+       "Build only shared tests that do not require a platform plugin" OFF)
+option(CAMBRIDGE_VALIDATE_MACOS_DEPENDENCIES
+       "Resolve the pinned macOS OBS and FFmpeg dependency baseline" OFF)
 option(CAMBRIDGE_REQUIRE_AVAHI "Require Avahi mDNS support when configuring the plugin" OFF)
 
-if(CAMBRIDGE_REQUIRE_AVAHI AND NOT AVAHI_FOUND)
-    message(FATAL_ERROR "Avahi development files are required for this build")
-endif()
+set(CAMBRIDGE_GIT_COMMIT "unknown" CACHE STRING
+    "Source Git commit embedded in the module identity")
 
-if(AVAHI_FOUND)
-    message(STATUS "mDNS advertisement enabled through Avahi")
-else()
-    message(STATUS "mDNS advertisement disabled: avahi-client development files were not found")
-endif()
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/CompilerWarnings.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/Dependencies.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/Platform.cmake")
 
-set(CAMBRIDGE_GIT_COMMIT "unknown" CACHE STRING "Source Git commit embedded in the module identity")
+cambridge_configure_dependencies()
+cambridge_select_platform_sources(CAMBRIDGE_PLATFORM_SOURCES)
 
-add_library(cambridge-obs-plugin MODULE
+set(CAMBRIDGE_SHARED_SOURCES
     src/control_protocol.cpp
     src/control_server.cpp
     src/decoder.cpp
@@ -44,179 +40,129 @@ add_library(cambridge-obs-plugin MODULE
     src/platform/interfaces/native_frame_importer.hpp
     src/platform/interfaces/discovery_advertiser.hpp
     src/platform/interfaces/source_properties.hpp
-    src/platform/linux/native_decoder_linux.cpp
-    src/platform/linux/discovery_advertiser_linux.cpp
-    src/platform/linux/native_frame_linux.hpp
-    src/platform/linux/native_frame_importer_linux.cpp
-    src/platform/linux/source_properties_linux.cpp
     src/platform/posix/posix_compat.cpp
     src/protocol_contract.generated.hpp
     src/receiver_constants.hpp
     src/renderer.cpp
     src/rtp.cpp
 )
-target_compile_features(cambridge-obs-plugin PRIVATE cxx_std_17)
-target_compile_definitions(cambridge-obs-plugin PRIVATE
-    CAMBRIDGE_GIT_COMMIT="${CAMBRIDGE_GIT_COMMIT}"
-    CAMBRIDGE_VERSION="${PROJECT_VERSION}"
-)
-if(AVAHI_FOUND)
-    target_compile_definitions(cambridge-obs-plugin PRIVATE CAMBRIDGE_HAS_AVAHI=1)
-endif()
-target_compile_options(cambridge-obs-plugin PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
-target_include_directories(cambridge-obs-plugin SYSTEM PRIVATE
-    ${OBS_INCLUDE_DIRS}
-    ${FFMPEG_INCLUDE_DIRS}
-    ${VA_INCLUDE_DIRS}
-    ${DRM_INCLUDE_DIRS}
-    ${JANSSON_INCLUDE_DIRS}
-)
-target_link_directories(cambridge-obs-plugin PRIVATE
-    ${OBS_LIBRARY_DIRS}
-    ${FFMPEG_LIBRARY_DIRS}
-    ${VA_LIBRARY_DIRS}
-    ${DRM_LIBRARY_DIRS}
-    ${JANSSON_LIBRARY_DIRS}
-)
-target_link_libraries(cambridge-obs-plugin PRIVATE
-    ${OBS_LIBRARIES}
-    ${FFMPEG_LIBRARIES}
-    ${VA_LIBRARIES}
-    ${DRM_LIBRARIES}
-    ${JANSSON_LIBRARIES}
-)
-if(AVAHI_FOUND)
-    target_link_libraries(cambridge-obs-plugin PRIVATE PkgConfig::AVAHI)
-endif()
-set_target_properties(cambridge-obs-plugin PROPERTIES
-    PREFIX ""
-    OUTPUT_NAME "cambridge-obs-plugin"
-)
 
-include(CTest)
-if(BUILD_TESTING)
-    add_executable(cambridge-obs-plugin-tests
+if(CAMBRIDGE_BUILD_PLUGIN)
+    add_library(cambridge-obs-plugin MODULE
+        ${CAMBRIDGE_SHARED_SOURCES}
+        ${CAMBRIDGE_PLATFORM_SOURCES}
+    )
+    target_compile_features(cambridge-obs-plugin PRIVATE cxx_std_17)
+    target_compile_definitions(cambridge-obs-plugin PRIVATE
+        CAMBRIDGE_GIT_COMMIT="${CAMBRIDGE_GIT_COMMIT}"
+        CAMBRIDGE_VERSION="${PROJECT_VERSION}"
+        ${CAMBRIDGE_PLUGIN_DEFINITIONS}
+    )
+    cambridge_enable_warnings(cambridge-obs-plugin)
+    target_include_directories(cambridge-obs-plugin SYSTEM PRIVATE
+        ${CAMBRIDGE_PLUGIN_INCLUDE_DIRS}
+    )
+    target_link_directories(cambridge-obs-plugin PRIVATE
+        ${CAMBRIDGE_PLUGIN_LIBRARY_DIRS}
+    )
+    target_link_libraries(cambridge-obs-plugin PRIVATE
+        ${CAMBRIDGE_PLUGIN_LINK_LIBRARIES}
+    )
+    set_target_properties(cambridge-obs-plugin PROPERTIES
+        PREFIX ""
+        OUTPUT_NAME "cambridge-obs-plugin"
+    )
+    if(APPLE)
+        set_target_properties(cambridge-obs-plugin PROPERTIES
+            MACOSX_BUNDLE_INFO_PLIST
+                "${CMAKE_CURRENT_SOURCE_DIR}/cmake/macos/Info.plist.in"
+            XCODE_ATTRIBUTE_GENERATE_INFOPLIST_FILE NO
+        )
+    endif()
+
+    install(TARGETS cambridge-obs-plugin
+        LIBRARY DESTINATION obs-plugins/cambridge-obs-plugin/bin/64bit
+    )
+endif()
+
+if(CAMBRIDGE_BUILD_TESTS)
+    include(CTest)
+endif()
+
+if(CAMBRIDGE_BUILD_TESTS AND BUILD_TESTING)
+    function(cambridge_add_test target)
+        add_executable(${target} ${ARGN})
+        target_compile_features(${target} PRIVATE cxx_std_17)
+        cambridge_enable_warnings(${target})
+        add_test(NAME ${target} COMMAND ${target})
+    endfunction()
+
+    cambridge_add_test(cambridge-obs-plugin-tests
         tests/rtp_tests.cpp
         src/rtp.cpp
     )
-    target_compile_features(cambridge-obs-plugin-tests PRIVATE cxx_std_17)
-    target_compile_options(cambridge-obs-plugin-tests PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
-    add_test(NAME cambridge-obs-plugin-tests COMMAND cambridge-obs-plugin-tests)
 
-    add_executable(cambridge-obs-plugin-contract-tests
+    cambridge_add_test(cambridge-obs-plugin-contract-tests
         tests/control_tests.cpp
         src/control_protocol.cpp
     )
-    target_compile_features(cambridge-obs-plugin-contract-tests PRIVATE cxx_std_17)
-    target_compile_options(cambridge-obs-plugin-contract-tests PRIVATE
-        -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror
+    target_include_directories(cambridge-obs-plugin-contract-tests SYSTEM PRIVATE
+        ${CAMBRIDGE_JSON_INCLUDE_DIRS}
     )
-    target_include_directories(cambridge-obs-plugin-contract-tests PRIVATE ${JANSSON_INCLUDE_DIRS})
-    target_link_directories(cambridge-obs-plugin-contract-tests PRIVATE ${JANSSON_LIBRARY_DIRS})
-    target_link_libraries(cambridge-obs-plugin-contract-tests PRIVATE ${JANSSON_LIBRARIES})
-    add_test(NAME cambridge-obs-plugin-contract-tests COMMAND cambridge-obs-plugin-contract-tests)
+    target_link_directories(cambridge-obs-plugin-contract-tests PRIVATE
+        ${CAMBRIDGE_JSON_LIBRARY_DIRS}
+    )
+    target_link_libraries(cambridge-obs-plugin-contract-tests PRIVATE
+        ${CAMBRIDGE_JSON_LINK_LIBRARIES}
+    )
 
-    add_executable(cambridge-obs-plugin-address-tests
+    cambridge_add_test(cambridge-obs-plugin-address-tests
         tests/network_address_candidates_tests.cpp
         src/network_address_candidates.cpp
     )
-    target_compile_features(cambridge-obs-plugin-address-tests PRIVATE cxx_std_17)
-    target_compile_options(cambridge-obs-plugin-address-tests PRIVATE
-        -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror
-    )
-    add_test(NAME cambridge-obs-plugin-address-tests COMMAND cambridge-obs-plugin-address-tests)
 
-    add_executable(cambridge-obs-plugin-mailbox-tests
+    cambridge_add_test(cambridge-obs-plugin-mailbox-tests
         tests/latest_frame_mailbox_tests.cpp
     )
-    target_compile_features(cambridge-obs-plugin-mailbox-tests PRIVATE cxx_std_17)
-    target_compile_options(cambridge-obs-plugin-mailbox-tests PRIVATE
-        -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror
-    )
-    add_test(NAME cambridge-obs-plugin-mailbox-tests COMMAND cambridge-obs-plugin-mailbox-tests)
 
-    add_executable(cambridge-obs-plugin-media-path-tests
+    cambridge_add_test(cambridge-obs-plugin-media-path-tests
         tests/media_path_tests.cpp
         src/media_path.cpp
     )
-    target_compile_features(cambridge-obs-plugin-media-path-tests PRIVATE cxx_std_17)
-    target_compile_options(cambridge-obs-plugin-media-path-tests PRIVATE
-        -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror
-    )
-    add_test(NAME cambridge-obs-plugin-media-path-tests COMMAND cambridge-obs-plugin-media-path-tests)
 
-    add_executable(cambridge-obs-plugin-decoder-policy-tests
+    cambridge_add_test(cambridge-obs-plugin-decoder-policy-tests
         tests/decoder_policy_tests.cpp
         src/media_path.cpp
     )
-    target_compile_features(cambridge-obs-plugin-decoder-policy-tests PRIVATE cxx_std_17)
-    target_compile_options(cambridge-obs-plugin-decoder-policy-tests PRIVATE
-        -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror
-    )
-    add_test(NAME cambridge-obs-plugin-decoder-policy-tests COMMAND cambridge-obs-plugin-decoder-policy-tests)
 
-    add_executable(cambridge-obs-plugin-renderer-policy-tests
+    cambridge_add_test(cambridge-obs-plugin-renderer-policy-tests
         tests/renderer_policy_tests.cpp
         src/media_path.cpp
     )
-    target_compile_features(cambridge-obs-plugin-renderer-policy-tests PRIVATE cxx_std_17)
-    target_compile_options(cambridge-obs-plugin-renderer-policy-tests PRIVATE
-        -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror
-    )
-    add_test(NAME cambridge-obs-plugin-renderer-policy-tests COMMAND cambridge-obs-plugin-renderer-policy-tests)
 
-    add_executable(cambridge-obs-plugin-posix-compat-tests
+    cambridge_add_test(cambridge-obs-plugin-posix-compat-tests
         tests/posix_compat_tests.cpp
         src/platform/posix/posix_compat.cpp
     )
-    target_compile_features(cambridge-obs-plugin-posix-compat-tests PRIVATE cxx_std_17)
-    target_compile_options(cambridge-obs-plugin-posix-compat-tests PRIVATE
-        -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror
-    )
-    add_test(NAME cambridge-obs-plugin-posix-compat-tests COMMAND cambridge-obs-plugin-posix-compat-tests)
 
-    add_executable(cambridge-obs-plugin-frame-lifetime-tests
+    cambridge_add_test(cambridge-obs-plugin-frame-lifetime-tests
         tests/frame_lifetime_tests.cpp
     )
-    target_compile_features(cambridge-obs-plugin-frame-lifetime-tests PRIVATE cxx_std_17)
-    target_compile_options(cambridge-obs-plugin-frame-lifetime-tests PRIVATE
-        -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror
-    )
-    add_test(NAME cambridge-obs-plugin-frame-lifetime-tests COMMAND cambridge-obs-plugin-frame-lifetime-tests)
 
-    add_executable(cambridge-obs-plugin-native-importer-policy-tests
-        tests/native_importer_policy_tests.cpp
-    )
-    target_compile_features(cambridge-obs-plugin-native-importer-policy-tests PRIVATE cxx_std_17)
-    target_compile_options(cambridge-obs-plugin-native-importer-policy-tests PRIVATE
-        -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror
-    )
-    add_test(NAME cambridge-obs-plugin-native-importer-policy-tests
-        COMMAND cambridge-obs-plugin-native-importer-policy-tests)
-
-    add_executable(cambridge-obs-plugin-discovery-metadata-tests
+    cambridge_add_test(cambridge-obs-plugin-discovery-metadata-tests
         tests/discovery_metadata_tests.cpp
         src/discovery_metadata.cpp
         src/network_address_candidates.cpp
     )
-    target_compile_features(cambridge-obs-plugin-discovery-metadata-tests PRIVATE cxx_std_17)
-    target_compile_options(cambridge-obs-plugin-discovery-metadata-tests PRIVATE
-        -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror
-    )
-    add_test(NAME cambridge-obs-plugin-discovery-metadata-tests
-        COMMAND cambridge-obs-plugin-discovery-metadata-tests)
 
-    add_executable(cambridge-obs-plugin-diagnostics-tests
+    cambridge_add_test(cambridge-obs-plugin-diagnostics-tests
         tests/diagnostics_tests.cpp
         src/diagnostics.cpp
     )
-    target_compile_features(cambridge-obs-plugin-diagnostics-tests PRIVATE cxx_std_17)
-    target_compile_options(cambridge-obs-plugin-diagnostics-tests PRIVATE
-        -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror
-    )
-    add_test(NAME cambridge-obs-plugin-diagnostics-tests COMMAND cambridge-obs-plugin-diagnostics-tests)
-endif()
 
-install(TARGETS cambridge-obs-plugin
-    LIBRARY DESTINATION obs-plugins/cambridge-obs-plugin/bin/64bit
-)
+    if(NOT CAMBRIDGE_BUILD_SHARED_TESTS_ONLY)
+        cambridge_add_test(cambridge-obs-plugin-native-importer-policy-tests
+            tests/native_importer_policy_tests.cpp
+        )
+    endif()
+endif()
