@@ -37,7 +37,7 @@ public actor CaptureService {
     private var outputDelegate: CaptureOutputDelegate?
     private var encoder: VideoToolboxEncoder?
     private var notificationTokens: [NSObjectProtocol] = []
-    private var previewLayer: AVCaptureVideoPreviewLayer?
+    private var cachedPreviewLayer: AVCaptureVideoPreviewLayer?
     private var selectedPosition: CameraPosition = .back
     private var selectedOrientation: StreamRotation = .zero
 
@@ -149,7 +149,7 @@ public actor CaptureService {
         outputDelegate = nil
         encoder?.invalidate()
         encoder = nil
-        previewLayer = nil
+        cachedPreviewLayer = nil
         session = nil
         device = nil
         videoInput = nil
@@ -174,7 +174,7 @@ public actor CaptureService {
 
     public func previewLayer() -> AVCaptureVideoPreviewLayer? {
         guard let session else { return nil }
-        if let previewLayer { return previewLayer }
+        if let cachedPreviewLayer { return cachedPreviewLayer }
         let resolution = SessionOrientationResolver().resolve(rotation: selectedOrientation, cameraPosition: selectedPosition)
         let layer = sessionQueue.sync {
             let layer = AVCaptureVideoPreviewLayer(session: session)
@@ -185,7 +185,7 @@ public actor CaptureService {
             }
             return layer
         }
-        previewLayer = layer
+        cachedPreviewLayer = layer
         return layer
     }
 
@@ -224,7 +224,7 @@ public actor CaptureService {
     public func selectedPreviewOrientation(_ orientation: StreamRotation) {
         selectedOrientation = orientation
         let resolution = SessionOrientationResolver().resolve(rotation: orientation, cameraPosition: selectedPosition)
-        let layer = previewLayer
+        let layer = cachedPreviewLayer
         sessionQueue.sync {
             if let connection = layer?.connection,
                connection.isVideoRotationAngleSupported(resolution.previewRotationAngle) {
