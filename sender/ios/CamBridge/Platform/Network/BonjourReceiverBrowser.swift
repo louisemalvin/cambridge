@@ -128,7 +128,7 @@ public enum ReceiverControlTarget: Sendable {
             guard let port = NWEndpoint.Port(rawValue: UInt16(endpoint.controlPort)) else {
                 throw ReceiverEndpointError.invalidPort(endpoint.controlPort)
             }
-            return .hostPort(host: .name(endpoint.host), port: port)
+            return .hostPort(host: .name(endpoint.host, nil), port: port)
         }
     }
 }

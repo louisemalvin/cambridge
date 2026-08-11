@@ -123,24 +123,24 @@ public enum CameraStabilizationPreference: String, Codable, CaseIterable, Equata
 
     public init(mode: AVCaptureVideoStabilizationMode) {
         if #available(iOS 18.0, *), mode == .cinematicExtendedEnhanced {
-            self = .cinematicExtendedEnhanced
+            self = CameraStabilizationPreference.cinematicExtendedEnhanced
             return
         }
         switch mode.rawValue {
         case AVCaptureVideoStabilizationMode.off.rawValue:
-            self = .off
+            self = CameraStabilizationPreference.off
         case AVCaptureVideoStabilizationMode.standard.rawValue:
-            self = .standard
+            self = CameraStabilizationPreference.standard
         case AVCaptureVideoStabilizationMode.cinematic.rawValue:
-            self = .cinematic
+            self = CameraStabilizationPreference.cinematic
         case AVCaptureVideoStabilizationMode.cinematicExtended.rawValue:
-            self = .cinematicExtended
+            self = CameraStabilizationPreference.cinematicExtended
         case AVCaptureVideoStabilizationMode.previewOptimized.rawValue:
-            self = .previewOptimized
+            self = CameraStabilizationPreference.previewOptimized
         case AVCaptureVideoStabilizationMode.auto.rawValue:
-            self = .auto
+            self = CameraStabilizationPreference.auto
         default:
-            self = .auto
+            self = CameraStabilizationPreference.auto
         }
     }
 

@@ -54,7 +54,7 @@ public actor RTPDatagramSender: RTPDatagramSending {
             throw RTPDatagramSenderError.invalidPort(port)
         }
         let connection = NWConnection(
-            host: .name(host),
+            host: .name(host, nil),
             port: nwPort,
             using: .udp
         )

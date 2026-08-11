@@ -73,9 +73,7 @@ public final class VideoToolboxEncoder {
         guard let geometry = mode.geometry else {
             throw VideoToolboxEncoderError.unsupportedBitrateRange
         }
-        let encoderSpecification: [String: Any] = [
-            kVTVideoEncoderSpecification_RequireHardwareAcceleratedVideoEncoder as String: true
-        ]
+        let encoderSpecification = Self.hardwareEncoderSpecification()
         var encoderID: CFString?
         var supportedProperties: CFDictionary?
         let status = VTCopySupportedPropertyDictionaryForEncoder(
@@ -130,9 +128,7 @@ public final class VideoToolboxEncoder {
         try inputQueue.sync {
             guard compressionSession == nil else { throw VideoToolboxEncoderError.alreadyPrepared }
             var session: VTCompressionSession?
-            let encoderSpecification: [String: Any] = [
-                kVTVideoEncoderSpecification_RequireHardwareAcceleratedVideoEncoder as String: true
-            ]
+            let encoderSpecification = Self.hardwareEncoderSpecification()
             let imageAttributes: [String: Any] = [
                 kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
                 kCVPixelBufferWidthKey as String: configuration.geometry.codedWidth,
@@ -174,6 +170,9 @@ public final class VideoToolboxEncoder {
                 let prepareStatus = VTCompressionSessionPrepareToEncodeFrames(session)
                 guard prepareStatus == noErr else { throw VideoToolboxEncoderError.prepareFailed(prepareStatus) }
                 readSessionProperties(session)
+                guard encoderUsesHardwareAccelerated == true else {
+                    throw VideoToolboxEncoderError.hardwareEncoderUnavailable
+                }
             } catch {
                 VTCompressionSessionInvalidate(session)
                 compressionSession = nil
@@ -326,18 +325,18 @@ public final class VideoToolboxEncoder {
     }
 
     private func setProperties(session: VTCompressionSession, configuration: StreamConfiguration) throws {
-        try set(session, key: kVTCompressionPropertyKey_RealTime, value: true, name: "real-time")
-        try set(session, key: kVTCompressionPropertyKey_AllowFrameReordering, value: false, name: "frame-reordering")
-        try set(session, key: kVTCompressionPropertyKey_ExpectedFrameRate, value: configuration.mode.fps, name: "frame-rate")
-        try set(session, key: kVTCompressionPropertyKey_AverageBitRate, value: configuration.bitrateBps, name: "average-bitrate")
-        try set(session, key: kVTCompressionPropertyKey_MaxKeyFrameInterval, value: configuration.mode.keyframeIntervalSeconds * configuration.mode.fps, name: "keyframe-interval")
-        try set(session, key: kVTCompressionPropertyKey_MaxKeyFrameIntervalDuration, value: Double(configuration.mode.keyframeIntervalSeconds), name: "keyframe-duration")
+        try set(session: session, key: kVTCompressionPropertyKey_RealTime, value: true, name: "real-time")
+        try set(session: session, key: kVTCompressionPropertyKey_AllowFrameReordering, value: false, name: "frame-reordering")
+        try set(session: session, key: kVTCompressionPropertyKey_ExpectedFrameRate, value: configuration.mode.fps, name: "frame-rate")
+        try set(session: session, key: kVTCompressionPropertyKey_AverageBitRate, value: configuration.bitrateBps, name: "average-bitrate")
+        try set(session: session, key: kVTCompressionPropertyKey_MaxKeyFrameInterval, value: configuration.mode.keyframeIntervalSeconds * configuration.mode.fps, name: "keyframe-interval")
+        try set(session: session, key: kVTCompressionPropertyKey_MaxKeyFrameIntervalDuration, value: Double(configuration.mode.keyframeIntervalSeconds), name: "keyframe-duration")
         let dataRateLimits = try Self.dataRateLimits(
             bitrateBps: configuration.bitrateBps,
             windowSeconds: Self.rateLimitWindowSeconds
         )
         try set(
-            session,
+            session: session,
             key: kVTCompressionPropertyKey_DataRateLimits,
             value: dataRateLimits as NSArray,
             name: Self.dataRateLimitsPropertyName
@@ -393,6 +392,17 @@ public final class VideoToolboxEncoder {
         if let value = value as? String { return value }
         if let value = value as? NSString { return value as String }
         return nil
+    }
+
+    private static func hardwareEncoderSpecification() -> [String: Any] {
+        if #available(iOS 17.4, *) {
+            return [
+                kVTVideoEncoderSpecification_RequireHardwareAcceleratedVideoEncoder as String: true
+            ]
+        }
+        return [
+            kVTVideoEncoderSpecification_EnableHardwareAcceleratedVideoEncoder as String: true
+        ]
     }
 
     private func set(session: VTCompressionSession, key: CFString, value: Any, name: String) throws {

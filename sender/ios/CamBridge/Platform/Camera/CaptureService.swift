@@ -42,6 +42,7 @@ public actor CaptureService {
     private var outputDelegate: CaptureOutputDelegate?
     private var encoder: VideoToolboxEncoder?
     private var notificationTokens: [NSObjectProtocol] = []
+    private var systemPressureObservation: NSKeyValueObservation?
     private var cachedPreviewLayer: AVCaptureVideoPreviewLayer?
     private var selectedPosition: CameraPosition = .back
     private var selectedOrientation: StreamRotation = .zero
@@ -163,7 +164,7 @@ public actor CaptureService {
         encoder?.invalidate()
         encoder = nil
         cachedPreviewLayer = nil
-        session = nil
+        self.session = nil
         device = nil
         videoInput = nil
         videoOutput = nil
@@ -349,29 +350,33 @@ public actor CaptureService {
     private func observeNotifications() {
         let center = NotificationCenter.default
         notificationTokens = [
-            center.addObserver(forName: AVCaptureSession.wasInterruptedNotification, object: session, queue: sessionQueue) { [weak self] notification in
+            center.addObserver(forName: AVCaptureSession.wasInterruptedNotification, object: session, queue: nil) { [weak self] notification in
                 let reasonValue = (notification.userInfo?[AVCaptureSessionInterruptionReasonKey] as? NSNumber)?.intValue
                 Task { await self?.handleInterruption(reasonValue: reasonValue) }
             },
-            center.addObserver(forName: AVCaptureSession.runtimeErrorNotification, object: session, queue: sessionQueue) { [weak self] notification in
+            center.addObserver(forName: AVCaptureSession.runtimeErrorNotification, object: session, queue: nil) { [weak self] notification in
                 let message = (notification.userInfo?[AVCaptureSessionErrorKey] as? NSError)?.localizedDescription
                 Task { await self?.handleRuntimeError(message: message) }
             },
-            center.addObserver(forName: AVCaptureSession.interruptionEndedNotification, object: session, queue: sessionQueue) { [weak self] _ in
+            center.addObserver(forName: AVCaptureSession.interruptionEndedNotification, object: session, queue: nil) { [weak self] _ in
                 Task { await self?.clearInterruption() }
             },
-            center.addObserver(forName: AVCaptureDevice.systemPressureStateDidChangeNotification, object: device, queue: sessionQueue) { [weak self] _ in
-                Task { await self?.updateSystemPressure() }
-            },
-            center.addObserver(forName: ProcessInfo.thermalStateDidChangeNotification, object: nil, queue: sessionQueue) { [weak self] _ in
+            center.addObserver(forName: ProcessInfo.thermalStateDidChangeNotification, object: nil, queue: nil) { [weak self] _ in
                 Task { await self?.updateThermalState() }
             }
         ]
+        if let device {
+            systemPressureObservation = device.observe(\AVCaptureDevice.systemPressureState, options: [.new]) { [weak self] _, _ in
+                Task { await self?.updateSystemPressure() }
+            }
+        }
     }
 
     private func removeNotifications() {
         for token in notificationTokens { NotificationCenter.default.removeObserver(token) }
         notificationTokens.removeAll(keepingCapacity: true)
+        systemPressureObservation?.invalidate()
+        systemPressureObservation = nil
     }
 
     private func handleInterruption(reasonValue: Int?) {
