@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import UIKit
 import CamBridgeCore
 
 @MainActor
@@ -75,5 +76,11 @@ public final class AppModel {
 
     deinit {
         snapshotTask?.cancel()
+    }
+
+    public func copyCapabilityReport() async {
+        let report = await setupModel.generateCapabilityReport()
+        settingsModel.setCapabilityReport(report)
+        UIPasteboard.general.string = report.copyableText()
     }
 }

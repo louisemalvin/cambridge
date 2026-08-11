@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import UIKit
 import CamBridgeCore
 
 @MainActor
@@ -49,6 +50,7 @@ public final class StreamSetupModel {
     public private(set) var isStarting = false
     public private(set) var isStreamActive = false
     public private(set) var statusMessage = "Checking for OBS receivers…"
+    public private(set) var capabilityReport: CapabilityReport?
     public var failure: StreamFailure?
 
     public var selectedMode: VideoMode? {
@@ -76,6 +78,11 @@ public final class StreamSetupModel {
     private let encoderProbe: any EncoderCapabilityProbing
     private let sessionCoordinator: any StreamSessionStarting
     private let logger: CamBridgeLogger
+    private let capabilityReportBuilder: any CapabilityReportBuilding
+    private let appVersion: String
+    private let buildVersion: String
+    private let operatingSystem: String
+    private let deviceModel: String
     private let preferredReceiverID: String?
     @ObservationIgnored private var discoveryTask: Task<Void, Never>?
     @ObservationIgnored private var capabilityTask: Task<Void, Never>?
@@ -90,7 +97,12 @@ public final class StreamSetupModel {
         capture: any CameraSetupServicing,
         encoderProbe: any EncoderCapabilityProbing,
         sessionCoordinator: any StreamSessionStarting,
-        logger: CamBridgeLogger
+        logger: CamBridgeLogger,
+        capabilityReportBuilder: any CapabilityReportBuilding = CapabilityReportBuilder(),
+        appVersion: String? = nil,
+        buildVersion: String? = nil,
+        operatingSystem: String? = nil,
+        deviceModel: String? = nil
     ) {
         self.settingsStore = settingsStore
         self.browser = browser
@@ -99,6 +111,11 @@ public final class StreamSetupModel {
         self.encoderProbe = encoderProbe
         self.sessionCoordinator = sessionCoordinator
         self.logger = logger
+        self.capabilityReportBuilder = capabilityReportBuilder
+        self.appVersion = appVersion ?? (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown")
+        self.buildVersion = buildVersion ?? (Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown")
+        self.operatingSystem = operatingSystem ?? ProcessInfo.processInfo.operatingSystemVersionString
+        self.deviceModel = deviceModel ?? UIDevice.current.model
         let preferences = settingsStore.load()
         preferredReceiverID = preferences.receiverId
         selectedModeID = preferences.modeId
@@ -167,6 +184,55 @@ public final class StreamSetupModel {
         await refreshCameraAndModes()
     }
 
+    public func generateCapabilityReport() async -> CapabilityReport {
+        let authorization = await capture.authorizationState()
+        let snapshots = await capture.capabilitySnapshots(
+            modes: VideoMode.productModes,
+            receiver: selectedReceiver?.capabilities,
+            orientation: selectedOrientation
+        )
+        let cameras = snapshots.map { snapshot in
+            let modes = snapshot.modeCapabilities.map { capability in
+                let encoderCapability = capability.supported
+                    ? encoderProbe.probe(mode: capability.mode, bitrateBps: capability.mode.defaultBitrateBps)
+                    : nil
+                return CapabilityReportMode(capability: capability, encoder: encoderCapability)
+            }
+            return CapabilityReportCamera(snapshot: snapshot, modes: modes)
+        }
+        let receiver = selectedReceiver.map {
+            CapabilityReportReceiver(
+                receiverId: $0.capabilities.receiverId,
+                displayName: $0.capabilities.displayName,
+                maxLongEdge: $0.capabilities.maxLongEdge,
+                maxShortEdge: $0.capabilities.maxShortEdge
+            )
+        }
+        let report = capabilityReportBuilder.build(CapabilityReportInput(
+            appVersion: appVersion,
+            buildVersion: buildVersion,
+            operatingSystem: operatingSystem,
+            deviceModel: deviceModel,
+            cameraAuthorization: Self.authorizationReportValue(authorization),
+            cameras: cameras,
+            selectedCameraID: selectedCameraID,
+            receiver: receiver,
+            selectedModeID: selectedModeID,
+            selectedBitrateBps: selectedBitrateBps,
+            selectedOrientationDegrees: selectedOrientation.degrees,
+            selectedStabilization: selectedStabilization.rawValue,
+            selectedReceiverDisplayName: selectedReceiver?.displayName
+        ))
+        capabilityReport = report
+        return report
+    }
+
+    public func copyCapabilityReport() async {
+        let report = await generateCapabilityReport()
+        UIPasteboard.general.string = report.copyableText()
+        logger.event("capability_report_copied", category: .app)
+    }
+
     public func refreshModeCapabilities() async {
         let refreshID = UUID()
         capabilityRefreshID = refreshID
@@ -184,16 +250,36 @@ public final class StreamSetupModel {
             guard cameraCapability.supported else { return cameraCapability }
             let encoderCapability = encoderProbe.probe(mode: cameraCapability.mode, bitrateBps: cameraCapability.mode.defaultBitrateBps)
             guard encoderCapability.supported else {
-                return CameraModeCapability(mode: cameraCapability.mode, supported: false, reason: cameraCapability.reason ?? encoderCapability.reason, formatID: cameraCapability.formatID, supportedStabilization: cameraCapability.supportedStabilization)
+                return CameraModeCapability(
+                    mode: cameraCapability.mode,
+                    supported: false,
+                    reason: cameraCapability.reason ?? encoderCapability.reason,
+                    formatID: cameraCapability.formatID,
+                    formatWidth: cameraCapability.formatWidth,
+                    formatHeight: cameraCapability.formatHeight,
+                    supportedFrameRateRanges: cameraCapability.supportedFrameRateRanges,
+                    supportedStabilization: cameraCapability.supportedStabilization,
+                    encoderIdentity: encoderCapability.encoderIdentity,
+                    encoderIdentityUnavailableReason: encoderCapability.encoderIdentityUnavailableReason,
+                    encoderUsesHardwareAccelerated: encoderCapability.encoderUsesHardwareAccelerated,
+                    encoderHardwareAvailabilityReason: encoderCapability.encoderHardwareAvailabilityReason
+                )
             }
             return CameraModeCapability(
                 mode: cameraCapability.mode,
                 supported: true,
                 reason: nil,
                 formatID: cameraCapability.formatID,
+                formatWidth: cameraCapability.formatWidth,
+                formatHeight: cameraCapability.formatHeight,
+                supportedFrameRateRanges: cameraCapability.supportedFrameRateRanges,
                 supportedStabilization: cameraCapability.supportedStabilization,
                 encoderMinimumBitrateBps: encoderCapability.minimumBitrateBps,
-                encoderMaximumBitrateBps: encoderCapability.maximumBitrateBps
+                encoderMaximumBitrateBps: encoderCapability.maximumBitrateBps,
+                encoderIdentity: encoderCapability.encoderIdentity,
+                encoderIdentityUnavailableReason: encoderCapability.encoderIdentityUnavailableReason,
+                encoderUsesHardwareAccelerated: encoderCapability.encoderUsesHardwareAccelerated,
+                encoderHardwareAvailabilityReason: encoderCapability.encoderHardwareAvailabilityReason
             )
         }
         if selectedModeCapability?.supported != true {
@@ -410,4 +496,17 @@ public final class StreamSetupModel {
     }
 
     private static let singleReceiverCount = 1
+
+    private static func authorizationReportValue(_ authorization: CameraAuthorizationState) -> String {
+        switch authorization {
+        case .notDetermined:
+            "notDetermined"
+        case .authorized:
+            "authorized"
+        case .denied:
+            "denied"
+        case .restricted:
+            "restricted"
+        }
+    }
 }

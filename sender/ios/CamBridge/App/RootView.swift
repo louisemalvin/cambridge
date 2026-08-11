@@ -15,7 +15,9 @@ struct RootView: View {
             WebcamScreen(model: model.webcamModel)
                 .tabItem { Label("Webcam", systemImage: "video") }
                 .tag(AppModel.Route.webcam)
-            SettingsScreen(model: model.settingsModel)
+            SettingsScreen(model: model.settingsModel) {
+                Task { await model.copyCapabilityReport() }
+            }
                 .tabItem { Label("Settings", systemImage: "gear") }
                 .tag(AppModel.Route.settings)
         }

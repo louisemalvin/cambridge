@@ -9,6 +9,7 @@ public final class SettingsModel {
     public private(set) var preferences: SenderPreferences
     public private(set) var isStreamActive = false
     public private(set) var diagnosticsText = "No stream diagnostics yet."
+    public private(set) var capabilityReportText = "No capability report generated yet."
 
     private let settingsStore: any SenderSettingsStoring
     private let logger: CamBridgeLogger
@@ -41,5 +42,9 @@ public final class SettingsModel {
 
     public func setDiagnostics(_ report: DiagnosticsReport) {
         diagnosticsText = report.copyableText()
+    }
+
+    public func setCapabilityReport(_ report: CapabilityReport) {
+        capabilityReportText = report.copyableText()
     }
 }

@@ -43,6 +43,15 @@ struct StreamSetupScreen: View {
                     .disabled(!model.canStart)
                     .accessibilityIdentifier("start-stream")
                 }
+                Section("Diagnostics") {
+                    Text("Capability reports can be copied before Start. Receiver hosts are redacted.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    Button("Copy capability report") {
+                        Task { await model.copyCapabilityReport() }
+                    }
+                    .accessibilityIdentifier("copy-capability-report")
+                }
                 if !model.statusMessage.isEmpty {
                     Section {
                         Text(model.statusMessage)

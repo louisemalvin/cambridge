@@ -26,11 +26,20 @@ public enum VideoToolboxEncoderError: Error, Equatable, Sendable {
 
 public struct VideoToolboxEncoderMetrics: Equatable, Sendable {
     public let encoderIdentity: String?
+    public let encoderIdentityUnavailableReason: String?
+    public let encoderUsesHardwareAccelerated: Bool?
+    public let encoderHardwareAvailabilityReason: String?
     public let encodedAccessUnits: Int
     public let encodedKeyframes: Int
     public let encodedBytes: Int
     public let firstPresentationTimeMicroseconds: Int64?
     public let lastPresentationTimeMicroseconds: Int64?
+}
+
+public struct VideoToolboxEncoderCapability: Equatable, Sendable {
+    public let bitrateRange: ClosedRange<Int>
+    public let encoderIdentity: String?
+    public let encoderIdentityUnavailableReason: String?
 }
 
 public final class VideoToolboxEncoder {
@@ -42,6 +51,9 @@ public final class VideoToolboxEncoder {
     private var nalLengthBytes: Int?
     private var parameterSets: [Data] = []
     private var encoderIdentity: String?
+    private var encoderIdentityUnavailableReason: String?
+    private var encoderUsesHardwareAccelerated: Bool?
+    private var encoderHardwareAvailabilityReason: String?
     private var encodedAccessUnits = Int.zero
     private var encodedKeyframes = Int.zero
     private var encodedBytes = Int.zero
@@ -54,19 +66,24 @@ public final class VideoToolboxEncoder {
     }
 
     public static func supportedBitrateRange(for mode: VideoMode) throws -> ClosedRange<Int> {
+        try supportedEncoderCapability(for: mode).bitrateRange
+    }
+
+    public static func supportedEncoderCapability(for mode: VideoMode) throws -> VideoToolboxEncoderCapability {
         guard let geometry = mode.geometry else {
             throw VideoToolboxEncoderError.unsupportedBitrateRange
         }
         let encoderSpecification: [String: Any] = [
             kVTVideoEncoderSpecification_RequireHardwareAcceleratedVideoEncoder as String: true
         ]
+        var encoderID: CFString?
         var supportedProperties: CFDictionary?
         let status = VTCopySupportedPropertyDictionaryForEncoder(
             width: Int32(geometry.codedWidth),
             height: Int32(geometry.codedHeight),
             codecType: kCMVideoCodecType_H264,
             encoderSpecification: encoderSpecification as CFDictionary,
-            encoderIDOut: nil,
+            encoderIDOut: &encoderID,
             supportedPropertiesOut: &supportedProperties
         )
         guard status == noErr else {
@@ -86,13 +103,21 @@ public final class VideoToolboxEncoder {
             in: bitrateProperty,
             forKey: kVTPropertySupportedValueMaximumKey
         ), minimum <= maximum {
-            return minimum...maximum
+            return VideoToolboxEncoderCapability(
+                bitrateRange: minimum...maximum,
+                encoderIdentity: encoderID.map { $0 as String },
+                encoderIdentityUnavailableReason: encoderID == nil ? "VideoToolbox returned no encoder identifier" : nil
+            )
         }
         if let values = bitrateProperty[kVTPropertySupportedValueListKey as String] as? [NSNumber],
            let minimum = values.map(\.intValue).min(),
            let maximum = values.map(\.intValue).max(),
            minimum <= maximum {
-            return minimum...maximum
+            return VideoToolboxEncoderCapability(
+                bitrateRange: minimum...maximum,
+                encoderIdentity: encoderID.map { $0 as String },
+                encoderIdentityUnavailableReason: encoderID == nil ? "VideoToolbox returned no encoder identifier" : nil
+            )
         }
         throw VideoToolboxEncoderError.unsupportedBitrateRange
     }
@@ -140,11 +165,15 @@ public final class VideoToolboxEncoder {
             encodedBytes = .zero
             firstPresentationTimeMicroseconds = nil
             lastPresentationTimeMicroseconds = nil
+            encoderIdentity = nil
+            encoderIdentityUnavailableReason = nil
+            encoderUsesHardwareAccelerated = nil
+            encoderHardwareAvailabilityReason = nil
             do {
                 try setProperties(session: session, configuration: configuration)
                 let prepareStatus = VTCompressionSessionPrepareToEncodeFrames(session)
                 guard prepareStatus == noErr else { throw VideoToolboxEncoderError.prepareFailed(prepareStatus) }
-                encoderIdentity = "VideoToolbox-H264"
+                readSessionProperties(session)
             } catch {
                 VTCompressionSessionInvalidate(session)
                 compressionSession = nil
@@ -189,6 +218,9 @@ public final class VideoToolboxEncoder {
         inputQueue.sync {
             VideoToolboxEncoderMetrics(
                 encoderIdentity: encoderIdentity,
+                encoderIdentityUnavailableReason: encoderIdentityUnavailableReason,
+                encoderUsesHardwareAccelerated: encoderUsesHardwareAccelerated,
+                encoderHardwareAvailabilityReason: encoderHardwareAvailabilityReason,
                 encodedAccessUnits: encodedAccessUnits,
                 encodedKeyframes: encodedKeyframes,
                 encodedBytes: encodedBytes,
@@ -328,6 +360,41 @@ public final class VideoToolboxEncoder {
         return [NSNumber(value: allowedBytes), NSNumber(value: windowSeconds)]
     }
 
+    private func readSessionProperties(_ session: VTCompressionSession) {
+        let encoderProperty = Self.copySessionProperty(session, key: kVTCompressionPropertyKey_EncoderID)
+        if encoderProperty.status == noErr, let identity = Self.stringValue(encoderProperty.value) {
+            encoderIdentity = identity
+        } else {
+            encoderIdentityUnavailableReason = "VideoToolbox encoder identity unavailable (status: \(encoderProperty.status))"
+        }
+
+        let hardwareProperty = Self.copySessionProperty(
+            session,
+            key: kVTCompressionPropertyKey_UsingHardwareAcceleratedVideoEncoder
+        )
+        if hardwareProperty.status == noErr, let value = hardwareProperty.value as? NSNumber {
+            encoderUsesHardwareAccelerated = value.boolValue
+        } else {
+            encoderHardwareAvailabilityReason = "VideoToolbox hardware-use property unavailable (status: \(hardwareProperty.status))"
+        }
+    }
+
+    private static func copySessionProperty(
+        _ session: VTCompressionSession,
+        key: CFString
+    ) -> (status: OSStatus, value: CFTypeRef?) {
+        var value: CFTypeRef?
+        let status = VTSessionCopyProperty(session, key: key, allocator: nil, valueOut: &value)
+        return (status, value)
+    }
+
+    private static func stringValue(_ value: CFTypeRef?) -> String? {
+        guard let value else { return nil }
+        if let value = value as? String { return value }
+        if let value = value as? NSString { return value as String }
+        return nil
+    }
+
     private func set(session: VTCompressionSession, key: CFString, value: Any, name: String) throws {
         let status = VTSessionSetProperty(session, key: key, value: value as CFTypeRef)
         guard status == noErr else { throw VideoToolboxEncoderError.propertyFailed(name, status) }
@@ -406,6 +473,9 @@ public final class VideoToolboxEncoder {
         nalLengthBytes = nil
         parameterSets.removeAll(keepingCapacity: true)
         encoderIdentity = nil
+        encoderIdentityUnavailableReason = nil
+        encoderUsesHardwareAccelerated = nil
+        encoderHardwareAvailabilityReason = nil
         firstPresentationTimeMicroseconds = nil
         lastPresentationTimeMicroseconds = nil
     }

@@ -8,26 +8,47 @@ public struct CameraModeCapability: Equatable, Sendable {
     public let supported: Bool
     public let reason: String?
     public let formatID: String?
+    public let formatWidth: Int?
+    public let formatHeight: Int?
+    public let supportedFrameRateRanges: [ClosedRange<Double>]
     public let supportedStabilization: [CameraStabilizationPreference]
     public let encoderMinimumBitrateBps: Int?
     public let encoderMaximumBitrateBps: Int?
+    public let encoderIdentity: String?
+    public let encoderIdentityUnavailableReason: String?
+    public let encoderUsesHardwareAccelerated: Bool?
+    public let encoderHardwareAvailabilityReason: String?
 
     public init(
         mode: VideoMode,
         supported: Bool,
         reason: String?,
         formatID: String?,
+        formatWidth: Int? = nil,
+        formatHeight: Int? = nil,
+        supportedFrameRateRanges: [ClosedRange<Double>] = [],
         supportedStabilization: [CameraStabilizationPreference] = [.off],
         encoderMinimumBitrateBps: Int? = nil,
-        encoderMaximumBitrateBps: Int? = nil
+        encoderMaximumBitrateBps: Int? = nil,
+        encoderIdentity: String? = nil,
+        encoderIdentityUnavailableReason: String? = nil,
+        encoderUsesHardwareAccelerated: Bool? = nil,
+        encoderHardwareAvailabilityReason: String? = nil
     ) {
         self.mode = mode
         self.supported = supported
         self.reason = reason
         self.formatID = formatID
+        self.formatWidth = formatWidth
+        self.formatHeight = formatHeight
+        self.supportedFrameRateRanges = supportedFrameRateRanges
         self.supportedStabilization = supportedStabilization
         self.encoderMinimumBitrateBps = encoderMinimumBitrateBps
         self.encoderMaximumBitrateBps = encoderMaximumBitrateBps
+        self.encoderIdentity = encoderIdentity
+        self.encoderIdentityUnavailableReason = encoderIdentityUnavailableReason
+        self.encoderUsesHardwareAccelerated = encoderUsesHardwareAccelerated
+        self.encoderHardwareAvailabilityReason = encoderHardwareAvailabilityReason
     }
 }
 
@@ -35,15 +56,9 @@ public struct CameraCapabilityProbe: Sendable {
     public init() {}
 
     public func rearCameraDescriptors() -> [CameraDeviceDescriptor] {
-        discoveryDevices().compactMap { device in
-            guard device.position == .back else { return nil }
-            return CameraDeviceDescriptor(
-                id: device.uniqueID,
-                name: device.localizedName,
-                position: .back,
-                isVirtual: device.deviceType == .builtInDualWideCamera || device.deviceType == .builtInTripleCamera
-            )
-        }
+        discoveryDevices()
+            .filter { $0.position == .back }
+            .map(descriptor(for:))
     }
 
     public func capabilities(
@@ -60,10 +75,51 @@ public struct CameraCapabilityProbe: Sendable {
             if let receiver,
                let geometry = mode.geometry,
                !receiver.supports(geometry, rotation: orientation) {
-                return CameraModeCapability(mode: mode, supported: false, reason: "Receiver geometry limit", formatID: format.formatID, supportedStabilization: stabilization)
+                return CameraModeCapability(
+                    mode: mode,
+                    supported: false,
+                    reason: "Receiver geometry limit",
+                    formatID: format.formatID,
+                    formatWidth: format.width,
+                    formatHeight: format.height,
+                    supportedFrameRateRanges: format.supportedFrameRateRanges,
+                    supportedStabilization: stabilization
+                )
             }
-            return CameraModeCapability(mode: mode, supported: true, reason: nil, formatID: format.formatID, supportedStabilization: stabilization)
+            return CameraModeCapability(
+                mode: mode,
+                supported: true,
+                reason: nil,
+                formatID: format.formatID,
+                formatWidth: format.width,
+                formatHeight: format.height,
+                supportedFrameRateRanges: format.supportedFrameRateRanges,
+                supportedStabilization: stabilization
+            )
         }
+    }
+
+    public func capabilitySnapshots(
+        modes: [VideoMode],
+        receiver: ReceiverCapabilities?,
+        orientation: StreamRotation
+    ) -> [CameraCapabilitySnapshot] {
+        discoveryDevices()
+            .filter { $0.position == .back }
+            .map { device in
+                let descriptor = descriptor(for: device)
+                let modeCapabilities = capabilities(for: device, modes: modes, receiver: receiver, orientation: orientation)
+                let stabilization = CameraStabilizationPreference.allCases.filter { preference in
+                    modeCapabilities.contains { $0.supportedStabilization.contains(preference) }
+                }
+                return CameraCapabilitySnapshot(
+                    device: descriptor,
+                    minimumZoomRatio: Double(device.minAvailableVideoZoomFactor),
+                    maximumZoomRatio: Double(device.maxAvailableVideoZoomFactor),
+                    supportedStabilization: stabilization.isEmpty ? [.off] : stabilization,
+                    modeCapabilities: modeCapabilities
+                )
+            }
     }
 
     public func exactFormat(for mode: VideoMode, on device: AVCaptureDevice) -> CameraFormatDescriptor? {
@@ -104,6 +160,17 @@ public struct CameraCapabilityProbe: Sendable {
             supported.insert(.off, at: .zero)
         }
         return supported
+    }
+
+    private func descriptor(for device: AVCaptureDevice) -> CameraDeviceDescriptor {
+        CameraDeviceDescriptor(
+            id: device.uniqueID,
+            name: device.localizedName,
+            position: device.position == .front ? .front : .back,
+            isVirtual: device.deviceType == .builtInDualCamera ||
+                device.deviceType == .builtInDualWideCamera ||
+                device.deviceType == .builtInTripleCamera
+        )
     }
 
     private func discoveryDevices() -> [AVCaptureDevice] {

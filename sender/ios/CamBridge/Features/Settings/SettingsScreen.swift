@@ -4,6 +4,12 @@ import CamBridgeCore
 
 struct SettingsScreen: View {
     @Bindable var model: SettingsModel
+    let onCopyCapabilityReport: () -> Void
+
+    init(model: SettingsModel, onCopyCapabilityReport: @escaping () -> Void = {}) {
+        self.model = model
+        self.onCopyCapabilityReport = onCopyCapabilityReport
+    }
 
     var body: some View {
         NavigationStack {
@@ -64,6 +70,11 @@ struct SettingsScreen: View {
                         .textSelection(.enabled)
                     Button("Copy diagnostics") { model.copyDiagnostics() }
                         .accessibilityIdentifier("copy-diagnostics")
+                    Text(model.capabilityReportText)
+                        .font(.system(.footnote, design: .monospaced))
+                        .textSelection(.enabled)
+                    Button("Copy capability report", action: onCopyCapabilityReport)
+                        .accessibilityIdentifier("copy-capability-report-settings")
                 }
                 Section("Build") {
                     LabeledContent("App version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown")

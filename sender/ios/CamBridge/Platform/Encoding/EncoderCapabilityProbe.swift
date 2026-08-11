@@ -7,6 +7,9 @@ public struct EncoderCapability: Equatable, Sendable {
     public let minimumBitrateBps: Int
     public let maximumBitrateBps: Int
     public let encoderIdentity: String?
+    public let encoderIdentityUnavailableReason: String? = nil
+    public let encoderUsesHardwareAccelerated: Bool? = nil
+    public let encoderHardwareAvailabilityReason: String? = nil
     public let reason: String?
 }
 
@@ -18,9 +21,9 @@ public struct EncoderCapabilityProbe: Sendable {
     public init() {}
 
     public func probe(mode: VideoMode, bitrateBps: Int) -> EncoderCapability {
-        let encoderRange: ClosedRange<Int>
+        let encoderCapability: VideoToolboxEncoderCapability
         do {
-            encoderRange = try VideoToolboxEncoder.supportedBitrateRange(for: mode)
+            encoderCapability = try VideoToolboxEncoder.supportedEncoderCapability(for: mode)
         } catch {
             return EncoderCapability(
                 modeId: mode.id,
@@ -28,10 +31,13 @@ public struct EncoderCapabilityProbe: Sendable {
                 minimumBitrateBps: .zero,
                 maximumBitrateBps: .zero,
                 encoderIdentity: nil,
+                encoderIdentityUnavailableReason: nil,
+                encoderUsesHardwareAccelerated: nil,
+                encoderHardwareAvailabilityReason: nil,
                 reason: "Hardware H.264 bitrate range is unavailable: \(error)"
             )
         }
-        let bitrates = mode.steppedBitrates(encoderRange: encoderRange)
+        let bitrates = mode.steppedBitrates(encoderRange: encoderCapability.bitrateRange)
         guard let firstBitrate = bitrates.first, let lastBitrate = bitrates.last else {
             return EncoderCapability(
                 modeId: mode.id,
@@ -39,22 +45,59 @@ public struct EncoderCapabilityProbe: Sendable {
                 minimumBitrateBps: .zero,
                 maximumBitrateBps: .zero,
                 encoderIdentity: nil,
+                encoderIdentityUnavailableReason: encoderCapability.encoderIdentityUnavailableReason,
+                encoderUsesHardwareAccelerated: nil,
+                encoderHardwareAvailabilityReason: nil,
                 reason: "No stepped bitrate intersects the hardware encoder range"
             )
         }
         let probeBitrate = bitrates.contains(bitrateBps) ? bitrateBps : firstBitrate
         guard let configuration = try? StreamConfiguration(mode: mode, bitrateBps: probeBitrate, orientation: .zero) else {
-            return EncoderCapability(modeId: mode.id, supported: false, minimumBitrateBps: firstBitrate, maximumBitrateBps: lastBitrate, encoderIdentity: nil, reason: "Mode cannot form a valid stream configuration")
+            return EncoderCapability(
+                modeId: mode.id,
+                supported: false,
+                minimumBitrateBps: firstBitrate,
+                maximumBitrateBps: lastBitrate,
+                encoderIdentity: nil,
+                encoderIdentityUnavailableReason: encoderCapability.encoderIdentityUnavailableReason,
+                encoderUsesHardwareAccelerated: nil,
+                encoderHardwareAvailabilityReason: nil,
+                reason: "Mode cannot form a valid stream configuration"
+            )
         }
         let encoder = VideoToolboxEncoder()
         do {
             try encoder.prepare(configuration: configuration)
-            let identity = encoder.metrics().encoderIdentity
+            let metrics = encoder.metrics()
+            let identity = metrics.encoderIdentity ?? encoderCapability.encoderIdentity
+            let identityUnavailableReason = identity == nil
+                ? metrics.encoderIdentityUnavailableReason ?? encoderCapability.encoderIdentityUnavailableReason
+                : nil
             encoder.invalidate()
-            return EncoderCapability(modeId: mode.id, supported: true, minimumBitrateBps: firstBitrate, maximumBitrateBps: lastBitrate, encoderIdentity: identity, reason: nil)
+            return EncoderCapability(
+                modeId: mode.id,
+                supported: true,
+                minimumBitrateBps: firstBitrate,
+                maximumBitrateBps: lastBitrate,
+                encoderIdentity: identity,
+                encoderIdentityUnavailableReason: identityUnavailableReason,
+                encoderUsesHardwareAccelerated: metrics.encoderUsesHardwareAccelerated,
+                encoderHardwareAvailabilityReason: metrics.encoderHardwareAvailabilityReason,
+                reason: nil
+            )
         } catch {
             encoder.invalidate()
-            return EncoderCapability(modeId: mode.id, supported: false, minimumBitrateBps: firstBitrate, maximumBitrateBps: lastBitrate, encoderIdentity: nil, reason: "Hardware H.264 encoder unavailable: \(error)")
+            return EncoderCapability(
+                modeId: mode.id,
+                supported: false,
+                minimumBitrateBps: firstBitrate,
+                maximumBitrateBps: lastBitrate,
+                encoderIdentity: nil,
+                encoderIdentityUnavailableReason: encoderCapability.encoderIdentityUnavailableReason,
+                encoderUsesHardwareAccelerated: nil,
+                encoderHardwareAvailabilityReason: nil,
+                reason: "Hardware H.264 encoder unavailable: \(error)"
+            )
         }
     }
 }

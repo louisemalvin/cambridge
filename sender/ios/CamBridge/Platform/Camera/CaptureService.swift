@@ -22,6 +22,11 @@ public protocol CameraSetupServicing: Sendable {
         receiver: ReceiverCapabilities?,
         orientation: StreamRotation
     ) async -> [CameraModeCapability]
+    func capabilitySnapshots(
+        modes: [VideoMode],
+        receiver: ReceiverCapabilities?,
+        orientation: StreamRotation
+    ) async -> [CameraCapabilitySnapshot]
     func cameraState() async -> CameraState
 }
 
@@ -90,6 +95,14 @@ public actor CaptureService {
             return modes.map { CameraModeCapability(mode: $0, supported: false, reason: "No rear camera selected", formatID: nil) }
         }
         return capabilityProbe.capabilities(for: device, modes: modes, receiver: receiver, orientation: orientation)
+    }
+
+    public func capabilitySnapshots(
+        modes: [VideoMode],
+        receiver: ReceiverCapabilities?,
+        orientation: StreamRotation
+    ) async -> [CameraCapabilitySnapshot] {
+        capabilityProbe.capabilitySnapshots(modes: modes, receiver: receiver, orientation: orientation)
     }
 
     public func prepare(

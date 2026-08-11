@@ -74,6 +74,147 @@ final class CamBridgeTests: XCTestCase {
     }
 
     @MainActor
+    func testCapabilityReportCanBeGeneratedBeforeStreamDiagnosticsExist() async throws {
+        let settings = FakeSetupSettingsStore()
+        let camera = FakeSetupCamera()
+        let probeReceiver = try ReceiverCapabilities(
+            receiverId: "fixture-receiver",
+            displayName: "Fixture receiver",
+            maxLongEdge: CamBridgeContract.Geometry.maximumLongEdge,
+            maxShortEdge: CamBridgeContract.Geometry.maximumShortEdge
+        )
+        let builder = CapabilityReportBuilder(clock: { Date(timeIntervalSince1970: 1_700_000_000) })
+        let model = StreamSetupModel(
+            settingsStore: settings,
+            browser: FakeSetupBrowser(),
+            probe: FakeSetupProbe(capabilities: probeReceiver),
+            capture: camera,
+            encoderProbe: FakeSetupEncoderProbe(),
+            sessionCoordinator: FakeSetupSession(),
+            logger: CamBridgeLogger(),
+            capabilityReportBuilder: builder,
+            appVersion: "1.2.3",
+            buildVersion: "42",
+            operatingSystem: "Test OS",
+            deviceModel: "Test iPhone"
+        )
+
+        let report = await model.generateCapabilityReport()
+
+        XCTAssertEqual(report.schemaVersion, CapabilityReport.currentSchemaVersion)
+        XCTAssertEqual(report.generatedAt, Date(timeIntervalSince1970: 1_700_000_000))
+        XCTAssertEqual(report.appVersion, "1.2.3")
+        XCTAssertEqual(report.cameras.count, 1)
+        XCTAssertNil(report.receiver)
+        XCTAssertNil(report.selectedReceiverDisplayName)
+        XCTAssertNotNil(model.capabilityReport)
+    }
+
+    func testCapabilityReportIncludesCameraModesEncoderIdentityAndRedactsReceiverHost() {
+        let supportedCapability = CameraModeCapability(
+            mode: .mode1080p30,
+            supported: true,
+            reason: nil,
+            formatID: "format-1080p30",
+            formatWidth: 1920,
+            formatHeight: 1080,
+            supportedFrameRateRanges: [24...30],
+            supportedStabilization: [.off, .standard]
+        )
+        let unsupportedCapability = CameraModeCapability(
+            mode: .mode2k60,
+            supported: false,
+            reason: "Receiver geometry limit",
+            formatID: "format-2k60",
+            formatWidth: 2560,
+            formatHeight: 1440,
+            supportedFrameRateRanges: [60...60]
+        )
+        let camera = CameraCapabilitySnapshot(
+            device: CameraDeviceDescriptor(id: "camera-rear-wide", name: "Wide Camera", position: .back, isVirtual: false),
+            minimumZoomRatio: 1,
+            maximumZoomRatio: 8,
+            supportedStabilization: [.off, .standard],
+            modeCapabilities: [supportedCapability, unsupportedCapability]
+        )
+        let report = CapabilityReportBuilder(clock: { Date(timeIntervalSince1970: 1_700_000_001) }).build(
+            CapabilityReportInput(
+                appVersion: "1.2.3",
+                buildVersion: "42",
+                operatingSystem: "Test OS",
+                deviceModel: "Test iPhone",
+                cameraAuthorization: "authorized",
+                cameras: [CapabilityReportCamera(
+                    snapshot: camera,
+                    modes: [
+                        CapabilityReportMode(
+                            capability: supportedCapability,
+                            encoder: EncoderCapability(
+                                modeId: "1080p30",
+                                supported: true,
+                                minimumBitrateBps: 4_000_000,
+                                maximumBitrateBps: 16_000_000,
+                                encoderIdentity: "com.apple.test.h264",
+                                encoderIdentityUnavailableReason: nil,
+                                encoderUsesHardwareAccelerated: true,
+                                encoderHardwareAvailabilityReason: nil,
+                                reason: nil
+                            )
+                        ),
+                        CapabilityReportMode(capability: unsupportedCapability, encoder: nil)
+                    ]
+                )],
+                selectedCameraID: "camera-rear-wide",
+                receiver: CapabilityReportReceiver(
+                    receiverId: "receiver-1",
+                    displayName: "OBS",
+                    maxLongEdge: 2560,
+                    maxShortEdge: 1440,
+                    host: "[redacted]"
+                ),
+                selectedModeID: "1080p30",
+                selectedBitrateBps: 8_000_000,
+                selectedOrientationDegrees: 90,
+                selectedStabilization: CameraStabilizationPreference.standard.rawValue,
+                selectedReceiverDisplayName: "OBS"
+            )
+        )
+
+        let modes = report.cameras[0].modes
+        XCTAssertEqual(report.cameras[0].minimumZoomRatio, 1)
+        XCTAssertEqual(report.cameras[0].maximumZoomRatio, 8)
+        XCTAssertEqual(report.cameras[0].supportedStabilization, ["off", "standard"])
+        XCTAssertEqual(modes[0].encoderIdentity, "com.apple.test.h264")
+        XCTAssertTrue(modes[0].encoderUsesHardwareAccelerated == true)
+        XCTAssertEqual(modes[0].frameRateRanges, [CapabilityReportFrameRateRange(minimum: 24, maximum: 30)])
+        XCTAssertFalse(modes[1].offered)
+        XCTAssertEqual(modes[1].reason, "Receiver geometry limit")
+        XCTAssertEqual(report.receiver?.host, "[redacted]")
+        XCTAssertEqual(report.copyableText(), report.copyableText())
+        XCTAssertFalse(report.copyableText().contains("127.0.0.1"))
+
+        let unavailableIdentity = CapabilityReportMode(
+            capability: supportedCapability,
+            encoder: EncoderCapability(
+                modeId: "1080p30",
+                supported: true,
+                minimumBitrateBps: 4_000_000,
+                maximumBitrateBps: 16_000_000,
+                encoderIdentity: nil,
+                encoderIdentityUnavailableReason: "VideoToolbox returned no encoder identifier",
+                encoderUsesHardwareAccelerated: nil,
+                encoderHardwareAvailabilityReason: "VideoToolbox hardware-use property unavailable",
+                reason: nil
+            )
+        )
+        XCTAssertNil(unavailableIdentity.encoderIdentity)
+        XCTAssertEqual(
+            unavailableIdentity.encoderIdentityUnavailableReason,
+            "VideoToolbox returned no encoder identifier"
+        )
+    }
+
+    @MainActor
     func testInvalidPersistedReceiverFallsBackWithoutCrashing() {
         let suiteName = "cambridge-settings-test-\(UUID().uuidString)"
         guard let defaults = UserDefaults(suiteName: suiteName) else {
@@ -336,6 +477,23 @@ private actor FakeSetupCamera: CameraSetupServicing {
                 supportedStabilization: [.off]
             )
         }
+    }
+
+    func capabilitySnapshots(
+        modes: [VideoMode],
+        receiver: ReceiverCapabilities?,
+        orientation: StreamRotation
+    ) async -> [CameraCapabilitySnapshot] {
+        let capabilities = await modeCapabilities(modes: modes, receiver: receiver, orientation: orientation)
+        return [
+            CameraCapabilitySnapshot(
+                device: camera,
+                minimumZoomRatio: 1,
+                maximumZoomRatio: 6,
+                supportedStabilization: [.off],
+                modeCapabilities: capabilities
+            )
+        ]
     }
 
     func cameraState() async -> CameraState {

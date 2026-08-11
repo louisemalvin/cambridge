@@ -31,6 +31,9 @@ public struct DiagnosticsReport: Codable, Equatable, Sendable {
     public let requestedStabilization: String?
     public let activeStabilization: String?
     public let encoderIdentity: String?
+    public let encoderIdentityUnavailableReason: String?
+    public let encoderUsesHardwareAccelerated: Bool?
+    public let encoderHardwareAvailabilityReason: String?
     public let encodedAccessUnits: Int
     public let encodedKeyframes: Int
     public let encodedBytes: Int
@@ -63,6 +66,9 @@ public struct DiagnosticsReport: Codable, Equatable, Sendable {
         requestedStabilization: String?,
         activeStabilization: String?,
         encoderIdentity: String?,
+        encoderIdentityUnavailableReason: String?,
+        encoderUsesHardwareAccelerated: Bool?,
+        encoderHardwareAvailabilityReason: String?,
         encodedAccessUnits: Int,
         encodedKeyframes: Int,
         encodedBytes: Int,
@@ -107,6 +113,9 @@ public struct DiagnosticsReport: Codable, Equatable, Sendable {
         self.requestedStabilization = requestedStabilization
         self.activeStabilization = activeStabilization
         self.encoderIdentity = encoderIdentity
+        self.encoderIdentityUnavailableReason = encoderIdentityUnavailableReason
+        self.encoderUsesHardwareAccelerated = encoderUsesHardwareAccelerated
+        self.encoderHardwareAvailabilityReason = encoderHardwareAvailabilityReason
         self.encodedAccessUnits = encodedAccessUnits
         self.encodedKeyframes = encodedKeyframes
         self.encodedBytes = encodedBytes
