@@ -129,8 +129,14 @@ if(CAMBRIDGE_BUILD_PLUGIN)
         target_sources(cambridge-obs-plugin PRIVATE "${CAMBRIDGE_METALLIB}")
     endif()
 
+    if(APPLE)
+        set(cambridge_plugin_install_destination obs-plugins/cambridge-obs-plugin)
+    else()
+        set(cambridge_plugin_install_destination
+            obs-plugins/cambridge-obs-plugin/bin/64bit)
+    endif()
     install(TARGETS cambridge-obs-plugin
-        LIBRARY DESTINATION obs-plugins/cambridge-obs-plugin/bin/64bit
+        LIBRARY DESTINATION "${cambridge_plugin_install_destination}"
     )
 
 endif()
