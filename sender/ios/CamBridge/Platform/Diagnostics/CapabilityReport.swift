@@ -203,39 +203,3 @@ public struct CapabilityReportBuilder: CapabilityReportBuilding {
         )
     }
 }
-
-private extension CapabilityReport {
-    init(
-        schemaVersion: Int,
-        generatedAt: Date,
-        appVersion: String,
-        buildVersion: String,
-        operatingSystem: String,
-        deviceModel: String,
-        cameraAuthorization: String,
-        cameras: [CapabilityReportCamera],
-        selectedCameraID: String?,
-        receiver: CapabilityReportReceiver?,
-        selectedModeID: String?,
-        selectedBitrateBps: Int?,
-        selectedOrientationDegrees: Int?,
-        selectedStabilization: String?,
-        selectedReceiverDisplayName: String?
-    ) {
-        self.schemaVersion = schemaVersion
-        self.generatedAt = generatedAt
-        self.appVersion = appVersion
-        self.buildVersion = buildVersion
-        self.operatingSystem = operatingSystem
-        self.deviceModel = deviceModel
-        self.cameraAuthorization = cameraAuthorization
-        self.cameras = cameras
-        self.selectedCameraID = selectedCameraID
-        self.receiver = receiver
-        self.selectedModeID = selectedModeID
-        self.selectedBitrateBps = selectedBitrateBps
-        self.selectedOrientationDegrees = selectedOrientationDegrees
-        self.selectedStabilization = selectedStabilization
-        self.selectedReceiverDisplayName = selectedReceiverDisplayName
-    }
-}
