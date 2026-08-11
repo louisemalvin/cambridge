@@ -213,121 +213,136 @@ private struct UITestFixtureSetupView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Camera") {
-                    Text("Camera permission: \(model.permission.displayName)")
-                        .accessibilityIdentifier("camera-permission-state")
-                    ForEach(UITestFixtureModel.CameraPermission.allCases, id: \.rawValue) { permission in
-                        Button(permission.displayName) {
-                            model.setPermission(permission.rawValue)
-                        }
-                        .accessibilityIdentifier("permission-\(permission.rawValue)")
-                    }
-                    Picker("Rear camera", selection: $model.selectedCameraID) {
-                        Text("Fixture wide camera").tag(UITestFixtureModel.cameraID)
-                    }
-                    .disabled(model.isStreamActive)
-                    .accessibilityIdentifier("camera-picker")
-                    if model.permission != .authorized {
-                        Button("Allow camera access", action: model.requestCameraAccess)
-                            .accessibilityIdentifier("request-camera-access")
-                    }
-                }
-
-                Section("Receiver") {
-                    Text(model.receiverStatus)
-                        .accessibilityIdentifier("receiver-status")
-                    ForEach([UITestFixtureModel.firstReceiverID, UITestFixtureModel.secondReceiverID], id: \.self) { receiverID in
-                        Button {
-                            model.setReceiver(receiverID)
-                        } label: {
-                            HStack {
-                                Image(systemName: model.selectedReceiverID == receiverID ? "checkmark.circle.fill" : "circle")
-                                Text(receiverID == UITestFixtureModel.firstReceiverID ? "Fixture OBS One" : "Fixture OBS Two")
+            ScrollView {
+                VStack(alignment: .leading, spacing: UITestFixtureLayout.standardSpacing) {
+                    VStack(alignment: .leading, spacing: UITestFixtureLayout.standardSpacing) {
+                        Text("Camera")
+                            .font(.headline)
+                        Text("Camera permission: \(model.permission.displayName)")
+                            .accessibilityIdentifier("camera-permission-state")
+                        ForEach(UITestFixtureModel.CameraPermission.allCases, id: \.rawValue) { permission in
+                            Button(permission.displayName) {
+                                model.setPermission(permission.rawValue)
                             }
+                            .accessibilityIdentifier("permission-\(permission.rawValue)")
                         }
-                        .accessibilityIdentifier(receiverID)
+                        Picker("Rear camera", selection: $model.selectedCameraID) {
+                            Text("Fixture wide camera").tag(UITestFixtureModel.cameraID)
+                        }
+                        .disabled(model.isStreamActive)
+                        .accessibilityIdentifier("camera-picker")
+                        if model.permission != .authorized {
+                            Button("Allow camera access", action: model.requestCameraAccess)
+                                .accessibilityIdentifier("request-camera-access")
+                        }
                     }
-                    TextField("OBS computer host", text: $model.manualHost)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .accessibilityIdentifier("manual-receiver-host")
-                    Button("Probe manual receiver", action: model.probeManualReceiver)
-                        .accessibilityIdentifier("probe-manual-receiver")
-                    Text(model.manualProbeMessage)
-                        .font(.caption)
-                        .accessibilityIdentifier("manual-probe-status")
-                }
 
-                Section("Video") {
-                    Button("1080p30") {
-                        model.setMode(UITestFixtureModel.supportedModeID)
+                    VStack(alignment: .leading, spacing: UITestFixtureLayout.standardSpacing) {
+                        Text("Receiver")
+                            .font(.headline)
+                        Text(model.receiverStatus)
+                            .accessibilityIdentifier("receiver-status")
+                        ForEach([UITestFixtureModel.firstReceiverID, UITestFixtureModel.secondReceiverID], id: \.self) { receiverID in
+                            Button {
+                                model.setReceiver(receiverID)
+                            } label: {
+                                HStack {
+                                    Image(systemName: model.selectedReceiverID == receiverID ? "checkmark.circle.fill" : "circle")
+                                    Text(receiverID == UITestFixtureModel.firstReceiverID ? "Fixture OBS One" : "Fixture OBS Two")
+                                }
+                            }
+                            .accessibilityIdentifier(receiverID)
+                        }
+                        TextField("OBS computer host", text: $model.manualHost)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .accessibilityIdentifier("manual-receiver-host")
+                        Button("Probe manual receiver", action: model.probeManualReceiver)
+                            .accessibilityIdentifier("probe-manual-receiver")
+                        Text(model.manualProbeMessage)
+                            .font(.caption)
+                            .accessibilityIdentifier("manual-probe-status")
                     }
-                    .disabled(model.isStreamActive)
-                    .accessibilityIdentifier("mode-1080p30")
-                    Button("2K60") {
-                        model.setMode(UITestFixtureModel.unsupportedModeID)
-                    }
-                    .accessibilityIdentifier("mode-2k60")
-                    .disabled(model.isStreamActive)
-                    Text(model.selectedModeDescription)
-                        .font(.caption)
-                        .accessibilityIdentifier("mode-capability-reason")
-                    Button("Landscape") {
-                        model.selectedOrientation = .zero
-                    }
-                    .disabled(model.isStreamActive)
-                    .accessibilityIdentifier("orientation-landscape")
-                    Button("Portrait clockwise") {
-                        model.selectedOrientation = .ninety
-                    }
-                    .disabled(model.isStreamActive)
-                    .accessibilityIdentifier("orientation-portrait")
-                    Button("Auto") {
-                        model.selectedStabilization = .auto
-                    }
-                    .disabled(model.isStreamActive)
-                    .accessibilityIdentifier("stabilization-auto")
-                    Button("Off") {
-                        model.selectedStabilization = .off
-                    }
-                    .disabled(model.isStreamActive)
-                    .accessibilityIdentifier("stabilization-off")
-                }
 
-                Section {
-                    Button {
-                        model.startStream()
-                    } label: {
-                        Text(model.streamPhase == .starting ? "Starting…" : "Start stream")
-                            .frame(maxWidth: .infinity)
+                    VStack(alignment: .leading, spacing: UITestFixtureLayout.standardSpacing) {
+                        Text("Video")
+                            .font(.headline)
+                        Button("1080p30") {
+                            model.setMode(UITestFixtureModel.supportedModeID)
+                        }
+                        .disabled(model.isStreamActive)
+                        .accessibilityIdentifier("mode-1080p30")
+                        Button("2K60") {
+                            model.setMode(UITestFixtureModel.unsupportedModeID)
+                        }
+                        .accessibilityIdentifier("mode-2k60")
+                        .disabled(model.isStreamActive)
+                        Text(model.selectedModeDescription)
+                            .font(.caption)
+                            .accessibilityIdentifier("mode-capability-reason")
+                        Button("Landscape") {
+                            model.selectedOrientation = .zero
+                        }
+                        .disabled(model.isStreamActive)
+                        .accessibilityIdentifier("orientation-landscape")
+                        Button("Portrait clockwise") {
+                            model.selectedOrientation = .ninety
+                        }
+                        .disabled(model.isStreamActive)
+                        .accessibilityIdentifier("orientation-portrait")
+                        Button("Auto") {
+                            model.selectedStabilization = .auto
+                        }
+                        .disabled(model.isStreamActive)
+                        .accessibilityIdentifier("stabilization-auto")
+                        Button("Off") {
+                            model.selectedStabilization = .off
+                        }
+                        .disabled(model.isStreamActive)
+                        .accessibilityIdentifier("stabilization-off")
                     }
-                    .disabled(!model.canStart)
-                    .accessibilityIdentifier("start-stream")
-                    if model.streamPhase == .starting {
-                        Button("Complete simulated start", action: model.completeStart)
-                            .accessibilityIdentifier("complete-start")
-                    }
-                }
 
-                if let failureMessage = model.failureMessage {
-                    Section("Recovery") {
-                        Text(failureMessage)
-                            .accessibilityIdentifier("stream-failure")
-                        Button("Retry", action: model.retry)
-                            .accessibilityIdentifier("retry-stream")
+                    VStack(alignment: .leading, spacing: UITestFixtureLayout.standardSpacing) {
+                        Text("Stream")
+                            .font(.headline)
+                        Button {
+                            model.startStream()
+                        } label: {
+                            Text(model.streamPhase == .starting ? "Starting…" : "Start stream")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .disabled(!model.canStart)
+                        .accessibilityIdentifier("start-stream")
+                        if model.streamPhase == .starting {
+                            Button("Complete simulated start", action: model.completeStart)
+                                .accessibilityIdentifier("complete-start")
+                        }
+                    }
+
+                    if let failureMessage = model.failureMessage {
+                        VStack(alignment: .leading, spacing: UITestFixtureLayout.standardSpacing) {
+                            Text("Recovery")
+                                .font(.headline)
+                            Text(failureMessage)
+                                .accessibilityIdentifier("stream-failure")
+                            Button("Retry", action: model.retry)
+                                .accessibilityIdentifier("retry-stream")
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: UITestFixtureLayout.standardSpacing) {
+                        Text("Diagnostics")
+                            .font(.headline)
+                        Text("Local diagnostic report: camera identifiers are included; receiver hosts are redacted.")
+                            .font(.caption)
+                        Button("Copy capability report", action: model.copyCapabilityReport)
+                            .accessibilityIdentifier("copy-capability-report")
+                        Text(model.capabilityReportCopied ? "Capability report copied" : "No capability report copied")
+                            .font(.caption)
+                            .accessibilityIdentifier("capability-report-status")
                     }
                 }
-
-                Section("Diagnostics") {
-                    Text("Local diagnostic report: camera identifiers are included; receiver hosts are redacted.")
-                        .font(.caption)
-                    Button("Copy capability report", action: model.copyCapabilityReport)
-                        .accessibilityIdentifier("copy-capability-report")
-                    Text(model.capabilityReportCopied ? "Capability report copied" : "No capability report copied")
-                        .font(.caption)
-                        .accessibilityIdentifier("capability-report-status")
-                }
+                .padding()
             }
             .navigationTitle("CamBridge")
         }
@@ -366,52 +381,62 @@ private struct UITestFixtureSettingsView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Stream preferences") {
-                    Button("1080p30") {
-                        model.setMode(UITestFixtureModel.supportedModeID)
+            ScrollView {
+                VStack(alignment: .leading, spacing: UITestFixtureLayout.standardSpacing) {
+                    VStack(alignment: .leading, spacing: UITestFixtureLayout.standardSpacing) {
+                        Text("Stream preferences")
+                            .font(.headline)
+                        Button("1080p30") {
+                            model.setMode(UITestFixtureModel.supportedModeID)
+                        }
+                        .disabled(model.isStreamActive)
+                        .accessibilityIdentifier("settings-mode-1080p30")
+                        Button("2K60") {
+                            model.setMode(UITestFixtureModel.unsupportedModeID)
+                        }
+                        .disabled(model.isStreamActive)
+                        .accessibilityIdentifier("settings-mode-2k60")
+                        Button("Landscape") {
+                            model.selectedOrientation = .zero
+                        }
+                        .disabled(model.isStreamActive)
+                        .accessibilityIdentifier("settings-orientation-landscape")
+                        Button("Portrait clockwise") {
+                            model.selectedOrientation = .ninety
+                        }
+                        .disabled(model.isStreamActive)
+                        .accessibilityIdentifier("settings-orientation-portrait")
+                        Button("Auto") {
+                            model.selectedStabilization = .auto
+                        }
+                        .disabled(model.isStreamActive)
+                        .accessibilityIdentifier("settings-stabilization-auto")
+                        Button("Off") {
+                            model.selectedStabilization = .off
+                        }
+                        .disabled(model.isStreamActive)
+                        .accessibilityIdentifier("settings-stabilization-off")
+                        if model.isStreamActive {
+                            Text("Settings locked while the stream is active")
+                                .accessibilityIdentifier("settings-locked")
+                        }
                     }
-                    .disabled(model.isStreamActive)
-                    .accessibilityIdentifier("settings-mode-1080p30")
-                    Button("2K60") {
-                        model.setMode(UITestFixtureModel.unsupportedModeID)
+                    VStack(alignment: .leading, spacing: UITestFixtureLayout.standardSpacing) {
+                        Text("Receiver")
+                            .font(.headline)
+                        Text(model.selectedReceiverName)
+                        Text(model.manualHost.isEmpty ? "Receiver host redacted" : "Receiver configured")
+                            .font(.caption)
                     }
-                    .disabled(model.isStreamActive)
-                    .accessibilityIdentifier("settings-mode-2k60")
-                    Button("Landscape") {
-                        model.selectedOrientation = .zero
-                    }
-                    .disabled(model.isStreamActive)
-                    .accessibilityIdentifier("settings-orientation-landscape")
-                    Button("Portrait clockwise") {
-                        model.selectedOrientation = .ninety
-                    }
-                    .disabled(model.isStreamActive)
-                    .accessibilityIdentifier("settings-orientation-portrait")
-                    Button("Auto") {
-                        model.selectedStabilization = .auto
-                    }
-                    .disabled(model.isStreamActive)
-                    .accessibilityIdentifier("settings-stabilization-auto")
-                    Button("Off") {
-                        model.selectedStabilization = .off
-                    }
-                    .disabled(model.isStreamActive)
-                    .accessibilityIdentifier("settings-stabilization-off")
-                    if model.isStreamActive {
-                        Text("Settings locked while the stream is active")
-                            .accessibilityIdentifier("settings-locked")
+                    VStack(alignment: .leading, spacing: UITestFixtureLayout.standardSpacing) {
+                        Text("Diagnostics")
+                            .font(.headline)
+                        Button("Copy capability report", action: model.copyCapabilityReport)
+                            .accessibilityIdentifier("copy-capability-report-settings")
                     }
                 }
-                Section("Receiver") {
-                    Text(model.selectedReceiverName)
-                    Text(model.manualHost.isEmpty ? "Receiver host redacted" : "Receiver configured")
-                        .font(.caption)
-                }
-                Section("Diagnostics") {
-                    Button("Copy capability report", action: model.copyCapabilityReport)
-                        .accessibilityIdentifier("copy-capability-report-settings")
-                }
+                .padding()
+            }
             }
             .navigationTitle("Settings")
         }
