@@ -58,17 +58,44 @@ function(cambridge_configure_dependencies)
                 message(FATAL_ERROR
                     "OBS dependency is ${CAMBRIDGE_OBS_VERSION}; expected ${expected_obs_version}")
             endif()
-            if(DEFINED CAMBRIDGE_FFMPEG_VERSION AND
-               NOT "${CAMBRIDGE_FFMPEG_VERSION}" STREQUAL "${expected_ffmpeg_version}")
+
+            set(resolved_ffmpeg_version "${CAMBRIDGE_FFMPEG_VERSION}")
+            if(NOT resolved_ffmpeg_version)
+                set(ffmpeg_version_header)
+                foreach(ffmpeg_include_dir IN LISTS CAMBRIDGE_FFMPEG_INCLUDE_DIRS)
+                    set(candidate_ffmpeg_version_header
+                        "${ffmpeg_include_dir}/libavutil/ffversion.h")
+                    if(EXISTS "${candidate_ffmpeg_version_header}")
+                        set(ffmpeg_version_header "${candidate_ffmpeg_version_header}")
+                        break()
+                    endif()
+                endforeach()
+                if(NOT ffmpeg_version_header)
+                    message(FATAL_ERROR
+                        "FFmpeg version header was not found in the selected include paths")
+                endif()
+                file(READ "${ffmpeg_version_header}" ffmpeg_version_header_contents)
+                string(REGEX MATCH
+                    "#define[ \t]+FFMPEG_VERSION[ \t]+\\\"([^\\\"]+)\\\""
+                    ffmpeg_version_match "${ffmpeg_version_header_contents}")
+                if(NOT ffmpeg_version_match)
+                    message(FATAL_ERROR
+                        "FFmpeg version header does not declare FFMPEG_VERSION: "
+                        "${ffmpeg_version_header}")
+                endif()
+                set(resolved_ffmpeg_version "${CMAKE_MATCH_1}")
+            endif()
+            if(NOT "${resolved_ffmpeg_version}" STREQUAL "${expected_ffmpeg_version}")
                 message(FATAL_ERROR
-                    "FFmpeg dependency is ${CAMBRIDGE_FFMPEG_VERSION}; expected ${expected_ffmpeg_version}")
+                    "FFmpeg dependency is ${resolved_ffmpeg_version}; "
+                    "expected ${expected_ffmpeg_version}")
             endif()
             set(CAMBRIDGE_OBS_VERSION "${expected_obs_version}" CACHE STRING
                 "Resolved OBS baseline version")
-            set(CAMBRIDGE_FFMPEG_VERSION "${expected_ffmpeg_version}" CACHE STRING
+            set(CAMBRIDGE_FFMPEG_VERSION "${resolved_ffmpeg_version}" CACHE STRING
                 "Resolved FFmpeg baseline version")
             message(STATUS "Resolved pinned OBS ${expected_obs_version}")
-            message(STATUS "Resolved pinned FFmpeg ${expected_ffmpeg_version}")
+            message(STATUS "Resolved pinned FFmpeg ${resolved_ffmpeg_version}")
         endif()
     endif()
 
