@@ -37,7 +37,10 @@ add_library(cambridge-obs-plugin MODULE
     src/media_path.cpp
     src/module.cpp
     src/network_address_candidates.cpp
-    src/linux_native_frame_temporary.hpp
+    src/platform/interfaces/native_decoder_adapter.hpp
+    src/platform/interfaces/native_frame.hpp
+    src/platform/linux/native_decoder_linux.cpp
+    src/platform/linux/native_frame_linux.hpp
     src/platform/posix/posix_compat.cpp
     src/protocol_contract.generated.hpp
     src/receiver_constants.hpp

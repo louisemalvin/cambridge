@@ -1,6 +1,6 @@
 #pragma once
 
-#include "platform/interfaces/native_frame.hpp"
+#include "../interfaces/native_frame.hpp"
 
 #include <memory>
 

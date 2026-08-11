@@ -1,6 +1,5 @@
 #include "decoder.hpp"
 
-#include "linux_native_frame_temporary.hpp"
 #include "platform/posix/posix_compat.hpp"
 #include "protocol_contract.generated.hpp"
 
@@ -20,7 +19,6 @@ namespace cambridge {
 namespace {
 
 constexpr AVCodecID kCodecId = AV_CODEC_ID_H264;
-constexpr AVPixelFormat kHardwarePixelFormat = AV_PIX_FMT_VAAPI;
 constexpr AVPixelFormat kSoftwarePixelFormat = AV_PIX_FMT_YUV420P;
 constexpr AVPixelFormat kOutputPixelFormat = AV_PIX_FMT_NV12;
 constexpr int kDecoderThreadCount = 1;
@@ -43,14 +41,6 @@ std::string ffmpeg_error(int error_code)
     char buffer[AV_ERROR_MAX_STRING_SIZE]{};
     av_strerror(error_code, buffer, sizeof(buffer));
     return buffer;
-}
-
-std::shared_ptr<AVFrame> owned_frame(AVFrame *frame)
-{
-    return std::shared_ptr<AVFrame>(frame, [](AVFrame *value) {
-        AVFrame *mutable_value = value;
-        av_frame_free(&mutable_value);
-    });
 }
 
 } // namespace
@@ -256,17 +246,12 @@ std::size_t Decoder::queue_occupancy() const
     return queue_.size();
 }
 
-enum AVPixelFormat Decoder::choose_hardware_format(AVCodecContext *context,
-                                                   const enum AVPixelFormat *formats)
+enum AVPixelFormat Decoder::choose_pixel_format(AVCodecContext *context,
+                                                 const enum AVPixelFormat *formats)
 {
     const auto decoder = static_cast<Decoder *>(context->opaque);
-    if (decoder && decoder->native_setup_requested_) {
-        for (const enum AVPixelFormat *format = formats; *format != AV_PIX_FMT_NONE; ++format) {
-            if (*format == kHardwarePixelFormat) {
-                return *format;
-            }
-        }
-        return AV_PIX_FMT_NONE;
+    if (decoder && decoder->native_setup_requested_ && decoder->native_adapter_) {
+        return decoder->native_adapter_->choose_pixel_format(formats);
     }
     for (const enum AVPixelFormat *format = formats; *format != AV_PIX_FMT_NONE; ++format) {
         if (*format == kSoftwarePixelFormat) {
@@ -296,27 +281,24 @@ bool Decoder::open_codec(const DecoderConfig &config, bool native_requested, std
     codec_context_->height = static_cast<int>(config.height);
     codec_context_->thread_count = kDecoderThreadCount;
     codec_context_->opaque = this;
-    codec_context_->get_format = &Decoder::choose_hardware_format;
+    codec_context_->get_format = &Decoder::choose_pixel_format;
     native_setup_requested_ = native_requested;
-    hardware_active_ = false;
     if (native_requested) {
-        const int device_result = av_hwdevice_ctx_create(
-            &hardware_device_, AV_HWDEVICE_TYPE_VAAPI, config.drm_device.c_str(), nullptr, 0);
-        if (device_result < 0) {
-            error = "VAAPI device setup failed:" + ffmpeg_error(device_result);
-            native_status = device_result == AVERROR(ENOMEM) ? NativeSetupStatus::Failed
-                                                              : NativeSetupStatus::Unsupported;
+        native_adapter_ = create_native_decoder_adapter();
+        if (!native_adapter_) {
+            error = "native decoder adapter is unavailable";
+            native_status = NativeSetupStatus::Unsupported;
             close_codec();
             return false;
         }
-        codec_context_->hw_device_ctx = av_buffer_ref(hardware_device_);
-        if (!codec_context_->hw_device_ctx) {
-            error = "could not retain the VAAPI device context";
-            native_status = NativeSetupStatus::Failed;
+        const NativeSetupResult setup = native_adapter_->configure(
+            *codec_context_, NativeDecoderConfig{config.width, config.height, config.drm_device});
+        if (setup.status != NativeSetupStatus::Ready) {
+            error = setup.reason;
+            native_status = setup.status;
             close_codec();
             return false;
         }
-        hardware_active_ = true;
     }
     const int open_result = avcodec_open2(codec_context_, codec, nullptr);
     if (open_result < 0) {
@@ -333,7 +315,8 @@ bool Decoder::open_codec(const DecoderConfig &config, bool native_requested, std
     }
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        decoder_name_ = native_requested ? "h264/VAAPI" : "h264/software";
+        decoder_name_ = native_requested && native_adapter_ ? std::string(native_adapter_->decoder_name())
+                                                             : "h264/software";
         current_render_mode_ = native_requested ? RenderMode::Native : RenderMode::CpuNv12;
     }
     report("decoder_ready:" + decoder_name() + ":level=" + std::to_string(kDefaultH264Level));
@@ -350,11 +333,11 @@ void Decoder::close_codec()
     if (codec_context_) {
         avcodec_free_context(&codec_context_);
     }
-    if (hardware_device_) {
-        av_buffer_unref(&hardware_device_);
+    if (native_adapter_) {
+        native_adapter_->reset();
+        native_adapter_.reset();
     }
     native_setup_requested_ = false;
-    hardware_active_ = false;
     std::lock_guard<std::mutex> lock(mutex_);
     decoder_name_ = "uninitialized";
     current_render_mode_ = RenderMode::Placeholder;
@@ -452,26 +435,18 @@ void Decoder::publish_frame(AVFrame *decoded, const AccessUnit &access_unit, std
         return;
     }
     if (native_setup_requested_) {
-        if (!hardware_active_ || decoded->format != kHardwarePixelFormat) {
+        if (!native_adapter_) {
             decode_failures_.fetch_add(1);
             fail(stream_generation, MediaPathFailureCode::NativeExport,
-                 "decoded frame is not a VAAPI hardware frame");
+                 "native decoder adapter is unavailable");
             return;
         }
-        AVFrame *drm = av_frame_alloc();
-        if (!drm) {
+        std::string export_error;
+        NativeFramePtr native_frame = native_adapter_->export_frame(*decoded, export_error);
+        if (!native_frame) {
             decode_failures_.fetch_add(1);
             fail(stream_generation, MediaPathFailureCode::NativeExport,
-                 "could not allocate a DRM PRIME frame");
-            return;
-        }
-        drm->format = AV_PIX_FMT_DRM_PRIME;
-        const int map_result = av_hwframe_map(drm, decoded, AV_HWFRAME_MAP_READ);
-        if (map_result < 0) {
-            av_frame_free(&drm);
-            decode_failures_.fetch_add(1);
-            fail(stream_generation, MediaPathFailureCode::NativeExport,
-                 "DRM PRIME export failed:" + ffmpeg_error(map_result));
+                 export_error.empty() ? "native frame export failed" : export_error);
             return;
         }
         auto frame = std::make_shared<VideoFrame>();
@@ -491,7 +466,7 @@ void Decoder::publish_frame(AVFrame *decoded, const AccessUnit &access_unit, std
         frame->pixel_format = "drm-prime";
         frame->color_range = decoded->color_range == AVCOL_RANGE_JPEG ? "full" : "limited";
         frame->color_space = decoded->colorspace == AVCOL_SPC_BT709 ? "bt709" : "unspecified";
-        frame->storage = NativeFrameStorage{std::make_shared<LinuxNativeFrame>(owned_frame(drm))};
+        frame->storage = NativeFrameStorage{std::move(native_frame)};
         on_frame_(std::move(frame));
         frames_decoded_.fetch_add(1);
         return;

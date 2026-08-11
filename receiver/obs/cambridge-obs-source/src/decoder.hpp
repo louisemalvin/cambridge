@@ -2,6 +2,7 @@
 
 #include "frame.hpp"
 #include "media_path.hpp"
+#include "platform/interfaces/native_decoder_adapter.hpp"
 #include "rtp.hpp"
 
 #include <atomic>
@@ -10,14 +11,13 @@
 #include <cstdint>
 #include <deque>
 #include <functional>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <thread>
 
 extern "C" {
 #include <libavcodec/avcodec.h>
-#include <libavutil/hwcontext.h>
-#include <libavutil/hwcontext_drm.h>
 #include <libswscale/swscale.h>
 }
 
@@ -63,8 +63,8 @@ public:
     [[nodiscard]] std::size_t queue_occupancy() const;
 
 private:
-    static enum AVPixelFormat choose_hardware_format(AVCodecContext *context,
-                                                      const enum AVPixelFormat *formats);
+    static enum AVPixelFormat choose_pixel_format(AVCodecContext *context,
+                                                  const enum AVPixelFormat *formats);
     void run();
     bool open_codec(const DecoderConfig &config, bool native_requested, std::string &error,
                     NativeSetupStatus &native_status);
@@ -100,10 +100,9 @@ private:
 
     std::mutex codec_mutex_;
     AVCodecContext *codec_context_ = nullptr;
-    AVBufferRef *hardware_device_ = nullptr;
     SwsContext *scaler_ = nullptr;
+    std::unique_ptr<NativeDecoderAdapter> native_adapter_;
     bool native_setup_requested_ = false;
-    bool hardware_active_ = false;
     RenderMode current_render_mode_ = RenderMode::Placeholder;
     std::string decoder_name_ = "uninitialized";
 

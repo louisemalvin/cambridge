@@ -1,6 +1,6 @@
 #include "renderer.hpp"
 
-#include "linux_native_frame_temporary.hpp"
+#include "platform/linux/native_frame_linux.hpp"
 #include "protocol_contract.generated.hpp"
 
 #include <drm_fourcc.h>
