@@ -186,25 +186,24 @@ private struct UITestFixtureTabs: View {
     @Bindable var model: UITestFixtureModel
 
     var body: some View {
-        TabView(selection: $model.route) {
-            UITestFixtureSetupView(model: model)
-                .tabItem {
-                    Label("Setup", systemImage: "antenna.radiowaves.left.and.right")
-                        .accessibilityIdentifier("setup-tab")
-                }
-                .tag(AppModel.Route.setup)
-            UITestFixtureWebcamView(model: model)
-                .tabItem {
-                    Label("Webcam", systemImage: "video")
-                        .accessibilityIdentifier("webcam-tab")
-                }
-                .tag(AppModel.Route.webcam)
-            UITestFixtureSettingsView(model: model)
-                .tabItem {
-                    Label("Settings", systemImage: "gear")
-                        .accessibilityIdentifier("settings-tab")
-                }
-                .tag(AppModel.Route.settings)
+        VStack(spacing: .zero) {
+            HStack(spacing: UITestFixtureLayout.standardSpacing) {
+                Button("Setup") { model.route = .setup }
+                    .accessibilityIdentifier("setup-tab")
+                Button("Webcam") { model.route = .webcam }
+                    .accessibilityIdentifier("webcam-tab")
+                Button("Settings") { model.route = .settings }
+                    .accessibilityIdentifier("settings-tab")
+            }
+            .padding(.horizontal)
+            switch model.route {
+            case .setup:
+                UITestFixtureSetupView(model: model)
+            case .webcam:
+                UITestFixtureWebcamView(model: model)
+            case .settings:
+                UITestFixtureSettingsView(model: model)
+            }
         }
     }
 }

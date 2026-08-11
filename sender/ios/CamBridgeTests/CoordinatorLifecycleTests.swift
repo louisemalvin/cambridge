@@ -585,7 +585,7 @@ private actor FakeSessionControl: CamBridgeControlConnectionProtocol {
     }
 
     func close() async {
-        if connected {
+        if !closed {
             connected = false
             closed = true
             closes += 1
@@ -752,8 +752,10 @@ private actor FailingDatagramSender: RTPDatagramSending {
     }
 
     func close() async {
-        connected = false
-        closes += 1
+        if connected {
+            connected = false
+            closes += 1
+        }
     }
 
     func metrics() async -> RTPDatagramMetrics {
