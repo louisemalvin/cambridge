@@ -11,7 +11,7 @@ final class CoordinatorLifecycleTests: XCTestCase {
             capture: capture,
             controlFactory: FakeSessionControlFactory(connection: control),
             datagramFactory: FakeDatagramFactory(sender: datagram),
-            firstGeneration: CamBridgeContract.Validation.minimumGeneration
+            firstGeneration: UInt64(CamBridgeContract.Validation.minimumGeneration)
         )
         let endpoint = try ReceiverEndpoint(host: "127.0.0.1")
         let receiver = try ReceiverCapabilities(
@@ -28,11 +28,11 @@ final class CoordinatorLifecycleTests: XCTestCase {
 
         let startResult = await coordinator.start(
             endpoint: endpoint,
-            controlTarget: .manual(endpoint),
+            controlTarget: ReceiverControlTarget.manual(endpoint),
             receiver: receiver,
             configuration: configuration,
             cameraDeviceID: "camera-test",
-            stabilization: .off
+            stabilization: CameraStabilizationPreference.off
         )
 
         guard case .success = startResult else {
@@ -42,7 +42,7 @@ final class CoordinatorLifecycleTests: XCTestCase {
         guard case let .streaming(identity, activeConfiguration, mediaPort) = streamingSnapshot.state else {
             return XCTFail("expected a streaming snapshot")
         }
-        XCTAssertEqual(identity.generation, CamBridgeContract.Validation.minimumGeneration)
+        XCTAssertEqual(identity.generation, UInt64(CamBridgeContract.Validation.minimumGeneration))
         XCTAssertEqual(activeConfiguration, configuration)
         XCTAssertEqual(mediaPort, CamBridgeContract.Defaults.controlPort + CamBridgeContract.Defaults.mediaPortOffset)
         let startCount = await capture.startCount()
@@ -58,7 +58,7 @@ final class CoordinatorLifecycleTests: XCTestCase {
         let closeCount = await datagram.closeCount()
         let controlClosed = await control.didClose()
         let diagnostics = await coordinator.diagnostics()
-        XCTAssertEqual(stoppedSnapshot.state, .idle)
+        XCTAssertEqual(stoppedSnapshot.state, StreamState.idle)
         XCTAssertEqual(stopCount, 1)
         XCTAssertEqual(closeCount, 1)
         XCTAssertTrue(controlClosed)
@@ -68,11 +68,11 @@ final class CoordinatorLifecycleTests: XCTestCase {
 
         let secondStartResult = await coordinator.start(
             endpoint: endpoint,
-            controlTarget: .manual(endpoint),
+            controlTarget: ReceiverControlTarget.manual(endpoint),
             receiver: receiver,
             configuration: configuration,
             cameraDeviceID: "camera-test",
-            stabilization: .off
+            stabilization: CameraStabilizationPreference.off
         )
         guard case .success = secondStartResult else {
             return XCTFail("expected a stopped coordinator to accept a new start")
@@ -97,7 +97,7 @@ final class CoordinatorLifecycleTests: XCTestCase {
             capture: capture,
             controlFactory: FakeSessionControlFactory(connection: control),
             datagramFactory: FakeDatagramFactory(sender: datagram),
-            firstGeneration: CamBridgeContract.Validation.minimumGeneration
+            firstGeneration: UInt64(CamBridgeContract.Validation.minimumGeneration)
         )
         let endpoint = try ReceiverEndpoint(host: "127.0.0.1")
         let receiver = try ReceiverCapabilities(
@@ -115,11 +115,11 @@ final class CoordinatorLifecycleTests: XCTestCase {
         let startTask = Task {
             await coordinator.start(
                 endpoint: endpoint,
-                controlTarget: .manual(endpoint),
+                controlTarget: ReceiverControlTarget.manual(endpoint),
                 receiver: receiver,
                 configuration: configuration,
                 cameraDeviceID: "camera-test",
-                stabilization: .off
+                stabilization: CameraStabilizationPreference.off
             )
         }
         await capture.waitUntilPrepareEntered()
@@ -131,9 +131,9 @@ final class CoordinatorLifecycleTests: XCTestCase {
         guard case let .failure(failure) = startResult else {
             return XCTFail("a Stop during preparation must cancel the suspended Start")
         }
-        XCTAssertEqual(failure, .cancelled)
+        XCTAssertEqual(failure, StreamFailure.cancelled)
         let snapshot = await coordinator.snapshotStream()
-        XCTAssertEqual(snapshot.state, .idle)
+        XCTAssertEqual(snapshot.state, StreamState.idle)
         let stopCount = await capture.stopCount()
         let controlCloseCount = await control.closeCount()
         let datagramCloseCount = await datagram.closeCount()
@@ -150,7 +150,7 @@ final class CoordinatorLifecycleTests: XCTestCase {
             capture: capture,
             controlFactory: FakeSessionControlFactory(connection: control),
             datagramFactory: FailingDatagramFactory(sender: datagram),
-            firstGeneration: CamBridgeContract.Validation.minimumGeneration
+            firstGeneration: UInt64(CamBridgeContract.Validation.minimumGeneration)
         )
         let endpoint = try ReceiverEndpoint(host: "127.0.0.1")
         let receiver = try ReceiverCapabilities(
@@ -174,11 +174,11 @@ final class CoordinatorLifecycleTests: XCTestCase {
 
         let startResult = await coordinator.start(
             endpoint: endpoint,
-            controlTarget: .manual(endpoint),
+            controlTarget: ReceiverControlTarget.manual(endpoint),
             receiver: receiver,
             configuration: configuration,
             cameraDeviceID: "camera-test",
-            stabilization: .off
+            stabilization: CameraStabilizationPreference.off
         )
         guard case .success = startResult else {
             return XCTFail("expected fake receiver to accept the stream")
@@ -216,7 +216,7 @@ final class CoordinatorLifecycleTests: XCTestCase {
             capture: capture,
             controlFactory: FakeSessionControlFactory(connection: control),
             datagramFactory: FailingConnectDatagramFactory(sender: datagram),
-            firstGeneration: CamBridgeContract.Validation.minimumGeneration
+            firstGeneration: UInt64(CamBridgeContract.Validation.minimumGeneration)
         )
         let endpoint = try ReceiverEndpoint(host: "127.0.0.1")
         let receiver = try ReceiverCapabilities(
@@ -233,11 +233,11 @@ final class CoordinatorLifecycleTests: XCTestCase {
 
         let result = await coordinator.start(
             endpoint: endpoint,
-            controlTarget: .manual(endpoint),
+            controlTarget: ReceiverControlTarget.manual(endpoint),
             receiver: receiver,
             configuration: configuration,
             cameraDeviceID: "camera-test",
-            stabilization: .off
+            stabilization: CameraStabilizationPreference.off
         )
 
         guard case let .failure(failure) = result else {
@@ -261,7 +261,7 @@ final class CoordinatorLifecycleTests: XCTestCase {
             capture: capture,
             controlFactory: FakeSessionControlFactory(connection: control),
             datagramFactory: FakeDatagramFactory(sender: FakeDatagramSender()),
-            firstGeneration: CamBridgeContract.Validation.minimumGeneration
+            firstGeneration: UInt64(CamBridgeContract.Validation.minimumGeneration)
         )
         let endpoint = try ReceiverEndpoint(host: "127.0.0.1")
         let receiver = try ReceiverCapabilities(
@@ -278,19 +278,20 @@ final class CoordinatorLifecycleTests: XCTestCase {
 
         let result = await coordinator.start(
             endpoint: endpoint,
-            controlTarget: .manual(endpoint),
+            controlTarget: ReceiverControlTarget.manual(endpoint),
             receiver: receiver,
             configuration: configuration,
             cameraDeviceID: "camera-test",
-            stabilization: .off
+            stabilization: CameraStabilizationPreference.off
         )
 
-        XCTAssertEqual(result, .failure(.receiverRejected("unsupported exact mode")))
+        let expectedResult: Result<Void, StreamFailure> = .failure(.receiverRejected("unsupported exact mode"))
+        XCTAssertEqual(result, expectedResult)
         let snapshot = await coordinator.snapshotStream()
         guard case let .failed(failure) = snapshot.state else {
             return XCTFail("receiver rejection must produce a failed stream state")
         }
-        XCTAssertEqual(failure, .receiverRejected("unsupported exact mode"))
+        XCTAssertEqual(failure, StreamFailure.receiverRejected("unsupported exact mode"))
     }
 
     func testMediaPacketsPreserveOrderAndStayWithinTheProtocolMTU() async throws {
@@ -301,7 +302,7 @@ final class CoordinatorLifecycleTests: XCTestCase {
             capture: capture,
             controlFactory: FakeSessionControlFactory(connection: control),
             datagramFactory: ControlledDatagramFactory(sender: datagram),
-            firstGeneration: CamBridgeContract.Validation.minimumGeneration
+            firstGeneration: UInt64(CamBridgeContract.Validation.minimumGeneration)
         )
         let endpoint = try ReceiverEndpoint(host: "127.0.0.1")
         let receiver = try ReceiverCapabilities(
@@ -318,11 +319,11 @@ final class CoordinatorLifecycleTests: XCTestCase {
 
         let result = await coordinator.start(
             endpoint: endpoint,
-            controlTarget: .manual(endpoint),
+            controlTarget: ReceiverControlTarget.manual(endpoint),
             receiver: receiver,
             configuration: configuration,
             cameraDeviceID: "camera-test",
-            stabilization: .off
+            stabilization: CameraStabilizationPreference.off
         )
         guard case .success = result else {
             return XCTFail("expected fake receiver to accept the stream")
@@ -356,7 +357,7 @@ final class CoordinatorLifecycleTests: XCTestCase {
             capture: capture,
             controlFactory: FakeSessionControlFactory(connection: control),
             datagramFactory: ControlledDatagramFactory(sender: datagram),
-            firstGeneration: CamBridgeContract.Validation.minimumGeneration
+            firstGeneration: UInt64(CamBridgeContract.Validation.minimumGeneration)
         )
         let endpoint = try ReceiverEndpoint(host: "127.0.0.1")
         let receiver = try ReceiverCapabilities(
@@ -373,11 +374,11 @@ final class CoordinatorLifecycleTests: XCTestCase {
 
         let result = await coordinator.start(
             endpoint: endpoint,
-            controlTarget: .manual(endpoint),
+            controlTarget: ReceiverControlTarget.manual(endpoint),
             receiver: receiver,
             configuration: configuration,
             cameraDeviceID: "camera-test",
-            stabilization: .off
+            stabilization: CameraStabilizationPreference.off
         )
         guard case .success = result else {
             return XCTFail("expected fake receiver to accept the stream")
@@ -393,11 +394,11 @@ final class CoordinatorLifecycleTests: XCTestCase {
         let snapshot = await coordinator.snapshotStream()
         let closeCount = await datagram.closeCount()
         let blockedCompletionCount = await datagram.blockedCompletionCount()
-        XCTAssertEqual(snapshot.state, .idle)
+        XCTAssertEqual(snapshot.state, StreamState.idle)
         XCTAssertEqual(closeCount, 1)
         XCTAssertEqual(blockedCompletionCount, 1)
         let diagnostics = await coordinator.diagnostics()
-        XCTAssertGreaterThan(diagnostics?.queueDrops ?? .zero, .zero)
+        XCTAssertGreaterThan(diagnostics?.queueDrops ?? Int.zero, Int.zero)
     }
 
     private static let largeAccessUnit = EncodedAccessUnit(

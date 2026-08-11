@@ -9,7 +9,7 @@ final class NetworkAdapterTests: XCTestCase {
         let factory = FakeControlConnectionFactory(connection: connection)
         let probe = CamBridgeReceiverProbe(factory: factory)
 
-        let result = await probe.probe(target: .manual(endpoint))
+        let result = await probe.probe(target: ReceiverControlTarget.manual(endpoint))
 
         guard case let .success(capabilities) = result else {
             return XCTFail("expected a valid capabilities response")
@@ -34,7 +34,7 @@ final class NetworkAdapterTests: XCTestCase {
         ), respondToProbe: false)
         let probe = CamBridgeReceiverProbe(factory: FakeControlConnectionFactory(connection: connection))
 
-        let result = await probe.probe(target: .manual(endpoint))
+        let result = await probe.probe(target: ReceiverControlTarget.manual(endpoint))
 
         let expectedFailure: Result<ReceiverCapabilities, StreamFailure> = .failure(.incompatibleProtocol)
         XCTAssertEqual(result, expectedFailure)
@@ -56,7 +56,7 @@ final class NetworkAdapterTests: XCTestCase {
         ), respondToProbe: false)
         let probe = CamBridgeReceiverProbe(factory: FakeControlConnectionFactory(connection: connection))
 
-        let result = await probe.probe(target: .manual(endpoint))
+        let result = await probe.probe(target: ReceiverControlTarget.manual(endpoint))
 
         let expectedFailure: Result<ReceiverCapabilities, StreamFailure> = .failure(.incompatibleProtocol)
         XCTAssertEqual(result, expectedFailure)
