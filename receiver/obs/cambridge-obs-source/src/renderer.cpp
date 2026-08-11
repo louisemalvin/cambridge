@@ -204,6 +204,17 @@ void Renderer::activate_session_media_path(SessionMediaPath path)
 
 void Renderer::end_session()
 {
+    if (graphics_resources_ready_) {
+        obs_enter_graphics();
+        for (TextureSlot &slot : slots_) {
+            destroy_slot(slot);
+        }
+        if (importer_) {
+            importer_->reset();
+        }
+        obs_leave_graphics();
+    }
+    next_slot_ = 0;
     active_media_path_ = SessionMediaPath::Unselected;
     failed_generation_ = 0;
     active_render_mode_ = "placeholder";

@@ -215,7 +215,7 @@ if(CAMBRIDGE_BUILD_TESTS AND BUILD_TESTING)
         )
     endif()
 
-    if(APPLE)
+    if(APPLE AND NOT CAMBRIDGE_BUILD_SHARED_TESTS_ONLY)
         set_source_files_properties(
             tests/native_decoder_macos_tests.mm
             src/platform/macos/native_decoder_macos.mm
