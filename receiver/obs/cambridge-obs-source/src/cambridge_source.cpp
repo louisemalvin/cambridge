@@ -1,6 +1,7 @@
 #include "cambridge_source.hpp"
 
 #include "control_protocol.hpp"
+#include "diagnostics.hpp"
 #include "discovery_metadata.hpp"
 #include "platform/interfaces/source_properties.hpp"
 #include "protocol_contract.generated.hpp"
@@ -12,7 +13,6 @@
 #include <cerrno>
 #include <chrono>
 #include <cstdio>
-#include <fstream>
 #include <limits>
 #include <sstream>
 #include <time.h>
@@ -300,101 +300,63 @@ void CamBridgeSource::tick(float)
 void CamBridgeSource::write_diagnostics()
 {
     const SourceConfig config = configuration();
-    bool session_active = false;
-    std::uint32_t coded_width = 0;
-    std::uint32_t coded_height = 0;
-    std::uint32_t display_width = 0;
-    std::uint32_t display_height = 0;
-    std::uint32_t rotation_degrees = 0;
-    DecoderMode requested_decoder_mode = DecoderMode::Automatic;
-    SessionMediaPath session_media_path = SessionMediaPath::Unselected;
-    NativeSetupStatus native_setup_status = NativeSetupStatus::Failed;
-    std::string native_setup_reason;
-    bool native_setup_attempted = false;
-    bool media_path_locked = false;
-    MediaPathFailureCode last_failure_code = MediaPathFailureCode::Decode;
-    std::string last_failure_detail;
+    DiagnosticsSnapshot snapshot;
+    snapshot.version = kModuleVersion;
+    snapshot.git_commit = CAMBRIDGE_GIT_COMMIT;
     {
         std::lock_guard<std::mutex> lock(session_mutex_);
-        session_active = session_active_;
-        coded_width = active_width_;
-        coded_height = active_height_;
-        display_width = active_display_width_;
-        display_height = active_display_height_;
-        rotation_degrees = active_rotation_degrees_;
-        requested_decoder_mode = requested_decoder_mode_;
-        session_media_path = active_media_path_;
-        native_setup_status = native_setup_status_;
-        native_setup_reason = native_setup_reason_;
-        native_setup_attempted = native_setup_attempted_;
-        media_path_locked = media_path_locked_;
-        last_failure_code = last_media_path_failure_code_;
-        last_failure_detail = last_media_path_failure_detail_;
+        snapshot.state = session_active_ ? "presenting" : "listening";
+        snapshot.coded_width = active_width_;
+        snapshot.coded_height = active_height_;
+        snapshot.display_width = active_display_width_;
+        snapshot.display_height = active_display_height_;
+        snapshot.rotation_degrees = active_rotation_degrees_;
+        snapshot.requested_decoder_mode = decoder_mode_name(requested_decoder_mode_);
+        snapshot.session_media_path = session_media_path_name(active_media_path_);
+        snapshot.native_setup_status = native_setup_attempted_ ? native_setup_status_name(native_setup_status_)
+                                                               : "not_attempted";
+        snapshot.native_setup_reason = native_setup_reason_;
+        snapshot.media_path_locked = media_path_locked_;
+        snapshot.last_media_path_failure_code = media_path_failure_code_name(last_media_path_failure_code_);
+        snapshot.last_media_path_failure_detail = last_media_path_failure_detail_;
     }
-    std::ofstream output(config.diagnostics_path, std::ios::trunc);
-    if (!output) {
-        report("diagnostics_write_failed:path=" + config.diagnostics_path);
+    snapshot.decoder = decoder_ ? decoder_->decoder_name() : "uninitialized";
+    snapshot.render = renderer_.render_mode();
+    snapshot.mailbox_occupancy = mailbox_.occupancy();
+    snapshot.frames_replaced = mailbox_.replaced_count();
+    snapshot.frames_stale = stale_transitions_.load();
+    snapshot.frames_decoded = decoder_ ? decoder_->frames_decoded() : 0;
+    snapshot.frames_rendered = frames_rendered_.load();
+    snapshot.media_path_failures = media_path_failures_.load();
+    snapshot.native_import_failures = native_import_failures_.load();
+    snapshot.native_pool_exhaustions = native_pool_exhaustions_.load();
+    snapshot.cpu_frame_copies = renderer_.cpu_uploads();
+    snapshot.gpu_copies = renderer_.gpu_copies();
+    snapshot.dma_buf_import_failures = renderer_.import_failures();
+    snapshot.packets_received = media_receiver_ ? media_receiver_->packets_received() : 0;
+    snapshot.bytes_received = media_receiver_ ? media_receiver_->bytes_received() : 0;
+    snapshot.packets_lost = media_receiver_ ? media_receiver_->packets_lost() : 0;
+    snapshot.malformed_packets = media_receiver_ ? media_receiver_->malformed_packets() : 0;
+    snapshot.invalid_source_packets = media_receiver_ ? media_receiver_->invalid_source_packets() : 0;
+    snapshot.decode_failures = decoder_ ? decoder_->decode_failures() : 0;
+    snapshot.decoder_queue_drops = decoder_ ? decoder_->queue_drops() : 0;
+    snapshot.decoder_queue_occupancy = decoder_ ? decoder_->queue_occupancy() : 0;
+    snapshot.reorder_occupancy = media_receiver_ ? media_receiver_->reorder_occupancy() : 0;
+    snapshot.reorder_peak = media_receiver_ ? media_receiver_->reorder_peak() : 0;
+    snapshot.reorder_deadline_drops = media_receiver_ ? media_receiver_->reorder_deadline_drops() : 0;
+    snapshot.max_receive_to_decode_ms = milliseconds(max_receive_to_decode_ns_.load());
+    snapshot.max_receive_to_publish_ms = milliseconds(max_receive_to_publish_ns_.load());
+    snapshot.max_receive_to_render_ms = milliseconds(max_receive_to_render_ns_.load());
+    snapshot.configured_control_port = config.control_port;
+    snapshot.configured_media_port = config.media_port;
+    snapshot.configured_reorder_deadline_ms = config.reorder_deadline_ms;
+    snapshot.configured_maximum_decoder_queue_age_ms = config.maximum_decoder_queue_age_ms;
+    snapshot.configured_maximum_live_frame_age_ms = config.maximum_live_frame_age_ms;
+    std::string error;
+    if (!::cambridge::write_diagnostics(snapshot, config.diagnostics_path, error)) {
+        report("diagnostics_write_failed:path=" + config.diagnostics_path + ":reason=" + error);
         return;
     }
-    output << "{\n"
-           << "  \"module\": \"cambridge-obs-plugin\",\n"
-           << "  \"version\": \"" << kModuleVersion << "\",\n"
-           << "  \"gitCommit\": \"" << CAMBRIDGE_GIT_COMMIT << "\",\n"
-           << "  \"protocolVersion\": " << kModuleProtocolVersion << ",\n"
-           << "  \"state\": \"" << (session_active ? "presenting" : "listening") << "\",\n"
-           << "  \"codedWidth\": " << coded_width << ",\n"
-           << "  \"codedHeight\": " << coded_height << ",\n"
-           << "  \"displayWidth\": " << display_width << ",\n"
-           << "  \"displayHeight\": " << display_height << ",\n"
-           << "  \"rotationDegrees\": " << rotation_degrees << ",\n"
-           << "  \"decoder\": \"" << (decoder_ ? decoder_->decoder_name() : "uninitialized") << "\",\n"
-           << "  \"render\": \"" << renderer_.render_mode() << "\",\n"
-           << "  \"mailboxOccupancy\": " << mailbox_.occupancy() << ",\n"
-           << "  \"mailboxMaximum\": " << kMailboxCapacity << ",\n"
-           << "  \"framesReplaced\": " << mailbox_.replaced_count() << ",\n"
-           << "  \"framesStale\": " << stale_transitions_.load() << ",\n"
-           << "  \"framesDecoded\": " << (decoder_ ? decoder_->frames_decoded() : 0) << ",\n"
-           << "  \"framesRendered\": " << frames_rendered_.load() << ",\n"
-           << "  \"hardwareCpuTransfers\": 0,\n"
-           << "  \"requestedDecoderMode\": \"" << decoder_mode_name(requested_decoder_mode) << "\",\n"
-           << "  \"sessionMediaPath\": \"" << session_media_path_name(session_media_path) << "\",\n"
-           << "  \"mediaPathLocked\": " << (media_path_locked ? "true" : "false") << ",\n"
-           << "  \"nativeSetupStatus\": \""
-           << (native_setup_attempted ? native_setup_status_name(native_setup_status) : "not_attempted")
-           << "\",\n"
-           << "  \"nativeSetupReason\": \"" << native_setup_reason << "\",\n"
-           << "  \"mediaPathFailures\": " << media_path_failures_.load() << ",\n"
-           << "  \"lastMediaPathFailureCode\": \""
-           << media_path_failure_code_name(last_failure_code) << "\",\n"
-           << "  \"lastMediaPathFailureDetail\": \"" << last_failure_detail << "\",\n"
-           << "  \"nativeImportFailures\": " << native_import_failures_.load() << ",\n"
-           << "  \"nativePoolExhaustions\": " << native_pool_exhaustions_.load() << ",\n"
-           << "  \"cpuFrameCopies\": " << renderer_.cpu_uploads() << ",\n"
-           << "  \"gpuCopies\": " << renderer_.gpu_copies() << ",\n"
-           << "  \"dmaBufImportFailures\": " << renderer_.import_failures() << ",\n"
-           << "  \"packetsReceived\": " << (media_receiver_ ? media_receiver_->packets_received() : 0) << ",\n"
-           << "  \"bytesReceived\": " << (media_receiver_ ? media_receiver_->bytes_received() : 0) << ",\n"
-           << "  \"packetsLost\": " << (media_receiver_ ? media_receiver_->packets_lost() : 0) << ",\n"
-           << "  \"malformedPackets\": " << (media_receiver_ ? media_receiver_->malformed_packets() : 0) << ",\n"
-           << "  \"invalidSourcePackets\": "
-           << (media_receiver_ ? media_receiver_->invalid_source_packets() : 0) << ",\n"
-           << "  \"decodeFailures\": " << (decoder_ ? decoder_->decode_failures() : 0) << ",\n"
-           << "  \"decoderQueueDrops\": " << (decoder_ ? decoder_->queue_drops() : 0) << ",\n"
-           << "  \"decoderQueueOccupancy\": " << (decoder_ ? decoder_->queue_occupancy() : 0) << ",\n"
-           << "  \"reorderOccupancy\": " << (media_receiver_ ? media_receiver_->reorder_occupancy() : 0)
-           << ",\n"
-           << "  \"reorderPeak\": " << (media_receiver_ ? media_receiver_->reorder_peak() : 0) << ",\n"
-           << "  \"reorderDeadlineDrops\": "
-           << (media_receiver_ ? media_receiver_->reorder_deadline_drops() : 0) << ",\n"
-           << "  \"maxReceiveToDecodeMs\": " << milliseconds(max_receive_to_decode_ns_.load()) << ",\n"
-           << "  \"maxReceiveToPublishMs\": " << milliseconds(max_receive_to_publish_ns_.load()) << ",\n"
-           << "  \"maxReceiveToRenderMs\": " << milliseconds(max_receive_to_render_ns_.load()) << ",\n"
-           << "  \"configured\": {\"controlPort\": " << config.control_port
-           << ", \"mediaPort\": " << config.media_port
-           << ", \"reorderDeadlineMs\": " << config.reorder_deadline_ms
-           << ", \"maximumDecoderQueueAgeMs\": " << config.maximum_decoder_queue_age_ms
-           << ", \"maximumLiveFrameAgeMs\": " << config.maximum_live_frame_age_ms << "}\n"
-           << "}\n";
     report("diagnostics_written:path=" + config.diagnostics_path);
 }
 

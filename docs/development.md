@@ -167,6 +167,10 @@ OBS log. In the CamBridge source properties, **Write diagnostics now** saves a
 snapshot containing session identity, geometry, decoder/render mode, queue
 occupancy, drops, and frame counters.
 
+The diagnostic field `hardwareCpuTransfers` is retained for tooling
+compatibility and is deprecated; native-frame export failures are terminal and
+the field is always serialized as zero.
+
 For an emulator run, use the log directory printed by the harness. Hardware
 decode may report VAAPI/DRM PRIME and direct DMA-BUF; software decode and NV12
 upload are valid fallback modes.

@@ -31,6 +31,8 @@ add_library(cambridge-obs-plugin MODULE
     src/control_protocol.cpp
     src/control_server.cpp
     src/decoder.cpp
+    src/diagnostics.cpp
+    src/diagnostics.hpp
     src/discovery_metadata.cpp
     src/cambridge_source.cpp
     src/media_receiver.cpp
@@ -203,6 +205,16 @@ if(BUILD_TESTING)
     )
     add_test(NAME cambridge-obs-plugin-discovery-metadata-tests
         COMMAND cambridge-obs-plugin-discovery-metadata-tests)
+
+    add_executable(cambridge-obs-plugin-diagnostics-tests
+        tests/diagnostics_tests.cpp
+        src/diagnostics.cpp
+    )
+    target_compile_features(cambridge-obs-plugin-diagnostics-tests PRIVATE cxx_std_17)
+    target_compile_options(cambridge-obs-plugin-diagnostics-tests PRIVATE
+        -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror
+    )
+    add_test(NAME cambridge-obs-plugin-diagnostics-tests COMMAND cambridge-obs-plugin-diagnostics-tests)
 endif()
 
 install(TARGETS cambridge-obs-plugin
