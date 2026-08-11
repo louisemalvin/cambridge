@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-set(release_version_file "${CMAKE_CURRENT_SOURCE_DIR}/../../../../VERSION")
+set(release_version_file "${CMAKE_CURRENT_SOURCE_DIR}/../../../VERSION")
 file(READ "${release_version_file}" cambridge_release_version)
 string(STRIP "${cambridge_release_version}" cambridge_release_version)
 project(cambridge-obs-plugin VERSION "${cambridge_release_version}" LANGUAGES CXX)

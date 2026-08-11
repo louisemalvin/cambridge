@@ -27,7 +27,7 @@ receiver discovery advertisement.
 
 - `sender/android/app/` — Android sender application
 - `sender/android/receiver-discovery/` — lifecycle-scoped Android DNS-SD library
-- `receiver/linux/obs/` — Linux OBS receiver
+- `receiver/obs/` — shared OBS receiver
 - `protocol/` — shared wire contract, schema, and examples
 - `scripts/sender/` and `scripts/receiver/` — platform-specific checks and fixtures
 - `sender/cambridge-video-modes.json` — shared Android/iOS phone mode catalog

@@ -6,9 +6,9 @@ repo_root=$(cd -- "${script_dir}/../../.." && pwd)
 build_dir="${repo_root}/build/cambridge-obs-plugin"
 artifact_dir=$(mktemp -d "${repo_root}/build/cambridge-fixture.XXXXXX")
 contract_json="${repo_root}/protocol/cambridge-stream-contract.json"
-scene_template="${repo_root}/scripts/receiver/linux/cambridge-test-scene.json"
-profile_template="${repo_root}/scripts/receiver/linux/cambridge-test-profile.ini"
-fixture_script="${repo_root}/scripts/receiver/linux/cambridge-fixture.py"
+scene_template="${repo_root}/scripts/receiver/common/cambridge-test-scene.json"
+profile_template="${repo_root}/scripts/receiver/common/cambridge-test-profile.ini"
+fixture_script="${repo_root}/scripts/receiver/common/cambridge-fixture.py"
 swift_fixture_package="${repo_root}/scripts/sender/ios/cambridge-swift-fixture"
 swift_container_image="swift:6.0.3-jammy"
 

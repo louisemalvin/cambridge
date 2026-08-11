@@ -3,13 +3,13 @@ name: Native OBS source
 on:
   push:
     paths:
-      - "receiver/linux/obs/cambridge-obs-source/**"
+      - "receiver/obs/cambridge-obs-source/**"
       - "protocol/**"
       - "scripts/receiver/linux/build-cambridge-obs-plugin.sh"
       - ".github/workflows/native.yml"
   pull_request:
     paths:
-      - "receiver/linux/obs/cambridge-obs-source/**"
+      - "receiver/obs/cambridge-obs-source/**"
       - "protocol/**"
       - "scripts/receiver/linux/build-cambridge-obs-plugin.sh"
       - ".github/workflows/native.yml"

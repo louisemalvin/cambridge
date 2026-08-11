@@ -21,11 +21,11 @@ KOTLIN_CONTRACT_PATH = (
 )
 KOTLIN_CATALOG_PATH = REPOSITORY_ROOT / "sender/android/app/src/main/java/dev/cambridge/sender/session/VideoProfiles.kt"
 CPP_GENERATOR_PATH = REPOSITORY_ROOT / "scripts/development/generate-cambridge-cpp-contract.py"
-CPP_CONTRACT_PATH = REPOSITORY_ROOT / "receiver/linux/obs/cambridge-obs-source/src/protocol_contract.generated.hpp"
-LEGACY_CPP_CONTRACT_PATH = REPOSITORY_ROOT / "receiver/linux/obs/cambridge-obs-source/src/protocol_contract.hpp"
-CPP_PROTOCOL_PATH = REPOSITORY_ROOT / "receiver/linux/obs/cambridge-obs-source/src/control_protocol.cpp"
-CPP_SOURCE_PATH = REPOSITORY_ROOT / "receiver/linux/obs/cambridge-obs-source/src/cambridge_source.cpp"
-FIXTURE_PATH = REPOSITORY_ROOT / "scripts/receiver/linux/cambridge-fixture.py"
+CPP_CONTRACT_PATH = REPOSITORY_ROOT / "receiver/obs/cambridge-obs-source/src/protocol_contract.generated.hpp"
+LEGACY_CPP_CONTRACT_PATH = REPOSITORY_ROOT / "receiver/obs/cambridge-obs-source/src/protocol_contract.hpp"
+CPP_PROTOCOL_PATH = REPOSITORY_ROOT / "receiver/obs/cambridge-obs-source/src/control_protocol.cpp"
+CPP_SOURCE_PATH = REPOSITORY_ROOT / "receiver/obs/cambridge-obs-source/src/cambridge_source.cpp"
+FIXTURE_PATH = REPOSITORY_ROOT / "scripts/receiver/common/cambridge-fixture.py"
 ANDROID_SMOKE_PATH = REPOSITORY_ROOT / "scripts/sender/android/test-emulator-cambridge.sh"
 NATIVE_FIXTURE_PATH = REPOSITORY_ROOT / "scripts/receiver/linux/test-cambridge-fixture.sh"
 
@@ -73,7 +73,7 @@ def check_no_receiver_presets() -> None:
         CPP_CONTRACT_PATH,
         CPP_PROTOCOL_PATH,
         CPP_SOURCE_PATH,
-        REPOSITORY_ROOT / "receiver/linux/obs/cambridge-obs-source/src/control_protocol.hpp",
+        REPOSITORY_ROOT / "receiver/obs/cambridge-obs-source/src/control_protocol.hpp",
     ]
     forbidden = ("ProfileContract", "kProfiles", "find_profile", '"profiles"')
     for path in production_paths:

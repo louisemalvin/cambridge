@@ -12,7 +12,7 @@ if [[ -n "$(git -C "${repo_root}" status --porcelain --untracked-files=all)" ]];
     git_commit="${git_commit}-dirty"
 fi
 
-cmake --fresh -S "${repo_root}/receiver/linux/obs/cambridge-obs-source" -B "${build_dir}" \
+cmake --fresh -S "${repo_root}/receiver/obs/cambridge-obs-source" -B "${build_dir}" \
     -DCMAKE_BUILD_TYPE="${build_type}" \
     -DCAMBRIDGE_GIT_COMMIT="${git_commit}" \
     -DCAMBRIDGE_REQUIRE_AVAHI="${require_avahi}" \
