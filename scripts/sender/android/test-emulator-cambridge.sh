@@ -295,7 +295,7 @@ rg -q '"mediaPort":'"${receiver_media_port}" "${app_log}" || fail "Android did n
 rg -q 'session_accepted:' "${obs_log}" || fail "OBS did not accept the CamBridge session"
 rg -q 'decoder_ready:h264/(VAAPI|software)' "${obs_log}" || fail "native H.264 decoder did not become ready"
 rg -q 'first_frame_published:mode=' "${obs_log}" || fail "native source did not publish a frame"
-rg -q 'render_mode=(dma_buf_direct|cpu_nv12_upload)' "${obs_log}" || fail "OBS texture presentation mode was not reported"
+rg -q 'render_mode=(native|software)' "${obs_log}" || fail "OBS texture presentation mode was not reported"
 if rg -q 'NetworkOnMainThreadException|failureType":"Unexpected|failureType":"CameraUnavailable|failureType":"CameraPermissionDenied' "${app_log}"; then
     fail "Android reported a stream runtime failure; see ${app_log}"
 fi

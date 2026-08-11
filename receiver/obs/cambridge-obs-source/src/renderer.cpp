@@ -78,8 +78,8 @@ technique Draw {
 }
 )";
 
-constexpr char kOpaqueRenderMode[] = "DMA-BUF direct";
-constexpr char kCpuRenderMode[] = "CPU NV12 upload";
+constexpr char kNativeRenderMode[] = "native";
+constexpr char kSoftwareRenderMode[] = "software";
 constexpr std::uint32_t kQuarterTurnDegrees = 90;
 constexpr std::uint32_t kQuarterTurnCount = 4;
 constexpr std::uint64_t kNanosecondsPerSecond = 1'000'000'000ULL;
@@ -283,9 +283,9 @@ bool Renderer::update_slot(TextureSlot &slot, const VideoFramePtr &frame)
             return false;
         }
         if (update_native_slot(slot, frame)) {
-            if (active_render_mode_ != kOpaqueRenderMode) {
-                active_render_mode_ = kOpaqueRenderMode;
-                report("render_mode=dma_buf_direct");
+            if (active_render_mode_ != kNativeRenderMode) {
+                active_render_mode_ = kNativeRenderMode;
+                report("render_mode=native");
             }
             return true;
         }
@@ -297,9 +297,9 @@ bool Renderer::update_slot(TextureSlot &slot, const VideoFramePtr &frame)
         return false;
     }
     if (update_cpu_slot(slot, frame)) {
-        if (active_render_mode_ != kCpuRenderMode) {
-            active_render_mode_ = kCpuRenderMode;
-            report("render_mode=cpu_nv12_upload");
+        if (active_render_mode_ != kSoftwareRenderMode) {
+            active_render_mode_ = kSoftwareRenderMode;
+            report("render_mode=software");
         }
         return true;
     }

@@ -280,18 +280,18 @@ rg -q "first_frame_published:mode=.*profile=${profile_width}x${profile_height}" 
     || fail "native source did not publish the requested profile"
 if [[ "${decoder_mode}" == "cpu" ]]; then
     rg -q 'decoder_ready:h264/software' "${obs_log}" || fail "CPU decoder mode was not honored"
-    rg -q 'render_mode=cpu_nv12_upload' "${obs_log}" || fail "CPU NV12 rendering was not reported"
+    rg -q 'render_mode=software' "${obs_log}" || fail "software rendering was not reported"
     rg -q 'session_accepted:.*:requested=cpu:path=software' "${obs_log}" \
         || fail "CPU session path was not locked to software"
 elif [[ "${decoder_mode}" == "native_required" ]]; then
     rg -q 'decoder_ready:h264/VAAPI' "${obs_log}" || fail "VAAPI was not active for the hardware fixture"
-    rg -q 'render_mode=dma_buf_direct' "${obs_log}" || fail "direct DMA-BUF rendering was not reported"
+    rg -q 'render_mode=native' "${obs_log}" || fail "native rendering was not reported"
     rg -q 'session_accepted:.*:requested=native_required:path=native' "${obs_log}" \
         || fail "native_required session path was not locked to native"
 else
     if rg -q 'decoder_ready:h264/VAAPI' "${obs_log}"; then
-        rg -q 'render_mode=dma_buf_direct' "${obs_log}" \
-            || fail "direct DMA-BUF rendering was not reported"
+        rg -q 'render_mode=native' "${obs_log}" \
+            || fail "native rendering was not reported"
         rg -q 'session_accepted:.*:requested=auto:path=native' "${obs_log}" \
             || fail "automatic native session path was not locked to native"
     else
@@ -299,7 +299,7 @@ else
             || fail "automatic mode did not select a supported decoder"
         rg -q 'native_unsupported_selecting_software:' "${obs_log}" \
             || fail "automatic software selection was not explicitly reported"
-        rg -q 'render_mode=cpu_nv12_upload' "${obs_log}" \
+        rg -q 'render_mode=software' "${obs_log}" \
             || fail "automatic software rendering was not reported"
         rg -q 'session_accepted:.*:requested=auto:path=software' "${obs_log}" \
             || fail "automatic software session path was not locked to software"

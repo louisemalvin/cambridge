@@ -463,7 +463,7 @@ void Decoder::publish_frame(AVFrame *decoded, const AccessUnit &access_unit, std
                                    static_cast<std::uint64_t>(config.maximum_live_frame_age_ms) *
                                        kNanosecondsPerMillisecond;
         frame->render_mode = RenderMode::Native;
-        frame->pixel_format = "drm-prime";
+        frame->pixel_format = "native";
         frame->color_range = decoded->color_range == AVCOL_RANGE_JPEG ? "full" : "limited";
         frame->color_space = decoded->colorspace == AVCOL_SPC_BT709 ? "bt709" : "unspecified";
         frame->storage = NativeFrameStorage{std::move(native_frame)};

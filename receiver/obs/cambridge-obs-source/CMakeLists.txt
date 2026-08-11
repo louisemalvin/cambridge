@@ -28,6 +28,10 @@ include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/Platform.cmake")
 cambridge_configure_dependencies()
 cambridge_select_platform_sources(CAMBRIDGE_PLATFORM_SOURCES)
 
+if(APPLE AND (CAMBRIDGE_BUILD_PLUGIN OR CAMBRIDGE_BUILD_TESTS))
+    enable_language(OBJCXX)
+endif()
+
 set(CAMBRIDGE_SHARED_SOURCES
     src/control_protocol.cpp
     src/control_server.cpp
@@ -186,6 +190,57 @@ if(CAMBRIDGE_BUILD_TESTS AND BUILD_TESTING)
         )
         target_link_libraries(cambridge-obs-plugin-bonjour-tests PRIVATE
             ${CAMBRIDGE_DNS_SD_LINK_LIBRARIES}
+        )
+
+        find_program(CAMBRIDGE_FFMPEG_EXECUTABLE NAMES ffmpeg REQUIRED)
+        set(CAMBRIDGE_NATIVE_TEST_WIDTH 16)
+        set(CAMBRIDGE_NATIVE_TEST_HEIGHT 16)
+        set(CAMBRIDGE_NATIVE_TEST_FPS 1)
+        set(CAMBRIDGE_NATIVE_TEST_SAMPLE
+            "${CMAKE_CURRENT_BINARY_DIR}/cambridge-native-decoder-sample.h264")
+        add_custom_command(
+            OUTPUT "${CAMBRIDGE_NATIVE_TEST_SAMPLE}"
+            COMMAND "${CAMBRIDGE_FFMPEG_EXECUTABLE}"
+                -hide_banner
+                -loglevel error
+                -nostdin
+                -f lavfi
+                -i "testsrc2=size=${CAMBRIDGE_NATIVE_TEST_WIDTH}x${CAMBRIDGE_NATIVE_TEST_HEIGHT}:rate=${CAMBRIDGE_NATIVE_TEST_FPS}"
+                -frames:v 1
+                -an
+                -c:v libx264
+                -pix_fmt yuv420p
+                -preset ultrafast
+                -tune zerolatency
+                -x264-params repeat-headers=1
+                -f h264
+                "${CAMBRIDGE_NATIVE_TEST_SAMPLE}"
+            VERBATIM
+        )
+        add_custom_target(cambridge-native-decoder-sample
+            DEPENDS "${CAMBRIDGE_NATIVE_TEST_SAMPLE}"
+        )
+
+        cambridge_add_test(cambridge-obs-plugin-native-decoder-tests
+            tests/native_decoder_macos_tests.mm
+            src/platform/macos/native_decoder_macos.mm
+        )
+        add_dependencies(cambridge-obs-plugin-native-decoder-tests
+            cambridge-native-decoder-sample
+        )
+        target_compile_definitions(cambridge-obs-plugin-native-decoder-tests PRIVATE
+            CAMBRIDGE_NATIVE_TEST_SAMPLE_PATH="${CAMBRIDGE_NATIVE_TEST_SAMPLE}"
+            CAMBRIDGE_NATIVE_TEST_WIDTH=${CAMBRIDGE_NATIVE_TEST_WIDTH}
+            CAMBRIDGE_NATIVE_TEST_HEIGHT=${CAMBRIDGE_NATIVE_TEST_HEIGHT}
+        )
+        target_include_directories(cambridge-obs-plugin-native-decoder-tests SYSTEM PRIVATE
+            ${CAMBRIDGE_FFMPEG_INCLUDE_DIRS}
+        )
+        target_link_directories(cambridge-obs-plugin-native-decoder-tests PRIVATE
+            ${CAMBRIDGE_FFMPEG_LIBRARY_DIRS}
+        )
+        target_link_libraries(cambridge-obs-plugin-native-decoder-tests PRIVATE
+            ${CAMBRIDGE_NATIVE_DECODER_LINK_LIBRARIES}
         )
     endif()
 endif()

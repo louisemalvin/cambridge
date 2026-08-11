@@ -25,6 +25,7 @@ function(cambridge_configure_dependencies)
     set(CAMBRIDGE_JSON_LIBRARY_DIRS)
     set(CAMBRIDGE_JSON_LINK_LIBRARIES)
     set(CAMBRIDGE_DNS_SD_LINK_LIBRARIES)
+    set(CAMBRIDGE_NATIVE_DECODER_LINK_LIBRARIES)
 
     if(APPLE AND CAMBRIDGE_BUILD_TESTS)
         find_library(CAMBRIDGE_DNS_SD_TEST_LIBRARY dns_sd REQUIRED)
@@ -40,6 +41,7 @@ function(cambridge_configure_dependencies)
     endif()
 
     if(CAMBRIDGE_BUILD_PLUGIN OR
+       (APPLE AND CAMBRIDGE_BUILD_TESTS) OR
        (APPLE AND CAMBRIDGE_VALIDATE_MACOS_DEPENDENCIES))
         find_package(PkgConfig REQUIRED)
         pkg_check_modules(CAMBRIDGE_OBS REQUIRED libobs)
@@ -50,12 +52,12 @@ function(cambridge_configure_dependencies)
             set(expected_obs_version "${CAMBRIDGE_PINNED_OBS_VERSION}")
             set(expected_ffmpeg_version "${CAMBRIDGE_PINNED_FFMPEG_VERSION}")
             if(DEFINED CAMBRIDGE_OBS_VERSION AND
-               NOT CAMBRIDGE_OBS_VERSION STREQUAL expected_obs_version)
+               NOT "${CAMBRIDGE_OBS_VERSION}" STREQUAL "${expected_obs_version}")
                 message(FATAL_ERROR
                     "OBS dependency is ${CAMBRIDGE_OBS_VERSION}; expected ${expected_obs_version}")
             endif()
             if(DEFINED CAMBRIDGE_FFMPEG_VERSION AND
-               NOT CAMBRIDGE_FFMPEG_VERSION STREQUAL expected_ffmpeg_version)
+               NOT "${CAMBRIDGE_FFMPEG_VERSION}" STREQUAL "${expected_ffmpeg_version}")
                 message(FATAL_ERROR
                     "FFmpeg dependency is ${CAMBRIDGE_FFMPEG_VERSION}; expected ${expected_ffmpeg_version}")
             endif()
@@ -132,6 +134,20 @@ function(cambridge_configure_dependencies)
         endif()
     endif()
 
+    if(APPLE AND CAMBRIDGE_BUILD_TESTS)
+        find_library(CAMBRIDGE_NATIVE_VIDEOTOOLBOX VideoToolbox REQUIRED)
+        find_library(CAMBRIDGE_NATIVE_COREVIDEO CoreVideo REQUIRED)
+        find_library(CAMBRIDGE_NATIVE_IOSURFACE IOSurface REQUIRED)
+        find_library(CAMBRIDGE_NATIVE_FOUNDATION Foundation REQUIRED)
+        list(APPEND CAMBRIDGE_NATIVE_DECODER_LINK_LIBRARIES
+            ${CAMBRIDGE_FFMPEG_LIBRARIES}
+            ${CAMBRIDGE_NATIVE_VIDEOTOOLBOX}
+            ${CAMBRIDGE_NATIVE_COREVIDEO}
+            ${CAMBRIDGE_NATIVE_IOSURFACE}
+            ${CAMBRIDGE_NATIVE_FOUNDATION}
+        )
+    endif()
+
     set(CAMBRIDGE_PLUGIN_INCLUDE_DIRS "${CAMBRIDGE_PLUGIN_INCLUDE_DIRS}" PARENT_SCOPE)
     set(CAMBRIDGE_PLUGIN_LIBRARY_DIRS "${CAMBRIDGE_PLUGIN_LIBRARY_DIRS}" PARENT_SCOPE)
     set(CAMBRIDGE_PLUGIN_LINK_LIBRARIES "${CAMBRIDGE_PLUGIN_LINK_LIBRARIES}" PARENT_SCOPE)
@@ -140,4 +156,9 @@ function(cambridge_configure_dependencies)
     set(CAMBRIDGE_JSON_LIBRARY_DIRS "${CAMBRIDGE_JSON_LIBRARY_DIRS}" PARENT_SCOPE)
     set(CAMBRIDGE_JSON_LINK_LIBRARIES "${CAMBRIDGE_JSON_LINK_LIBRARIES}" PARENT_SCOPE)
     set(CAMBRIDGE_DNS_SD_LINK_LIBRARIES "${CAMBRIDGE_DNS_SD_LINK_LIBRARIES}" PARENT_SCOPE)
+    set(CAMBRIDGE_NATIVE_DECODER_LINK_LIBRARIES
+        "${CAMBRIDGE_NATIVE_DECODER_LINK_LIBRARIES}" PARENT_SCOPE)
+    set(CAMBRIDGE_FFMPEG_INCLUDE_DIRS "${CAMBRIDGE_FFMPEG_INCLUDE_DIRS}" PARENT_SCOPE)
+    set(CAMBRIDGE_FFMPEG_LIBRARY_DIRS "${CAMBRIDGE_FFMPEG_LIBRARY_DIRS}" PARENT_SCOPE)
+    set(CAMBRIDGE_FFMPEG_LIBRARIES "${CAMBRIDGE_FFMPEG_LIBRARIES}" PARENT_SCOPE)
 endfunction()
