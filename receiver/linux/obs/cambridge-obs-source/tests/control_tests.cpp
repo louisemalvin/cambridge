@@ -1,6 +1,6 @@
 #include "../src/control_protocol.hpp"
 
-#include "../src/protocol_contract.hpp"
+#include "../src/protocol_contract.generated.hpp"
 
 #include <cstdlib>
 #include <cstdint>

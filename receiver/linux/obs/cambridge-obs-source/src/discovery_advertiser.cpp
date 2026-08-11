@@ -1,7 +1,7 @@
 #include "discovery_advertiser.hpp"
 
 #include "network_address_candidates.hpp"
-#include "protocol_contract.hpp"
+#include "protocol_contract.generated.hpp"
 
 #include <chrono>
 #include <condition_variable>

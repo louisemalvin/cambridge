@@ -1,6 +1,6 @@
 #include "control_protocol.hpp"
 
-#include "protocol_contract.hpp"
+#include "protocol_contract.generated.hpp"
 
 #include <jansson.h>
 

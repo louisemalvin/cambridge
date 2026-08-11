@@ -5,7 +5,8 @@
 #include "discovery_advertiser.hpp"
 #include "latest_frame_mailbox.hpp"
 #include "media_receiver.hpp"
-#include "protocol_contract.hpp"
+#include "protocol_contract.generated.hpp"
+#include "receiver_constants.hpp"
 #include "renderer.hpp"
 
 #include <atomic>
@@ -28,10 +29,10 @@ struct SourceConfig {
     std::uint32_t reorder_deadline_ms = contract::kDefaultReorderDeadlineMs;
     std::uint32_t maximum_decoder_queue_age_ms = contract::kDefaultMaximumDecoderQueueAgeMs;
     std::uint32_t maximum_live_frame_age_ms = contract::kDefaultMaximumLiveFrameAgeMs;
-    std::size_t receive_buffer_bytes = contract::kDefaultReceiveBufferBytes;
-    std::string drm_device = contract::kDefaultDrmDevice;
-    std::string decoder_mode = contract::kDefaultDecoderMode;
-    std::string diagnostics_path = contract::kDefaultDiagnosticsPath;
+    std::size_t receive_buffer_bytes = receiver::kDefaultReceiveBufferBytes;
+    std::string drm_device = receiver::kDefaultDrmDevice;
+    std::string decoder_mode = receiver::kDefaultDecoderMode;
+    std::string diagnostics_path = receiver::kDefaultDiagnosticsPath;
     bool transparent_placeholder = false;
 };
 

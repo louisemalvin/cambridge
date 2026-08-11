@@ -1,5 +1,5 @@
 #include "cambridge_source.hpp"
-#include "protocol_contract.hpp"
+#include "protocol_contract.generated.hpp"
 
 extern "C" {
 #include <obs/obs-module.h>

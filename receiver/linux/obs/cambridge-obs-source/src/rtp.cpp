@@ -1,6 +1,6 @@
 #include "rtp.hpp"
 
-#include "protocol_contract.hpp"
+#include "protocol_contract.generated.hpp"
 
 #include <algorithm>
 #include <array>
@@ -21,12 +21,15 @@ constexpr std::size_t kRtpFixedHeaderBytes = contract::kRtpHeaderBytes;
 constexpr std::size_t kRtpExtensionHeaderBytes = 4;
 constexpr std::size_t kH264NalHeaderBytes = 1;
 constexpr std::size_t kFuPayloadHeaderBytes = 2;
+constexpr std::size_t kH264StartCodeBytes = 4;
 constexpr std::uint8_t kFuStartMask = 0x80;
 constexpr std::uint8_t kFuEndMask = 0x40;
 constexpr std::uint8_t kFuTypeMask = 0x1f;
 constexpr std::uint8_t kFuIndicatorTypeMask = 0x1f;
 constexpr std::uint8_t kFuIndicatorNriMask = 0xe0;
 constexpr std::uint8_t kFuIndicatorForbiddenBit = 0x80;
+constexpr std::uint8_t kFuANalType = 28;
+constexpr std::uint8_t kH264IdrNalType = 5;
 constexpr std::size_t kSequenceHalfRange = 0x8000;
 constexpr std::uint64_t kMicrosecondsPerSecond = 1'000'000;
 constexpr std::uint64_t kNanosecondsPerMillisecond = 1'000'000;
@@ -182,18 +185,18 @@ void RtpH264Assembler::discard_current()
 
 void RtpH264Assembler::append_nal(const std::uint8_t *data, std::size_t size, std::uint16_t sequence)
 {
-    if (size == 0 || current_.annex_b.size() + contract::kH264StartCodeBytes + size > maximum_access_unit_bytes_) {
+    if (size == 0 || current_.annex_b.size() + kH264StartCodeBytes + size > maximum_access_unit_bytes_) {
         corrupted_ = true;
         return;
     }
-    current_.annex_b.insert(current_.annex_b.end(), contract::kH264StartCodeBytes, 0U);
+    current_.annex_b.insert(current_.annex_b.end(), kH264StartCodeBytes, 0U);
     current_.annex_b.back() = 1U;
     current_.annex_b.insert(current_.annex_b.end(), data, data + size);
-    if (current_.annex_b.size() == contract::kH264StartCodeBytes + size) {
+    if (current_.annex_b.size() == kH264StartCodeBytes + size) {
         current_.first_sequence = sequence;
     }
     current_.last_sequence = sequence;
-    if ((data[0] & kFuTypeMask) == contract::kH264IdrNalType) {
+    if ((data[0] & kFuTypeMask) == kH264IdrNalType) {
         current_.contains_idr = true;
     }
 }
@@ -232,7 +235,7 @@ void RtpH264Assembler::process_packet(const RtpPacket &packet, std::uint64_t rec
             corrupted_ = true;
         }
         append_nal(packet.payload.data(), packet.payload.size(), packet.sequence);
-    } else if (nal_type == contract::kH264FuANalType) {
+    } else if (nal_type == kFuANalType) {
         if (packet.payload.size() < kFuPayloadHeaderBytes) {
             corrupted_ = true;
         } else {
@@ -273,7 +276,7 @@ void RtpH264Assembler::process_packet(const RtpPacket &packet, std::uint64_t rec
                 current_.last_sequence = packet.sequence;
                 if (end) {
                     fu_active_ = false;
-                    if ((fu_nal_header_ & kFuTypeMask) == contract::kH264IdrNalType) {
+                    if ((fu_nal_header_ & kFuTypeMask) == kH264IdrNalType) {
                         current_.contains_idr = true;
                     }
                 }
@@ -421,7 +424,7 @@ bool RtpH264Packetizer::send_nal(const std::uint8_t *nal, std::size_t size, bool
     if (maximum_fragment == 0) {
         return false;
     }
-    const std::uint8_t indicator = static_cast<std::uint8_t>((nal[0] & kFuIndicatorNriMask) | contract::kH264FuANalType);
+    const std::uint8_t indicator = static_cast<std::uint8_t>((nal[0] & kFuIndicatorNriMask) | kFuANalType);
     const std::uint8_t nal_type = static_cast<std::uint8_t>(nal[0] & kFuTypeMask);
     std::size_t offset = kH264NalHeaderBytes;
     bool start = true;

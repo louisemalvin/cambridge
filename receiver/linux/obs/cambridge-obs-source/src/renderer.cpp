@@ -1,6 +1,6 @@
 #include "renderer.hpp"
 
-#include "protocol_contract.hpp"
+#include "protocol_contract.generated.hpp"
 
 #include <drm_fourcc.h>
 

@@ -1,7 +1,7 @@
 #include "cambridge_source.hpp"
 
 #include "control_protocol.hpp"
-#include "protocol_contract.hpp"
+#include "protocol_contract.generated.hpp"
 
 #include <obs/obs-data.h>
 #include <obs/obs-properties.h>
@@ -573,11 +573,11 @@ SourceConfig source_config_from_settings(obs_data_t *settings)
                                                        contract::kDefaultMaximumLiveFrameAgeMs,
                                                        kMinimumLiveAgeMs, kMaximumLiveAgeMs);
     config.receive_buffer_bytes = static_cast<std::size_t>(bounded_setting(
-        settings, kPropertySocketBuffer, contract::kDefaultReceiveBufferBytes, kMinimumSocketBufferBytes,
+        settings, kPropertySocketBuffer, receiver::kDefaultReceiveBufferBytes, kMinimumSocketBufferBytes,
         kMaximumSocketBufferBytes));
-    config.drm_device = setting_string(settings, kPropertyDrmDevice, contract::kDefaultDrmDevice);
-    config.decoder_mode = setting_string(settings, kPropertyDecoderMode, contract::kDefaultDecoderMode);
-    config.diagnostics_path = setting_string(settings, kPropertyDiagnosticsPath, contract::kDefaultDiagnosticsPath);
+    config.drm_device = setting_string(settings, kPropertyDrmDevice, receiver::kDefaultDrmDevice);
+    config.decoder_mode = setting_string(settings, kPropertyDecoderMode, receiver::kDefaultDecoderMode);
+    config.diagnostics_path = setting_string(settings, kPropertyDiagnosticsPath, receiver::kDefaultDiagnosticsPath);
     config.transparent_placeholder = obs_data_get_bool(settings, kPropertyTransparentPlaceholder);
     return config;
 }
@@ -591,10 +591,10 @@ void source_get_defaults(obs_data_t *settings)
     obs_data_set_default_int(settings, kPropertyReorderDeadline, contract::kDefaultReorderDeadlineMs);
     obs_data_set_default_int(settings, kPropertyQueueAge, contract::kDefaultMaximumDecoderQueueAgeMs);
     obs_data_set_default_int(settings, kPropertyLiveAge, contract::kDefaultMaximumLiveFrameAgeMs);
-    obs_data_set_default_int(settings, kPropertySocketBuffer, contract::kDefaultReceiveBufferBytes);
-    obs_data_set_default_string(settings, kPropertyDrmDevice, contract::kDefaultDrmDevice);
-    obs_data_set_default_string(settings, kPropertyDecoderMode, contract::kDefaultDecoderMode);
-    obs_data_set_default_string(settings, kPropertyDiagnosticsPath, contract::kDefaultDiagnosticsPath);
+    obs_data_set_default_int(settings, kPropertySocketBuffer, receiver::kDefaultReceiveBufferBytes);
+    obs_data_set_default_string(settings, kPropertyDrmDevice, receiver::kDefaultDrmDevice);
+    obs_data_set_default_string(settings, kPropertyDecoderMode, receiver::kDefaultDecoderMode);
+    obs_data_set_default_string(settings, kPropertyDiagnosticsPath, receiver::kDefaultDiagnosticsPath);
     obs_data_set_default_bool(settings, kPropertyTransparentPlaceholder, false);
 }
 
@@ -623,14 +623,14 @@ obs_properties_t *source_get_properties(void *data)
     obs_properties_add_int(advanced_properties, kPropertySocketBuffer, "UDP receive buffer (bytes)", kMinimumSocketBufferBytes,
                            kMaximumSocketBufferBytes, kSocketBufferStepBytes);
     obs_properties_add_path(advanced_properties, kPropertyDrmDevice, "DRM render device", OBS_PATH_FILE, "DRM device (*)",
-                             contract::kDefaultDrmDevice);
+                             receiver::kDefaultDrmDevice);
     obs_property_t *decoder_mode = obs_properties_add_list(advanced_properties, kPropertyDecoderMode, "Decoder mode",
                                                             OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_STRING);
-    obs_property_list_add_string(decoder_mode, "Automatic VA-API then CPU", contract::kDefaultDecoderMode);
+    obs_property_list_add_string(decoder_mode, "Automatic VA-API then CPU", receiver::kDefaultDecoderMode);
     obs_property_list_add_string(decoder_mode, "CPU fallback", "cpu");
     obs_properties_add_bool(advanced_properties, kPropertyTransparentPlaceholder, "Transparent placeholder");
     obs_properties_add_path(advanced_properties, kPropertyDiagnosticsPath, "Diagnostics JSON path", OBS_PATH_FILE,
-                             "JSON (*.json)", contract::kDefaultDiagnosticsPath);
+                             "JSON (*.json)", receiver::kDefaultDiagnosticsPath);
     obs_properties_add_button2(advanced_properties, kPropertyDumpDiagnostics, "Write diagnostics now", dump_button_clicked, source);
     obs_properties_add_group(properties, kPropertyAdvancedSettings, "Advanced settings", OBS_GROUP_NORMAL,
                              advanced_properties);

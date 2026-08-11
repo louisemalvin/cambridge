@@ -1,6 +1,7 @@
 #include "control_server.hpp"
 
-#include "protocol_contract.hpp"
+#include "protocol_contract.generated.hpp"
+#include "receiver_constants.hpp"
 
 #include <arpa/inet.h>
 #include <cerrno>
@@ -20,12 +21,12 @@ namespace {
 
 constexpr int kListenBacklog = 1;
 constexpr int kInvalidSocket = -1;
-constexpr std::size_t kLengthPrefixBytes = 4;
+constexpr std::size_t kLengthPrefixBytes = contract::kControlHeaderBytes;
 
 bool wait_for_socket(int fd, short events)
 {
     pollfd descriptor{fd, events, 0};
-    const int result = poll(&descriptor, 1, static_cast<int>(contract::kWorkerPollIntervalMs));
+    const int result = poll(&descriptor, 1, static_cast<int>(receiver::kWorkerPollIntervalMs));
     return result > 0 && (descriptor.revents & events) != 0;
 }
 
@@ -34,7 +35,7 @@ bool receive_exact(int fd, std::uint8_t *data, std::size_t size)
     std::size_t offset = 0;
     while (offset < size) {
         pollfd descriptor{fd, POLLIN, 0};
-        const int poll_result = poll(&descriptor, 1, static_cast<int>(contract::kWorkerPollIntervalMs));
+        const int poll_result = poll(&descriptor, 1, static_cast<int>(receiver::kWorkerPollIntervalMs));
         if (poll_result < 0 && errno == EINTR) {
             continue;
         }

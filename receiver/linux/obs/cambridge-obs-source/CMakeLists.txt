@@ -36,6 +36,8 @@ add_library(cambridge-obs-plugin MODULE
     src/media_receiver.cpp
     src/module.cpp
     src/network_address_candidates.cpp
+    src/protocol_contract.generated.hpp
+    src/receiver_constants.hpp
     src/renderer.cpp
     src/rtp.cpp
 )

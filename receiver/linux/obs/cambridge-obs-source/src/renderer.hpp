@@ -1,7 +1,7 @@
 #pragma once
 
 #include "frame.hpp"
-#include "protocol_contract.hpp"
+#include "protocol_contract.generated.hpp"
 
 #include <atomic>
 #include <array>

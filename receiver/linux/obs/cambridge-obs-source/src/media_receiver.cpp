@@ -1,6 +1,7 @@
 #include "media_receiver.hpp"
 
-#include "protocol_contract.hpp"
+#include "protocol_contract.generated.hpp"
+#include "receiver_constants.hpp"
 
 #include <arpa/inet.h>
 #include <cerrno>
@@ -155,7 +156,7 @@ void MediaReceiver::run()
             break;
         }
         pollfd poll_descriptor{descriptor, POLLIN, 0};
-        if (poll(&poll_descriptor, 1, static_cast<int>(contract::kWorkerPollIntervalMs)) <= 0) {
+        if (poll(&poll_descriptor, 1, static_cast<int>(receiver::kWorkerPollIntervalMs)) <= 0) {
             continue;
         }
         if ((poll_descriptor.revents & POLLIN) == 0) {

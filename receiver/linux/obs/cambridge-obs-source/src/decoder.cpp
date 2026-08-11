@@ -1,6 +1,6 @@
 #include "decoder.hpp"
 
-#include "protocol_contract.hpp"
+#include "protocol_contract.generated.hpp"
 
 extern "C" {
 #include <libavutil/error.h>
@@ -26,7 +26,7 @@ constexpr int kDecoderThreadCount = 1;
 constexpr std::uint64_t kNanosecondsPerMillisecond = 1'000'000ULL;
 constexpr std::uint64_t kNanosecondsPerSecond = 1'000'000'000ULL;
 constexpr std::uint64_t kMicrosecondsPerSecond = 1'000'000ULL;
-constexpr std::uint32_t kRtpClockRate = 90'000;
+constexpr std::uint32_t kRtpClockRate = contract::kRtpClockRateHz;
 constexpr std::uint32_t kDefaultH264Level = 51;
 
 std::uint64_t monotonic_time_ns()

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -19,7 +20,9 @@ KOTLIN_CONTRACT_PATH = (
     / "sender/android/app/src/main/java/dev/cambridge/sender/connection/control/cambridge/CamBridgeStreamContract.kt"
 )
 KOTLIN_CATALOG_PATH = REPOSITORY_ROOT / "sender/android/app/src/main/java/dev/cambridge/sender/session/VideoProfiles.kt"
-CPP_CONTRACT_PATH = REPOSITORY_ROOT / "receiver/linux/obs/cambridge-obs-source/src/protocol_contract.hpp"
+CPP_GENERATOR_PATH = REPOSITORY_ROOT / "scripts/development/generate-cambridge-cpp-contract.py"
+CPP_CONTRACT_PATH = REPOSITORY_ROOT / "receiver/linux/obs/cambridge-obs-source/src/protocol_contract.generated.hpp"
+LEGACY_CPP_CONTRACT_PATH = REPOSITORY_ROOT / "receiver/linux/obs/cambridge-obs-source/src/protocol_contract.hpp"
 CPP_PROTOCOL_PATH = REPOSITORY_ROOT / "receiver/linux/obs/cambridge-obs-source/src/control_protocol.cpp"
 CPP_SOURCE_PATH = REPOSITORY_ROOT / "receiver/linux/obs/cambridge-obs-source/src/cambridge_source.cpp"
 FIXTURE_PATH = REPOSITORY_ROOT / "scripts/receiver/linux/cambridge-fixture.py"
@@ -82,7 +85,23 @@ def check_no_receiver_presets() -> None:
         raise AssertionError("receiver production code still validates or advertises a profile catalog")
 
 
+def check_generated_cpp_contract() -> None:
+    result = subprocess.run(
+        [sys.executable, str(CPP_GENERATOR_PATH), "--check"],
+        cwd=REPOSITORY_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        detail = result.stderr.strip() or result.stdout.strip()
+        raise AssertionError(f"generated C++ contract is stale: {detail}")
+    if LEGACY_CPP_CONTRACT_PATH.exists():
+        raise AssertionError(f"legacy C++ contract header still exists: {LEGACY_CPP_CONTRACT_PATH}")
+
+
 def main() -> int:
+    check_generated_cpp_contract()
     contract = json.loads(read(CONTRACT_PATH))
     deployment = json.loads(read(DEPLOYMENT_PATH))
     schema = json.loads(read(SCHEMA_PATH))

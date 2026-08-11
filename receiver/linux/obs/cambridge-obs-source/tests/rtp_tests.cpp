@@ -1,6 +1,6 @@
 #include "../src/rtp.hpp"
 
-#include "../src/protocol_contract.hpp"
+#include "../src/protocol_contract.generated.hpp"
 
 #include <cassert>
 #include <cstdint>
