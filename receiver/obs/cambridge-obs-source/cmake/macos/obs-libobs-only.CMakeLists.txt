@@ -1,0 +1,27 @@
+# CamBridge's pinned OBS entry point.
+#
+# OBS's normal root project also adds the renderers, plugins, tests, and
+# frontend.  CamBridge only needs the libobs development target, so this file
+# keeps OBS's own initialization and deliberately adds no other OBS subtree.
+
+cmake_minimum_required(VERSION 3.28...3.30)
+
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/common/bootstrap.cmake" NO_POLICY_SCOPE)
+
+project(obs-studio VERSION ${OBS_VERSION_CANONICAL})
+
+include(compilerconfig)
+include(defaults)
+include(helpers)
+
+option(ENABLE_UI "Enable building with UI (requires Qt)" OFF)
+option(ENABLE_SCRIPTING "Enable scripting support" OFF)
+option(ENABLE_HEVC "Enable HEVC encoders" OFF)
+option(ENABLE_FFMPEG_MUX_DEBUG "Enable FFmpeg muxer debugging" OFF)
+
+set(ENABLE_FRONTEND OFF CACHE BOOL "Build the OBS frontend" FORCE)
+set(ENABLE_PLUGINS OFF CACHE BOOL "Build OBS plugins" FORCE)
+
+add_subdirectory(libobs)
+
+message_configuration()
