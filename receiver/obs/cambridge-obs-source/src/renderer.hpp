@@ -62,6 +62,8 @@ private:
     void draw_placeholder(std::uint32_t output_width, std::uint32_t output_height);
     void draw_cpu(const TextureSlot &slot, std::uint32_t output_width, std::uint32_t output_height,
                   bool full_range, std::uint32_t rotation_degrees);
+    void draw_bgra(const TextureSlot &slot, std::uint32_t output_width, std::uint32_t output_height,
+                   std::uint32_t rotation_degrees);
     void draw_native(const TextureSlot &slot, std::uint32_t output_width, std::uint32_t output_height);
     void destroy_slot(TextureSlot &slot);
     void fail(const VideoFramePtr &frame, MediaPathFailureCode code, const std::string &detail);

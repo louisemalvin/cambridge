@@ -17,6 +17,8 @@ option(CAMBRIDGE_BUILD_SHARED_TESTS_ONLY
 option(CAMBRIDGE_VALIDATE_MACOS_DEPENDENCIES
        "Resolve the pinned macOS OBS and FFmpeg dependency baseline" OFF)
 option(CAMBRIDGE_REQUIRE_AVAHI "Require Avahi mDNS support when configuring the plugin" OFF)
+option(CAMBRIDGE_ENABLE_TEST_FAULTS
+       "Enable explicit native fault injection hooks for acceptance tests" OFF)
 
 set(CAMBRIDGE_GIT_COMMIT "unknown" CACHE STRING
     "Source Git commit embedded in the module identity")
@@ -67,6 +69,9 @@ if(CAMBRIDGE_BUILD_PLUGIN)
         CAMBRIDGE_VERSION="${PROJECT_VERSION}"
         ${CAMBRIDGE_PLUGIN_DEFINITIONS}
     )
+    if(CAMBRIDGE_ENABLE_TEST_FAULTS)
+        target_compile_definitions(cambridge-obs-plugin PRIVATE CAMBRIDGE_ENABLE_TEST_FAULTS=1)
+    endif()
     cambridge_enable_warnings(cambridge-obs-plugin)
     target_include_directories(cambridge-obs-plugin SYSTEM PRIVATE
         ${CAMBRIDGE_PLUGIN_INCLUDE_DIRS}
@@ -82,6 +87,11 @@ if(CAMBRIDGE_BUILD_PLUGIN)
         OUTPUT_NAME "cambridge-obs-plugin"
     )
     if(APPLE)
+        set_source_files_properties(
+            src/platform/macos/native_decoder_macos.mm
+            src/platform/macos/native_frame_importer_macos.mm
+            PROPERTIES COMPILE_OPTIONS "-fobjc-arc"
+        )
         set(CAMBRIDGE_VERSION "${PROJECT_VERSION}")
         configure_file(
             "${CMAKE_CURRENT_SOURCE_DIR}/cmake/macos/Info.plist.in"
@@ -98,6 +108,30 @@ if(CAMBRIDGE_BUILD_PLUGIN)
     install(TARGETS cambridge-obs-plugin
         LIBRARY DESTINATION obs-plugins/cambridge-obs-plugin/bin/64bit
     )
+
+    if(APPLE)
+        find_program(CAMBRIDGE_XCRUN_EXECUTABLE xcrun REQUIRED)
+        set(CAMBRIDGE_METAL_AIR
+            "${CMAKE_CURRENT_BINARY_DIR}/nv12_to_bgra.air")
+        set(CAMBRIDGE_METALLIB
+            "${CMAKE_CURRENT_BINARY_DIR}/nv12_to_bgra.metallib")
+        add_custom_command(
+            OUTPUT "${CAMBRIDGE_METALLIB}"
+            COMMAND "${CAMBRIDGE_XCRUN_EXECUTABLE}" -sdk macosx metal
+                -c "${CMAKE_CURRENT_SOURCE_DIR}/data/macos/nv12_to_bgra.metal"
+                -o "${CAMBRIDGE_METAL_AIR}"
+            COMMAND "${CAMBRIDGE_XCRUN_EXECUTABLE}" -sdk macosx metallib
+                "${CAMBRIDGE_METAL_AIR}"
+                -o "${CAMBRIDGE_METALLIB}"
+            DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/data/macos/nv12_to_bgra.metal"
+            VERBATIM
+        )
+        add_custom_target(cambridge-metal-library DEPENDS "${CAMBRIDGE_METALLIB}")
+        add_dependencies(cambridge-obs-plugin cambridge-metal-library)
+        install(FILES "${CAMBRIDGE_METALLIB}"
+            DESTINATION obs-plugins/cambridge-obs-plugin/bin/64bit
+        )
+    endif()
 endif()
 
 if(CAMBRIDGE_BUILD_TESTS)
@@ -182,6 +216,11 @@ if(CAMBRIDGE_BUILD_TESTS AND BUILD_TESTING)
     endif()
 
     if(APPLE)
+        set_source_files_properties(
+            tests/native_decoder_macos_tests.mm
+            src/platform/macos/native_decoder_macos.mm
+            PROPERTIES COMPILE_OPTIONS "-fobjc-arc"
+        )
         cambridge_add_test(cambridge-obs-plugin-bonjour-tests
             tests/bonjour_lifecycle_tests.cpp
             src/platform/macos/discovery_advertiser_macos.cpp
@@ -210,6 +249,8 @@ if(CAMBRIDGE_BUILD_TESTS AND BUILD_TESTING)
                 -an
                 -c:v libx264
                 -pix_fmt yuv420p
+                -colorspace bt709
+                -color_range tv
                 -preset ultrafast
                 -tune zerolatency
                 -x264-params repeat-headers=1

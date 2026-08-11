@@ -13,6 +13,8 @@
 #include <cerrno>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <limits>
 #include <sstream>
 #include <time.h>
@@ -65,6 +67,8 @@ constexpr char kPropertyDiagnosticsPath[] = "diagnostics_path";
 constexpr char kPropertyDumpDiagnostics[] = "dump_diagnostics";
 constexpr char kPropertySetupInfo[] = "setup_info";
 constexpr char kPropertyAdvancedSettings[] = "advanced_settings";
+constexpr char kDiagnosticsOnSessionEndEnvironment[] =
+    "CAMBRIDGE_TEST_WRITE_DIAGNOSTICS_ON_SESSION_END";
 
 std::uint64_t monotonic_time_ns()
 {
@@ -107,6 +111,12 @@ bool dump_button_clicked(obs_properties_t *, obs_property_t *, void *data)
         source->write_diagnostics();
     }
     return false;
+}
+
+bool test_diagnostics_on_session_end()
+{
+    const char *value = std::getenv(kDiagnosticsOnSessionEndEnvironment);
+    return value && std::strcmp(value, "1") == 0;
 }
 
 } // namespace
@@ -640,6 +650,10 @@ void CamBridgeSource::drain_media_path_failure()
         if (pending->code == MediaPathFailureCode::NativeImport) {
             ++native_import_failures_;
         }
+        if (pending->code == MediaPathFailureCode::NativeConversion &&
+            pending->detail.rfind("native_pool_exhaustion:", 0) == 0) {
+            ++native_pool_exhaustions_;
+        }
         last_media_path_failure_code_ = pending->code;
         last_media_path_failure_detail_ = pending->detail;
     }
@@ -650,6 +664,9 @@ void CamBridgeSource::drain_media_path_failure()
 
 void CamBridgeSource::end_session()
 {
+    if (test_diagnostics_on_session_end()) {
+        write_diagnostics();
+    }
     {
         std::lock_guard<std::mutex> lock(session_mutex_);
         session_active_ = false;

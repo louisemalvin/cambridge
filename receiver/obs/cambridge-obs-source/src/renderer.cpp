@@ -70,10 +70,30 @@ float4 PSNv12(VertInOut vert_in) : TARGET
     return float4(rgb, 1.0);
 }
 
+float4 PSBgra(VertInOut vert_in) : TARGET
+{
+    float2 sample_uv = vert_in.uv;
+    if (rotation_quarter_turn == 1) {
+        sample_uv = float2(vert_in.uv.y, 1.0 - vert_in.uv.x);
+    } else if (rotation_quarter_turn == 2) {
+        sample_uv = float2(1.0 - vert_in.uv.x, 1.0 - vert_in.uv.y);
+    } else if (rotation_quarter_turn == 3) {
+        sample_uv = float2(1.0 - vert_in.uv.y, vert_in.uv.x);
+    }
+    return image.Sample(def_sampler, sample_uv);
+}
+
 technique Draw {
     pass {
         vertex_shader = VSDefault(vert_in);
         pixel_shader = PSNv12(vert_in);
+    }
+}
+
+technique DrawBgra {
+    pass {
+        vertex_shader = VSDefault(vert_in);
+        pixel_shader = PSBgra(vert_in);
     }
 }
 )";
@@ -241,21 +261,31 @@ bool Renderer::update_native_slot(TextureSlot &slot, const VideoFramePtr &frame)
     const auto *storage = frame ? std::get_if<NativeFrameStorage>(&frame->storage) : nullptr;
     if (!storage || !storage->frame || !importer_) {
         report("native_frame_unavailable");
+        fail(frame, MediaPathFailureCode::NativeImport, "native frame is unavailable");
         return false;
     }
+    destroy_slot(slot);
     NativeImportResult result = importer_->import_frame(storage->frame, frame->frame_generation);
     if (!result.imported_texture) {
         if (!result.error.empty()) {
             report(result.error);
         }
+        const bool conversion_failure = result.error.rfind("native_conversion:", 0) == 0 ||
+                                        result.error.rfind("native_pool_exhaustion:", 0) == 0;
+        fail(frame, conversion_failure ? MediaPathFailureCode::NativeConversion
+                                       : MediaPathFailureCode::NativeImport,
+             result.error.empty() ? "native texture import failed" : result.error);
         return false;
     }
-    if (result.imported_texture->format() != ImportedTextureFormat::Nv12) {
+    const bool valid_nv12 = result.imported_texture->format() == ImportedTextureFormat::Nv12 &&
+                            result.imported_texture->primary_texture() &&
+                            result.imported_texture->chroma_texture();
+    const bool valid_bgra = result.imported_texture->format() == ImportedTextureFormat::Bgra &&
+                            result.imported_texture->primary_texture() &&
+                            !result.imported_texture->chroma_texture();
+    if (!valid_nv12 && !valid_bgra) {
         report("native_texture_format_unsupported");
-        return false;
-    }
-    if (!result.imported_texture->primary_texture() || !result.imported_texture->chroma_texture()) {
-        report("native_texture_planes_unavailable");
+        fail(frame, MediaPathFailureCode::NativeImport, "native texture format is unsupported");
         return false;
     }
     destroy_slot(slot);
@@ -289,7 +319,6 @@ bool Renderer::update_slot(TextureSlot &slot, const VideoFramePtr &frame)
             }
             return true;
         }
-        fail(frame, MediaPathFailureCode::NativeImport, "DMA-BUF texture import failed");
         return false;
     }
     if (!std::holds_alternative<CpuNv12Storage>(frame->storage)) {
@@ -359,13 +388,39 @@ void Renderer::draw_cpu(const TextureSlot &slot, std::uint32_t output_width, std
 
 void Renderer::draw_native(const TextureSlot &slot, std::uint32_t output_width, std::uint32_t output_height)
 {
-    if (!slot.frame || !slot.imported_texture ||
-        slot.imported_texture->format() != ImportedTextureFormat::Nv12) {
+    if (!slot.frame || !slot.imported_texture) {
         draw_placeholder(output_width, output_height);
         return;
     }
-    draw_cpu(slot, output_width, output_height, slot.frame->color_range == "full",
-             slot.frame->rotation_degrees);
+    if (slot.imported_texture->format() == ImportedTextureFormat::Nv12) {
+        if (!slot.imported_texture->chroma_texture()) {
+            draw_placeholder(output_width, output_height);
+            return;
+        }
+        draw_cpu(slot, output_width, output_height, slot.frame->color_range == "full",
+                 slot.frame->rotation_degrees);
+    } else if (slot.imported_texture->format() == ImportedTextureFormat::Bgra) {
+        draw_bgra(slot, output_width, output_height, slot.frame->rotation_degrees);
+    } else {
+        draw_placeholder(output_width, output_height);
+    }
+}
+
+void Renderer::draw_bgra(const TextureSlot &slot, std::uint32_t output_width,
+                         std::uint32_t output_height, std::uint32_t rotation_degrees)
+{
+    if (!slot.texture || !nv12_effect_) {
+        draw_placeholder(output_width, output_height);
+        return;
+    }
+    gs_eparam_t *image = gs_effect_get_param_by_name(nv12_effect_, "image");
+    gs_eparam_t *rotation = gs_effect_get_param_by_name(nv12_effect_, "rotation_quarter_turn");
+    gs_effect_set_texture(image, slot.texture);
+    const auto quarter_turn = static_cast<int>((rotation_degrees / kQuarterTurnDegrees) % kQuarterTurnCount);
+    gs_effect_set_int(rotation, quarter_turn);
+    while (gs_effect_loop(nv12_effect_, "DrawBgra")) {
+        gs_draw_sprite(slot.texture, kNoFlip, output_width, output_height);
+    }
 }
 
 bool Renderer::render(const VideoFramePtr &frame, std::uint32_t output_width, std::uint32_t output_height)

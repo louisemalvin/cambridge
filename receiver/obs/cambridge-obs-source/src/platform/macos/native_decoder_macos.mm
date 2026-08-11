@@ -12,6 +12,8 @@ extern "C" {
 
 #include <memory>
 #include <cerrno>
+#include <cstdlib>
+#include <cstring>
 
 namespace cambridge {
 namespace {
@@ -44,6 +46,39 @@ bool is_supported_pixel_format(OSType pixel_format)
 {
     return pixel_format == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange ||
            pixel_format == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange;
+}
+
+#if defined(CAMBRIDGE_ENABLE_TEST_FAULTS)
+bool native_fault_requested(const char *fault_name)
+{
+    const char *requested_fault = std::getenv("CAMBRIDGE_NATIVE_FAULT");
+    return requested_fault && std::strcmp(requested_fault, fault_name) == 0;
+}
+#endif
+
+MacosColorMatrix color_matrix_for(AVColorSpace color_space)
+{
+    switch (color_space) {
+    case AVCOL_SPC_BT709:
+        return MacosColorMatrix::Bt709;
+    case AVCOL_SPC_SMPTE170M:
+    case AVCOL_SPC_BT470BG:
+        return MacosColorMatrix::Bt601;
+    default:
+        return MacosColorMatrix::Unspecified;
+    }
+}
+
+MacosColorRange color_range_for(AVColorRange color_range)
+{
+    switch (color_range) {
+    case AVCOL_RANGE_JPEG:
+        return MacosColorRange::Full;
+    case AVCOL_RANGE_MPEG:
+        return MacosColorRange::Limited;
+    default:
+        return MacosColorRange::Unspecified;
+    }
 }
 
 class MacosNativeDecoderAdapter final : public NativeDecoderAdapter {
@@ -91,6 +126,12 @@ public:
 
     NativeFramePtr export_frame(const AVFrame &decoded, std::string &error) override
     {
+#if defined(CAMBRIDGE_ENABLE_TEST_FAULTS)
+        if (native_fault_requested("export")) {
+            error = "fault_injected:native_export";
+            return {};
+        }
+#endif
         if (!configured_ || decoded.format != kHardwarePixelFormat) {
             error = "decoded frame is not a configured VideoToolbox hardware frame";
             return {};
@@ -114,7 +155,8 @@ public:
             error = "VideoToolbox frame is not IOSurface-backed";
             return {};
         }
-        return std::make_shared<MacosNativeFrame>(pixel_buffer);
+        return std::make_shared<MacosNativeFrame>(
+            pixel_buffer, color_matrix_for(decoded.colorspace), color_range_for(decoded.color_range));
     }
 
     [[nodiscard]] std::string_view decoder_name() const override { return kNativeDecoderName; }
