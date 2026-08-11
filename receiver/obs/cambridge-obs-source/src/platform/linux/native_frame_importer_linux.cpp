@@ -134,11 +134,13 @@ public:
         std::array<std::uint64_t, kNv12PlaneCount> modifiers{};
         for (std::size_t plane = 0; plane < kNv12PlaneCount; ++plane) {
             const AVDRMPlaneDescriptor &plane_descriptor = *planes[plane];
-            if (plane_descriptor.object_index >= descriptor->nb_objects) {
+            if (plane_descriptor.object_index < 0 || plane_descriptor.object_index >= descriptor->nb_objects) {
                 return {nullptr, kNoGpuCopies, "DMA-BUF plane object is out of range"};
             }
             const AVDRMObjectDescriptor &object = descriptor->objects[plane_descriptor.object_index];
             if (object.fd < 0 || plane_descriptor.pitch <= 0 || plane_descriptor.offset < 0 ||
+                object.format_modifier == DRM_FORMAT_MOD_INVALID ||
+                static_cast<std::uint64_t>(plane_descriptor.pitch) < plane_widths[plane] ||
                 static_cast<std::uint64_t>(plane_descriptor.pitch) > std::numeric_limits<std::uint32_t>::max() ||
                 static_cast<std::uint64_t>(plane_descriptor.offset) > std::numeric_limits<std::uint32_t>::max()) {
                 return {nullptr, kNoGpuCopies, "DMA-BUF plane metadata is invalid"};
