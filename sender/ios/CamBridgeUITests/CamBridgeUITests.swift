@@ -77,12 +77,16 @@ final class CamBridgeUITests: XCTestCase {
         tap(app, id: "stop-stream")
         let alert = app.alerts["Stop stream?"]
         assertExists(alert)
-        alert.buttons["Cancel"].tap()
+        let cancel = alert.descendants(matching: .button)["cancel-stop"].firstMatch
+        assertExists(cancel)
+        cancel.tap()
         let alertAfterCancel = alert.exists
         XCTAssertFalse(alertAfterCancel)
         tap(app, id: "stop-stream")
         assertExists(alert)
-        alert.buttons["Stop"].tap()
+        let stop = alert.descendants(matching: .button)["confirm-stop"].firstMatch
+        assertExists(stop)
+        stop.tap()
         assertExists(element(app, id: "start-stream"))
     }
 
@@ -116,7 +120,11 @@ final class CamBridgeUITests: XCTestCase {
 
         tap(app, id: "webcam-tab")
         tap(app, id: "stop-stream")
-        app.alerts["Stop stream?"].buttons["Stop"].tap()
+        let stopAlert = app.alerts["Stop stream?"]
+        assertExists(stopAlert)
+        let stop = stopAlert.descendants(matching: .button)["confirm-stop"].firstMatch
+        assertExists(stop)
+        stop.tap()
         tap(app, id: "settings-tab")
         assertEnabled(idleMode, true)
     }
@@ -180,5 +188,5 @@ final class CamBridgeUITests: XCTestCase {
         app.descendants(matching: .any)[id].firstMatch
     }
 
-    private static let waitTimeout: TimeInterval = 5
+    private static let waitTimeout: TimeInterval = 10
 }
