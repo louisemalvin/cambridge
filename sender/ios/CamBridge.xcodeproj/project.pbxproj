@@ -26,6 +26,16 @@
 		CB2000000000000000000009 /* CamBridgeUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CamBridgeUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		CB8100000000000000000001 /* Exceptions for "CamBridge" folder in "CamBridge" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Resources/Info.plist,
+			);
+			target = CB5000000000000000000001 /* CamBridge */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFrameworksBuildPhase section */
 		CB3000000000000000000001 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
@@ -67,6 +77,7 @@
 		CB4000000000000000000002 /* CamBridge */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
+				CB8100000000000000000001 /* Exceptions for "CamBridge" folder in "CamBridge" target */,
 			);
 			explicitFileTypes = {
 			};
