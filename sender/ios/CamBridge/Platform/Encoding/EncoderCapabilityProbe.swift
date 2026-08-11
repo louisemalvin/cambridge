@@ -7,9 +7,9 @@ public struct EncoderCapability: Equatable, Sendable {
     public let minimumBitrateBps: Int
     public let maximumBitrateBps: Int
     public let encoderIdentity: String?
-    public let encoderIdentityUnavailableReason: String? = nil
-    public let encoderUsesHardwareAccelerated: Bool? = nil
-    public let encoderHardwareAvailabilityReason: String? = nil
+    public let encoderIdentityUnavailableReason: String?
+    public let encoderUsesHardwareAccelerated: Bool?
+    public let encoderHardwareAvailabilityReason: String?
     public let reason: String?
 
     public init(

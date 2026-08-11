@@ -229,6 +229,48 @@ final class CamBridgeTests: XCTestCase {
     }
 
     @MainActor
+    func testSharedPreferenceStatePropagatesInBothDirectionsAndLocksWhileActive() throws {
+        let settings = FakeSetupSettingsStore()
+        let preferencesState = SenderPreferencesState(settingsStore: settings)
+        let settingsModel = SettingsModel(preferencesState: preferencesState, logger: CamBridgeLogger())
+        let receiver = try ReceiverCapabilities(
+            receiverId: "fixture-receiver",
+            displayName: "Fixture Receiver",
+            maxLongEdge: CamBridgeContract.Geometry.maximumLongEdge,
+            maxShortEdge: CamBridgeContract.Geometry.maximumShortEdge
+        )
+        let model = StreamSetupModel(
+            preferencesState: preferencesState,
+            browser: FakeSetupBrowser(),
+            probe: FakeSetupProbe(capabilities: receiver),
+            capture: FakeSetupCamera(),
+            encoderProbe: FakeSetupEncoderProbe(),
+            sessionCoordinator: FakeSetupSession(),
+            logger: CamBridgeLogger()
+        )
+
+        var settingsPreferences = settingsModel.preferences
+        settingsPreferences.orientation = .ninety
+        settingsModel.updatePreferences(settingsPreferences)
+        XCTAssertEqual(model.selectedOrientation, .ninety)
+
+        model.selectMode(VideoMode.mode720p30.id)
+        XCTAssertEqual(settingsModel.preferences.modeId, VideoMode.mode720p30.id)
+        XCTAssertEqual(settingsModel.preferences.bitrateBps, VideoMode.mode720p30.defaultBitrateBps)
+
+        let beforeActiveMutation = settingsModel.preferences
+        preferencesState.setStreamActive(true)
+        var rejectedPreferences = beforeActiveMutation
+        rejectedPreferences.orientation = .oneEighty
+        settingsModel.updatePreferences(rejectedPreferences)
+        XCTAssertEqual(settingsModel.preferences, beforeActiveMutation)
+
+        preferencesState.setStreamActive(false)
+        settingsModel.updatePreferences(rejectedPreferences)
+        XCTAssertEqual(model.selectedOrientation, .oneEighty)
+    }
+
+    @MainActor
     func testWebcamStopConfirmationAndDimmedPresentationReducers() {
         let environment = AppEnvironment()
         let model = environment.appModel.webcamModel
