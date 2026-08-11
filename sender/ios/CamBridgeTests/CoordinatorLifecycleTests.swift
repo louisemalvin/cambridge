@@ -292,6 +292,139 @@ final class CoordinatorLifecycleTests: XCTestCase {
         }
         XCTAssertEqual(failure, .receiverRejected("unsupported exact mode"))
     }
+
+    func testMediaPacketsPreserveOrderAndStayWithinTheProtocolMTU() async throws {
+        let capture = FakeCaptureService()
+        let control = FakeSessionControl()
+        let datagram = ControlledDatagramSender()
+        let coordinator = try StreamSessionCoordinator(
+            capture: capture,
+            controlFactory: FakeSessionControlFactory(connection: control),
+            datagramFactory: ControlledDatagramFactory(sender: datagram),
+            firstGeneration: CamBridgeContract.Validation.minimumGeneration
+        )
+        let endpoint = try ReceiverEndpoint(host: "127.0.0.1")
+        let receiver = try ReceiverCapabilities(
+            receiverId: "test-receiver",
+            displayName: "Test Receiver",
+            maxLongEdge: CamBridgeContract.Geometry.maximumLongEdge,
+            maxShortEdge: CamBridgeContract.Geometry.maximumShortEdge
+        )
+        let configuration = try StreamConfiguration(
+            mode: VideoMode.mode1080p30,
+            bitrateBps: VideoMode.mode1080p30.defaultBitrateBps,
+            orientation: .zero
+        )
+
+        let result = await coordinator.start(
+            endpoint: endpoint,
+            controlTarget: .manual(endpoint),
+            receiver: receiver,
+            configuration: configuration,
+            cameraDeviceID: "camera-test",
+            stabilization: .off
+        )
+        guard case .success = result else {
+            return XCTFail("expected fake receiver to accept the stream")
+        }
+
+        await capture.emit(.success(Self.largeAccessUnit))
+        await datagram.waitUntilPacketCount(atLeast: Self.expectedFragmentCount)
+        let packets = await datagram.packets()
+        XCTAssertFalse(packets.isEmpty)
+        XCTAssertTrue(packets.allSatisfy { $0.count <= CamBridgeContract.Media.mtuBytes })
+        let sequences = packets.map { packet in
+            UInt16(packet[Self.rtpSequenceHighByteOffset]) << Self.rtpByteShift | UInt16(packet[Self.rtpSequenceLowByteOffset])
+        }
+        for (previous, next) in zip(sequences, sequences.dropFirst()) {
+            XCTAssertEqual(next, previous &+ Self.sequenceIncrement)
+        }
+
+        _ = await coordinator.stop()
+        let diagnostics = await coordinator.diagnostics()
+        let closeCount = await datagram.closeCount()
+        XCTAssertEqual(diagnostics?.rtpPacketsSent, packets.count)
+        XCTAssertEqual(diagnostics?.rtpBytesSent, packets.reduce(into: .zero) { $0 += $1.count })
+        XCTAssertEqual(closeCount, 1)
+    }
+
+    func testSlowDatagramCompletionKeepsNewestAccessUnitQueueBoundedAndCancellationIsSingleResume() async throws {
+        let capture = FakeCaptureService()
+        let control = FakeSessionControl()
+        let datagram = ControlledDatagramSender(blockNextSend: true)
+        let coordinator = try StreamSessionCoordinator(
+            capture: capture,
+            controlFactory: FakeSessionControlFactory(connection: control),
+            datagramFactory: ControlledDatagramFactory(sender: datagram),
+            firstGeneration: CamBridgeContract.Validation.minimumGeneration
+        )
+        let endpoint = try ReceiverEndpoint(host: "127.0.0.1")
+        let receiver = try ReceiverCapabilities(
+            receiverId: "test-receiver",
+            displayName: "Test Receiver",
+            maxLongEdge: CamBridgeContract.Geometry.maximumLongEdge,
+            maxShortEdge: CamBridgeContract.Geometry.maximumShortEdge
+        )
+        let configuration = try StreamConfiguration(
+            mode: VideoMode.mode1080p30,
+            bitrateBps: VideoMode.mode1080p30.defaultBitrateBps,
+            orientation: .zero
+        )
+
+        let result = await coordinator.start(
+            endpoint: endpoint,
+            controlTarget: .manual(endpoint),
+            receiver: receiver,
+            configuration: configuration,
+            cameraDeviceID: "camera-test",
+            stabilization: .off
+        )
+        guard case .success = result else {
+            return XCTFail("expected fake receiver to accept the stream")
+        }
+
+        await capture.emit(.success(Self.largeAccessUnit))
+        await datagram.waitUntilSendEntered()
+        await capture.emit(.success(Self.largeAccessUnitAtNextTimestamp))
+        await capture.emit(.success(Self.largeAccessUnitAtFinalTimestamp))
+        await capture.emit(.success(Self.largeAccessUnitAtLastTimestamp))
+
+        _ = await coordinator.stop()
+        let snapshot = await coordinator.snapshotStream()
+        let closeCount = await datagram.closeCount()
+        let blockedCompletionCount = await datagram.blockedCompletionCount()
+        XCTAssertEqual(snapshot.state, .idle)
+        XCTAssertEqual(closeCount, 1)
+        XCTAssertEqual(blockedCompletionCount, 1)
+        let diagnostics = await coordinator.diagnostics()
+        XCTAssertGreaterThan(diagnostics?.queueDrops ?? .zero, .zero)
+    }
+
+    private static let largeAccessUnit = EncodedAccessUnit(
+        data: Data([0x00, 0x00, 0x00, 0x01, 0x65]) + Data(repeating: 0x01, count: CamBridgeContract.Media.mtuBytes),
+        presentationTimeMicroseconds: .zero,
+        isKeyframe: true
+    )
+    private static let largeAccessUnitAtNextTimestamp = EncodedAccessUnit(
+        data: Data([0x00, 0x00, 0x00, 0x01, 0x65]) + Data(repeating: 0x02, count: CamBridgeContract.Media.mtuBytes),
+        presentationTimeMicroseconds: 1,
+        isKeyframe: false
+    )
+    private static let largeAccessUnitAtFinalTimestamp = EncodedAccessUnit(
+        data: Data([0x00, 0x00, 0x00, 0x01, 0x65]) + Data(repeating: 0x03, count: CamBridgeContract.Media.mtuBytes),
+        presentationTimeMicroseconds: 2,
+        isKeyframe: false
+    )
+    private static let largeAccessUnitAtLastTimestamp = EncodedAccessUnit(
+        data: Data([0x00, 0x00, 0x00, 0x01, 0x65]) + Data(repeating: 0x04, count: CamBridgeContract.Media.mtuBytes),
+        presentationTimeMicroseconds: 3,
+        isKeyframe: false
+    )
+    private static let expectedFragmentCount = 2
+    private static let rtpSequenceHighByteOffset = 2
+    private static let rtpSequenceLowByteOffset = 3
+    private static let rtpByteShift = 8
+    private static let sequenceIncrement: UInt16 = 1
 }
 
 private actor FakeCaptureService: StreamCaptureControlling {
@@ -493,6 +626,100 @@ private actor FakeDatagramSender: RTPDatagramSending {
 
 private struct FakeDatagramFactory: RTPDatagramSenderFactory {
     let sender: FakeDatagramSender
+
+    func make(host: String, port: Int) throws -> any RTPDatagramSending {
+        sender
+    }
+}
+
+private actor ControlledDatagramSender: RTPDatagramSending {
+    private let blockNextSend: Bool
+    private var connected = false
+    private var closes = 0
+    private var packetsSent: [Data] = []
+    private var sendEntered = false
+    private var sendEnteredWaiter: CheckedContinuation<Void, Never>?
+    private var blockedSend: CheckedContinuation<Void, Error>?
+    private var blockedCompletions = 0
+    private var packetWaiters: [(count: Int, continuation: CheckedContinuation<Void, Never>)] = []
+
+    init(blockNextSend: Bool = false) {
+        self.blockNextSend = blockNextSend
+    }
+
+    func connect() async throws {
+        connected = true
+    }
+
+    func send(_ datagram: Data) async throws {
+        guard connected else { throw RTPDatagramSenderError.notConnected }
+        if blockNextSend, !sendEntered {
+            sendEntered = true
+            sendEnteredWaiter?.resume()
+            sendEnteredWaiter = nil
+            try await withTaskCancellationHandler(operation: {
+                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                    blockedSend = continuation
+                }
+            }, onCancel: {
+                Task { await self.cancelBlockedSend() }
+            })
+        }
+        packetsSent.append(datagram)
+        resumeReadyPacketWaiters()
+    }
+
+    func close() async {
+        if connected {
+            connected = false
+            closes += 1
+        }
+        cancelBlockedSend()
+    }
+
+    func metrics() async -> RTPDatagramMetrics {
+        RTPDatagramMetrics(
+            packetsSent: packetsSent.count,
+            bytesSent: packetsSent.reduce(into: .zero) { $0 += $1.count },
+            sendFailures: .zero,
+            maximumSendDurationNanoseconds: .zero
+        )
+    }
+
+    func waitUntilSendEntered() async {
+        if sendEntered { return }
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            sendEnteredWaiter = continuation
+        }
+    }
+
+    func waitUntilPacketCount(atLeast count: Int) async {
+        if packetsSent.count >= count { return }
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            packetWaiters.append((count, continuation))
+        }
+    }
+
+    func packets() -> [Data] { packetsSent }
+    func closeCount() -> Int { closes }
+    func blockedCompletionCount() -> Int { blockedCompletions }
+
+    private func cancelBlockedSend() {
+        guard let blockedSend else { return }
+        self.blockedSend = nil
+        blockedCompletions += 1
+        blockedSend.resume(throwing: CancellationError())
+    }
+
+    private func resumeReadyPacketWaiters() {
+        let ready = packetWaiters.filter { packetsSent.count >= $0.count }
+        packetWaiters.removeAll { packetsSent.count >= $0.count }
+        ready.forEach { $0.continuation.resume() }
+    }
+}
+
+private struct ControlledDatagramFactory: RTPDatagramSenderFactory {
+    let sender: ControlledDatagramSender
 
     func make(host: String, port: Int) throws -> any RTPDatagramSending {
         sender

@@ -264,6 +264,7 @@ private struct UITestFixtureSetupView: View {
                     Button("1080p30") {
                         model.setMode(UITestFixtureModel.supportedModeID)
                     }
+                    .disabled(model.isStreamActive)
                     .accessibilityIdentifier("mode-1080p30")
                     Button("2K60") {
                         model.setMode(UITestFixtureModel.unsupportedModeID)
@@ -276,6 +277,7 @@ private struct UITestFixtureSetupView: View {
                     Button("Landscape") {
                         model.selectedOrientation = .zero
                     }
+                    .disabled(model.isStreamActive)
                     .accessibilityIdentifier("orientation-landscape")
                     Button("Portrait clockwise") {
                         model.selectedOrientation = .ninety
@@ -285,6 +287,7 @@ private struct UITestFixtureSetupView: View {
                     Button("Auto") {
                         model.selectedStabilization = .auto
                     }
+                    .disabled(model.isStreamActive)
                     .accessibilityIdentifier("stabilization-auto")
                     Button("Off") {
                         model.selectedStabilization = .off
@@ -367,6 +370,7 @@ private struct UITestFixtureSettingsView: View {
                     Button("1080p30") {
                         model.setMode(UITestFixtureModel.supportedModeID)
                     }
+                    .disabled(model.isStreamActive)
                     .accessibilityIdentifier("settings-mode-1080p30")
                     Button("2K60") {
                         model.setMode(UITestFixtureModel.unsupportedModeID)
@@ -376,6 +380,7 @@ private struct UITestFixtureSettingsView: View {
                     Button("Landscape") {
                         model.selectedOrientation = .zero
                     }
+                    .disabled(model.isStreamActive)
                     .accessibilityIdentifier("settings-orientation-landscape")
                     Button("Portrait clockwise") {
                         model.selectedOrientation = .ninety
@@ -385,6 +390,7 @@ private struct UITestFixtureSettingsView: View {
                     Button("Auto") {
                         model.selectedStabilization = .auto
                     }
+                    .disabled(model.isStreamActive)
                     .accessibilityIdentifier("settings-stabilization-auto")
                     Button("Off") {
                         model.selectedStabilization = .off

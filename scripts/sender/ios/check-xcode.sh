@@ -64,6 +64,31 @@ xcodebuild \
     -derivedDataPath "${repo_root}/build/ios-derived-data" \
     ARCHS="${simulator_architecture}" \
     ONLY_ACTIVE_ARCH=YES \
+    SWIFT_ENABLE_TESTABILITY=YES \
     CODE_SIGNING_ALLOWED=NO \
     CODE_SIGNING_REQUIRED=NO \
     test 2>&1 | tee "${log_dir}/xcodebuild-test.log"
+
+app_bundle="${repo_root}/build/ios-derived-data/Build/Products/Debug-iphonesimulator/CamBridge.app"
+privacy_manifest="${app_bundle}/PrivacyInfo.xcprivacy"
+if [[ ! -f "${privacy_manifest}" ]]; then
+    echo "Built app is missing target privacy manifest: ${privacy_manifest}" >&2
+    exit 2
+fi
+python3 - "${privacy_manifest}" <<'PY'
+import plistlib
+import sys
+
+manifest_path = sys.argv[1]
+with open(manifest_path, "rb") as manifest_file:
+    manifest = plistlib.load(manifest_file)
+
+required_api_types = manifest.get("NSPrivacyAccessedAPITypes", [])
+user_defaults_entries = [
+    entry for entry in required_api_types
+    if entry.get("NSPrivacyAccessedAPIType") == "NSPrivacyAccessedAPICategoryUserDefaults"
+]
+if not any("CA92.1" in entry.get("NSPrivacyAccessedAPITypeReasons", []) for entry in user_defaults_entries):
+    raise SystemExit("PrivacyInfo.xcprivacy does not declare UserDefaults reason CA92.1")
+print(f"Verified target privacy manifest: {manifest_path}")
+PY
