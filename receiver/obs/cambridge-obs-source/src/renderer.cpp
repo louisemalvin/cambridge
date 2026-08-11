@@ -28,6 +28,19 @@ uniform texture2d image1;
 uniform bool full_range;
 uniform int rotation_quarter_turn;
 
+const int kQuarterTurnOne = 1;
+const int kQuarterTurnTwo = 2;
+const int kQuarterTurnThree = 3;
+const float kUnitCoordinate = 1.0;
+const float kChromaCenter = 0.5;
+const float kVideoRangeLumaOffset = 16.0 / 255.0;
+const float kVideoRangeLumaScale = 1.16438356;
+const float kBt709RedCoefficient = 1.5748;
+const float kBt709GreenBlueCoefficient = 0.1873;
+const float kBt709GreenRedCoefficient = 0.4681;
+const float kBt709BlueCoefficient = 1.8556;
+
+
 sampler_state def_sampler {
     Filter = Linear;
     AddressU = Clamp;
@@ -42,7 +55,7 @@ struct VertInOut {
 VertInOut VSDefault(VertInOut vert_in)
 {
     VertInOut vert_out;
-    vert_out.pos = mul(float4(vert_in.pos.xyz, 1.0), ViewProj);
+    vert_out.pos = mul(float4(vert_in.pos.xyz, kUnitCoordinate), ViewProj);
     vert_out.uv = vert_in.uv;
     return vert_out;
 }
@@ -50,35 +63,35 @@ VertInOut VSDefault(VertInOut vert_in)
 float4 PSNv12(VertInOut vert_in) : TARGET
 {
     float2 sample_uv = vert_in.uv;
-    if (rotation_quarter_turn == 1) {
-        sample_uv = float2(vert_in.uv.y, 1.0 - vert_in.uv.x);
-    } else if (rotation_quarter_turn == 2) {
-        sample_uv = float2(1.0 - vert_in.uv.x, 1.0 - vert_in.uv.y);
-    } else if (rotation_quarter_turn == 3) {
-        sample_uv = float2(1.0 - vert_in.uv.y, vert_in.uv.x);
+    if (rotation_quarter_turn == kQuarterTurnOne) {
+        sample_uv = float2(vert_in.uv.y, kUnitCoordinate - vert_in.uv.x);
+    } else if (rotation_quarter_turn == kQuarterTurnTwo) {
+        sample_uv = float2(kUnitCoordinate - vert_in.uv.x, kUnitCoordinate - vert_in.uv.y);
+    } else if (rotation_quarter_turn == kQuarterTurnThree) {
+        sample_uv = float2(kUnitCoordinate - vert_in.uv.y, vert_in.uv.x);
     }
     float y = image.Sample(def_sampler, sample_uv).r;
     float2 uv = image1.Sample(def_sampler, sample_uv).rg;
     if (!full_range) {
-        y = (y - (16.0 / 255.0)) * 1.16438356;
+        y = (y - kVideoRangeLumaOffset) * kVideoRangeLumaScale;
     }
-    uv -= float2(0.5, 0.5);
+    uv -= float2(kChromaCenter, kChromaCenter);
     float3 rgb;
-    rgb.r = y + 1.5748 * uv.y;
-    rgb.g = y - 0.1873 * uv.x - 0.4681 * uv.y;
-    rgb.b = y + 1.8556 * uv.x;
-    return float4(rgb, 1.0);
+    rgb.r = y + kBt709RedCoefficient * uv.y;
+    rgb.g = y - kBt709GreenBlueCoefficient * uv.x - kBt709GreenRedCoefficient * uv.y;
+    rgb.b = y + kBt709BlueCoefficient * uv.x;
+    return float4(rgb, kUnitCoordinate);
 }
 
 float4 PSBgra(VertInOut vert_in) : TARGET
 {
     float2 sample_uv = vert_in.uv;
-    if (rotation_quarter_turn == 1) {
-        sample_uv = float2(vert_in.uv.y, 1.0 - vert_in.uv.x);
-    } else if (rotation_quarter_turn == 2) {
-        sample_uv = float2(1.0 - vert_in.uv.x, 1.0 - vert_in.uv.y);
-    } else if (rotation_quarter_turn == 3) {
-        sample_uv = float2(1.0 - vert_in.uv.y, vert_in.uv.x);
+    if (rotation_quarter_turn == kQuarterTurnOne) {
+        sample_uv = float2(vert_in.uv.y, kUnitCoordinate - vert_in.uv.x);
+    } else if (rotation_quarter_turn == kQuarterTurnTwo) {
+        sample_uv = float2(kUnitCoordinate - vert_in.uv.x, kUnitCoordinate - vert_in.uv.y);
+    } else if (rotation_quarter_turn == kQuarterTurnThree) {
+        sample_uv = float2(kUnitCoordinate - vert_in.uv.y, vert_in.uv.x);
     }
     return image.Sample(def_sampler, sample_uv);
 }

@@ -12,21 +12,36 @@ struct ConversionParameters {
 constexpr uint2 kNv12Subsampling = uint2(2, 2);
 constexpr uint kBt709Matrix = 0;
 constexpr uint kBt601Matrix = 1;
+constexpr uint kLimitedRange = 0;
+constexpr float kVideoRangeLumaOffset = 16.0 / 255.0;
+constexpr float kVideoRangeLumaScale = 1.16438356;
+constexpr float kChromaCenter = 0.5;
+constexpr float kColorMinimum = 0.0;
+constexpr float kColorMaximum = 1.0;
+constexpr float kOpaqueAlpha = 1.0;
+constexpr float kBt709RedCoefficient = 1.5748;
+constexpr float kBt709GreenBlueCoefficient = 0.1873;
+constexpr float kBt709GreenRedCoefficient = 0.4681;
+constexpr float kBt709BlueCoefficient = 1.8556;
+constexpr float kBt601RedCoefficient = 1.4020;
+constexpr float kBt601GreenBlueCoefficient = 0.3441;
+constexpr float kBt601GreenRedCoefficient = 0.7141;
+constexpr float kBt601BlueCoefficient = 1.7720;
 
 float3 convert_bt709(float y, float2 chroma)
 {
     return float3(
-        y + 1.5748 * chroma.y,
-        y - 0.1873 * chroma.x - 0.4681 * chroma.y,
-        y + 1.8556 * chroma.x);
+        y + kBt709RedCoefficient * chroma.y,
+        y - kBt709GreenBlueCoefficient * chroma.x - kBt709GreenRedCoefficient * chroma.y,
+        y + kBt709BlueCoefficient * chroma.x);
 }
 
 float3 convert_bt601(float y, float2 chroma)
 {
     return float3(
-        y + 1.4020 * chroma.y,
-        y - 0.3441 * chroma.x - 0.7141 * chroma.y,
-        y + 1.7720 * chroma.x);
+        y + kBt601RedCoefficient * chroma.y,
+        y - kBt601GreenBlueCoefficient * chroma.x - kBt601GreenRedCoefficient * chroma.y,
+        y + kBt601BlueCoefficient * chroma.x);
 }
 
 kernel void nv12_to_bgra(
@@ -41,10 +56,11 @@ kernel void nv12_to_bgra(
     }
 
     float y = luma.read(position).r;
-    if (parameters.full_range == 0) {
-        y = (y - (16.0 / 255.0)) * 1.16438356;
+    if (parameters.full_range == kLimitedRange) {
+        y = (y - kVideoRangeLumaOffset) * kVideoRangeLumaScale;
     }
-    float2 centered_chroma = chroma.read(position / kNv12Subsampling).rg - float2(0.5, 0.5);
+    float2 centered_chroma =
+        chroma.read(position / kNv12Subsampling).rg - float2(kChromaCenter, kChromaCenter);
     float3 rgb;
     if (parameters.color_matrix == kBt709Matrix) {
         rgb = convert_bt709(y, centered_chroma);
@@ -53,6 +69,7 @@ kernel void nv12_to_bgra(
     } else {
         return;
     }
-    destination.write(float4(clamp(rgb.b, 0.0, 1.0), clamp(rgb.g, 0.0, 1.0),
-                             clamp(rgb.r, 0.0, 1.0), 1.0), position);
+    destination.write(float4(clamp(rgb.b, kColorMinimum, kColorMaximum),
+                             clamp(rgb.g, kColorMinimum, kColorMaximum),
+                             clamp(rgb.r, kColorMinimum, kColorMaximum), kOpaqueAlpha), position);
 }
