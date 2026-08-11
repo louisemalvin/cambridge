@@ -1,57 +1,58 @@
 import XCTest
 
+@MainActor
 final class CamBridgeUITests: XCTestCase {
     func testSetupLaunchesAndNavigatesToSettingsAndBack() {
         let app = launchFixture()
 
-        XCTAssertTrue(element(app, id: "start-stream").waitForExistence(timeout: Self.waitTimeout))
+        assertExists(element(app, id: "start-stream"))
         tap(app, id: "settings-tab")
-        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: Self.waitTimeout))
+        assertExists(app.navigationBars["Settings"])
         tap(app, id: "setup-tab")
-        XCTAssertTrue(app.navigationBars["CamBridge"].waitForExistence(timeout: Self.waitTimeout))
+        assertExists(app.navigationBars["CamBridge"])
     }
 
     func testPermissionStatesAndCameraAccessAreDeterministic() {
         let app = launchFixture()
 
         tap(app, id: "permission-denied")
-        XCTAssertTrue(element(app, id: "camera-permission-state").label.contains("Denied"))
+        assertLabelContains(element(app, id: "camera-permission-state"), "Denied")
         tap(app, id: "permission-restricted")
-        XCTAssertTrue(element(app, id: "camera-permission-state").label.contains("Restricted"))
+        assertLabelContains(element(app, id: "camera-permission-state"), "Restricted")
         tap(app, id: "permission-authorized")
-        XCTAssertTrue(element(app, id: "camera-permission-state").label.contains("Authorized"))
+        assertLabelContains(element(app, id: "camera-permission-state"), "Authorized")
     }
 
     func testReceiverDiscoveryAndManualProbeStates() {
         let app = launchFixture()
 
-        XCTAssertTrue(element(app, id: "receiver-status").label.contains("Select"))
+        assertLabelContains(element(app, id: "receiver-status"), "Select")
         tap(app, id: "fixture-receiver-one")
-        XCTAssertTrue(element(app, id: "receiver-status").label.contains("Fixture OBS One"))
+        assertLabelContains(element(app, id: "receiver-status"), "Fixture OBS One")
         tap(app, id: "fixture-receiver-two")
-        XCTAssertTrue(element(app, id: "receiver-status").label.contains("Fixture OBS Two"))
+        assertLabelContains(element(app, id: "receiver-status"), "Fixture OBS Two")
 
         let host = element(app, id: "manual-receiver-host")
         host.tap()
         tap(app, id: "probe-manual-receiver")
-        XCTAssertTrue(element(app, id: "manual-probe-status").label.contains("Probe failed"))
+        assertLabelContains(element(app, id: "manual-probe-status"), "Probe failed")
         host.typeText("192.0.2.10")
         tap(app, id: "probe-manual-receiver")
-        XCTAssertTrue(element(app, id: "manual-probe-status").label.contains("Ready"))
+        assertLabelContains(element(app, id: "manual-probe-status"), "Ready")
     }
 
     func testUnsupportedModeExplainsWhyStartIsDisabledUntilSelectionsAreValid() {
         let app = launchFixture()
         let start = element(app, id: "start-stream")
 
-        XCTAssertFalse(start.isEnabled)
-        XCTAssertTrue(element(app, id: "mode-capability-reason").label.contains("Unavailable"))
+        assertEnabled(start, false)
+        assertLabelContains(element(app, id: "mode-capability-reason"), "Unavailable")
         tap(app, id: "permission-authorized")
         tap(app, id: "fixture-receiver-one")
-        XCTAssertFalse(start.isEnabled)
+        assertEnabled(start, false)
         tap(app, id: "mode-1080p30")
-        XCTAssertTrue(element(app, id: "mode-capability-reason").label.contains("Supported"))
-        XCTAssertTrue(start.isEnabled)
+        assertLabelContains(element(app, id: "mode-capability-reason"), "Supported")
+        assertEnabled(start, true)
     }
 
     func testStartProgressPreventsDuplicateStartAndTransitionsToWebcam() {
@@ -59,13 +60,13 @@ final class CamBridgeUITests: XCTestCase {
         configureValidStart(app)
 
         let start = element(app, id: "start-stream")
-        XCTAssertTrue(start.isEnabled)
+        assertEnabled(start, true)
         start.tap()
-        XCTAssertFalse(start.isEnabled)
-        XCTAssertTrue(element(app, id: "complete-start").waitForExistence(timeout: Self.waitTimeout))
+        assertEnabled(start, false)
+        assertExists(element(app, id: "complete-start"))
         element(app, id: "complete-start").tap()
-        XCTAssertTrue(element(app, id: "webcam-status").waitForExistence(timeout: Self.waitTimeout))
-        XCTAssertTrue(element(app, id: "stop-stream").exists)
+        assertExists(element(app, id: "webcam-status"))
+        assertExists(element(app, id: "stop-stream"))
     }
 
     func testStopConfirmationSupportsCancelAndConfirm() {
@@ -75,13 +76,14 @@ final class CamBridgeUITests: XCTestCase {
 
         tap(app, id: "stop-stream")
         let alert = app.alerts["Stop stream?"]
-        XCTAssertTrue(alert.waitForExistence(timeout: Self.waitTimeout))
+        assertExists(alert)
         alert.buttons["Cancel"].tap()
-        XCTAssertFalse(alert.exists)
+        let alertAfterCancel = alert.exists
+        XCTAssertFalse(alertAfterCancel)
         tap(app, id: "stop-stream")
-        XCTAssertTrue(alert.waitForExistence(timeout: Self.waitTimeout))
+        assertExists(alert)
         alert.buttons["Stop"].tap()
-        XCTAssertTrue(element(app, id: "start-stream").waitForExistence(timeout: Self.waitTimeout))
+        assertExists(element(app, id: "start-stream"))
     }
 
     func testTerminalFailureReturnsToSetupAndRetryRestoresEditableState() {
@@ -90,17 +92,18 @@ final class CamBridgeUITests: XCTestCase {
         startAndComplete(app)
         tap(app, id: "simulate-terminal-failure")
 
-        XCTAssertTrue(element(app, id: "stream-failure").waitForExistence(timeout: Self.waitTimeout))
+        assertExists(element(app, id: "stream-failure"))
         tap(app, id: "retry-stream")
-        XCTAssertFalse(element(app, id: "stream-failure").exists)
-        XCTAssertTrue(element(app, id: "start-stream").isEnabled)
+        let failureExistsAfterRetry = element(app, id: "stream-failure").exists
+        XCTAssertFalse(failureExistsAfterRetry)
+        assertEnabled(element(app, id: "start-stream"), true)
     }
 
     func testSettingsEditsAreAvailableIdleAndLockedDuringActiveStream() {
         let app = launchFixture()
         tap(app, id: "settings-tab")
         let idleMode = element(app, id: "settings-mode-1080p30")
-        XCTAssertTrue(idleMode.isEnabled)
+        assertEnabled(idleMode, true)
         idleMode.tap()
 
         tap(app, id: "setup-tab")
@@ -108,24 +111,24 @@ final class CamBridgeUITests: XCTestCase {
         startAndComplete(app)
         tap(app, id: "settings-tab")
 
-        XCTAssertTrue(element(app, id: "settings-locked").waitForExistence(timeout: Self.waitTimeout))
-        XCTAssertFalse(idleMode.isEnabled)
+        assertExists(element(app, id: "settings-locked"))
+        assertEnabled(idleMode, false)
 
         tap(app, id: "webcam-tab")
         tap(app, id: "stop-stream")
         app.alerts["Stop stream?"].buttons["Stop"].tap()
         tap(app, id: "settings-tab")
-        XCTAssertTrue(idleMode.isEnabled)
+        assertEnabled(idleMode, true)
     }
 
     func testPreStreamCapabilityReportCanBeCopied() {
         let app = launchFixture()
         tap(app, id: "copy-capability-report")
 
-        XCTAssertTrue(element(app, id: "capability-report-status").label.contains("copied"))
+        assertLabelContains(element(app, id: "capability-report-status"), "copied")
         tap(app, id: "settings-tab")
         tap(app, id: "copy-capability-report-settings")
-        XCTAssertTrue(element(app, id: "copy-capability-report-settings").exists)
+        assertExists(element(app, id: "copy-capability-report-settings"))
     }
 
     private func launchFixture() -> XCUIApplication {
@@ -143,19 +146,34 @@ final class CamBridgeUITests: XCTestCase {
 
     private func startAndComplete(_ app: XCUIApplication) {
         let start = element(app, id: "start-stream")
-        XCTAssertTrue(start.waitForExistence(timeout: Self.waitTimeout))
-        XCTAssertTrue(start.isEnabled)
+        assertExists(start)
+        assertEnabled(start, true)
         start.tap()
         let complete = element(app, id: "complete-start")
-        XCTAssertTrue(complete.waitForExistence(timeout: Self.waitTimeout))
+        assertExists(complete)
         complete.tap()
-        XCTAssertTrue(element(app, id: "stop-stream").waitForExistence(timeout: Self.waitTimeout))
+        assertExists(element(app, id: "stop-stream"))
     }
 
     private func tap(_ app: XCUIApplication, id: String) {
         let control = element(app, id: id)
-        XCTAssertTrue(control.waitForExistence(timeout: Self.waitTimeout), "Missing accessibility identifier: \(id)")
+        assertExists(control, message: "Missing accessibility identifier: \(id)")
         control.tap()
+    }
+
+    private func assertExists(_ control: XCUIElement, message: String = "") {
+        let exists = control.waitForExistence(timeout: Self.waitTimeout)
+        XCTAssertTrue(exists, message)
+    }
+
+    private func assertLabelContains(_ control: XCUIElement, _ expectedText: String) {
+        let label = control.label
+        XCTAssertTrue(label.contains(expectedText), "Expected '\(expectedText)' in '\(label)'")
+    }
+
+    private func assertEnabled(_ control: XCUIElement, _ expected: Bool) {
+        let isEnabled = control.isEnabled
+        XCTAssertEqual(isEnabled, expected)
     }
 
     private func element(_ app: XCUIApplication, id: String) -> XCUIElement {

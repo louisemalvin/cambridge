@@ -367,18 +367,17 @@ public final class VideoToolboxEncoder {
             encoderIdentityUnavailableReason = "VideoToolbox encoder identity unavailable (status: \(encoderProperty.status))"
         }
 
+        let hardwarePropertyKey: CFString
         if #available(iOS 17.4, *) {
-            let hardwareProperty = Self.copySessionProperty(
-                session,
-                key: kVTCompressionPropertyKey_UsingHardwareAcceleratedVideoEncoder
-            )
-            if hardwareProperty.status == noErr, let value = hardwareProperty.value as? NSNumber {
-                encoderUsesHardwareAccelerated = value.boolValue
-            } else {
-                encoderHardwareAvailabilityReason = "VideoToolbox hardware-use property unavailable (status: \(hardwareProperty.status))"
-            }
+            hardwarePropertyKey = kVTCompressionPropertyKey_UsingHardwareAcceleratedVideoEncoder
         } else {
-            encoderHardwareAvailabilityReason = "VideoToolbox hardware-use property is unavailable before iOS 17.4"
+            hardwarePropertyKey = Self.legacyHardwareUsePropertyKey as CFString
+        }
+        let hardwareProperty = Self.copySessionProperty(session, key: hardwarePropertyKey)
+        if hardwareProperty.status == noErr, let value = hardwareProperty.value as? NSNumber {
+            encoderUsesHardwareAccelerated = value.boolValue
+        } else {
+            encoderHardwareAvailabilityReason = "VideoToolbox hardware-use property unavailable (status: \(hardwareProperty.status))"
         }
     }
 
@@ -500,6 +499,7 @@ public final class VideoToolboxEncoder {
     private static let byteIncrement = 1
     private static let dataRateLimitsPropertyName = kVTCompressionPropertyKey_DataRateLimits as String
     private static let legacyHardwareSpecificationKey = "EnableHardwareAcceleratedVideoEncoder"
+    private static let legacyHardwareUsePropertyKey = "UsingHardwareAcceleratedVideoEncoder"
     private static let inputQueueKey = DispatchSpecificKey<UInt8>()
     private static let inputQueueMarker: UInt8 = 1
     private static let counterIncrement = 1
