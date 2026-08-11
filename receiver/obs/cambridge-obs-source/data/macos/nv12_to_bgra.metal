@@ -13,9 +13,11 @@ constexpr uint2 kNv12Subsampling = uint2(2, 2);
 constexpr uint kBt709Matrix = 0;
 constexpr uint kBt601Matrix = 1;
 constexpr uint kLimitedRange = 0;
+constexpr uint kFullRange = 1;
 constexpr float kVideoRangeLumaOffset = 16.0 / 255.0;
 constexpr float kVideoRangeLumaScale = 1.16438356;
-constexpr float kChromaCenter = 0.5;
+constexpr float kVideoRangeChromaCenter = 128.0 / 255.0;
+constexpr float kFullRangeChromaCenter = 0.5;
 constexpr float kColorMinimum = 0.0;
 constexpr float kColorMaximum = 1.0;
 constexpr float kOpaqueAlpha = 1.0;
@@ -27,21 +29,23 @@ constexpr float kBt601RedCoefficient = 1.4020;
 constexpr float kBt601GreenBlueCoefficient = 0.3441;
 constexpr float kBt601GreenRedCoefficient = 0.7141;
 constexpr float kBt601BlueCoefficient = 1.7720;
+constexpr float kBt709LimitedRedCoefficient = 1.79274107;
+constexpr float kBt709LimitedGreenBlueCoefficient = 0.21324866;
+constexpr float kBt709LimitedGreenRedCoefficient = 0.53290960;
+constexpr float kBt709LimitedBlueCoefficient = 2.11240179;
+constexpr float kBt601LimitedRedCoefficient = 1.59602679;
+constexpr float kBt601LimitedGreenBlueCoefficient = 0.39176228;
+constexpr float kBt601LimitedGreenRedCoefficient = 0.81296719;
+constexpr float kBt601LimitedBlueCoefficient = 2.01723214;
 
-float3 convert_bt709(float y, float2 chroma)
+float3 convert(float y, float2 chroma, float red_coefficient,
+               float green_blue_coefficient, float green_red_coefficient,
+               float blue_coefficient)
 {
     return float3(
-        y + kBt709RedCoefficient * chroma.y,
-        y - kBt709GreenBlueCoefficient * chroma.x - kBt709GreenRedCoefficient * chroma.y,
-        y + kBt709BlueCoefficient * chroma.x);
-}
-
-float3 convert_bt601(float y, float2 chroma)
-{
-    return float3(
-        y + kBt601RedCoefficient * chroma.y,
-        y - kBt601GreenBlueCoefficient * chroma.x - kBt601GreenRedCoefficient * chroma.y,
-        y + kBt601BlueCoefficient * chroma.x);
+        y + red_coefficient * chroma.y,
+        y - green_blue_coefficient * chroma.x - green_red_coefficient * chroma.y,
+        y + blue_coefficient * chroma.x);
 }
 
 kernel void nv12_to_bgra(
@@ -56,16 +60,39 @@ kernel void nv12_to_bgra(
     }
 
     float y = luma.read(position).r;
+    float2 sampled_chroma = chroma.read(position / kNv12Subsampling).rg;
+    float3 rgb;
     if (parameters.full_range == kLimitedRange) {
         y = (y - kVideoRangeLumaOffset) * kVideoRangeLumaScale;
-    }
-    float2 centered_chroma =
-        chroma.read(position / kNv12Subsampling).rg - float2(kChromaCenter, kChromaCenter);
-    float3 rgb;
-    if (parameters.color_matrix == kBt709Matrix) {
-        rgb = convert_bt709(y, centered_chroma);
-    } else if (parameters.color_matrix == kBt601Matrix) {
-        rgb = convert_bt601(y, centered_chroma);
+        float2 centered_chroma = sampled_chroma -
+            float2(kVideoRangeChromaCenter, kVideoRangeChromaCenter);
+        if (parameters.color_matrix == kBt709Matrix) {
+            rgb = convert(y, centered_chroma, kBt709LimitedRedCoefficient,
+                          kBt709LimitedGreenBlueCoefficient,
+                          kBt709LimitedGreenRedCoefficient,
+                          kBt709LimitedBlueCoefficient);
+        } else if (parameters.color_matrix == kBt601Matrix) {
+            rgb = convert(y, centered_chroma, kBt601LimitedRedCoefficient,
+                          kBt601LimitedGreenBlueCoefficient,
+                          kBt601LimitedGreenRedCoefficient,
+                          kBt601LimitedBlueCoefficient);
+        } else {
+            return;
+        }
+    } else if (parameters.full_range == kFullRange) {
+        float2 centered_chroma = sampled_chroma -
+            float2(kFullRangeChromaCenter, kFullRangeChromaCenter);
+        if (parameters.color_matrix == kBt709Matrix) {
+            rgb = convert(y, centered_chroma, kBt709RedCoefficient,
+                          kBt709GreenBlueCoefficient, kBt709GreenRedCoefficient,
+                          kBt709BlueCoefficient);
+        } else if (parameters.color_matrix == kBt601Matrix) {
+            rgb = convert(y, centered_chroma, kBt601RedCoefficient,
+                          kBt601GreenBlueCoefficient, kBt601GreenRedCoefficient,
+                          kBt601BlueCoefficient);
+        } else {
+            return;
+        }
     } else {
         return;
     }

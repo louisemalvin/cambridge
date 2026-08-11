@@ -99,17 +99,13 @@ if(CAMBRIDGE_BUILD_PLUGIN)
             @ONLY
         )
         set_target_properties(cambridge-obs-plugin PROPERTIES
+            BUNDLE TRUE
+            BUNDLE_EXTENSION plugin
             MACOSX_BUNDLE_INFO_PLIST
                 "${CMAKE_CURRENT_BINARY_DIR}/cambridge-obs-plugin-Info.plist"
             XCODE_ATTRIBUTE_GENERATE_INFOPLIST_FILE NO
         )
-    endif()
 
-    install(TARGETS cambridge-obs-plugin
-        LIBRARY DESTINATION obs-plugins/cambridge-obs-plugin/bin/64bit
-    )
-
-    if(APPLE)
         find_program(CAMBRIDGE_XCRUN_EXECUTABLE xcrun REQUIRED)
         set(CAMBRIDGE_METAL_AIR
             "${CMAKE_CURRENT_BINARY_DIR}/nv12_to_bgra.air")
@@ -126,12 +122,17 @@ if(CAMBRIDGE_BUILD_PLUGIN)
             DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/data/macos/nv12_to_bgra.metal"
             VERBATIM
         )
-        add_custom_target(cambridge-metal-library DEPENDS "${CAMBRIDGE_METALLIB}")
-        add_dependencies(cambridge-obs-plugin cambridge-metal-library)
-        install(FILES "${CAMBRIDGE_METALLIB}"
-            DESTINATION obs-plugins/cambridge-obs-plugin/bin/64bit
+        set_source_files_properties("${CAMBRIDGE_METALLIB}" PROPERTIES
+            GENERATED TRUE
+            MACOSX_PACKAGE_LOCATION Resources
         )
+        target_sources(cambridge-obs-plugin PRIVATE "${CAMBRIDGE_METALLIB}")
     endif()
+
+    install(TARGETS cambridge-obs-plugin
+        LIBRARY DESTINATION obs-plugins/cambridge-obs-plugin/bin/64bit
+    )
+
 endif()
 
 if(CAMBRIDGE_BUILD_TESTS)
@@ -183,6 +184,8 @@ if(CAMBRIDGE_BUILD_TESTS AND BUILD_TESTING)
         tests/decoder_policy_tests.cpp
         src/media_path.cpp
     )
+    find_package(Threads REQUIRED)
+    target_link_libraries(cambridge-obs-plugin-decoder-policy-tests PRIVATE Threads::Threads)
 
     cambridge_add_test(cambridge-obs-plugin-renderer-policy-tests
         tests/renderer_policy_tests.cpp

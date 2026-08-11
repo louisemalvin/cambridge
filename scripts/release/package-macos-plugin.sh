@@ -11,11 +11,14 @@ package_name="cambridge-obs-plugin-${version}-macos-universal.pkg"
 package_path="${artifact_dir}/${package_name}"
 component_path="${artifact_dir}/cambridge-obs-plugin-${version}-component.pkg"
 package_root="${artifact_dir}/cambridge-obs-plugin-${version}-macos-root"
-plugin_path="${staging_dir}/obs-plugins/cambridge-obs-plugin/bin/64bit/cambridge-obs-plugin.so"
-metallib_path="${staging_dir}/obs-plugins/cambridge-obs-plugin/bin/64bit/nv12_to_bgra.metallib"
+plugin_bundle="${staging_dir}/obs-plugins/cambridge-obs-plugin.plugin"
+plugin_path="${plugin_bundle}/Contents/MacOS/cambridge-obs-plugin"
+metallib_path="${plugin_bundle}/Contents/Resources/nv12_to_bgra.metallib"
+info_plist="${plugin_bundle}/Contents/Info.plist"
 application_identity=${CAMBRIDGE_DEVELOPER_ID_APPLICATION:-}
 installer_identity=${CAMBRIDGE_DEVELOPER_ID_INSTALLER:-}
 notary_profile=${CAMBRIDGE_NOTARY_PROFILE:-}
+notary_keychain=${CAMBRIDGE_NOTARY_KEYCHAIN:-}
 skip_build=${CAMBRIDGE_SKIP_BUILD:-OFF}
 
 fail() {
@@ -38,6 +41,8 @@ command -v xcrun >/dev/null 2>&1 || fail "Xcode xcrun is required"
 command -v pkgutil >/dev/null 2>&1 || fail "pkgutil is required"
 command -v spctl >/dev/null 2>&1 || fail "spctl is required"
 command -v shasum >/dev/null 2>&1 || fail "shasum is required"
+command -v plutil >/dev/null 2>&1 || fail "plutil is required"
+command -v jq >/dev/null 2>&1 || fail "jq is required"
 case "${skip_build}" in
     ON|OFF) ;;
     *) fail "CAMBRIDGE_SKIP_BUILD must be ON or OFF" ;;
@@ -54,20 +59,23 @@ if [[ "${skip_build}" == "OFF" ]]; then
         "${repo_root}/scripts/receiver/macos/build-cambridge-obs-plugin.sh"
 fi
 
-[[ -f "${plugin_path}" ]] || fail "universal plugin was not staged: ${plugin_path}"
+[[ -d "${plugin_bundle}" ]] || fail "universal plugin bundle was not staged: ${plugin_bundle}"
+[[ -f "${plugin_path}" ]] || fail "universal plugin binary was not staged: ${plugin_path}"
 [[ -f "${metallib_path}" ]] || fail "Metal library was not staged: ${metallib_path}"
+[[ -f "${info_plist}" ]] || fail "plugin Info.plist was not staged: ${info_plist}"
+plutil -lint "${info_plist}" >/dev/null
 lipo -verify_arch arm64 x86_64 "${plugin_path}" || fail "plugin is not universal"
 if otool -L "${plugin_path}" | rg -q '/opt/homebrew|/usr/local/opt|/usr/local/Cellar|/opt/homebrew/Cellar'; then
     fail "plugin contains an unintended Homebrew load command"
 fi
 
-package_plugin_dir="${package_root}/Library/Application Support/obs-studio/plugins/cambridge-obs-plugin/bin/64bit"
+package_plugin_dir="${package_root}/Library/Application Support/obs-studio/plugins"
 mkdir -p "${package_plugin_dir}"
-cp "${plugin_path}" "${package_plugin_dir}/cambridge-obs-plugin.so"
-cp "${metallib_path}" "${package_plugin_dir}/nv12_to_bgra.metallib"
+cp -R "${plugin_bundle}" "${package_plugin_dir}/cambridge-obs-plugin.plugin"
+package_plugin_bundle="${package_plugin_dir}/cambridge-obs-plugin.plugin"
 codesign --force --options runtime --timestamp --sign "${application_identity}" \
-    "${package_plugin_dir}/cambridge-obs-plugin.so"
-codesign --verify --strict --verbose=2 "${package_plugin_dir}/cambridge-obs-plugin.so"
+    "${package_plugin_bundle}"
+codesign --verify --strict --verbose=2 "${package_plugin_bundle}"
 
 pkgbuild \
     --root "${package_root}" \
@@ -80,11 +88,16 @@ productbuild \
     --package "${component_path}" \
     --sign "${installer_identity}" \
     "${package_path}"
-xcrun notarytool submit "${package_path}" \
-    --keychain-profile "${notary_profile}" \
-    --wait \
-    --output-format json >"${artifact_dir}/notary-${version}.json"
+notary_arguments=(--keychain-profile "${notary_profile}")
+if [[ -n "${notary_keychain}" ]]; then
+    notary_arguments+=(--keychain "${notary_keychain}")
+fi
+xcrun notarytool submit "${package_path}" "${notary_arguments[@]}" \
+    --wait --output-format json >"${artifact_dir}/notary-${version}.json"
+jq -e '.status == "Accepted"' "${artifact_dir}/notary-${version}.json" >/dev/null \
+    || fail "Apple notarization did not return Accepted"
 xcrun stapler staple "${package_path}"
+xcrun stapler validate "${package_path}"
 spctl --assess --type install --verbose=4 "${package_path}"
 pkgutil --check-signature "${package_path}"
 

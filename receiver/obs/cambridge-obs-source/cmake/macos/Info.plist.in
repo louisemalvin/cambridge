@@ -3,8 +3,14 @@
     "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleExecutable</key>
+    <string>cambridge-obs-plugin</string>
     <key>CFBundleIdentifier</key>
     <string>com.cambridge.obs-plugin</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
     <key>CFBundleName</key>
     <string>CamBridge OBS Plugin</string>
     <key>CFBundleDisplayName</key>

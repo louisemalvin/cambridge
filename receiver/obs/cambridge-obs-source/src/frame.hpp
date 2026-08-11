@@ -1,6 +1,7 @@
 #pragma once
 
 #include "platform/interfaces/native_frame.hpp"
+#include "media_path.hpp"
 
 #include <cstdint>
 #include <memory>
@@ -9,11 +10,6 @@
 #include <vector>
 
 namespace cambridge {
-
-enum class FrameStorageKind {
-    CpuNv12,
-    Native,
-};
 
 enum class RenderMode {
     CpuNv12,
@@ -32,6 +28,12 @@ struct NativeFrameStorage {
 };
 
 using FrameStorage = std::variant<CpuNv12Storage, NativeFrameStorage>;
+
+inline FrameStorageKind frame_storage_kind(const FrameStorage &storage)
+{
+    return std::holds_alternative<NativeFrameStorage>(storage) ? FrameStorageKind::Native
+                                                               : FrameStorageKind::CpuNv12;
+}
 
 struct VideoFrame {
     std::uint64_t stream_generation = 0;

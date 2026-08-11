@@ -56,7 +56,7 @@ bool native_fault_requested(const char *fault_name)
 }
 #endif
 
-MacosColorMatrix color_matrix_for(AVColorSpace color_space)
+MacosColorMatrix color_matrix_for(AVColorSpace color_space, CVPixelBufferRef pixel_buffer)
 {
     switch (color_space) {
     case AVCOL_SPC_BT709:
@@ -65,16 +65,30 @@ MacosColorMatrix color_matrix_for(AVColorSpace color_space)
     case AVCOL_SPC_BT470BG:
         return MacosColorMatrix::Bt601;
     default:
+        break;
+    }
+
+    CFTypeRef matrix = CVBufferCopyAttachment(
+        pixel_buffer, kCVImageBufferYCbCrMatrixKey, nullptr);
+    if (!matrix) {
         return MacosColorMatrix::Unspecified;
     }
+    MacosColorMatrix result = MacosColorMatrix::Unspecified;
+    if (CFEqual(matrix, kCVImageBufferYCbCrMatrix_ITU_R_709_2)) {
+        result = MacosColorMatrix::Bt709;
+    } else if (CFEqual(matrix, kCVImageBufferYCbCrMatrix_ITU_R_601_4)) {
+        result = MacosColorMatrix::Bt601;
+    }
+    CFRelease(matrix);
+    return result;
 }
 
-MacosColorRange color_range_for(AVColorRange color_range)
+MacosColorRange color_range_for(OSType pixel_format)
 {
-    switch (color_range) {
-    case AVCOL_RANGE_JPEG:
+    switch (pixel_format) {
+    case kCVPixelFormatType_420YpCbCr8BiPlanarFullRange:
         return MacosColorRange::Full;
-    case AVCOL_RANGE_MPEG:
+    case kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange:
         return MacosColorRange::Limited;
     default:
         return MacosColorRange::Unspecified;
@@ -136,13 +150,14 @@ public:
             error = "decoded frame is not a configured VideoToolbox hardware frame";
             return {};
         }
-        const auto *pixel_buffer = reinterpret_cast<CVPixelBufferRef>(
+        CVPixelBufferRef pixel_buffer = reinterpret_cast<CVPixelBufferRef>(
             decoded.data[kVideoToolboxPixelBufferDataIndex]);
         if (!pixel_buffer) {
             error = "VideoToolbox frame does not contain a CVPixelBuffer";
             return {};
         }
-        if (!is_supported_pixel_format(CVPixelBufferGetPixelFormatType(pixel_buffer))) {
+        const OSType pixel_format = CVPixelBufferGetPixelFormatType(pixel_buffer);
+        if (!is_supported_pixel_format(pixel_format)) {
             error = "VideoToolbox frame is not bi-planar 4:2:0";
             return {};
         }
@@ -156,7 +171,8 @@ public:
             return {};
         }
         return std::make_shared<MacosNativeFrame>(
-            pixel_buffer, color_matrix_for(decoded.colorspace), color_range_for(decoded.color_range));
+            pixel_buffer, color_matrix_for(decoded.colorspace, pixel_buffer),
+            color_range_for(pixel_format));
     }
 
     [[nodiscard]] std::string_view decoder_name() const override { return kNativeDecoderName; }

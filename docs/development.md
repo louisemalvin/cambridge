@@ -118,7 +118,16 @@ CAMBRIDGE_REQUIRE_UNIVERSAL=OFF \
 
 The release workflow repeats this for arm64 and x86_64 and combines the
 verified slices into one universal package. The build checks `lipo` architecture
-membership and rejects unintended Homebrew load paths with `otool -L`.
+membership, validates the bundle metadata and ad hoc development signature, and
+rejects unintended Homebrew load paths with `otool -L`. The staged artifact is
+one self-contained bundle:
+
+```text
+build/cambridge-obs-plugin-macos/staging/obs-plugins/cambridge-obs-plugin.plugin
+```
+
+Its executable is under `Contents/MacOS`, while the Info.plist and compiled
+Metal library are under `Contents/Info.plist` and `Contents/Resources`.
 
 Run the native acceptance fixture with the mode required for native assertions:
 
@@ -246,12 +255,30 @@ macOS universal package named
 `cambridge-obs-plugin-<version>-macos-universal.pkg`.
 
 The macOS package script requires Developer ID application and installer
-identities plus a configured `notarytool` keychain profile. It signs the plugin
-and installer, submits the package, staples the notarization ticket, verifies
-the installed-package assessment and signature, and writes a SHA-256 checksum.
-Credentials are supplied only by the release environment or Actions secrets.
-Do not publish the macOS artifact until both physical architecture gates and a
-clean-machine install, uninstall, and reinstall have been retained.
+identities plus a configured `notarytool` keychain profile. It signs the whole
+plugin bundle and installer, submits the package, requires an `Accepted`
+notarization result, staples and validates the ticket, verifies Gatekeeper and
+package signatures, and writes a SHA-256 checksum.
+
+The release workflow imports credentials into a temporary keychain on a fresh
+runner. Configure these Actions secrets:
+
+- `CAMBRIDGE_DEVELOPER_ID_APPLICATION` and
+  `CAMBRIDGE_DEVELOPER_ID_INSTALLER`: exact signing identity names
+- `CAMBRIDGE_DEVELOPER_ID_APPLICATION_P12_BASE64` and
+  `CAMBRIDGE_DEVELOPER_ID_APPLICATION_P12_PASSWORD`
+- `CAMBRIDGE_DEVELOPER_ID_INSTALLER_P12_BASE64` and
+  `CAMBRIDGE_DEVELOPER_ID_INSTALLER_P12_PASSWORD`
+- `CAMBRIDGE_SIGNING_KEYCHAIN_PASSWORD`
+- `CAMBRIDGE_NOTARY_PROFILE`, `CAMBRIDGE_NOTARY_APPLE_ID`,
+  `CAMBRIDGE_NOTARY_TEAM_ID`, and `CAMBRIDGE_NOTARY_APP_PASSWORD`
+
+The temporary keychain and decoded PKCS#12 files are deleted after packaging.
+The tag workflow builds and publishes macOS only when the repository Actions
+variable `CAMBRIDGE_RELEASE_MACOS` is exactly `true`. Leave it unset until both
+physical architecture gates and a clean-machine install, uninstall, and
+reinstall have been retained. Android and Linux releases remain independent of
+that support gate.
 
 Signing keys and passwords belong in the release environment or GitHub Actions
 secrets, never in the repository. The packaging script writes release files

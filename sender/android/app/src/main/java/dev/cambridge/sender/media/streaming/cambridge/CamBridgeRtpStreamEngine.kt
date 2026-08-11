@@ -302,6 +302,9 @@ class CamBridgeRtpStreamEngine(
             configuration.profile.height,
         ).apply {
             setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
+            setInteger(MediaFormat.KEY_COLOR_STANDARD, MediaFormat.COLOR_STANDARD_BT709)
+            setInteger(MediaFormat.KEY_COLOR_RANGE, MediaFormat.COLOR_RANGE_LIMITED)
+            setInteger(MediaFormat.KEY_COLOR_TRANSFER, MediaFormat.COLOR_TRANSFER_SDR_VIDEO)
             setInteger(MediaFormat.KEY_BIT_RATE, configuration.bitrateBps)
             setInteger(MediaFormat.KEY_FRAME_RATE, configuration.profile.fps)
             setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, configuration.keyframeIntervalSeconds)
@@ -317,6 +320,9 @@ class CamBridgeRtpStreamEngine(
             "encoder_configuration_requested",
             mapOf(
                 "mime" to H264_MIME_TYPE,
+                "colorStandard" to MediaFormat.COLOR_STANDARD_BT709,
+                "colorRange" to MediaFormat.COLOR_RANGE_LIMITED,
+                "colorTransfer" to MediaFormat.COLOR_TRANSFER_SDR_VIDEO,
                 "width" to configuration.profile.width,
                 "height" to configuration.profile.height,
                 "fps" to configuration.profile.fps,

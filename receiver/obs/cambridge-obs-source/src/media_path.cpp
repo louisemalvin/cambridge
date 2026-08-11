@@ -1,5 +1,7 @@
 #include "media_path.hpp"
 
+#include <utility>
+
 namespace cambridge {
 namespace {
 
@@ -58,6 +60,54 @@ MediaPathDecision decide_media_path(DecoderMode requested_mode,
         return {SessionMediaPath::Failed, false, {}, "native_required_unavailable:" + reason};
     }
     return {SessionMediaPath::Failed, false, {}, "native_setup_failed:" + reason};
+}
+
+bool frame_storage_matches_media_path(SessionMediaPath path, FrameStorageKind storage_kind)
+{
+    if (path == SessionMediaPath::Native) {
+        return storage_kind == FrameStorageKind::Native;
+    }
+    if (path == SessionMediaPath::Software) {
+        return storage_kind == FrameStorageKind::CpuNv12;
+    }
+    return false;
+}
+
+void PendingMediaPathFailureQueue::activate(std::uint64_t stream_generation)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    active_generation_ = stream_generation;
+    pending_.reset();
+}
+
+void PendingMediaPathFailureQueue::deactivate()
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    active_generation_ = kInactiveStreamGeneration;
+    pending_.reset();
+}
+
+bool PendingMediaPathFailureQueue::post(PendingMediaPathFailure failure)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (failure.stream_generation == kInactiveStreamGeneration ||
+        failure.stream_generation != active_generation_ || pending_) {
+        return false;
+    }
+    pending_ = std::move(failure);
+    return true;
+}
+
+std::optional<PendingMediaPathFailure> PendingMediaPathFailureQueue::take()
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!pending_ || pending_->stream_generation != active_generation_) {
+        pending_.reset();
+        return std::nullopt;
+    }
+    std::optional<PendingMediaPathFailure> result = std::move(pending_);
+    pending_.reset();
+    return result;
 }
 
 std::string_view decoder_mode_name(DecoderMode mode)

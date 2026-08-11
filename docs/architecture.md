@@ -85,7 +85,11 @@ stop messages. The media plane carries H.264 access units as RFC 6184 RTP
 packets over UDP.
 
 The two planes share a session ID and generation. The receiver rejects stale
-or incompatible sessions before presenting their frames.
+or incompatible sessions before presenting their frames. Start, replacement,
+failure, disconnect, and stop pass through one serialized lifecycle boundary.
+The bounded failure queue accepts only the first failure for the active
+generation, so a delayed callback from an old decoder or renderer cannot end a
+newer session.
 
 ### Linux OBS receiver
 

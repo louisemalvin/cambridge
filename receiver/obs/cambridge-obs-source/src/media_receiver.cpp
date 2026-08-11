@@ -25,6 +25,7 @@ constexpr int kSocketType = SOCK_DGRAM;
 constexpr int kSocketProtocol = IPPROTO_UDP;
 constexpr int kSocketReuseEnabled = 1;
 constexpr std::size_t kMinimumReceiveBufferBytes = 64 * 1024;
+constexpr std::uint64_t kNanosecondsPerSecond = 1'000'000'000ULL;
 
 std::string address_string(const sockaddr_in &address)
 {
@@ -39,7 +40,7 @@ std::uint64_t monotonic_time_ns()
 {
     timespec time{};
     clock_gettime(CLOCK_MONOTONIC, &time);
-    return static_cast<std::uint64_t>(time.tv_sec) * 1'000'000'000ULL +
+    return static_cast<std::uint64_t>(time.tv_sec) * kNanosecondsPerSecond +
            static_cast<std::uint64_t>(time.tv_nsec);
 }
 

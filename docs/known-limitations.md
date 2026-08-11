@@ -43,8 +43,9 @@ The macOS path is VideoToolbox → retained IOSurface-backed NV12 → one Metal
 NV12-to-BGRA conversion → bounded IOSurface pool → OBS texture. It is built for
 macOS 12+ arm64 and x86_64, but no macOS support claim is made until the native
 fixture, Bonjour lifecycle, rotation, soak, and clean-install gates pass on both
-architectures. If local-network access is denied, Bonjour discovery is degraded;
-manual receiver addressing remains available.
+architectures. The signed package is release-gated and is not added to tagged
+releases until those checks pass. If local-network access is denied, Bonjour
+discovery is degraded; manual receiver addressing remains available.
 
 ## iOS sender status
 

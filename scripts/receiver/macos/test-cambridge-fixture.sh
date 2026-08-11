@@ -38,13 +38,13 @@ recording_hashes="${artifact_dir}/recording.framemd5"
 diagnostics_path="${artifact_dir}/diagnostics.json"
 recording_file=""
 
-obs_plugin_dir="${obs_config}/plugins/cambridge-obs-plugin/bin/64bit"
-plugin_so="${build_dir}/staging/obs-plugins/cambridge-obs-plugin/bin/64bit/cambridge-obs-plugin.so"
-metallib="${build_dir}/staging/obs-plugins/cambridge-obs-plugin/bin/64bit/nv12_to_bgra.metallib"
-plugin_backup="${artifact_dir}/cambridge-obs-plugin.so.backup"
-metallib_backup="${artifact_dir}/nv12_to_bgra.metallib.backup"
+obs_plugin_dir="${obs_config}/plugins"
+obs_plugin_bundle="${obs_plugin_dir}/cambridge-obs-plugin.plugin"
+staged_plugin_bundle="${build_dir}/staging/obs-plugins/cambridge-obs-plugin.plugin"
+plugin_binary="${staged_plugin_bundle}/Contents/MacOS/cambridge-obs-plugin"
+metallib="${staged_plugin_bundle}/Contents/Resources/nv12_to_bgra.metallib"
+plugin_backup="${artifact_dir}/cambridge-obs-plugin.plugin.backup"
 plugin_was_present=0
-metallib_was_present=0
 obs_files_touched=0
 scene_created=0
 profile_created=0
@@ -76,15 +76,9 @@ stop_obs() {
 restore_obs_files() {
     stop_obs
     if [[ "${obs_files_touched}" == "1" ]]; then
+        rm -rf "${obs_plugin_bundle}"
         if [[ "${plugin_was_present}" == "1" ]]; then
-            mv -f "${plugin_backup}" "${obs_plugin_dir}/cambridge-obs-plugin.so"
-        else
-            rm -f "${obs_plugin_dir}/cambridge-obs-plugin.so"
-        fi
-        if [[ "${metallib_was_present}" == "1" ]]; then
-            mv -f "${metallib_backup}" "${obs_plugin_dir}/nv12_to_bgra.metallib"
-        else
-            rm -f "${obs_plugin_dir}/nv12_to_bgra.metallib"
+            mv -f "${plugin_backup}" "${obs_plugin_bundle}"
         fi
     fi
     if [[ "${scene_created}" == "1" ]]; then
@@ -147,22 +141,18 @@ media_port=${CAMBRIDGE_MEDIA_PORT:-$((control_port + media_port_offset))}
 
 "${repo_root}/scripts/receiver/macos/build-cambridge-obs-plugin.sh" \
     >"${artifact_dir}/plugin-build.log"
-[[ -f "${plugin_so}" ]] || fail "staged OBS plugin is missing: ${plugin_so}"
+[[ -d "${staged_plugin_bundle}" ]] || fail "staged OBS plugin bundle is missing: ${staged_plugin_bundle}"
+[[ -f "${plugin_binary}" ]] || fail "staged OBS plugin binary is missing: ${plugin_binary}"
 [[ -f "${metallib}" ]] || fail "staged Metal library is missing: ${metallib}"
 
 mkdir -p "${obs_plugin_dir}" "${obs_config}/basic/scenes" "${obs_config}/basic/profiles/${profile_id}"
 obs_files_touched=1
 profile_created=1
-if [[ -e "${obs_plugin_dir}/cambridge-obs-plugin.so" ]]; then
-    mv "${obs_plugin_dir}/cambridge-obs-plugin.so" "${plugin_backup}"
+if [[ -e "${obs_plugin_bundle}" ]]; then
+    mv "${obs_plugin_bundle}" "${plugin_backup}"
     plugin_was_present=1
 fi
-if [[ -e "${obs_plugin_dir}/nv12_to_bgra.metallib" ]]; then
-    mv "${obs_plugin_dir}/nv12_to_bgra.metallib" "${metallib_backup}"
-    metallib_was_present=1
-fi
-cp "${plugin_so}" "${obs_plugin_dir}/cambridge-obs-plugin.so"
-cp "${metallib}" "${obs_plugin_dir}/nv12_to_bgra.metallib"
+cp -R "${staged_plugin_bundle}" "${obs_plugin_bundle}"
 
 jq --arg decoder_mode "${decoder_mode}" \
     --arg collection_id "${collection_id}" \
@@ -361,5 +351,5 @@ printf 'duration_seconds=%s\n' "${duration_seconds}"
 printf 'control=%s\n' "${control_port}"
 printf 'media=%s\n' "${media_port}"
 printf 'module_sha256='
-shasum -a 256 "${plugin_so}" | awk '{print $1}'
+shasum -a 256 "${plugin_binary}" | awk '{print $1}'
 printf 'artifacts=%s\n' "${artifact_dir}"

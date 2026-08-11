@@ -32,13 +32,18 @@ const int kQuarterTurnOne = 1;
 const int kQuarterTurnTwo = 2;
 const int kQuarterTurnThree = 3;
 const float kUnitCoordinate = 1.0;
-const float kChromaCenter = 0.5;
+const float kFullRangeChromaCenter = 0.5;
+const float kVideoRangeChromaCenter = 128.0 / 255.0;
 const float kVideoRangeLumaOffset = 16.0 / 255.0;
 const float kVideoRangeLumaScale = 1.16438356;
 const float kBt709RedCoefficient = 1.5748;
 const float kBt709GreenBlueCoefficient = 0.1873;
 const float kBt709GreenRedCoefficient = 0.4681;
 const float kBt709BlueCoefficient = 1.8556;
+const float kBt709LimitedRedCoefficient = 1.79274107;
+const float kBt709LimitedGreenBlueCoefficient = 0.21324866;
+const float kBt709LimitedGreenRedCoefficient = 0.53290960;
+const float kBt709LimitedBlueCoefficient = 2.11240179;
 
 
 sampler_state def_sampler {
@@ -74,12 +79,21 @@ float4 PSNv12(VertInOut vert_in) : TARGET
     float2 uv = image1.Sample(def_sampler, sample_uv).rg;
     if (!full_range) {
         y = (y - kVideoRangeLumaOffset) * kVideoRangeLumaScale;
+        uv -= float2(kVideoRangeChromaCenter, kVideoRangeChromaCenter);
+    } else {
+        uv -= float2(kFullRangeChromaCenter, kFullRangeChromaCenter);
     }
-    uv -= float2(kChromaCenter, kChromaCenter);
     float3 rgb;
-    rgb.r = y + kBt709RedCoefficient * uv.y;
-    rgb.g = y - kBt709GreenBlueCoefficient * uv.x - kBt709GreenRedCoefficient * uv.y;
-    rgb.b = y + kBt709BlueCoefficient * uv.x;
+    if (full_range) {
+        rgb.r = y + kBt709RedCoefficient * uv.y;
+        rgb.g = y - kBt709GreenBlueCoefficient * uv.x - kBt709GreenRedCoefficient * uv.y;
+        rgb.b = y + kBt709BlueCoefficient * uv.x;
+    } else {
+        rgb.r = y + kBt709LimitedRedCoefficient * uv.y;
+        rgb.g = y - kBt709LimitedGreenBlueCoefficient * uv.x -
+            kBt709LimitedGreenRedCoefficient * uv.y;
+        rgb.b = y + kBt709LimitedBlueCoefficient * uv.x;
+    }
     return float4(rgb, kUnitCoordinate);
 }
 
@@ -153,6 +167,7 @@ void Renderer::report(const std::string &event)
 
 std::string Renderer::render_mode() const
 {
+    std::lock_guard<std::mutex> lock(render_mode_mutex_);
     return active_render_mode_;
 }
 
@@ -210,8 +225,9 @@ void Renderer::discard_prepared_native_session()
 
 void Renderer::activate_session_media_path(SessionMediaPath path)
 {
-    active_media_path_ = path;
-    failed_generation_ = 0;
+    active_media_path_.store(path);
+    failed_generation_.store(kInactiveStreamGeneration);
+    std::lock_guard<std::mutex> lock(render_mode_mutex_);
     active_render_mode_ = "placeholder";
 }
 
@@ -228,8 +244,9 @@ void Renderer::end_session()
         obs_leave_graphics();
     }
     next_slot_ = 0;
-    active_media_path_ = SessionMediaPath::Unselected;
-    failed_generation_ = 0;
+    active_media_path_.store(SessionMediaPath::Unselected);
+    failed_generation_.store(kInactiveStreamGeneration);
+    std::lock_guard<std::mutex> lock(render_mode_mutex_);
     active_render_mode_ = "placeholder";
 }
 
@@ -324,34 +341,46 @@ bool Renderer::update_native_slot(TextureSlot &slot, const VideoFramePtr &frame)
 
 bool Renderer::update_slot(TextureSlot &slot, const VideoFramePtr &frame)
 {
-    if (!frame || active_media_path_ == SessionMediaPath::Unselected ||
-        active_media_path_ == SessionMediaPath::Failed) {
+    const SessionMediaPath active_media_path = active_media_path_.load();
+    if (!frame || active_media_path == SessionMediaPath::Unselected ||
+        active_media_path == SessionMediaPath::Failed) {
         return false;
     }
-    if (failed_generation_ == frame->stream_generation) {
+    if (failed_generation_.load() == frame->stream_generation) {
         return false;
     }
-    if (active_media_path_ == SessionMediaPath::Native) {
-        if (!std::holds_alternative<NativeFrameStorage>(frame->storage)) {
+    if (!frame_storage_matches_media_path(active_media_path, frame_storage_kind(frame->storage))) {
+        if (active_media_path == SessionMediaPath::Native) {
             fail(frame, MediaPathFailureCode::NativeImport, "native session received CPU frame storage");
-            return false;
+        } else {
+            fail(frame, MediaPathFailureCode::SoftwareUpload,
+                 "software session received native frame storage");
         }
+        return false;
+    }
+    if (active_media_path == SessionMediaPath::Native) {
         if (update_native_slot(slot, frame)) {
-            if (active_render_mode_ != kNativeRenderMode) {
+            bool mode_changed = false;
+            {
+                std::lock_guard<std::mutex> lock(render_mode_mutex_);
+                mode_changed = active_render_mode_ != kNativeRenderMode;
                 active_render_mode_ = kNativeRenderMode;
+            }
+            if (mode_changed) {
                 report("render_mode=native");
             }
             return true;
         }
         return false;
     }
-    if (!std::holds_alternative<CpuNv12Storage>(frame->storage)) {
-        fail(frame, MediaPathFailureCode::SoftwareUpload, "software session received native frame storage");
-        return false;
-    }
     if (update_cpu_slot(slot, frame)) {
-        if (active_render_mode_ != kSoftwareRenderMode) {
+        bool mode_changed = false;
+        {
+            std::lock_guard<std::mutex> lock(render_mode_mutex_);
+            mode_changed = active_render_mode_ != kSoftwareRenderMode;
             active_render_mode_ = kSoftwareRenderMode;
+        }
+        if (mode_changed) {
             report("render_mode=software");
         }
         return true;
@@ -362,10 +391,19 @@ bool Renderer::update_slot(TextureSlot &slot, const VideoFramePtr &frame)
 
 void Renderer::fail(const VideoFramePtr &frame, MediaPathFailureCode code, const std::string &detail)
 {
-    if (!frame || failed_generation_ == frame->stream_generation) {
+    if (!frame) {
         return;
     }
-    failed_generation_ = frame->stream_generation;
+    std::uint64_t failed_generation = failed_generation_.load();
+    while (failed_generation != frame->stream_generation) {
+        if (failed_generation_.compare_exchange_weak(failed_generation,
+                                                     frame->stream_generation)) {
+            break;
+        }
+    }
+    if (failed_generation == frame->stream_generation) {
+        return;
+    }
     import_failures_.fetch_add(code == MediaPathFailureCode::NativeImport ? 1U : 0U);
     if (on_failure_) {
         on_failure_(frame->stream_generation, code, detail);
@@ -386,6 +424,7 @@ void Renderer::draw_placeholder(std::uint32_t output_width, std::uint32_t output
     while (gs_effect_loop(effect, "Draw")) {
         gs_draw_sprite(placeholder_, kNoFlip, output_width, output_height);
     }
+    std::lock_guard<std::mutex> lock(render_mode_mutex_);
     active_render_mode_ = "placeholder";
 }
 
@@ -450,8 +489,9 @@ void Renderer::draw_bgra(const TextureSlot &slot, std::uint32_t output_width,
 bool Renderer::render(const VideoFramePtr &frame, std::uint32_t output_width, std::uint32_t output_height)
 {
     ensure_graphics_resources();
-    if (!frame || frame->frame_generation == 0 || active_media_path_ == SessionMediaPath::Unselected ||
-        active_media_path_ == SessionMediaPath::Failed) {
+    const SessionMediaPath active_media_path = active_media_path_.load();
+    if (!frame || frame->frame_generation == 0 || active_media_path == SessionMediaPath::Unselected ||
+        active_media_path == SessionMediaPath::Failed) {
         draw_placeholder(output_width, output_height);
         return false;
     }
@@ -474,7 +514,7 @@ bool Renderer::render(const VideoFramePtr &frame, std::uint32_t output_width, st
             return false;
         }
     }
-    if (active_media_path_ == SessionMediaPath::Native && slot->imported_texture) {
+    if (active_media_path == SessionMediaPath::Native && slot->imported_texture) {
         draw_native(*slot, output_width, output_height);
     } else {
         draw_cpu(*slot, output_width, output_height, frame->color_range == "full", frame->rotation_degrees);
@@ -515,8 +555,10 @@ void Renderer::reset()
         importer_->reset();
     }
     graphics_resources_ready_ = false;
-    active_media_path_ = SessionMediaPath::Unselected;
-    failed_generation_ = 0;
+    active_media_path_.store(SessionMediaPath::Unselected);
+    failed_generation_.store(kInactiveStreamGeneration);
+    std::lock_guard<std::mutex> lock(render_mode_mutex_);
+    active_render_mode_ = "placeholder";
 }
 
 } // namespace cambridge

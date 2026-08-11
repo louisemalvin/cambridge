@@ -81,6 +81,7 @@ jobs:
             build/release/*.tar.gz.sha256
 
   macos-build:
+    if: vars.CAMBRIDGE_RELEASE_MACOS == 'true'
     needs: verify-version
     strategy:
       fail-fast: false
@@ -111,18 +112,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          plugin="build/cambridge-obs-plugin-macos-release/staging/obs-plugins/cambridge-obs-plugin/bin/64bit/cambridge-obs-plugin.so"
-          metallib="build/cambridge-obs-plugin-macos-release/staging/obs-plugins/cambridge-obs-plugin/bin/64bit/nv12_to_bgra.metallib"
+          bundle="build/cambridge-obs-plugin-macos-release/staging/obs-plugins/cambridge-obs-plugin.plugin"
+          plugin="${bundle}/Contents/MacOS/cambridge-obs-plugin"
           lipo -verify_arch "${CAMBRIDGE_ARCHITECTURE}" "${plugin}"
           mkdir -p "dist/${CAMBRIDGE_ARCHITECTURE}"
-          cp "${plugin}" "dist/${CAMBRIDGE_ARCHITECTURE}/cambridge-obs-plugin.so"
-          cp "${metallib}" "dist/${CAMBRIDGE_ARCHITECTURE}/nv12_to_bgra.metallib"
+          cp -R "${bundle}" "dist/${CAMBRIDGE_ARCHITECTURE}/cambridge-obs-plugin.plugin"
       - uses: actions/upload-artifact@v4
         with:
           name: macos-plugin-${{ matrix.architecture }}
           path: dist/${{ matrix.architecture }}/
 
   macos-package:
+    if: vars.CAMBRIDGE_RELEASE_MACOS == 'true'
     needs: macos-build
     runs-on: macos-15
     steps:
@@ -135,6 +136,56 @@ jobs:
         with:
           name: macos-plugin-x86_64
           path: dist-input/x86_64
+      - name: Import macOS signing identities and configure notarization
+        env:
+          CAMBRIDGE_APPLICATION_P12_BASE64: ${{ secrets.CAMBRIDGE_DEVELOPER_ID_APPLICATION_P12_BASE64 }}
+          CAMBRIDGE_APPLICATION_P12_PASSWORD: ${{ secrets.CAMBRIDGE_DEVELOPER_ID_APPLICATION_P12_PASSWORD }}
+          CAMBRIDGE_INSTALLER_P12_BASE64: ${{ secrets.CAMBRIDGE_DEVELOPER_ID_INSTALLER_P12_BASE64 }}
+          CAMBRIDGE_INSTALLER_P12_PASSWORD: ${{ secrets.CAMBRIDGE_DEVELOPER_ID_INSTALLER_P12_PASSWORD }}
+          CAMBRIDGE_KEYCHAIN_PASSWORD: ${{ secrets.CAMBRIDGE_SIGNING_KEYCHAIN_PASSWORD }}
+          CAMBRIDGE_NOTARY_PROFILE: ${{ secrets.CAMBRIDGE_NOTARY_PROFILE }}
+          CAMBRIDGE_NOTARY_APPLE_ID: ${{ secrets.CAMBRIDGE_NOTARY_APPLE_ID }}
+          CAMBRIDGE_NOTARY_TEAM_ID: ${{ secrets.CAMBRIDGE_NOTARY_TEAM_ID }}
+          CAMBRIDGE_NOTARY_APP_PASSWORD: ${{ secrets.CAMBRIDGE_NOTARY_APP_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          required_values=(
+            "${CAMBRIDGE_APPLICATION_P12_BASE64}"
+            "${CAMBRIDGE_APPLICATION_P12_PASSWORD}"
+            "${CAMBRIDGE_INSTALLER_P12_BASE64}"
+            "${CAMBRIDGE_INSTALLER_P12_PASSWORD}"
+            "${CAMBRIDGE_KEYCHAIN_PASSWORD}"
+            "${CAMBRIDGE_NOTARY_PROFILE}"
+            "${CAMBRIDGE_NOTARY_APPLE_ID}"
+            "${CAMBRIDGE_NOTARY_TEAM_ID}"
+            "${CAMBRIDGE_NOTARY_APP_PASSWORD}"
+          )
+          for required_value in "${required_values[@]}"; do
+            test -n "${required_value}"
+          done
+          keychain_path="${RUNNER_TEMP}/cambridge-signing.keychain-db"
+          application_p12="${RUNNER_TEMP}/cambridge-application.p12"
+          installer_p12="${RUNNER_TEMP}/cambridge-installer.p12"
+          printf '%s' "${CAMBRIDGE_APPLICATION_P12_BASE64}" | base64 -D >"${application_p12}"
+          printf '%s' "${CAMBRIDGE_INSTALLER_P12_BASE64}" | base64 -D >"${installer_p12}"
+          security create-keychain -p "${CAMBRIDGE_KEYCHAIN_PASSWORD}" "${keychain_path}"
+          security set-keychain-settings -lut 21600 "${keychain_path}"
+          security unlock-keychain -p "${CAMBRIDGE_KEYCHAIN_PASSWORD}" "${keychain_path}"
+          security import "${application_p12}" -k "${keychain_path}" \
+            -P "${CAMBRIDGE_APPLICATION_P12_PASSWORD}" -T /usr/bin/codesign
+          security import "${installer_p12}" -k "${keychain_path}" \
+            -P "${CAMBRIDGE_INSTALLER_P12_PASSWORD}" -T /usr/bin/pkgbuild \
+            -T /usr/bin/productbuild
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s \
+            -k "${CAMBRIDGE_KEYCHAIN_PASSWORD}" "${keychain_path}"
+          security list-keychains -d user -s "${keychain_path}"
+          xcrun notarytool store-credentials "${CAMBRIDGE_NOTARY_PROFILE}" \
+            --apple-id "${CAMBRIDGE_NOTARY_APPLE_ID}" \
+            --team-id "${CAMBRIDGE_NOTARY_TEAM_ID}" \
+            --password "${CAMBRIDGE_NOTARY_APP_PASSWORD}" \
+            --keychain "${keychain_path}"
+          printf 'CAMBRIDGE_NOTARY_KEYCHAIN=%s\n' "${keychain_path}" >>"${GITHUB_ENV}"
       - name: Assemble, sign, notarize, and staple macOS universal package
         env:
           CAMBRIDGE_BUILD_DIR: build/cambridge-obs-plugin-macos-release
@@ -146,14 +197,27 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          plugin_dir="${CAMBRIDGE_STAGING_DIR}/obs-plugins/cambridge-obs-plugin/bin/64bit"
-          mkdir -p "${plugin_dir}"
+          plugin_bundle="${CAMBRIDGE_STAGING_DIR}/obs-plugins/cambridge-obs-plugin.plugin"
+          plugin_binary="${plugin_bundle}/Contents/MacOS/cambridge-obs-plugin"
+          mkdir -p "${CAMBRIDGE_STAGING_DIR}/obs-plugins"
+          cp -R dist-input/arm64/cambridge-obs-plugin.plugin "${plugin_bundle}"
           lipo -create \
-            dist-input/arm64/cambridge-obs-plugin.so \
-            dist-input/x86_64/cambridge-obs-plugin.so \
-            -output "${plugin_dir}/cambridge-obs-plugin.so"
-          cp dist-input/arm64/nv12_to_bgra.metallib "${plugin_dir}/nv12_to_bgra.metallib"
+            dist-input/arm64/cambridge-obs-plugin.plugin/Contents/MacOS/cambridge-obs-plugin \
+            dist-input/x86_64/cambridge-obs-plugin.plugin/Contents/MacOS/cambridge-obs-plugin \
+            -output "${plugin_binary}"
           ./scripts/release/package-macos-plugin.sh
+      - name: Remove temporary macOS signing material
+        if: always()
+        env:
+          CAMBRIDGE_KEYCHAIN_PASSWORD: ${{ secrets.CAMBRIDGE_SIGNING_KEYCHAIN_PASSWORD }}
+        shell: bash
+        run: |
+          keychain_path="${RUNNER_TEMP}/cambridge-signing.keychain-db"
+          if [[ -e "${keychain_path}" ]]; then
+            security delete-keychain "${keychain_path}"
+          fi
+          rm -f "${RUNNER_TEMP}/cambridge-application.p12" \
+            "${RUNNER_TEMP}/cambridge-installer.p12"
       - uses: actions/upload-artifact@v4
         with:
           name: macos-universal-release
@@ -162,10 +226,16 @@ jobs:
             build/release/*.pkg.sha256
 
   publish:
-    if: github.ref_type == 'tag'
+    if: >-
+      always() && github.ref_type == 'tag' &&
+      needs.android.result == 'success' &&
+      needs.native.result == 'success' &&
+      ((needs.macos-build.result == 'skipped' && needs.macos-package.result == 'skipped') ||
+       (needs.macos-build.result == 'success' && needs.macos-package.result == 'success'))
     needs:
       - android
       - native
+      - macos-build
       - macos-package
     runs-on: ubuntu-latest
     steps:

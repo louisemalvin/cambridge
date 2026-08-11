@@ -83,8 +83,10 @@ ssize_t send_without_sigpipe(int socket_descriptor, const void *data, std::size_
     return send(socket_descriptor, data, size, flags | MSG_NOSIGNAL);
 #elif defined(__APPLE__)
     constexpr int kSigpipeDisabled = 1;
-    setsockopt(socket_descriptor, SOL_SOCKET, SO_NOSIGPIPE, &kSigpipeDisabled,
-               sizeof(kSigpipeDisabled));
+    if (setsockopt(socket_descriptor, SOL_SOCKET, SO_NOSIGPIPE, &kSigpipeDisabled,
+                   sizeof(kSigpipeDisabled)) != 0) {
+        return -1;
+    }
     return send(socket_descriptor, data, size, flags);
 #endif
 }

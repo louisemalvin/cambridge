@@ -9,9 +9,15 @@
   and signed/notarized package paths. macOS remains an acceptance candidate and
   is not marked as supported until the physical architecture and clean-machine
   gates pass.
+- Packaged the macOS receiver as one OBS `.plugin` bundle containing its
+  permission metadata and compiled Metal resource, with explicit fresh-runner
+  signing and notarization setup.
 - Made native decode, conversion, import, and bounded-pool failures terminal
   for the active session; the deprecated `hardwareCpuTransfers` diagnostic is
   always zero.
+- Serialized receiver session replacement and made decoder/renderer failures
+  generation-scoped so stale callbacks cannot stop a newer stream. Tightened
+  DMA-BUF object bounds and NV12 pitch validation on Linux.
 
 ## 0.3.0 — Sender-owned video modes and resilient receiver discovery
 

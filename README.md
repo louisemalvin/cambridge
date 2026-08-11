@@ -41,7 +41,7 @@ with hardware-accelerated decoding where supported.
 | Sender | Receiver | Status |
 | --- | --- | --- |
 | Android | Linux x86_64/amd64 + OBS Studio | Supported |
-| Android | macOS 12+ + OBS Studio | Implementation and CI in progress; physical acceptance pending |
+| Android | macOS 12+ + OBS Studio | Implementation present; physical acceptance pending |
 
 An iOS sender and Windows and ARM Linux receivers are not currently supported.
 The macOS receiver is not a supported downloadable product until its arm64 and

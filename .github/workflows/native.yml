@@ -64,8 +64,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          plugin="build/cambridge-obs-plugin-macos/staging/obs-plugins/cambridge-obs-plugin/bin/64bit/cambridge-obs-plugin.so"
+          bundle="build/cambridge-obs-plugin-macos/staging/obs-plugins/cambridge-obs-plugin.plugin"
+          plugin="${bundle}/Contents/MacOS/cambridge-obs-plugin"
+          metallib="${bundle}/Contents/Resources/nv12_to_bgra.metallib"
+          plist="${bundle}/Contents/Info.plist"
+          test -d "${bundle}"
           test -f "${plugin}"
+          test -f "${metallib}"
+          plutil -lint "${plist}"
+          codesign --verify --strict --verbose=2 "${bundle}"
           lipo -verify_arch "${CAMBRIDGE_ARCHITECTURE}" "${plugin}"
           if otool -L "${plugin}" | grep -Eq '/opt/homebrew|/usr/local/opt|/usr/local/Cellar|/opt/homebrew/Cellar'; then
             echo "unexpected Homebrew load command in ${plugin}" >&2

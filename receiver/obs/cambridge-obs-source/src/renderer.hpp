@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <string>
 
 extern "C" {
@@ -78,8 +79,9 @@ private:
     gs_texture_t *placeholder_ = nullptr;
     gs_effect_t *nv12_effect_ = nullptr;
     bool graphics_resources_ready_ = false;
-    SessionMediaPath active_media_path_ = SessionMediaPath::Unselected;
-    std::uint64_t failed_generation_ = 0;
+    std::atomic<SessionMediaPath> active_media_path_{SessionMediaPath::Unselected};
+    std::atomic<std::uint64_t> failed_generation_{kInactiveStreamGeneration};
+    mutable std::mutex render_mode_mutex_;
     std::string active_render_mode_ = "placeholder";
     std::atomic<std::uint64_t> import_failures_{0};
     std::atomic<std::uint64_t> gpu_copies_{0};

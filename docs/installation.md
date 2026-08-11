@@ -59,7 +59,9 @@ There is no supported macOS package to install from the current public release.
 Maintainers may use the development build and release-package workflow on
 validated macOS hosts, but should not treat a software-rendered fixture or a
 successful compile as macOS support. When the physical gates pass, the package
-will use the same source IDs and manual-address fallback as Linux.
+will install one `cambridge-obs-plugin.plugin` bundle under
+`/Library/Application Support/obs-studio/plugins` and will use the same source
+IDs and manual-address fallback as Linux.
 
 ## Start a stream
 

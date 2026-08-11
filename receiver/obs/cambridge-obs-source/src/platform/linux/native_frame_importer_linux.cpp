@@ -21,6 +21,7 @@ constexpr std::uint32_t kNv12ChromaColumnsDivisor = 2;
 constexpr std::uint32_t kNv12ChromaRowsDivisor = 2;
 constexpr std::uint32_t kUnsetDimension = 0;
 constexpr std::uint64_t kNoGpuCopies = 0;
+constexpr std::array<std::uint32_t, kNv12PlaneCount> kBytesPerTexel = {1, 2};
 
 class LinuxImportedNativeTexture final : public ImportedNativeTexture {
 public:
@@ -138,12 +139,31 @@ public:
                 return {nullptr, kNoGpuCopies, "DMA-BUF plane object is out of range"};
             }
             const AVDRMObjectDescriptor &object = descriptor->objects[plane_descriptor.object_index];
+            const std::uint64_t plane_width = plane_widths[plane];
+            const std::uint64_t plane_height = plane_heights[plane];
+            const std::uint64_t bytes_per_texel = kBytesPerTexel[plane];
+            if (plane_width > std::numeric_limits<std::uint32_t>::max() / bytes_per_texel) {
+                return {nullptr, kNoGpuCopies, "DMA-BUF plane row size is invalid"};
+            }
+            const std::uint64_t minimum_pitch = plane_width * bytes_per_texel;
             if (object.fd < 0 || plane_descriptor.pitch <= 0 || plane_descriptor.offset < 0 ||
                 object.format_modifier == DRM_FORMAT_MOD_INVALID ||
-                static_cast<std::uint64_t>(plane_descriptor.pitch) < plane_widths[plane] ||
+                static_cast<std::uint64_t>(plane_descriptor.pitch) < minimum_pitch ||
                 static_cast<std::uint64_t>(plane_descriptor.pitch) > std::numeric_limits<std::uint32_t>::max() ||
                 static_cast<std::uint64_t>(plane_descriptor.offset) > std::numeric_limits<std::uint32_t>::max()) {
                 return {nullptr, kNoGpuCopies, "DMA-BUF plane metadata is invalid"};
+            }
+            const std::uint64_t pitch = static_cast<std::uint64_t>(plane_descriptor.pitch);
+            const std::uint64_t offset = static_cast<std::uint64_t>(plane_descriptor.offset);
+            const std::uint64_t rows_after_first = plane_height - 1U;
+            if (rows_after_first >
+                (std::numeric_limits<std::uint64_t>::max() - minimum_pitch) / pitch) {
+                return {nullptr, kNoGpuCopies, "DMA-BUF plane extent overflows"};
+            }
+            const std::uint64_t plane_extent = rows_after_first * pitch + minimum_pitch;
+            const std::uint64_t object_size = static_cast<std::uint64_t>(object.size);
+            if (object_size == 0 || offset > object_size || plane_extent > object_size - offset) {
+                return {nullptr, kNoGpuCopies, "DMA-BUF plane exceeds its object"};
             }
             fds[plane] = object.fd;
             strides[plane] = static_cast<std::uint32_t>(plane_descriptor.pitch);

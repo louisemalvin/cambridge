@@ -65,6 +65,16 @@ void test_send_without_sigpipe_transfers_bytes()
     close(sockets[1]);
 }
 
+void test_send_without_sigpipe_survives_closed_peer()
+{
+    int sockets[2]{};
+    require(socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) == 0);
+    close(sockets[1]);
+    const char payload = 'x';
+    require(cambridge::posix::send_without_sigpipe(sockets[0], &payload, sizeof(payload), 0) < 0);
+    close(sockets[0]);
+}
+
 void test_udp_loopback_transfers_bytes()
 {
     std::string error;
@@ -145,6 +155,7 @@ int main()
 {
     test_socket_creation_and_accept_are_close_on_exec();
     test_send_without_sigpipe_transfers_bytes();
+    test_send_without_sigpipe_survives_closed_peer();
     test_udp_loopback_transfers_bytes();
     test_tcp_shutdown_is_clean();
     test_thread_name_helper_is_callable();

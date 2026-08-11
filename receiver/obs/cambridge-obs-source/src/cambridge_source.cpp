@@ -51,6 +51,8 @@ constexpr std::uint32_t kDeadlineStep = 1;
 constexpr std::uint32_t kQueueAgeStep = 1;
 constexpr std::uint32_t kLiveAgeStep = 1;
 constexpr std::uint32_t kMailboxCapacity = contract::kMailboxCapacity;
+constexpr std::uint32_t kQuarterTurnDegrees = 90;
+constexpr std::uint32_t kThreeQuarterTurnDegrees = 270;
 constexpr std::uint32_t kModuleProtocolVersion = contract::kProtocolVersion;
 constexpr char kModuleVersion[] = CAMBRIDGE_VERSION;
 constexpr char kPropertyControlPort[] = "control_port";
@@ -391,7 +393,8 @@ bool CamBridgeSource::on_hello(const HelloMessage &hello, const std::string &pee
     const auto short_edge = [](std::uint32_t width, std::uint32_t height) {
         return std::min(width, height);
     };
-    const bool swaps_geometry = hello.rotation_degrees == 90 || hello.rotation_degrees == 270;
+    const bool swaps_geometry = hello.rotation_degrees == kQuarterTurnDegrees ||
+                                hello.rotation_degrees == kThreeQuarterTurnDegrees;
     const std::uint32_t display_width = swaps_geometry ? hello.coded_height : hello.coded_width;
     const std::uint32_t display_height = swaps_geometry ? hello.coded_width : hello.coded_height;
     if (hello.codec != contract::kCodecH264 ||
@@ -402,7 +405,8 @@ bool CamBridgeSource::on_hello(const HelloMessage &hello, const std::string &pee
         error = "only bounded H.264 sessions are accepted";
         return false;
     }
-    end_session();
+    std::lock_guard<std::mutex> lifecycle_lock(session_lifecycle_mutex_);
+    end_session_locked();
 
     DecoderMode requested_mode = parse_decoder_mode(config.decoder_mode);
     if (!is_known_decoder_mode(config.decoder_mode)) {
@@ -510,9 +514,12 @@ bool CamBridgeSource::on_hello(const HelloMessage &hello, const std::string &pee
         session_active_ = true;
         stale_state_ = true;
     }
-    decoder_->activate_prepared_session(decision.path);
-    renderer_.activate_session_media_path(decision.path);
+    media_path_failures_pending_.activate(hello.generation);
     mailbox_.clear();
+    obs_enter_graphics();
+    renderer_.activate_session_media_path(decision.path);
+    obs_leave_graphics();
+    decoder_->activate_prepared_session(decision.path);
     if (media_receiver_) {
         media_receiver_->begin_session(hello.generation, peer_address);
     }
@@ -540,6 +547,7 @@ std::string CamBridgeSource::on_probe(const std::string &request_id) const
 
 void CamBridgeSource::on_control_message(const ControlMessage &message)
 {
+    std::lock_guard<std::mutex> lifecycle_lock(session_lifecycle_mutex_);
     bool should_stop = false;
     {
         std::lock_guard<std::mutex> lock(session_mutex_);
@@ -549,13 +557,14 @@ void CamBridgeSource::on_control_message(const ControlMessage &message)
         should_stop = message.type == contract::kMessageStop;
     }
     if (should_stop) {
-        end_session();
+        end_session_locked();
     }
 }
 
 void CamBridgeSource::on_control_disconnect()
 {
-    end_session();
+    std::lock_guard<std::mutex> lifecycle_lock(session_lifecycle_mutex_);
+    end_session_locked();
     report("control_disconnected_session_invalidated");
 }
 
@@ -593,8 +602,7 @@ void CamBridgeSource::on_decoder_frame(VideoFramePtr frame)
         }
         active_path = active_media_path_;
     }
-    const bool native_frame = std::holds_alternative<NativeFrameStorage>(frame->storage);
-    if ((active_path == SessionMediaPath::Native) != native_frame) {
+    if (!frame_storage_matches_media_path(active_path, frame_storage_kind(frame->storage))) {
         post_media_path_failure({frame->stream_generation, MediaPathFailureCode::Decode,
                                  "decoder published storage for the wrong locked media path"});
         return;
@@ -621,26 +629,16 @@ void CamBridgeSource::on_decoder_event(const std::string &event)
 
 void CamBridgeSource::post_media_path_failure(PendingMediaPathFailure failure)
 {
-    if (failure.stream_generation == 0) {
-        return;
-    }
-    std::lock_guard<std::mutex> lock(media_path_failure_mutex_);
-    if (!pending_media_path_failure_) {
-        pending_media_path_failure_ = std::move(failure);
-    }
+    media_path_failures_pending_.post(std::move(failure));
 }
 
 void CamBridgeSource::drain_media_path_failure()
 {
-    std::optional<PendingMediaPathFailure> pending;
-    {
-        std::lock_guard<std::mutex> lock(media_path_failure_mutex_);
-        pending = std::move(pending_media_path_failure_);
-        pending_media_path_failure_.reset();
-    }
+    std::optional<PendingMediaPathFailure> pending = media_path_failures_pending_.take();
     if (!pending) {
         return;
     }
+    std::lock_guard<std::mutex> lifecycle_lock(session_lifecycle_mutex_);
     {
         std::lock_guard<std::mutex> lock(session_mutex_);
         if (!session_active_ || stream_generation_ != pending->stream_generation) {
@@ -659,11 +657,18 @@ void CamBridgeSource::drain_media_path_failure()
     }
     report("media_path_failure:code=" +
            std::string(media_path_failure_code_name(pending->code)) + ":detail=" + pending->detail);
-    end_session();
+    end_session_locked();
 }
 
 void CamBridgeSource::end_session()
 {
+    std::lock_guard<std::mutex> lifecycle_lock(session_lifecycle_mutex_);
+    end_session_locked();
+}
+
+void CamBridgeSource::end_session_locked()
+{
+    media_path_failures_pending_.deactivate();
     if (test_diagnostics_on_session_end()) {
         write_diagnostics();
     }
@@ -674,7 +679,7 @@ void CamBridgeSource::end_session()
         active_media_path_ = SessionMediaPath::Unselected;
         session_id_.clear();
         peer_address_.clear();
-        stream_generation_ = 0;
+        stream_generation_ = kInactiveStreamGeneration;
         active_width_ = 0;
         active_height_ = 0;
         active_display_width_ = 0;
@@ -685,10 +690,6 @@ void CamBridgeSource::end_session()
         stale_state_ = false;
         first_frame_reported_.store(false);
         last_rendered_frame_generation_.store(0);
-    }
-    {
-        std::lock_guard<std::mutex> lock(media_path_failure_mutex_);
-        pending_media_path_failure_.reset();
     }
     if (media_receiver_) {
         media_receiver_->end_session();

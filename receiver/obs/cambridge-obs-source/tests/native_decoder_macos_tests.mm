@@ -108,6 +108,12 @@ void test_bounded_fixture_decodes_to_retained_pixel_buffer()
         const OSType pixel_format = CVPixelBufferGetPixelFormatType(pixel_buffer);
         require(pixel_format == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange ||
                 pixel_format == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange);
+        require(native_frame->color_matrix() == cambridge::MacosColorMatrix::Bt709);
+        const cambridge::MacosColorRange expected_range =
+            pixel_format == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
+                ? cambridge::MacosColorRange::Full
+                : cambridge::MacosColorRange::Limited;
+        require(native_frame->color_range() == expected_range);
         av_frame_unref(decoded);
         require(CVPixelBufferGetWidth(native_frame->pixel_buffer()) ==
                 CAMBRIDGE_NATIVE_TEST_WIDTH);

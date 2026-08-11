@@ -22,12 +22,6 @@ extern "C" {
 
 namespace cambridge {
 
-struct PendingMediaPathFailure {
-    std::uint64_t stream_generation = 0;
-    MediaPathFailureCode code = MediaPathFailureCode::Decode;
-    std::string detail;
-};
-
 struct SourceConfig {
     std::uint16_t control_port = static_cast<std::uint16_t>(contract::kDefaultControlPort);
     std::uint16_t media_port = static_cast<std::uint16_t>(contract::kDefaultMediaPort);
@@ -75,15 +69,17 @@ private:
     void post_media_path_failure(PendingMediaPathFailure failure);
     void drain_media_path_failure();
     void end_session();
+    void end_session_locked();
     void report(const std::string &event) const;
 
     SourceConfig config_;
     obs_source_t *source_ = nullptr;
     mutable std::mutex configuration_mutex_;
+    mutable std::mutex session_lifecycle_mutex_;
     mutable std::mutex session_mutex_;
     std::string session_id_;
     std::string peer_address_;
-    std::uint64_t stream_generation_ = 0;
+    std::uint64_t stream_generation_ = kInactiveStreamGeneration;
     std::uint32_t active_width_ = 0;
     std::uint32_t active_height_ = 0;
     std::uint32_t active_display_width_ = 0;
@@ -107,8 +103,7 @@ private:
     std::unique_ptr<MediaReceiver> media_receiver_;
     std::unique_ptr<Decoder> decoder_;
     Renderer renderer_;
-    mutable std::mutex media_path_failure_mutex_;
-    std::optional<PendingMediaPathFailure> pending_media_path_failure_;
+    PendingMediaPathFailureQueue media_path_failures_pending_;
     std::atomic<std::uint64_t> malformed_events_{0};
     std::atomic<std::uint64_t> packet_loss_events_{0};
     std::atomic<std::uint64_t> stale_transitions_{0};

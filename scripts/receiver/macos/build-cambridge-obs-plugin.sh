@@ -19,12 +19,15 @@ command -v jq >/dev/null 2>&1 || { printf 'error: jq is required\n' >&2; exit 1;
 command -v xcrun >/dev/null 2>&1 || { printf 'error: Xcode xcrun is required\n' >&2; exit 1; }
 command -v lipo >/dev/null 2>&1 || { printf 'error: lipo is required\n' >&2; exit 1; }
 command -v otool >/dev/null 2>&1 || { printf 'error: otool is required\n' >&2; exit 1; }
+command -v plutil >/dev/null 2>&1 || { printf 'error: plutil is required\n' >&2; exit 1; }
+command -v codesign >/dev/null 2>&1 || { printf 'error: codesign is required\n' >&2; exit 1; }
 case "${require_universal}" in
     ON|OFF) ;;
     *) printf 'error: CAMBRIDGE_REQUIRE_UNIVERSAL must be ON or OFF\n' >&2; exit 1 ;;
 esac
 deployment_target=${CAMBRIDGE_MACOS_DEPLOYMENT_TARGET:-$(jq -er '.baseline.macosDeploymentTarget' "${buildspec_file}")}
 architectures=${CAMBRIDGE_MACOS_ARCHITECTURES:-$(jq -er '.baseline.architectures | join(";")' "${buildspec_file}")}
+discovery_service_type=$(jq -er '.discovery.serviceType' "${repo_root}/protocol/cambridge-stream-contract.json")
 
 cmake --fresh -S "${repo_root}/receiver/obs/cambridge-obs-source" -B "${build_dir}" \
     -G "Unix Makefiles" \
@@ -41,10 +44,27 @@ cmake --build "${build_dir}" --parallel
 ctest --test-dir "${build_dir}" --output-on-failure
 cmake --install "${build_dir}"
 
-plugin_path="${staging_dir}/obs-plugins/cambridge-obs-plugin/bin/64bit/cambridge-obs-plugin.so"
-metallib_path="${staging_dir}/obs-plugins/cambridge-obs-plugin/bin/64bit/nv12_to_bgra.metallib"
-[[ -f "${plugin_path}" ]] || { printf 'error: plugin was not staged: %s\n' "${plugin_path}" >&2; exit 1; }
+plugin_bundle="${staging_dir}/obs-plugins/cambridge-obs-plugin.plugin"
+plugin_path="${plugin_bundle}/Contents/MacOS/cambridge-obs-plugin"
+metallib_path="${plugin_bundle}/Contents/Resources/nv12_to_bgra.metallib"
+info_plist="${plugin_bundle}/Contents/Info.plist"
+[[ -d "${plugin_bundle}" ]] || { printf 'error: plugin bundle was not staged: %s\n' "${plugin_bundle}" >&2; exit 1; }
+[[ -f "${plugin_path}" ]] || { printf 'error: plugin binary was not staged: %s\n' "${plugin_path}" >&2; exit 1; }
 [[ -f "${metallib_path}" ]] || { printf 'error: Metal library was not staged: %s\n' "${metallib_path}" >&2; exit 1; }
+[[ -f "${info_plist}" ]] || { printf 'error: bundle Info.plist was not staged: %s\n' "${info_plist}" >&2; exit 1; }
+plutil -lint "${info_plist}" >/dev/null
+[[ "$(plutil -extract CFBundleExecutable raw "${info_plist}")" == "cambridge-obs-plugin" ]] || {
+    printf 'error: bundle executable metadata is incorrect\n' >&2
+    exit 1
+}
+[[ -n "$(plutil -extract NSLocalNetworkUsageDescription raw "${info_plist}")" ]] || {
+    printf 'error: local-network permission description is missing\n' >&2
+    exit 1
+}
+[[ "$(plutil -extract NSBonjourServices.0 raw "${info_plist}")" == "${discovery_service_type}" ]] || {
+    printf 'error: Bonjour service metadata does not match the protocol contract\n' >&2
+    exit 1
+}
 IFS=';' read -r -a architecture_list <<<"${architectures}"
 lipo -verify_arch "${architecture_list[@]}" "${plugin_path}"
 plugin_architectures=$(lipo -archs "${plugin_path}")
@@ -58,7 +78,10 @@ if otool -L "${plugin_path}" | rg -q '/opt/homebrew|/usr/local/opt|/usr/local/Ce
     printf 'error: plugin contains an unintended Homebrew load command\n' >&2
     exit 1
 fi
+codesign --force --sign - --timestamp=none "${plugin_bundle}"
+codesign --verify --strict --verbose=2 "${plugin_bundle}"
 
+printf 'bundle=%s\n' "${plugin_bundle}"
 printf 'module=%s\n' "${plugin_path}"
 printf 'architectures=%s\n' "${plugin_architectures}"
 printf 'metallib=%s\n' "${metallib_path}"
