@@ -123,6 +123,36 @@ final class CamBridgeTests: XCTestCase {
         XCTAssertEqual(accessUnit.presentationTimeMicroseconds, 1_000)
     }
 
+    func testVideoToolboxDataRateLimitsUseFlatByteCountAndWindowArray() throws {
+        let limits = try VideoToolboxEncoder.dataRateLimits(
+            bitrateBps: 8_000_000,
+            windowSeconds: 2
+        )
+
+        XCTAssertEqual(limits.map(\.intValue), [2_000_000, 2])
+        XCTAssertEqual(limits.count, 2)
+    }
+
+    func testVideoToolboxDataRateLimitsRoundNonByteAlignedBitrateUp() throws {
+        let limits = try VideoToolboxEncoder.dataRateLimits(
+            bitrateBps: 9,
+            windowSeconds: 1
+        )
+
+        XCTAssertEqual(limits.map(\.intValue), [2, 1])
+    }
+
+    func testVideoToolboxDataRateLimitsRejectOverflow() {
+        XCTAssertThrowsError(
+            try VideoToolboxEncoder.dataRateLimits(
+                bitrateBps: Int.max,
+                windowSeconds: 2
+            )
+        ) { error in
+            XCTAssertEqual(error as? VideoToolboxEncoderError, .dataRateLimitOverflow)
+        }
+    }
+
     func testEncodedAccessUnitQueueRetainsOnlyNewestCompleteWork() async throws {
         let queue = try EncodedAccessUnitQueue(capacity: CamBridgeContract.Media.maxInFlightAccessUnits)
         let first = EncodedAccessUnit(data: Data([0x01]), presentationTimeMicroseconds: 1, isKeyframe: false)

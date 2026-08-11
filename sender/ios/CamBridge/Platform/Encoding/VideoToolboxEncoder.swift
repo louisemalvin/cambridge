@@ -16,6 +16,8 @@ public enum VideoToolboxEncoderError: Error, Equatable, Sendable {
     case prepareFailed(OSStatus)
     case frameFailed(OSStatus)
     case outputFailed(OSStatus)
+    case invalidDataRateLimit
+    case dataRateLimitOverflow
     case missingFormatDescription
     case missingParameterSets
     case malformedSample
@@ -298,8 +300,32 @@ public final class VideoToolboxEncoder {
         try set(session, key: kVTCompressionPropertyKey_AverageBitRate, value: configuration.bitrateBps, name: "average-bitrate")
         try set(session, key: kVTCompressionPropertyKey_MaxKeyFrameInterval, value: configuration.mode.keyframeIntervalSeconds * configuration.mode.fps, name: "keyframe-interval")
         try set(session, key: kVTCompressionPropertyKey_MaxKeyFrameIntervalDuration, value: Double(configuration.mode.keyframeIntervalSeconds), name: "keyframe-duration")
-        let dataRateLimits: [[Int]] = [[configuration.bitrateBps * Self.rateLimitWindowSeconds, Self.rateLimitWindowSeconds]]
-        try set(session, key: kVTCompressionPropertyKey_DataRateLimits, value: dataRateLimits, name: "data-rate-limits")
+        let dataRateLimits = try Self.dataRateLimits(
+            bitrateBps: configuration.bitrateBps,
+            windowSeconds: Self.rateLimitWindowSeconds
+        )
+        try set(
+            session,
+            key: kVTCompressionPropertyKey_DataRateLimits,
+            value: dataRateLimits as NSArray,
+            name: Self.dataRateLimitsPropertyName
+        )
+    }
+
+    // VideoToolbox defines each data-rate limit as a byte count followed by a
+    // time interval. Keep the conversion here so the property shape and unit
+    // boundary are tested without requiring a physical encoder.
+    static func dataRateLimits(bitrateBps: Int, windowSeconds: Int) throws -> [NSNumber] {
+        guard bitrateBps > .zero, windowSeconds > .zero else {
+            throw VideoToolboxEncoderError.invalidDataRateLimit
+        }
+        let (windowBits, overflow) = bitrateBps.multipliedReportingOverflow(by: windowSeconds)
+        guard !overflow else { throw VideoToolboxEncoderError.dataRateLimitOverflow }
+        let wholeBytes = windowBits / Self.bitsPerByte
+        let roundedByte = windowBits % Self.bitsPerByte == .zero ? .zero : Self.byteIncrement
+        let allowedBytes = wholeBytes + roundedByte
+        guard allowedBytes > .zero else { throw VideoToolboxEncoderError.invalidDataRateLimit }
+        return [NSNumber(value: allowedBytes), NSNumber(value: windowSeconds)]
     }
 
     private func set(session: VTCompressionSession, key: CFString, value: Any, name: String) throws {
@@ -386,6 +412,9 @@ public final class VideoToolboxEncoder {
 
     private static let microsecondsTimeScale: CMTimeScale = 1_000_000
     private static let rateLimitWindowSeconds = 2
+    private static let bitsPerByte = 8
+    private static let byteIncrement = 1
+    private static let dataRateLimitsPropertyName = kVTCompressionPropertyKey_DataRateLimits as String
     private static let inputQueueKey = DispatchSpecificKey<UInt8>()
     private static let inputQueueMarker: UInt8 = 1
     private static let counterIncrement = 1
