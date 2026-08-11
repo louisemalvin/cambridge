@@ -4,6 +4,11 @@ CamBridge currently requires an Android phone and a Linux x86_64/amd64
 computer running OBS Studio. Put both devices on the same trusted local
 network.
 
+The shared receiver also contains a macOS 12+ implementation and CI/package
+path, but macOS is not a supported downloadable receiver yet. Its arm64 and
+x86_64 VideoToolbox/Metal/Bonjour acceptance and clean-machine package gates
+must pass before the public installation path changes.
+
 The repository also contains an iOS 17 sender install candidate. It is not a
 released or supported platform yet: Apple-target compilation, signing, a real
 iPhone camera/encoder, and glass-to-glass behavior must be validated on macOS
@@ -48,6 +53,14 @@ includes the Stop control; removing the app task also stops the active stream.
 4. Restart OBS, add a source named **CamBridge**, and keep the default source
    settings for normal use.
 
+## macOS status
+
+There is no supported macOS package to install from the current public release.
+Maintainers may use the development build and release-package workflow on
+validated macOS hosts, but should not treat a software-rendered fixture or a
+successful compile as macOS support. When the physical gates pass, the package
+will use the same source IDs and manual-address fallback as Linux.
+
 ## Start a stream
 
 1. Make sure OBS is running with the CamBridge source present.
@@ -75,6 +88,11 @@ framework-resolved IPv4 address plus the bounded IPv4 unicast candidates adverti
 the OBS service. This allows a multi-homed receiver to advertise LAN and VPN
 addresses without any VPN-specific address in the app. The advertised DNS-SD
 port is used directly; CamBridge does not scan ports.
+
+If macOS or OBS prompts for local-network access, allow it for Bonjour discovery.
+If that permission is denied, discovery reports a degraded status and manual
+receiver addressing remains available; it does not change the selected media
+path.
 
 CamBridge is not encrypted or authenticated. Do not expose these ports to the
 internet; see [Known limitations](known-limitations.md).

@@ -23,6 +23,10 @@ The emulator smoke test additionally uses an Android emulator, `adb`, `ffmpeg`,
 local builds, but required for the packaged Linux receiver because they enable
 receiver discovery advertisement.
 
+macOS receiver builds require macOS 12 or later, Xcode command-line tools,
+Homebrew, and the pinned OBS Studio and FFmpeg sources prepared by
+`scripts/receiver/macos/prepare-cambridge-build-dependencies.sh`.
+
 ## Repository layout
 
 - `sender/android/app/` — Android sender application
@@ -98,6 +102,48 @@ Check its runtime dependencies with:
 ldd -r build/cambridge-obs-plugin/staging/obs-plugins/cambridge-obs-plugin/bin/64bit/cambridge-obs-plugin.so
 ```
 
+### macOS receiver build and fixture
+
+The macOS build uses the shared receiver tree and selects the three concrete
+macOS implementations at CMake configure time. Prepare one architecture's
+pinned FFmpeg and OBS/libobs prerequisites, then build that slice:
+
+```bash
+CAMBRIDGE_MACOS_ARCHITECTURE=arm64 \
+  ./scripts/receiver/macos/prepare-cambridge-build-dependencies.sh
+CAMBRIDGE_MACOS_ARCHITECTURES=arm64 \
+CAMBRIDGE_REQUIRE_UNIVERSAL=OFF \
+  ./scripts/receiver/macos/build-cambridge-obs-plugin.sh
+```
+
+The release workflow repeats this for arm64 and x86_64 and combines the
+verified slices into one universal package. The build checks `lipo` architecture
+membership and rejects unintended Homebrew load paths with `otool -L`.
+
+Run the native acceptance fixture with the mode required for native assertions:
+
+```bash
+CAMBRIDGE_DECODER_MODE=native_required \
+CAMBRIDGE_DURATION_SECONDS=5 \
+  ./scripts/receiver/macos/test-cambridge-fixture.sh
+```
+
+Software and explicit native fault checks are separate:
+
+```bash
+CAMBRIDGE_DECODER_MODE=cpu CAMBRIDGE_DURATION_SECONDS=5 \
+  ./scripts/receiver/macos/test-cambridge-fixture.sh
+CAMBRIDGE_ENABLE_TEST_FAULTS=ON CAMBRIDGE_NATIVE_FAULT=pool \
+CAMBRIDGE_DECODER_MODE=native_required \
+  CAMBRIDGE_DURATION_SECONDS=5 \
+  ./scripts/receiver/macos/test-cambridge-fixture.sh
+```
+
+The fault harness also covers export, conversion, and import. A native-required
+run must report `sessionMediaPath` as `native`, `cpuFrameCopies` as zero, and
+one GPU copy per presented native frame; software output never satisfies that
+gate. Native failures are terminal for the active generation.
+
 ## Integration tests
 
 ### Android emulator
@@ -169,7 +215,9 @@ occupancy, drops, and frame counters.
 
 The diagnostic field `hardwareCpuTransfers` is retained for tooling
 compatibility and is deprecated; native-frame export failures are terminal and
-the field is always serialized as zero.
+the field is always serialized as zero. Native diagnostics also record the setup
+result, selected and locked media path, native export/conversion/import
+failures, pool exhaustion, and `gpuCopies`.
 
 For an emulator run, use the log directory printed by the harness. Hardware
 decode may report VAAPI/DRM PRIME and direct DMA-BUF; software decode and NV12
@@ -193,7 +241,17 @@ the complete repository checks, and validating the Linux package with
 `./scripts/release/package-linux-plugin.sh`. Push the release commit before
 pushing its matching `v<version>` tag. The tag starts the release workflow,
 which builds a signed Android APK named `cambridge-v<version>.apk` and a Linux
-archive named `cambridge-obs-plugin-<version>-linux-x86_64.tar.gz`.
+archive named `cambridge-obs-plugin-<version>-linux-x86_64.tar.gz`, plus a
+macOS universal package named
+`cambridge-obs-plugin-<version>-macos-universal.pkg`.
+
+The macOS package script requires Developer ID application and installer
+identities plus a configured `notarytool` keychain profile. It signs the plugin
+and installer, submits the package, staples the notarization ticket, verifies
+the installed-package assessment and signature, and writes a SHA-256 checksum.
+Credentials are supplied only by the release environment or Actions secrets.
+Do not publish the macOS artifact until both physical architecture gates and a
+clean-machine install, uninstall, and reinstall have been retained.
 
 Signing keys and passwords belong in the release environment or GitHub Actions
 secrets, never in the repository. The packaging script writes release files

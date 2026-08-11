@@ -15,7 +15,8 @@ with hardware-accelerated decoding where supported.
 - Portrait and landscape orientations
 - Phone-supported 1080p and 2K modes at 30 or 60 fps with bitrate control
 - Explicit optical, electronic, and camera-managed stabilization controls
-- Hardware decoding with a software fallback where hardware acceleration is unavailable
+- Automatic, native-required, and software-only receiver decoder modes
+- Hardware decoding with a software fallback selected once at session start
 
 ## Quick Start
 
@@ -40,20 +41,28 @@ with hardware-accelerated decoding where supported.
 | Sender | Receiver | Status |
 | --- | --- | --- |
 | Android | Linux x86_64/amd64 + OBS Studio | Supported |
+| Android | macOS 12+ + OBS Studio | Implementation and CI in progress; physical acceptance pending |
 
-An iOS sender and Windows, macOS, and ARM Linux receivers are not currently
-supported.
+An iOS sender and Windows and ARM Linux receivers are not currently supported.
+The macOS receiver is not a supported downloadable product until its arm64 and
+x86_64 physical acceptance, clean-machine package installation, and release
+verification gates pass.
 
 ## How It Works
 
 The phone captures and encodes video, sends it across the local network, and
-the OBS source decodes and presents it as an OBS texture:
+one shared OBS receiver decodes and presents it as an OBS texture:
 
 ```text
-Camera2 → MediaCodec H.264 → RTP/H.264 over UDP → FFmpeg → OBS source
-                                                       ↳ VAAPI/DRM PRIME when available
-                                                       ↳ software decode otherwise
+Camera2 → MediaCodec H.264 → RTP/H.264 over UDP → shared OBS receiver
+                                                   ↳ Linux: FFmpeg → VAAPI/DRM PRIME → DMA-BUF → OBS
+                                                   ↳ macOS: FFmpeg → VideoToolbox → Metal → IOSurface → OBS
+                                                   ↳ software: FFmpeg → CPU NV12 → OBS
 ```
+
+The receiver locks one of the selected media paths before accepting RTP for a
+session. A native decode, conversion, or import failure ends that session; it
+does not silently switch paths after decoding starts.
 
 See [Architecture](docs/architecture.md) for the component boundaries and
 latency/buffering model.

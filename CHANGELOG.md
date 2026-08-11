@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- Consolidated the OBS receiver into one shared Linux/macOS source tree with
+  explicit Automatic, NativeRequired, and Software media-path selection locked
+  before RTP acceptance.
+- Added the macOS VideoToolbox, Metal, IOSurface, Bonjour, universal-build, CI,
+  and signed/notarized package paths. macOS remains an acceptance candidate and
+  is not marked as supported until the physical architecture and clean-machine
+  gates pass.
+- Made native decode, conversion, import, and bounded-pool failures terminal
+  for the active session; the deprecated `hardwareCpuTransfers` diagnostic is
+  always zero.
+
 ## 0.3.0 — Sender-owned video modes and resilient receiver discovery
 
 - Introduced CamBridge stream protocol version 6. It is intentionally

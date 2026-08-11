@@ -1,8 +1,10 @@
 # Known limitations
 
 - The supported product path is Android sender → Linux x86_64/amd64 OBS
-  receiver. An iOS sender and Windows, macOS, and ARM Linux receivers are not
-  currently supported.
+  receiver. The macOS 12+ receiver implementation is present but remains an
+  acceptance candidate until both physical architectures and clean-machine
+  package installation pass. An iOS sender and Windows and ARM Linux receivers
+  are not currently supported.
 - Android camera capabilities and hardware H.264 encoder support vary by
   device. The app may offer fewer compatible quality or frame-rate choices
   than the normal 1080p and 2K phone modes, and the encoder can narrow a
@@ -19,6 +21,10 @@
 - Hardware decoding and direct DMA-BUF presentation depend on the Linux GPU,
   driver, render-node permissions, and OBS graphics support. The software
   decode/NV12 upload fallback uses more CPU and may perform differently.
+- Receiver decoder modes are explicit: Automatic selects native or software at
+  session start, NativeRequired rejects unavailable native setup, and Software
+  never attempts native setup. Once selected, a path does not change; native
+  decode, Metal conversion, import, or pool failures end the session.
 - Receiver discovery depends on Android NSD and the receiver's mDNS/Avahi
   advertisement. CamBridge retains all addresses Android resolves, including
   addresses from multi-homed or VPN-connected receivers, but networks that do
@@ -30,6 +36,15 @@
   orientation changes take effect after Stop and a new Start.
 - The control and media transport is unauthenticated and unencrypted. Use
   CamBridge only on a trusted local network.
+
+## macOS receiver status
+
+The macOS path is VideoToolbox → retained IOSurface-backed NV12 → one Metal
+NV12-to-BGRA conversion → bounded IOSurface pool → OBS texture. It is built for
+macOS 12+ arm64 and x86_64, but no macOS support claim is made until the native
+fixture, Bonjour lifecycle, rotation, soak, and clean-install gates pass on both
+architectures. If local-network access is denied, Bonjour discovery is degraded;
+manual receiver addressing remains available.
 
 ## iOS sender status
 

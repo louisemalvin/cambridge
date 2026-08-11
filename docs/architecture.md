@@ -1,8 +1,9 @@
 # CamBridge Architecture
 
-CamBridge has an Android sender and a native Linux OBS receiver. A session is
+CamBridge has an Android sender and one shared native OBS receiver. A session is
 started explicitly by the user and the receiver handles one active session at
-a time.
+a time. The public supported path remains Linux; the macOS receiver
+implementation is subject to its physical acceptance and clean-install gates.
 
 ## Data flow
 
@@ -11,14 +12,26 @@ Android camera
     → Camera2 capture
     → MediaCodec H.264 encoder
     → RTP/H.264 over UDP
-    → OBS source on Linux
+    → shared OBS source
     → FFmpeg H.264 decoder
-    → VAAPI/DRM PRIME and DMA-BUF when available
+    → one locked media path
     → OBS texture
 ```
 
-The receiver falls back to software decoding and a bounded NV12 texture upload
-when hardware decoding or direct DMA-BUF import is unavailable.
+The receiver selects its path once, before RTP acceptance:
+
+```text
+native Linux:  FFmpeg → VAAPI → DRM PRIME → DMA-BUF → OBS NV12 textures
+native macOS:  FFmpeg → VideoToolbox → retained CVPixelBuffer
+               → one Metal NV12-to-BGRA conversion → bounded IOSurface pool → OBS
+software:      FFmpeg software H.264 → CPU NV12 → bounded OBS upload
+```
+
+Automatic mode selects native when complete native setup is ready and selects
+software only when setup reports unsupported capability. Native-required rejects
+the session when native setup is unavailable, while software mode never attempts
+native setup. After the path is locked, decode, conversion, import, and upload
+failures end the session instead of rebuilding the decoder or changing paths.
 
 The iOS sender follows the same wire path and does not add a second receiver
 or transport:
@@ -84,6 +97,19 @@ frames are presented through the OBS graphics API.
 VAAPI with a DRM render node is preferred. When the host cannot provide a
 usable hardware path, the decoder produces software frames and the renderer
 uploads NV12 data to an OBS texture.
+
+### macOS OBS receiver
+
+The macOS implementation uses the same control, RTP, H.264 orchestration,
+session, mailbox, rendering policy, settings, and diagnostics code as Linux.
+VideoToolbox exports retained IOSurface-backed bi-planar NV12 frames. The Metal
+importer performs one GPU conversion into a fixed BGRA IOSurface pool, then uses
+OBS's public IOSurface texture import API. The software path remains separate and
+uploads CPU NV12 frames through the shared renderer.
+
+Bonjour and Avahi both advertise the shared discovery metadata. Discovery is
+helpful but not required: if local-network permission or mDNS discovery is
+denied, manual receiver addressing remains available.
 
 ## Ownership boundaries
 
