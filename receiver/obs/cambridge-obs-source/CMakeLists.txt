@@ -277,6 +277,10 @@ if(CAMBRIDGE_BUILD_TESTS AND BUILD_TESTING)
             tests/native_decoder_macos_tests.mm
             src/platform/macos/native_decoder_macos.mm
         )
+        set(CAMBRIDGE_NATIVE_DECODER_TEST_SKIP_RETURN_CODE 77)
+        set_tests_properties(cambridge-obs-plugin-native-decoder-tests PROPERTIES
+            SKIP_RETURN_CODE "${CAMBRIDGE_NATIVE_DECODER_TEST_SKIP_RETURN_CODE}"
+        )
         add_dependencies(cambridge-obs-plugin-native-decoder-tests
             cambridge-native-decoder-sample
         )

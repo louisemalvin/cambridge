@@ -3,6 +3,7 @@
 #include "../src/protocol_contract.generated.hpp"
 
 #import <CoreVideo/CoreVideo.h>
+#import <VideoToolbox/VideoToolbox.h>
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -14,7 +15,9 @@ extern "C" {
 #include <cstdint>
 #include <cstring>
 #include <fstream>
+#include <iostream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #ifndef CAMBRIDGE_NATIVE_TEST_SAMPLE_PATH
@@ -25,6 +28,13 @@ namespace {
 
 constexpr std::size_t kMaximumDecodedFramesToInspect = 4;
 constexpr std::size_t kFirstFrameIndex = 0;
+constexpr int kCTestSkipReturnCode = 77;
+
+[[noreturn]] void skip_test(std::string_view reason)
+{
+    std::cerr << "SKIP: " << reason << '\n';
+    std::exit(kCTestSkipReturnCode);
+}
 
 void require(bool condition)
 {
@@ -58,6 +68,9 @@ enum AVPixelFormat choose_native_format(AVCodecContext *context,
 
 void test_bounded_fixture_decodes_to_retained_pixel_buffer()
 {
+    if (!VTIsHardwareDecodeSupported(kCMVideoCodecType_H264)) {
+        skip_test("H.264 VideoToolbox hardware decoding is unavailable on this host");
+    }
     const std::vector<std::uint8_t> sample = read_bounded_sample();
     const auto decoder = avcodec_find_decoder(AV_CODEC_ID_H264);
     require(decoder != nullptr);
