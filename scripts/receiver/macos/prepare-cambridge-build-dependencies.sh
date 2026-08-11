@@ -5,6 +5,7 @@ script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_root=$(cd -- "${script_dir}/../../.." && pwd)
 architecture=${CAMBRIDGE_MACOS_ARCHITECTURE:-}
 readonly download_retry_limit=3
+readonly download_retry_delay_seconds=2
 if [[ -z "${architecture}" ]]; then
     printf 'error: CAMBRIDGE_MACOS_ARCHITECTURE must be arm64 or x86_64\n' >&2
     exit 1
@@ -35,7 +36,9 @@ ffmpeg_hash=$(jq -er '.dependencies[] | select(.name == "ffmpeg") | .sha256' "${
 ffmpeg_archive="${temp_root}/ffmpeg-${ffmpeg_version}.tar.xz"
 ffmpeg_source="${temp_root}/ffmpeg-${ffmpeg_version}"
 ffmpeg_prefix="${temp_root}/ffmpeg-prefix-${architecture}"
-curl --fail --location --retry "${download_retry_limit}" "${ffmpeg_url}" --output "${ffmpeg_archive}"
+curl --fail --location --retry "${download_retry_limit}" \
+    --retry-delay "${download_retry_delay_seconds}" --retry-all-errors \
+    "${ffmpeg_url}" --output "${ffmpeg_archive}"
 echo "${ffmpeg_hash}  ${ffmpeg_archive}" | shasum -a 256 -c -
 tar -xf "${ffmpeg_archive}" -C "${temp_root}"
 (
@@ -70,7 +73,9 @@ obs_archive="${temp_root}/obs-${obs_version}.tar.gz"
 obs_source="${temp_root}/obs-studio-${obs_version}-sources"
 obs_build="${temp_root}/obs-build-${architecture}"
 obs_prefix="${temp_root}/obs-prefix-${architecture}"
-curl --fail --location --retry "${download_retry_limit}" "${obs_url}" --output "${obs_archive}"
+curl --fail --location --retry "${download_retry_limit}" \
+    --retry-delay "${download_retry_delay_seconds}" --retry-all-errors \
+    "${obs_url}" --output "${obs_archive}"
 echo "${obs_hash}  ${obs_archive}" | shasum -a 256 -c -
 tar -xf "${obs_archive}" -C "${temp_root}"
 cmake -S "${obs_source}" -B "${obs_build}" -G Ninja \
