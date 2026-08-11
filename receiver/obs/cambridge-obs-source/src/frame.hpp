@@ -11,10 +11,14 @@ extern "C" {
 
 namespace cambridge {
 
-enum class RenderMode {
-    HardwareDmaBuf,
-    HardwareCpuTransfer,
+enum class FrameStorageKind {
     CpuNv12,
+    Native,
+};
+
+enum class RenderMode {
+    CpuNv12,
+    Native,
     Placeholder,
 };
 
@@ -30,6 +34,7 @@ struct VideoFrame {
     std::uint64_t decode_time_ns = 0;
     std::uint64_t publish_time_ns = 0;
     std::uint64_t stale_deadline_ns = 0;
+    FrameStorageKind storage_kind = FrameStorageKind::CpuNv12;
     RenderMode render_mode = RenderMode::Placeholder;
     std::string pixel_format;
     std::string color_range;

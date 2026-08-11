@@ -54,8 +54,8 @@ std::shared_ptr<AVFrame> owned_frame(AVFrame *frame)
 
 } // namespace
 
-Decoder::Decoder(FrameCallback on_frame, EventCallback on_event)
-    : on_frame_(std::move(on_frame)), on_event_(std::move(on_event))
+Decoder::Decoder(FrameCallback on_frame, EventCallback on_event, MediaPathFailureCallback on_failure)
+    : on_frame_(std::move(on_frame)), on_event_(std::move(on_event)), on_failure_(std::move(on_failure))
 {
 }
 
@@ -81,52 +81,132 @@ void Decoder::stop()
         std::lock_guard<std::mutex> lock(mutex_);
         stopping_ = true;
         session_active_ = false;
+        prepared_ = false;
+        active_generation_ = 0;
+        prepared_generation_ = 0;
+        active_path_ = SessionMediaPath::Unselected;
         queue_.clear();
     }
     condition_.notify_all();
     if (thread_.joinable()) {
         thread_.join();
     }
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::mutex> codec_lock(codec_mutex_);
     close_codec();
-    started_ = false;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        started_ = false;
+    }
 }
 
-void Decoder::begin_session(std::uint64_t stream_generation, DecoderConfig config)
+NativeSetupResult Decoder::prepare_native_session(std::uint64_t stream_generation, DecoderConfig config)
 {
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        pending_generation_ = stream_generation;
-        pending_config_ = std::move(config);
-        session_active_ = true;
-        reconfigure_requested_ = true;
+        prepared_ = false;
+        session_active_ = false;
+        active_generation_ = 0;
+        active_path_ = SessionMediaPath::Unselected;
         queue_.clear();
     }
+
+    std::string error;
+    NativeSetupStatus status = NativeSetupStatus::Failed;
+    bool opened = false;
+    {
+        std::lock_guard<std::mutex> codec_lock(codec_mutex_);
+        opened = open_codec(config, true, error, status);
+    }
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (opened) {
+            prepared_config_ = std::move(config);
+            prepared_generation_ = stream_generation;
+            prepared_ = true;
+        } else {
+            prepared_generation_ = 0;
+        }
+    }
+    if (!opened) {
+        return {status, error.empty() ? "native decoder setup failed" : std::move(error)};
+    }
+    return {NativeSetupStatus::Ready, {}};
+}
+
+bool Decoder::prepare_software_session(std::uint64_t stream_generation, DecoderConfig config,
+                                       std::string &error)
+{
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        prepared_ = false;
+        session_active_ = false;
+        active_generation_ = 0;
+        active_path_ = SessionMediaPath::Unselected;
+        queue_.clear();
+    }
+
+    NativeSetupStatus ignored_status = NativeSetupStatus::Failed;
+    bool opened = false;
+    {
+        std::lock_guard<std::mutex> codec_lock(codec_mutex_);
+        opened = open_codec(config, false, error, ignored_status);
+    }
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (opened) {
+            prepared_config_ = std::move(config);
+            prepared_generation_ = stream_generation;
+            prepared_ = true;
+        } else {
+            prepared_generation_ = 0;
+        }
+    }
+    return opened;
+}
+
+void Decoder::activate_prepared_session(SessionMediaPath selected_path)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!prepared_) {
+        return;
+    }
+    active_config_ = prepared_config_;
+    active_generation_ = prepared_generation_;
+    active_path_ = selected_path;
+    failure_reported_generation_ = 0;
+    session_active_ = true;
+    prepared_ = false;
+    current_render_mode_ = selected_path == SessionMediaPath::Native ? RenderMode::Native
+                                                                       : RenderMode::CpuNv12;
     condition_.notify_all();
+}
+
+void Decoder::discard_prepared_session()
+{
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        prepared_ = false;
+        prepared_generation_ = 0;
+        queue_.clear();
+    }
+    std::lock_guard<std::mutex> codec_lock(codec_mutex_);
+    close_codec();
 }
 
 void Decoder::end_session()
 {
-    std::lock_guard<std::mutex> lock(mutex_);
-    session_active_ = false;
-    queue_.clear();
-    reconfigure_requested_ = false;
-}
-
-void Decoder::request_cpu_fallback()
-{
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        if (!session_active_ || pending_config_.force_cpu) {
-            return;
-        }
-        pending_config_.force_cpu = true;
         session_active_ = false;
-        reconfigure_requested_ = true;
+        prepared_ = false;
+        active_generation_ = 0;
+        prepared_generation_ = 0;
+        active_path_ = SessionMediaPath::Unselected;
+        failure_reported_generation_ = 0;
         queue_.clear();
     }
-    condition_.notify_all();
-    report("cpu_fallback_requested_after_dma_buf_import_failure");
+    std::lock_guard<std::mutex> codec_lock(codec_mutex_);
+    close_codec();
 }
 
 bool Decoder::submit(AccessUnit access_unit)
@@ -151,6 +231,12 @@ bool Decoder::submit(AccessUnit access_unit)
     return accepted;
 }
 
+bool Decoder::prepared_session_ready() const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    return prepared_;
+}
+
 std::string Decoder::decoder_name() const
 {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -169,13 +255,17 @@ std::size_t Decoder::queue_occupancy() const
     return queue_.size();
 }
 
-enum AVPixelFormat Decoder::choose_hardware_format(AVCodecContext *context, const enum AVPixelFormat *formats)
+enum AVPixelFormat Decoder::choose_hardware_format(AVCodecContext *context,
+                                                   const enum AVPixelFormat *formats)
 {
     const auto decoder = static_cast<Decoder *>(context->opaque);
-    for (const enum AVPixelFormat *format = formats; *format != AV_PIX_FMT_NONE; ++format) {
-        if (decoder && decoder->hardware_active_ && *format == kHardwarePixelFormat) {
-            return *format;
+    if (decoder && decoder->native_setup_requested_) {
+        for (const enum AVPixelFormat *format = formats; *format != AV_PIX_FMT_NONE; ++format) {
+            if (*format == kHardwarePixelFormat) {
+                return *format;
+            }
         }
+        return AV_PIX_FMT_NONE;
     }
     for (const enum AVPixelFormat *format = formats; *format != AV_PIX_FMT_NONE; ++format) {
         if (*format == kSoftwarePixelFormat) {
@@ -185,28 +275,20 @@ enum AVPixelFormat Decoder::choose_hardware_format(AVCodecContext *context, cons
     return formats[0];
 }
 
-bool Decoder::configure_codec(const DecoderConfig &config)
-{
-    if (open_codec(config, !config.force_cpu)) {
-        return true;
-    }
-    if (!config.force_cpu) {
-        report("hardware_decode_unavailable_using_cpu_fallback");
-        return open_codec(config, false);
-    }
-    return false;
-}
-
-bool Decoder::open_codec(const DecoderConfig &config, bool try_hardware)
+bool Decoder::open_codec(const DecoderConfig &config, bool native_requested, std::string &error,
+                         NativeSetupStatus &native_status)
 {
     close_codec();
     const AVCodec *codec = avcodec_find_decoder(kCodecId);
     if (!codec) {
-        report("libavcodec_h264_decoder_missing");
+        error = "libavcodec H.264 decoder is unavailable";
+        native_status = native_requested ? NativeSetupStatus::Unsupported : NativeSetupStatus::Failed;
         return false;
     }
     codec_context_ = avcodec_alloc_context3(codec);
     if (!codec_context_) {
+        error = "could not allocate the H.264 decoder context";
+        native_status = NativeSetupStatus::Failed;
         return false;
     }
     codec_context_->width = static_cast<int>(config.width);
@@ -214,27 +296,47 @@ bool Decoder::open_codec(const DecoderConfig &config, bool try_hardware)
     codec_context_->thread_count = kDecoderThreadCount;
     codec_context_->opaque = this;
     codec_context_->get_format = &Decoder::choose_hardware_format;
+    native_setup_requested_ = native_requested;
     hardware_active_ = false;
-    if (try_hardware) {
+    if (native_requested) {
         const int device_result = av_hwdevice_ctx_create(
             &hardware_device_, AV_HWDEVICE_TYPE_VAAPI, config.drm_device.c_str(), nullptr, 0);
         if (device_result < 0) {
-            report("vaapi_device_open_failed:" + ffmpeg_error(device_result));
-            hardware_device_ = nullptr;
-        } else {
-            codec_context_->hw_device_ctx = av_buffer_ref(hardware_device_);
-            hardware_active_ = codec_context_->hw_device_ctx != nullptr;
+            error = "VAAPI device setup failed:" + ffmpeg_error(device_result);
+            native_status = device_result == AVERROR(ENOMEM) ? NativeSetupStatus::Failed
+                                                              : NativeSetupStatus::Unsupported;
+            close_codec();
+            return false;
         }
+        codec_context_->hw_device_ctx = av_buffer_ref(hardware_device_);
+        if (!codec_context_->hw_device_ctx) {
+            error = "could not retain the VAAPI device context";
+            native_status = NativeSetupStatus::Failed;
+            close_codec();
+            return false;
+        }
+        hardware_active_ = true;
     }
     const int open_result = avcodec_open2(codec_context_, codec, nullptr);
     if (open_result < 0) {
-        report("h264_decoder_open_failed:" + ffmpeg_error(open_result));
+        error = "H.264 decoder open failed:" + ffmpeg_error(open_result);
+        if (native_requested &&
+            (open_result == AVERROR(EINVAL) || open_result == AVERROR(ENODEV) ||
+             open_result == AVERROR(ENOSYS))) {
+            native_status = NativeSetupStatus::Unsupported;
+        } else {
+            native_status = NativeSetupStatus::Failed;
+        }
         close_codec();
         return false;
     }
-    decoder_name_ = hardware_active_ ? "h264/VAAPI" : "h264/software";
-    current_render_mode_ = hardware_active_ ? RenderMode::HardwareDmaBuf : RenderMode::CpuNv12;
-    report("decoder_ready:" + decoder_name_ + ":level=" + std::to_string(kDefaultH264Level));
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        decoder_name_ = native_requested ? "h264/VAAPI" : "h264/software";
+        current_render_mode_ = native_requested ? RenderMode::Native : RenderMode::CpuNv12;
+    }
+    report("decoder_ready:" + decoder_name() + ":level=" + std::to_string(kDefaultH264Level));
+    native_status = NativeSetupStatus::Ready;
     return true;
 }
 
@@ -250,9 +352,11 @@ void Decoder::close_codec()
     if (hardware_device_) {
         av_buffer_unref(&hardware_device_);
     }
+    native_setup_requested_ = false;
     hardware_active_ = false;
+    std::lock_guard<std::mutex> lock(mutex_);
     decoder_name_ = "uninitialized";
-    current_render_mode_ = RenderMode::CpuNv12;
+    current_render_mode_ = RenderMode::Placeholder;
 }
 
 void Decoder::flush_codec()
@@ -265,6 +369,9 @@ void Decoder::flush_codec()
 void Decoder::decode_access_unit(const AccessUnit &access_unit, std::uint64_t stream_generation,
                                  const DecoderConfig &config)
 {
+    if (!generation_active(stream_generation)) {
+        return;
+    }
     const std::uint64_t now = monotonic_time_ns();
     const std::uint64_t maximum_age = static_cast<std::uint64_t>(config.maximum_queue_age_ms) *
                                       kNanosecondsPerMillisecond;
@@ -274,6 +381,7 @@ void Decoder::decode_access_unit(const AccessUnit &access_unit, std::uint64_t st
         return;
     }
     if (!codec_context_) {
+        fail(stream_generation, MediaPathFailureCode::Decode, "decoder context is unavailable");
         return;
     }
     const auto packet_pts = static_cast<int64_t>((static_cast<std::uint64_t>(access_unit.rtp_timestamp) *
@@ -303,15 +411,20 @@ void Decoder::decode_access_unit(const AccessUnit &access_unit, std::uint64_t st
     const int send_result = send_packet(access_unit.annex_b.data(), access_unit.annex_b.size());
     if (send_result < 0) {
         decode_failures_.fetch_add(1);
-        report("decoder_send_failed:" + ffmpeg_error(send_result));
-        flush_codec();
+        fail(stream_generation, MediaPathFailureCode::Decode,
+             "decoder_send_failed:" + ffmpeg_error(send_result));
         return;
     }
 
     while (true) {
+        if (!generation_active(stream_generation)) {
+            return;
+        }
         AVFrame *decoded = av_frame_alloc();
         if (!decoded) {
-            break;
+            decode_failures_.fetch_add(1);
+            fail(stream_generation, MediaPathFailureCode::Decode, "could not allocate a decoded frame");
+            return;
         }
         const int receive_result = avcodec_receive_frame(codec_context_, decoded);
         if (receive_result == AVERROR(EAGAIN) || receive_result == AVERROR_EOF) {
@@ -321,9 +434,9 @@ void Decoder::decode_access_unit(const AccessUnit &access_unit, std::uint64_t st
         if (receive_result < 0) {
             av_frame_free(&decoded);
             decode_failures_.fetch_add(1);
-            report("decoder_receive_failed:" + ffmpeg_error(receive_result));
-            flush_codec();
-            break;
+            fail(stream_generation, MediaPathFailureCode::Decode,
+                 "decoder_receive_failed:" + ffmpeg_error(receive_result));
+            return;
         }
         publish_frame(decoded, access_unit, stream_generation, config);
         av_frame_free(&decoded);
@@ -334,65 +447,73 @@ void Decoder::publish_frame(AVFrame *decoded, const AccessUnit &access_unit, std
                             const DecoderConfig &config)
 {
     const std::uint64_t decode_time = monotonic_time_ns();
-    if (hardware_active_ && decoded->format == kHardwarePixelFormat) {
-        AVFrame *drm = av_frame_alloc();
-        if (drm) {
-            drm->format = AV_PIX_FMT_DRM_PRIME;
-            const int map_result = av_hwframe_map(drm, decoded, AV_HWFRAME_MAP_READ);
-            if (map_result >= 0) {
-                auto frame = std::make_shared<VideoFrame>();
-                frame->stream_generation = stream_generation;
-                frame->width = static_cast<std::uint32_t>(decoded->width);
-                frame->height = static_cast<std::uint32_t>(decoded->height);
-                frame->rotation_degrees = config.rotation_degrees;
-                frame->rtp_timestamp = access_unit.rtp_timestamp;
-                frame->receive_time_ns = access_unit.receive_time_ns;
-                frame->decode_time_ns = decode_time;
-                frame->complete_time_ns = decode_time;
-                frame->publish_time_ns = decode_time;
-                frame->stale_deadline_ns = decode_time +
-                                           static_cast<std::uint64_t>(config.maximum_live_frame_age_ms) *
-                                               kNanosecondsPerMillisecond;
-                frame->render_mode = RenderMode::HardwareDmaBuf;
-                frame->pixel_format = "drm-prime";
-                frame->color_range = decoded->color_range == AVCOL_RANGE_JPEG ? "full" : "limited";
-                frame->color_space = decoded->colorspace == AVCOL_SPC_BT709 ? "bt709" : "unspecified";
-                frame->drm_frame = owned_frame(drm);
-                on_frame_(std::move(frame));
-                frames_decoded_.fetch_add(1);
-                current_render_mode_ = RenderMode::HardwareDmaBuf;
-                return;
-            }
-            av_frame_free(&drm);
-            report("drm_prime_export_failed_using_cpu_transfer:" + ffmpeg_error(map_result));
-        }
-        AVFrame *transferred = av_frame_alloc();
-        if (transferred && av_hwframe_transfer_data(transferred, decoded, 0) >= 0) {
-            hardware_cpu_transfers_.fetch_add(1);
-            publish_nv12(transferred, access_unit, stream_generation, config, RenderMode::HardwareCpuTransfer);
-            av_frame_free(&transferred);
-            return;
-        }
-        av_frame_free(&transferred);
-        decode_failures_.fetch_add(1);
+    if (!generation_active(stream_generation)) {
         return;
     }
-    publish_nv12(decoded, access_unit, stream_generation, config, RenderMode::CpuNv12);
+    if (native_setup_requested_) {
+        if (!hardware_active_ || decoded->format != kHardwarePixelFormat) {
+            decode_failures_.fetch_add(1);
+            fail(stream_generation, MediaPathFailureCode::NativeExport,
+                 "decoded frame is not a VAAPI hardware frame");
+            return;
+        }
+        AVFrame *drm = av_frame_alloc();
+        if (!drm) {
+            decode_failures_.fetch_add(1);
+            fail(stream_generation, MediaPathFailureCode::NativeExport,
+                 "could not allocate a DRM PRIME frame");
+            return;
+        }
+        drm->format = AV_PIX_FMT_DRM_PRIME;
+        const int map_result = av_hwframe_map(drm, decoded, AV_HWFRAME_MAP_READ);
+        if (map_result < 0) {
+            av_frame_free(&drm);
+            decode_failures_.fetch_add(1);
+            fail(stream_generation, MediaPathFailureCode::NativeExport,
+                 "DRM PRIME export failed:" + ffmpeg_error(map_result));
+            return;
+        }
+        auto frame = std::make_shared<VideoFrame>();
+        frame->stream_generation = stream_generation;
+        frame->width = static_cast<std::uint32_t>(decoded->width);
+        frame->height = static_cast<std::uint32_t>(decoded->height);
+        frame->rotation_degrees = config.rotation_degrees;
+        frame->rtp_timestamp = access_unit.rtp_timestamp;
+        frame->receive_time_ns = access_unit.receive_time_ns;
+        frame->decode_time_ns = decode_time;
+        frame->complete_time_ns = decode_time;
+        frame->publish_time_ns = decode_time;
+        frame->stale_deadline_ns = decode_time +
+                                   static_cast<std::uint64_t>(config.maximum_live_frame_age_ms) *
+                                       kNanosecondsPerMillisecond;
+        frame->render_mode = RenderMode::Native;
+        frame->storage_kind = FrameStorageKind::Native;
+        frame->pixel_format = "drm-prime";
+        frame->color_range = decoded->color_range == AVCOL_RANGE_JPEG ? "full" : "limited";
+        frame->color_space = decoded->colorspace == AVCOL_SPC_BT709 ? "bt709" : "unspecified";
+        frame->drm_frame = owned_frame(drm);
+        on_frame_(std::move(frame));
+        frames_decoded_.fetch_add(1);
+        return;
+    }
+    publish_nv12(decoded, access_unit, stream_generation, config);
 }
 
 void Decoder::publish_nv12(AVFrame *decoded, const AccessUnit &access_unit, std::uint64_t stream_generation,
-                           const DecoderConfig &config, RenderMode mode)
+                           const DecoderConfig &config)
 {
     scaler_ = sws_getCachedContext(scaler_, decoded->width, decoded->height,
                                    static_cast<AVPixelFormat>(decoded->format), decoded->width, decoded->height,
                                    kOutputPixelFormat, SWS_FAST_BILINEAR, nullptr, nullptr, nullptr);
     if (!scaler_) {
         decode_failures_.fetch_add(1);
-        report("nv12_scaler_unavailable");
+        fail(stream_generation, MediaPathFailureCode::Decode, "NV12 scaler is unavailable");
         return;
     }
     const int buffer_size = av_image_get_buffer_size(kOutputPixelFormat, decoded->width, decoded->height, 1);
     if (buffer_size <= 0) {
+        decode_failures_.fetch_add(1);
+        fail(stream_generation, MediaPathFailureCode::Decode, "could not size the NV12 output");
         return;
     }
     auto frame = std::make_shared<VideoFrame>();
@@ -401,9 +522,16 @@ void Decoder::publish_nv12(AVFrame *decoded, const AccessUnit &access_unit, std:
     int destination_linesize[4]{};
     if (av_image_fill_arrays(destination_data, destination_linesize, frame->nv12.data(), kOutputPixelFormat,
                              decoded->width, decoded->height, 1) < 0) {
+        decode_failures_.fetch_add(1);
+        fail(stream_generation, MediaPathFailureCode::Decode, "could not prepare the NV12 output");
         return;
     }
-    sws_scale(scaler_, decoded->data, decoded->linesize, 0, decoded->height, destination_data, destination_linesize);
+    if (sws_scale(scaler_, decoded->data, decoded->linesize, 0, decoded->height, destination_data,
+                  destination_linesize) <= 0) {
+        decode_failures_.fetch_add(1);
+        fail(stream_generation, MediaPathFailureCode::Decode, "NV12 conversion failed");
+        return;
+    }
     const std::uint64_t now = monotonic_time_ns();
     frame->stream_generation = stream_generation;
     frame->width = static_cast<std::uint32_t>(decoded->width);
@@ -417,7 +545,8 @@ void Decoder::publish_nv12(AVFrame *decoded, const AccessUnit &access_unit, std:
     frame->stale_deadline_ns = now +
                                static_cast<std::uint64_t>(config.maximum_live_frame_age_ms) *
                                    kNanosecondsPerMillisecond;
-    frame->render_mode = mode;
+    frame->render_mode = RenderMode::CpuNv12;
+    frame->storage_kind = FrameStorageKind::CpuNv12;
     frame->pixel_format = "nv12";
     frame->color_range = decoded->color_range == AVCOL_RANGE_JPEG ? "full" : "limited";
     frame->color_space = decoded->colorspace == AVCOL_SPC_BT709 ? "bt709" : "unspecified";
@@ -425,7 +554,30 @@ void Decoder::publish_nv12(AVFrame *decoded, const AccessUnit &access_unit, std:
     frame->nv12_uv_stride = static_cast<std::uint32_t>(destination_linesize[1]);
     on_frame_(std::move(frame));
     frames_decoded_.fetch_add(1);
-    current_render_mode_ = mode;
+}
+
+void Decoder::fail(std::uint64_t stream_generation, MediaPathFailureCode code, const std::string &detail)
+{
+    bool should_post = false;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (session_active_ && active_generation_ == stream_generation &&
+            failure_reported_generation_ != stream_generation) {
+            failure_reported_generation_ = stream_generation;
+            session_active_ = false;
+            queue_.clear();
+            should_post = true;
+        }
+    }
+    if (should_post && on_failure_) {
+        on_failure_(stream_generation, code, detail);
+    }
+}
+
+bool Decoder::generation_active(std::uint64_t stream_generation) const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    return session_active_ && active_generation_ == stream_generation;
 }
 
 void Decoder::report(const std::string &event)
@@ -444,26 +596,9 @@ void Decoder::run()
         std::uint64_t generation = 0;
         {
             std::unique_lock<std::mutex> lock(mutex_);
-            condition_.wait(lock, [this] {
-                return stopping_ || reconfigure_requested_ || (session_active_ && !queue_.empty());
-            });
+            condition_.wait(lock, [this] { return stopping_ || (session_active_ && !queue_.empty()); });
             if (stopping_) {
                 break;
-            }
-            if (reconfigure_requested_) {
-                generation = pending_generation_;
-                config = pending_config_;
-                reconfigure_requested_ = false;
-                active_generation_ = generation;
-                session_active_ = true;
-                lock.unlock();
-                if (!configure_codec(config)) {
-                    report("decoder_setup_failed");
-                    std::lock_guard<std::mutex> relock(mutex_);
-                    session_active_ = false;
-                    continue;
-                }
-                continue;
             }
             if (!session_active_ || queue_.empty()) {
                 continue;
@@ -471,12 +606,11 @@ void Decoder::run()
             access_unit = std::move(queue_.front());
             queue_.pop_front();
             generation = active_generation_;
-            config = pending_config_;
+            config = active_config_;
         }
+        std::lock_guard<std::mutex> codec_lock(codec_mutex_);
         decode_access_unit(access_unit, generation, config);
     }
-    std::lock_guard<std::mutex> lock(mutex_);
-    close_codec();
 }
 
 } // namespace cambridge

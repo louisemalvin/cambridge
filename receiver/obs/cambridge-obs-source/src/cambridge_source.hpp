@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 
 extern "C" {
@@ -20,6 +21,12 @@ extern "C" {
 }
 
 namespace cambridge {
+
+struct PendingMediaPathFailure {
+    std::uint64_t stream_generation = 0;
+    MediaPathFailureCode code = MediaPathFailureCode::Decode;
+    std::string detail;
+};
 
 struct SourceConfig {
     std::uint16_t control_port = static_cast<std::uint16_t>(contract::kDefaultControlPort);
@@ -65,7 +72,8 @@ private:
     void on_invalid_packet(const std::string &reason);
     void on_decoder_frame(VideoFramePtr frame);
     void on_decoder_event(const std::string &event);
-    void on_renderer_hardware_fallback();
+    void post_media_path_failure(PendingMediaPathFailure failure);
+    void drain_media_path_failure();
     void end_session();
     void report(const std::string &event) const;
 
@@ -83,6 +91,12 @@ private:
     std::uint32_t active_rotation_degrees_ = 0;
     std::uint32_t active_fps_ = 0;
     std::uint32_t active_bitrate_bps_ = 0;
+    DecoderMode requested_decoder_mode_ = DecoderMode::Automatic;
+    SessionMediaPath active_media_path_ = SessionMediaPath::Unselected;
+    NativeSetupStatus native_setup_status_ = NativeSetupStatus::Failed;
+    std::string native_setup_reason_;
+    bool native_setup_attempted_ = false;
+    bool media_path_locked_ = false;
     bool session_active_ = false;
     bool started_ = false;
     bool stale_state_ = false;
@@ -93,6 +107,8 @@ private:
     std::unique_ptr<MediaReceiver> media_receiver_;
     std::unique_ptr<Decoder> decoder_;
     Renderer renderer_;
+    mutable std::mutex media_path_failure_mutex_;
+    std::optional<PendingMediaPathFailure> pending_media_path_failure_;
     std::atomic<std::uint64_t> malformed_events_{0};
     std::atomic<std::uint64_t> packet_loss_events_{0};
     std::atomic<std::uint64_t> stale_transitions_{0};
@@ -102,6 +118,11 @@ private:
     std::atomic<std::uint64_t> max_receive_to_render_ns_{0};
     std::atomic<std::uint64_t> frames_rendered_{0};
     std::atomic<std::uint64_t> last_rendered_frame_generation_{0};
+    std::atomic<std::uint64_t> media_path_failures_{0};
+    std::atomic<std::uint64_t> native_import_failures_{0};
+    std::atomic<std::uint64_t> native_pool_exhaustions_{0};
+    MediaPathFailureCode last_media_path_failure_code_ = MediaPathFailureCode::Decode;
+    std::string last_media_path_failure_detail_;
 };
 
 SourceConfig source_config_from_settings(obs_data_t *settings);

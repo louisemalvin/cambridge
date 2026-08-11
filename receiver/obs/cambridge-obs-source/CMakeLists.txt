@@ -34,6 +34,7 @@ add_library(cambridge-obs-plugin MODULE
     src/discovery_advertiser.cpp
     src/cambridge_source.cpp
     src/media_receiver.cpp
+    src/media_path.cpp
     src/module.cpp
     src/network_address_candidates.cpp
     src/protocol_contract.generated.hpp
@@ -120,6 +121,36 @@ if(BUILD_TESTING)
         -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror
     )
     add_test(NAME cambridge-obs-plugin-mailbox-tests COMMAND cambridge-obs-plugin-mailbox-tests)
+
+    add_executable(cambridge-obs-plugin-media-path-tests
+        tests/media_path_tests.cpp
+        src/media_path.cpp
+    )
+    target_compile_features(cambridge-obs-plugin-media-path-tests PRIVATE cxx_std_17)
+    target_compile_options(cambridge-obs-plugin-media-path-tests PRIVATE
+        -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror
+    )
+    add_test(NAME cambridge-obs-plugin-media-path-tests COMMAND cambridge-obs-plugin-media-path-tests)
+
+    add_executable(cambridge-obs-plugin-decoder-policy-tests
+        tests/decoder_policy_tests.cpp
+        src/media_path.cpp
+    )
+    target_compile_features(cambridge-obs-plugin-decoder-policy-tests PRIVATE cxx_std_17)
+    target_compile_options(cambridge-obs-plugin-decoder-policy-tests PRIVATE
+        -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror
+    )
+    add_test(NAME cambridge-obs-plugin-decoder-policy-tests COMMAND cambridge-obs-plugin-decoder-policy-tests)
+
+    add_executable(cambridge-obs-plugin-renderer-policy-tests
+        tests/renderer_policy_tests.cpp
+        src/media_path.cpp
+    )
+    target_compile_features(cambridge-obs-plugin-renderer-policy-tests PRIVATE cxx_std_17)
+    target_compile_options(cambridge-obs-plugin-renderer-policy-tests PRIVATE
+        -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror
+    )
+    add_test(NAME cambridge-obs-plugin-renderer-policy-tests COMMAND cambridge-obs-plugin-renderer-policy-tests)
 endif()
 
 install(TARGETS cambridge-obs-plugin

@@ -17,6 +17,7 @@ namespace cambridge {
 namespace {
 
 constexpr std::size_t kTextureSlotCount = contract::kTexturePoolSlots;
+constexpr std::uint32_t kUnsetDimension = 0;
 constexpr std::uint32_t kPlaceholderWidth = 2;
 constexpr std::uint32_t kPlaceholderHeight = 2;
 constexpr std::uint32_t kPlaceholderTextureLevels = 1;
@@ -102,8 +103,8 @@ std::uint64_t monotonic_time_ns()
 
 } // namespace
 
-Renderer::Renderer(RendererConfig config, EventCallback on_event, HardwareFallbackCallback on_hardware_fallback)
-    : config_(config), on_event_(std::move(on_event)), on_hardware_fallback_(std::move(on_hardware_fallback))
+Renderer::Renderer(RendererConfig config, EventCallback on_event, MediaPathFailureCallback on_failure)
+    : config_(config), on_event_(std::move(on_event)), on_failure_(std::move(on_failure))
 {
     static_assert(kTextureSlotCount == contract::kTexturePoolSlots);
 }
@@ -156,6 +157,61 @@ void Renderer::ensure_graphics_resources()
         bfree(errors);
     }
     graphics_resources_ready_ = true;
+}
+
+void Renderer::query_dmabuf_capabilities()
+{
+    if (dma_buf_capabilities_checked_) {
+        return;
+    }
+    enum gs_dmabuf_flags flags = GS_DMABUF_FLAG_NONE;
+    uint32_t *formats = nullptr;
+    size_t format_count = 0;
+    dma_buf_supported_ = gs_query_dmabuf_capabilities(&flags, &formats, &format_count);
+    if (formats) {
+        bfree(formats);
+    }
+    dma_buf_capabilities_checked_ = true;
+    report((dma_buf_supported_ ? "obs_dma_buf_capabilities_available" :
+                                "obs_dma_buf_capabilities_unavailable") +
+           std::string(":flags=") + std::to_string(static_cast<std::uint32_t>(flags)) +
+           ":format_count=" + std::to_string(format_count));
+}
+
+NativeSetupResult Renderer::prepare_native_session(std::uint32_t maximum_width,
+                                                   std::uint32_t maximum_height)
+{
+    if (maximum_width == kUnsetDimension || maximum_height == kUnsetDimension) {
+        return {NativeSetupStatus::Failed, "native importer dimensions are empty"};
+    }
+    ensure_graphics_resources();
+    if (!placeholder_ || !nv12_effect_) {
+        return {NativeSetupStatus::Failed, "OBS graphics resources are unavailable"};
+    }
+    query_dmabuf_capabilities();
+    if (!dma_buf_supported_) {
+        return {NativeSetupStatus::Unsupported, "OBS DMA-BUF import is unavailable"};
+    }
+    return {NativeSetupStatus::Ready, {}};
+}
+
+void Renderer::discard_prepared_native_session()
+{
+    // Native preparation currently reserves only bounded capability state.
+}
+
+void Renderer::activate_session_media_path(SessionMediaPath path)
+{
+    active_media_path_ = path;
+    failed_generation_ = 0;
+    active_render_mode_ = "placeholder";
+}
+
+void Renderer::end_session()
+{
+    active_media_path_ = SessionMediaPath::Unselected;
+    failed_generation_ = 0;
+    active_render_mode_ = "placeholder";
 }
 
 bool Renderer::update_cpu_slot(TextureSlot &slot, const VideoFramePtr &frame)
@@ -279,7 +335,6 @@ bool Renderer::update_dmabuf_slot(TextureSlot &slot, const VideoFramePtr &frame)
                     gs_texture_destroy(texture);
                 }
             }
-            import_failures_.fetch_add(1);
             report("dma_buf_texture_import_failed:format=" + std::to_string(drm_formats[plane]) +
                    ":modifier=" + std::to_string(modifiers[plane]));
             return false;
@@ -295,8 +350,16 @@ bool Renderer::update_dmabuf_slot(TextureSlot &slot, const VideoFramePtr &frame)
 
 bool Renderer::update_slot(TextureSlot &slot, const VideoFramePtr &frame)
 {
-    if (frame->render_mode == RenderMode::HardwareDmaBuf) {
-        if (hardware_fallback_requested_) {
+    if (!frame || active_media_path_ == SessionMediaPath::Unselected ||
+        active_media_path_ == SessionMediaPath::Failed) {
+        return false;
+    }
+    if (failed_generation_ == frame->stream_generation) {
+        return false;
+    }
+    if (active_media_path_ == SessionMediaPath::Native) {
+        if (frame->storage_kind != FrameStorageKind::Native) {
+            fail(frame, MediaPathFailureCode::NativeImport, "native session received CPU frame storage");
             return false;
         }
         if (update_dmabuf_slot(slot, frame)) {
@@ -306,12 +369,11 @@ bool Renderer::update_slot(TextureSlot &slot, const VideoFramePtr &frame)
             }
             return true;
         }
-        if (!hardware_fallback_requested_) {
-            hardware_fallback_requested_ = true;
-            if (on_hardware_fallback_) {
-                on_hardware_fallback_();
-            }
-        }
+        fail(frame, MediaPathFailureCode::NativeImport, "DMA-BUF texture import failed");
+        return false;
+    }
+    if (frame->storage_kind != FrameStorageKind::CpuNv12) {
+        fail(frame, MediaPathFailureCode::SoftwareUpload, "software session received native frame storage");
         return false;
     }
     if (update_cpu_slot(slot, frame)) {
@@ -321,7 +383,20 @@ bool Renderer::update_slot(TextureSlot &slot, const VideoFramePtr &frame)
         }
         return true;
     }
+    fail(frame, MediaPathFailureCode::SoftwareUpload, "CPU NV12 texture upload failed");
     return false;
+}
+
+void Renderer::fail(const VideoFramePtr &frame, MediaPathFailureCode code, const std::string &detail)
+{
+    if (!frame || failed_generation_ == frame->stream_generation) {
+        return;
+    }
+    failed_generation_ = frame->stream_generation;
+    import_failures_.fetch_add(code == MediaPathFailureCode::NativeImport ? 1U : 0U);
+    if (on_failure_) {
+        on_failure_(frame->stream_generation, code, detail);
+    }
 }
 
 void Renderer::draw_placeholder(std::uint32_t output_width, std::uint32_t output_height)
@@ -375,21 +450,8 @@ void Renderer::draw_dmabuf(const TextureSlot &slot, std::uint32_t output_width, 
 bool Renderer::render(const VideoFramePtr &frame, std::uint32_t output_width, std::uint32_t output_height)
 {
     ensure_graphics_resources();
-    if (!dma_buf_capabilities_checked_) {
-        enum gs_dmabuf_flags flags = GS_DMABUF_FLAG_NONE;
-        uint32_t *formats = nullptr;
-        size_t format_count = 0;
-        dma_buf_supported_ = gs_query_dmabuf_capabilities(&flags, &formats, &format_count);
-        if (formats) {
-            bfree(formats);
-        }
-        dma_buf_capabilities_checked_ = true;
-        report((dma_buf_supported_ ? "obs_dma_buf_capabilities_available" :
-                                    "obs_dma_buf_capabilities_unavailable") +
-               std::string(":flags=") + std::to_string(static_cast<std::uint32_t>(flags)) +
-               ":format_count=" + std::to_string(format_count));
-    }
-    if (!frame || frame->frame_generation == 0) {
+    if (!frame || frame->frame_generation == 0 || active_media_path_ == SessionMediaPath::Unselected ||
+        active_media_path_ == SessionMediaPath::Failed) {
         draw_placeholder(output_width, output_height);
         return false;
     }
@@ -412,7 +474,7 @@ bool Renderer::render(const VideoFramePtr &frame, std::uint32_t output_width, st
             return false;
         }
     }
-    if (frame->render_mode == RenderMode::HardwareDmaBuf && slot->texture) {
+    if (active_media_path_ == SessionMediaPath::Native && slot->texture) {
         draw_dmabuf(*slot, output_width, output_height);
     } else {
         draw_cpu(*slot, output_width, output_height, frame->color_range == "full", frame->rotation_degrees);
@@ -449,8 +511,9 @@ void Renderer::reset()
     }
     graphics_resources_ready_ = false;
     dma_buf_capabilities_checked_ = false;
-    hardware_fallback_requested_ = false;
     dma_buf_layout_reported_ = false;
+    active_media_path_ = SessionMediaPath::Unselected;
+    failed_generation_ = 0;
 }
 
 } // namespace cambridge

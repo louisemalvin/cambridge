@@ -114,7 +114,9 @@ CamBridgeSource::CamBridgeSource(SourceConfig config, obs_source_t *source)
     : config_(std::move(config)), source_(source),
       renderer_(RendererConfig{config_.transparent_placeholder}, [this](const std::string &event) {
           report(event);
-      }, [this] { on_renderer_hardware_fallback(); })
+      }, [this](std::uint64_t generation, MediaPathFailureCode code, const std::string &detail) {
+          post_media_path_failure({generation, code, detail});
+      })
 {
 }
 
@@ -143,7 +145,10 @@ bool CamBridgeSource::start(std::string &error)
     }
     decoder_ = std::make_unique<Decoder>(
         [this](VideoFramePtr frame) { on_decoder_frame(std::move(frame)); },
-        [this](const std::string &event) { on_decoder_event(event); });
+        [this](const std::string &event) { on_decoder_event(event); },
+        [this](std::uint64_t generation, MediaPathFailureCode code, const std::string &detail) {
+            post_media_path_failure({generation, code, detail});
+        });
     decoder_->start();
 
     MediaReceiverConfig media_config;
@@ -206,6 +211,7 @@ bool CamBridgeSource::start(std::string &error)
 
 void CamBridgeSource::stop()
 {
+    end_session();
     if (discovery_advertiser_) {
         discovery_advertiser_->stop();
         discovery_advertiser_.reset();
@@ -219,11 +225,9 @@ void CamBridgeSource::stop()
         media_receiver_.reset();
     }
     if (decoder_) {
-        decoder_->end_session();
         decoder_->stop();
         decoder_.reset();
     }
-    end_session();
     started_ = false;
 }
 
@@ -285,7 +289,7 @@ void CamBridgeSource::render(gs_effect_t *)
 
 void CamBridgeSource::tick(float)
 {
-    // Media loss is handled by dropping late or incomplete access units.
+    drain_media_path_failure();
 }
 
 void CamBridgeSource::write_diagnostics()
@@ -297,6 +301,14 @@ void CamBridgeSource::write_diagnostics()
     std::uint32_t display_width = 0;
     std::uint32_t display_height = 0;
     std::uint32_t rotation_degrees = 0;
+    DecoderMode requested_decoder_mode = DecoderMode::Automatic;
+    SessionMediaPath session_media_path = SessionMediaPath::Unselected;
+    NativeSetupStatus native_setup_status = NativeSetupStatus::Failed;
+    std::string native_setup_reason;
+    bool native_setup_attempted = false;
+    bool media_path_locked = false;
+    MediaPathFailureCode last_failure_code = MediaPathFailureCode::Decode;
+    std::string last_failure_detail;
     {
         std::lock_guard<std::mutex> lock(session_mutex_);
         session_active = session_active_;
@@ -305,6 +317,14 @@ void CamBridgeSource::write_diagnostics()
         display_width = active_display_width_;
         display_height = active_display_height_;
         rotation_degrees = active_rotation_degrees_;
+        requested_decoder_mode = requested_decoder_mode_;
+        session_media_path = active_media_path_;
+        native_setup_status = native_setup_status_;
+        native_setup_reason = native_setup_reason_;
+        native_setup_attempted = native_setup_attempted_;
+        media_path_locked = media_path_locked_;
+        last_failure_code = last_media_path_failure_code_;
+        last_failure_detail = last_media_path_failure_detail_;
     }
     std::ofstream output(config.diagnostics_path, std::ios::trunc);
     if (!output) {
@@ -330,10 +350,22 @@ void CamBridgeSource::write_diagnostics()
            << "  \"framesStale\": " << stale_transitions_.load() << ",\n"
            << "  \"framesDecoded\": " << (decoder_ ? decoder_->frames_decoded() : 0) << ",\n"
            << "  \"framesRendered\": " << frames_rendered_.load() << ",\n"
+           << "  \"hardwareCpuTransfers\": 0,\n"
+           << "  \"requestedDecoderMode\": \"" << decoder_mode_name(requested_decoder_mode) << "\",\n"
+           << "  \"sessionMediaPath\": \"" << session_media_path_name(session_media_path) << "\",\n"
+           << "  \"mediaPathLocked\": " << (media_path_locked ? "true" : "false") << ",\n"
+           << "  \"nativeSetupStatus\": \""
+           << (native_setup_attempted ? native_setup_status_name(native_setup_status) : "not_attempted")
+           << "\",\n"
+           << "  \"nativeSetupReason\": \"" << native_setup_reason << "\",\n"
+           << "  \"mediaPathFailures\": " << media_path_failures_.load() << ",\n"
+           << "  \"lastMediaPathFailureCode\": \""
+           << media_path_failure_code_name(last_failure_code) << "\",\n"
+           << "  \"lastMediaPathFailureDetail\": \"" << last_failure_detail << "\",\n"
+           << "  \"nativeImportFailures\": " << native_import_failures_.load() << ",\n"
+           << "  \"nativePoolExhaustions\": " << native_pool_exhaustions_.load() << ",\n"
            << "  \"cpuFrameCopies\": " << renderer_.cpu_uploads() << ",\n"
            << "  \"gpuCopies\": " << renderer_.gpu_copies() << ",\n"
-           << "  \"hardwareCpuTransfers\": " << (decoder_ ? decoder_->hardware_cpu_transfers() : 0)
-           << ",\n"
            << "  \"dmaBufImportFailures\": " << renderer_.import_failures() << ",\n"
            << "  \"packetsReceived\": " << (media_receiver_ ? media_receiver_->packets_received() : 0) << ",\n"
            << "  \"bytesReceived\": " << (media_receiver_ ? media_receiver_->bytes_received() : 0) << ",\n"
@@ -394,6 +426,92 @@ bool CamBridgeSource::on_hello(const HelloMessage &hello, const std::string &pee
         return false;
     }
     end_session();
+
+    DecoderMode requested_mode = parse_decoder_mode(config.decoder_mode);
+    if (!is_known_decoder_mode(config.decoder_mode)) {
+        report("decoder_mode_unknown_selecting_automatic:" + config.decoder_mode);
+        requested_mode = DecoderMode::Automatic;
+    }
+    if (!decoder_) {
+        error = "decoder is not available";
+        return false;
+    }
+
+    DecoderConfig decoder_config;
+    decoder_config.width = hello.coded_width;
+    decoder_config.height = hello.coded_height;
+    decoder_config.rotation_degrees = hello.rotation_degrees;
+    decoder_config.fps = hello.fps;
+    decoder_config.maximum_queue_age_ms = config.maximum_decoder_queue_age_ms;
+    decoder_config.maximum_live_frame_age_ms = config.maximum_live_frame_age_ms;
+    decoder_config.drm_device = config.drm_device;
+
+    std::optional<NativeSetupResult> native_setup;
+    bool native_resources_prepared = false;
+    auto discard_native_resources = [&] {
+        if (!native_resources_prepared) {
+            return;
+        }
+        obs_enter_graphics();
+        renderer_.discard_prepared_native_session();
+        obs_leave_graphics();
+        native_resources_prepared = false;
+    };
+
+    if (requested_mode == DecoderMode::Software) {
+        if (!decoder_->prepare_software_session(hello.generation, decoder_config, error)) {
+            decoder_->discard_prepared_session();
+            error = "software_decoder_setup_failed:" + error;
+            return false;
+        }
+    } else {
+        obs_enter_graphics();
+        native_resources_prepared = true;
+        const NativeSetupResult importer_setup =
+            renderer_.prepare_native_session(hello.coded_width, hello.coded_height);
+        obs_leave_graphics();
+        if (importer_setup.status == NativeSetupStatus::Ready) {
+            native_setup = decoder_->prepare_native_session(hello.generation, decoder_config);
+        } else {
+            native_setup = importer_setup;
+        }
+
+        const MediaPathDecision decision = decide_media_path(requested_mode, native_setup);
+        if (!decision.accepted) {
+            decoder_->discard_prepared_session();
+            discard_native_resources();
+            error = decision.error;
+            return false;
+        }
+        if (decision.path == SessionMediaPath::Software) {
+            decoder_->discard_prepared_session();
+            discard_native_resources();
+            if (!decoder_->prepare_software_session(hello.generation, decoder_config, error)) {
+                decoder_->discard_prepared_session();
+                error = "software_decoder_setup_failed:" + error;
+                return false;
+            }
+        }
+        if (!decision.event.empty()) {
+            report(decision.event);
+        }
+    }
+
+    const MediaPathDecision decision = requested_mode == DecoderMode::Software
+                                           ? decide_media_path(requested_mode, std::nullopt)
+                                           : decide_media_path(requested_mode, native_setup);
+    if (!decision.accepted) {
+        decoder_->discard_prepared_session();
+        discard_native_resources();
+        error = decision.error;
+        return false;
+    }
+    if (!decoder_->prepared_session_ready()) {
+        decoder_->discard_prepared_session();
+        discard_native_resources();
+        error = "decoder activation preparation is missing";
+        return false;
+    }
     {
         std::lock_guard<std::mutex> lock(session_mutex_);
         session_id_ = hello.session_id;
@@ -406,31 +524,29 @@ bool CamBridgeSource::on_hello(const HelloMessage &hello, const std::string &pee
         active_rotation_degrees_ = hello.rotation_degrees;
         active_fps_ = hello.fps;
         active_bitrate_bps_ = hello.bitrate_bps;
+        requested_decoder_mode_ = requested_mode;
+        active_media_path_ = decision.path;
+        media_path_locked_ = true;
+        native_setup_status_ = native_setup ? native_setup->status : NativeSetupStatus::Failed;
+        native_setup_reason_ = native_setup ? native_setup->reason : "not_attempted";
+        native_setup_attempted_ = native_setup.has_value();
         session_active_ = true;
         stale_state_ = true;
     }
+    decoder_->activate_prepared_session(decision.path);
+    renderer_.activate_session_media_path(decision.path);
     mailbox_.clear();
     if (media_receiver_) {
         media_receiver_->begin_session(hello.generation, peer_address);
-    }
-    if (decoder_) {
-        DecoderConfig decoder_config;
-        decoder_config.width = hello.coded_width;
-        decoder_config.height = hello.coded_height;
-        decoder_config.rotation_degrees = hello.rotation_degrees;
-        decoder_config.fps = hello.fps;
-        decoder_config.maximum_queue_age_ms = config.maximum_decoder_queue_age_ms;
-        decoder_config.maximum_live_frame_age_ms = config.maximum_live_frame_age_ms;
-        decoder_config.drm_device = config.drm_device;
-        decoder_config.force_cpu = config.decoder_mode == "cpu";
-        decoder_->begin_session(hello.generation, std::move(decoder_config));
     }
     report("session_accepted:id=" + hello.session_id + ":generation=" + std::to_string(hello.generation) +
            ":profile=" + hello.profile_id +
            ":coded=" + std::to_string(hello.coded_width) + "x" + std::to_string(hello.coded_height) +
            ":display=" + std::to_string(display_width) + "x" +
            std::to_string(display_height) + ":rotation=" + std::to_string(hello.rotation_degrees) +
-           "@" + std::to_string(hello.fps) + ":bitrate=" + std::to_string(hello.bitrate_bps));
+           "@" + std::to_string(hello.fps) + ":bitrate=" + std::to_string(hello.bitrate_bps) +
+           ":requested=" + std::string(decoder_mode_name(requested_mode)) +
+           ":path=" + std::string(session_media_path_name(decision.path)));
     return true;
 }
 
@@ -492,6 +608,20 @@ void CamBridgeSource::on_decoder_frame(VideoFramePtr frame)
     if (!frame) {
         return;
     }
+    SessionMediaPath active_path = SessionMediaPath::Unselected;
+    {
+        std::lock_guard<std::mutex> lock(session_mutex_);
+        if (!session_active_ || !media_path_locked_ || frame->stream_generation != stream_generation_) {
+            return;
+        }
+        active_path = active_media_path_;
+    }
+    const bool native_frame = frame->storage_kind == FrameStorageKind::Native;
+    if ((active_path == SessionMediaPath::Native) != native_frame) {
+        post_media_path_failure({frame->stream_generation, MediaPathFailureCode::Decode,
+                                 "decoder published storage for the wrong locked media path"});
+        return;
+    }
     if (frame->decode_time_ns >= frame->receive_time_ns) {
         observe_maximum(max_receive_to_decode_ns_, frame->decode_time_ns - frame->receive_time_ns);
     }
@@ -499,7 +629,7 @@ void CamBridgeSource::on_decoder_frame(VideoFramePtr frame)
         observe_maximum(max_receive_to_publish_ns_, frame->publish_time_ns - frame->receive_time_ns);
     }
     if (!first_frame_reported_.exchange(true)) {
-        report("first_frame_published:mode=" + std::to_string(static_cast<int>(frame->render_mode)) +
+        report("first_frame_published:mode=" + std::string(session_media_path_name(active_path)) +
                ":profile=" + std::to_string(frame->width) + "x" + std::to_string(frame->height) +
                ":pixel_format=" + frame->pixel_format + ":color_space=" + frame->color_space +
                ":color_range=" + frame->color_range);
@@ -512,38 +642,78 @@ void CamBridgeSource::on_decoder_event(const std::string &event)
     report(event);
 }
 
-void CamBridgeSource::on_renderer_hardware_fallback()
+void CamBridgeSource::post_media_path_failure(PendingMediaPathFailure failure)
 {
-    mailbox_.clear();
-    if (decoder_) {
-        decoder_->request_cpu_fallback();
+    if (failure.stream_generation == 0) {
+        return;
     }
+    std::lock_guard<std::mutex> lock(media_path_failure_mutex_);
+    if (!pending_media_path_failure_) {
+        pending_media_path_failure_ = std::move(failure);
+    }
+}
+
+void CamBridgeSource::drain_media_path_failure()
+{
+    std::optional<PendingMediaPathFailure> pending;
+    {
+        std::lock_guard<std::mutex> lock(media_path_failure_mutex_);
+        pending = std::move(pending_media_path_failure_);
+        pending_media_path_failure_.reset();
+    }
+    if (!pending) {
+        return;
+    }
+    {
+        std::lock_guard<std::mutex> lock(session_mutex_);
+        if (!session_active_ || stream_generation_ != pending->stream_generation) {
+            return;
+        }
+        ++media_path_failures_;
+        if (pending->code == MediaPathFailureCode::NativeImport) {
+            ++native_import_failures_;
+        }
+        last_media_path_failure_code_ = pending->code;
+        last_media_path_failure_detail_ = pending->detail;
+    }
+    report("media_path_failure:code=" +
+           std::string(media_path_failure_code_name(pending->code)) + ":detail=" + pending->detail);
+    end_session();
 }
 
 void CamBridgeSource::end_session()
 {
-    std::lock_guard<std::mutex> lock(session_mutex_);
-    session_active_ = false;
-    session_id_.clear();
-    peer_address_.clear();
-    stream_generation_ = 0;
-    active_width_ = 0;
-    active_height_ = 0;
-    active_display_width_ = 0;
-    active_display_height_ = 0;
-    active_rotation_degrees_ = 0;
-    active_fps_ = 0;
-    active_bitrate_bps_ = 0;
-    stale_state_ = false;
-    first_frame_reported_.store(false);
-    last_rendered_frame_generation_.store(0);
-    mailbox_.clear();
+    {
+        std::lock_guard<std::mutex> lock(session_mutex_);
+        session_active_ = false;
+        media_path_locked_ = false;
+        active_media_path_ = SessionMediaPath::Unselected;
+        session_id_.clear();
+        peer_address_.clear();
+        stream_generation_ = 0;
+        active_width_ = 0;
+        active_height_ = 0;
+        active_display_width_ = 0;
+        active_display_height_ = 0;
+        active_rotation_degrees_ = 0;
+        active_fps_ = 0;
+        active_bitrate_bps_ = 0;
+        stale_state_ = false;
+        first_frame_reported_.store(false);
+        last_rendered_frame_generation_.store(0);
+    }
+    {
+        std::lock_guard<std::mutex> lock(media_path_failure_mutex_);
+        pending_media_path_failure_.reset();
+    }
     if (media_receiver_) {
         media_receiver_->end_session();
     }
     if (decoder_) {
         decoder_->end_session();
     }
+    mailbox_.clear();
+    renderer_.end_session();
 }
 
 void CamBridgeSource::report(const std::string &event) const
@@ -626,8 +796,11 @@ obs_properties_t *source_get_properties(void *data)
                              receiver::kDefaultDrmDevice);
     obs_property_t *decoder_mode = obs_properties_add_list(advanced_properties, kPropertyDecoderMode, "Decoder mode",
                                                             OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_STRING);
-    obs_property_list_add_string(decoder_mode, "Automatic VA-API then CPU", receiver::kDefaultDecoderMode);
-    obs_property_list_add_string(decoder_mode, "CPU fallback", "cpu");
+    obs_property_list_add_string(decoder_mode, "Automatic: native when supported, otherwise software at session start",
+                                 receiver::kDefaultDecoderMode);
+    obs_property_list_add_string(decoder_mode, "Require native hardware: fail the session if unavailable",
+                                 decoder_mode_name(DecoderMode::NativeRequired).data());
+    obs_property_list_add_string(decoder_mode, "Software only", decoder_mode_name(DecoderMode::Software).data());
     obs_properties_add_bool(advanced_properties, kPropertyTransparentPlaceholder, "Transparent placeholder");
     obs_properties_add_path(advanced_properties, kPropertyDiagnosticsPath, "Diagnostics JSON path", OBS_PATH_FILE,
                              "JSON (*.json)", receiver::kDefaultDiagnosticsPath);
