@@ -130,7 +130,7 @@ if(CAMBRIDGE_BUILD_PLUGIN)
     endif()
 
     if(APPLE)
-        set(cambridge_plugin_install_destination obs-plugins/cambridge-obs-plugin)
+        set(cambridge_plugin_install_destination obs-plugins)
     else()
         set(cambridge_plugin_install_destination
             obs-plugins/cambridge-obs-plugin/bin/64bit)
