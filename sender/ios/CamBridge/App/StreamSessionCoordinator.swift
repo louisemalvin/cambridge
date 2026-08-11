@@ -303,6 +303,7 @@ public actor StreamSessionCoordinator {
                     }
                 }
             } catch {
+                guard !Task.isCancelled else { return }
                 await self.handleTransportFailure(error)
             }
         }
@@ -318,11 +319,13 @@ public actor StreamSessionCoordinator {
                         await self.handleTerminalFailure(.receiverRejected(message))
                     default:
                         await self.handleTerminalFailure(.incompatibleProtocol)
-                    }
-                    return
                 }
+                return
+            }
+                guard !Task.isCancelled else { return }
                 await self.handleTerminalFailure(.controlConnectionFailed("receiver closed the control lease"))
             } catch {
+                guard !Task.isCancelled else { return }
                 await self.handleTerminalFailure(.controlConnectionFailed(String(describing: error)))
             }
         }

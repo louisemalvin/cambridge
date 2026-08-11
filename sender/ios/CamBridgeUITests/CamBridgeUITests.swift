@@ -7,9 +7,9 @@ final class CamBridgeUITests: XCTestCase {
 
         assertExists(element(app, id: "start-stream"))
         tap(app, id: "settings-tab")
-        assertExists(app.navigationBars["Settings"])
+        assertExists(element(app, id: "settings-screen-title"))
         tap(app, id: "setup-tab")
-        assertExists(app.navigationBars["CamBridge"])
+        assertExists(element(app, id: "setup-screen-title"))
     }
 
     func testPermissionStatesAndCameraAccessAreDeterministic() {

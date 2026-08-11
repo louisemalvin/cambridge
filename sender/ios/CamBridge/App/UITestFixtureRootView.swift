@@ -215,6 +215,9 @@ private struct UITestFixtureSetupView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: UITestFixtureLayout.standardSpacing) {
+                    Text("CamBridge")
+                        .font(.title2)
+                        .accessibilityIdentifier("setup-screen-title")
                     VStack(alignment: .leading, spacing: UITestFixtureLayout.standardSpacing) {
                         Text("Camera")
                             .font(.headline)
@@ -383,6 +386,9 @@ private struct UITestFixtureSettingsView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: UITestFixtureLayout.standardSpacing) {
+                    Text("Settings")
+                        .font(.title2)
+                        .accessibilityIdentifier("settings-screen-title")
                     VStack(alignment: .leading, spacing: UITestFixtureLayout.standardSpacing) {
                         Text("Stream preferences")
                             .font(.headline)
