@@ -26,9 +26,11 @@ function(cambridge_configure_dependencies)
     set(CAMBRIDGE_JSON_LINK_LIBRARIES)
     set(CAMBRIDGE_DNS_SD_LINK_LIBRARIES)
     set(CAMBRIDGE_NATIVE_DECODER_LINK_LIBRARIES)
+    set(CAMBRIDGE_DNS_SD_LIBRARY_NAMES dns_services dns_sd)
 
     if(APPLE AND CAMBRIDGE_BUILD_TESTS)
-        find_library(CAMBRIDGE_DNS_SD_TEST_LIBRARY dns_sd REQUIRED)
+        find_library(CAMBRIDGE_DNS_SD_TEST_LIBRARY
+            NAMES ${CAMBRIDGE_DNS_SD_LIBRARY_NAMES} REQUIRED)
         list(APPEND CAMBRIDGE_DNS_SD_LINK_LIBRARIES ${CAMBRIDGE_DNS_SD_TEST_LIBRARY})
     endif()
 
@@ -120,7 +122,8 @@ function(cambridge_configure_dependencies)
             find_library(CAMBRIDGE_IOSURFACE IOSurface REQUIRED)
             find_library(CAMBRIDGE_METAL Metal REQUIRED)
             find_library(CAMBRIDGE_FOUNDATION Foundation REQUIRED)
-            find_library(CAMBRIDGE_DNS_SD dns_sd REQUIRED)
+            find_library(CAMBRIDGE_DNS_SD
+                NAMES ${CAMBRIDGE_DNS_SD_LIBRARY_NAMES} REQUIRED)
             list(APPEND CAMBRIDGE_PLUGIN_LINK_LIBRARIES
                 ${CAMBRIDGE_VIDEOTOOLBOX}
                 ${CAMBRIDGE_COREVIDEO}
