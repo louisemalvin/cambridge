@@ -176,7 +176,7 @@ Name: libobs
 Description: OBS Studio libobs pinned CamBridge build baseline
 Version: ${obs_version}
 Cflags: -F\${prefix}/Frameworks -I\${includedir} -I${simde_prefix}/include
-Libs: -L\${libdir} -lobs
+Libs: -F\${prefix}/Frameworks -framework libobs
 EOF
 
 obs_cflags=$(PKG_CONFIG_PATH="${obs_pc_dir}:${obs_pkg_config_path}" \

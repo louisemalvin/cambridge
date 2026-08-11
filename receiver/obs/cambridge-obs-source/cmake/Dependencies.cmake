@@ -115,8 +115,19 @@ function(cambridge_configure_dependencies)
             ${CAMBRIDGE_OBS_LIBRARY_DIRS}
             ${CAMBRIDGE_FFMPEG_LIBRARY_DIRS}
         )
+        if(APPLE AND DEFINED ENV{CAMBRIDGE_OBS_PREFIX})
+            set(cambridge_obs_framework_binary
+                "$ENV{CAMBRIDGE_OBS_PREFIX}/Frameworks/libobs.framework/Versions/A/libobs")
+            if(NOT EXISTS "${cambridge_obs_framework_binary}")
+                message(FATAL_ERROR
+                    "Pinned OBS framework binary was not found: ${cambridge_obs_framework_binary}")
+            endif()
+            list(APPEND CAMBRIDGE_PLUGIN_LINK_LIBRARIES
+                "${cambridge_obs_framework_binary}")
+        else()
+            list(APPEND CAMBRIDGE_PLUGIN_LINK_LIBRARIES ${CAMBRIDGE_OBS_LIBRARIES})
+        endif()
         list(APPEND CAMBRIDGE_PLUGIN_LINK_LIBRARIES
-            ${CAMBRIDGE_OBS_LIBRARIES}
             ${CAMBRIDGE_FFMPEG_LIBRARIES}
             ${CAMBRIDGE_JANSSON_LIBRARIES}
         )
