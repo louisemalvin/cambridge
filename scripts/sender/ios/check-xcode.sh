@@ -23,6 +23,10 @@ if ! command -v xcodebuild >/dev/null 2>&1 || ! command -v xcrun >/dev/null 2>&1
 fi
 
 developer_directory=$(xcode-select -p)
+if [[ ! -d "${developer_directory}" ]]; then
+    echo "Selected Xcode developer directory does not exist: ${developer_directory}" >&2
+    exit 2
+fi
 echo "Using Xcode developer directory: ${developer_directory}"
 xcodebuild -version
 
