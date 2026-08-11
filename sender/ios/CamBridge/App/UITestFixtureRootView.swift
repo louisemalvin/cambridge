@@ -441,7 +441,6 @@ private struct UITestFixtureSettingsView: View {
             .navigationTitle("Settings")
         }
     }
-}
 
 private enum UITestFixtureLayout {
     static let standardSpacing: CGFloat = 16
