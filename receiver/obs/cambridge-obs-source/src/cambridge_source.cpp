@@ -128,8 +128,8 @@ bool test_diagnostics_on_session_end()
 
 } // namespace
 
-CamBridgeSource::CamBridgeSource(SourceConfig config, obs_source_t *source)
-    : config_(std::move(config)), source_(source),
+CamBridgeSource::CamBridgeSource(SourceConfig config)
+    : config_(std::move(config)),
       renderer_(RendererConfig{config_.transparent_placeholder}, create_native_frame_importer(),
                 [this](const std::string &event) {
                     report(event);
@@ -798,9 +798,9 @@ obs_properties_t *source_get_properties(void *data)
     return properties;
 }
 
-void *source_create(obs_data_t *settings, obs_source_t *source)
+void *source_create(obs_data_t *settings, obs_source_t *)
 {
-    auto instance = std::make_unique<CamBridgeSource>(source_config_from_settings(settings), source);
+    auto instance = std::make_unique<CamBridgeSource>(source_config_from_settings(settings));
     std::string error;
     if (!instance->start(error)) {
         blog(LOG_ERROR, "[cambridge] source failed to start: %s", error.c_str());

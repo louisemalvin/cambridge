@@ -43,7 +43,7 @@ struct SourceConfig {
 
 class CamBridgeSource {
 public:
-    CamBridgeSource(SourceConfig config, obs_source_t *source);
+    explicit CamBridgeSource(SourceConfig config);
     ~CamBridgeSource();
 
     CamBridgeSource(const CamBridgeSource &) = delete;
@@ -77,7 +77,6 @@ private:
     void report(const std::string &event) const;
 
     SourceConfig config_;
-    obs_source_t *source_ = nullptr;
     mutable std::mutex configuration_mutex_;
     mutable std::mutex session_lifecycle_mutex_;
     mutable std::mutex session_mutex_;
