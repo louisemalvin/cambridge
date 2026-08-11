@@ -58,6 +58,8 @@ xcodebuild \
     -scheme "${scheme_name}" \
     -destination "platform=iOS Simulator,arch=${simulator_architecture},id=${destination_id}" \
     -derivedDataPath "${repo_root}/build/ios-derived-data" \
+    ARCHS="${simulator_architecture}" \
+    ONLY_ACTIVE_ARCH=YES \
     CODE_SIGNING_ALLOWED=NO \
     CODE_SIGNING_REQUIRED=NO \
     test 2>&1 | tee "${log_dir}/xcodebuild-test.log"
