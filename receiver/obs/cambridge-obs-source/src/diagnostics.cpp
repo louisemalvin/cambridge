@@ -17,7 +17,8 @@ std::string json_escape(std::string_view value)
 {
     std::string escaped;
     escaped.reserve(value.size());
-    for (const unsigned char character : value) {
+    for (const char raw_character : value) {
+        const unsigned char character = static_cast<unsigned char>(raw_character);
         switch (character) {
         case '"':
             escaped += "\\\"";

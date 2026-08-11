@@ -25,7 +25,6 @@ constexpr std::size_t kH264StartCodeBytes = 4;
 constexpr std::uint8_t kFuStartMask = 0x80;
 constexpr std::uint8_t kFuEndMask = 0x40;
 constexpr std::uint8_t kFuTypeMask = 0x1f;
-constexpr std::uint8_t kFuIndicatorTypeMask = 0x1f;
 constexpr std::uint8_t kFuIndicatorNriMask = 0xe0;
 constexpr std::uint8_t kFuIndicatorForbiddenBit = 0x80;
 constexpr std::uint8_t kFuANalType = 28;

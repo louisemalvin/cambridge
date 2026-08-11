@@ -216,6 +216,9 @@ if(CAMBRIDGE_BUILD_TESTS AND BUILD_TESTING)
         cambridge_add_test(cambridge-obs-plugin-native-importer-policy-tests
             tests/native_importer_policy_tests.cpp
         )
+        target_include_directories(cambridge-obs-plugin-native-importer-policy-tests SYSTEM PRIVATE
+            ${CAMBRIDGE_OBS_INCLUDE_DIRS}
+        )
     endif()
 
     if(APPLE AND NOT CAMBRIDGE_BUILD_SHARED_TESTS_ONLY)
@@ -252,6 +255,7 @@ if(CAMBRIDGE_BUILD_TESTS AND BUILD_TESTING)
                 -frames:v 1
                 -an
                 -c:v ${CAMBRIDGE_NATIVE_TEST_ENCODER}
+                -allow_sw 1
                 -pix_fmt yuv420p
                 -colorspace bt709
                 -color_range tv
