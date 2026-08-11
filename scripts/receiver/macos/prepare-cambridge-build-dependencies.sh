@@ -16,7 +16,7 @@ case "${architecture}" in
 esac
 
 command -v brew >/dev/null 2>&1 || { printf 'error: Homebrew is required for build tools\n' >&2; exit 1; }
-brew install cmake pkg-config jq yasm nasm jansson simde uthash
+brew install pkg-config jq yasm nasm jansson simde uthash
 
 buildspec="${repo_root}/receiver/obs/cambridge-obs-source/buildspec.json"
 temp_root=${CAMBRIDGE_DEPENDENCY_BUILD_ROOT:-${RUNNER_TEMP:-}}
@@ -29,6 +29,19 @@ build_jobs=$(sysctl -n hw.ncpu)
 simde_prefix=$(brew --prefix simde)
 uthash_prefix=$(brew --prefix uthash)
 jansson_prefix=$(brew --prefix jansson)
+
+cmake_version=$(jq -er '.baseline.cmake' "${buildspec}")
+cmake_url=$(jq -er '.dependencies[] | select(.name == "cmake") | .url' "${buildspec}")
+cmake_hash=$(jq -er '.dependencies[] | select(.name == "cmake") | .sha256' "${buildspec}")
+cmake_archive="${temp_root}/cmake-${cmake_version}-macos-universal.tar.gz"
+cmake_root="${temp_root}/cmake-${cmake_version}-macos-universal/CMake.app/Contents"
+curl --fail --location --retry "${download_retry_limit}" \
+    --retry-delay "${download_retry_delay_seconds}" --retry-all-errors \
+    "${cmake_url}" --output "${cmake_archive}"
+echo "${cmake_hash}  ${cmake_archive}" | shasum -a 256 -c -
+tar -xf "${cmake_archive}" -C "${temp_root}"
+export PATH="${cmake_root}/bin:${PATH}"
+cmake --version
 
 ffmpeg_version=$(jq -er '.baseline.ffmpeg' "${buildspec}")
 ffmpeg_url=$(jq -er '.dependencies[] | select(.name == "ffmpeg") | .url' "${buildspec}")
@@ -110,10 +123,12 @@ export_lines=(
     "CMAKE_PREFIX_PATH=${obs_prefix};${ffmpeg_prefix};${simde_prefix};${uthash_prefix};${jansson_prefix}"
     "PKG_CONFIG_PATH=${obs_pc_dir}:${ffmpeg_prefix}/lib/pkgconfig:${simde_prefix}/lib/pkgconfig:${uthash_prefix}/lib/pkgconfig:${jansson_prefix}/lib/pkgconfig"
 )
-if [[ -n "${GITHUB_ENV:-}" ]]; then
+if [[ -n "${GITHUB_ENV:-}" && -n "${GITHUB_PATH:-}" ]]; then
     for export_line in "${export_lines[@]}"; do
         printf '%s\n' "${export_line}" >>"${GITHUB_ENV}"
     done
+    printf '%s\n' "${cmake_root}/bin" >>"${GITHUB_PATH}"
 else
+    printf 'PATH=%s/bin:${PATH}\n' "${cmake_root}"
     printf '%s\n' "${export_lines[@]}"
 fi

@@ -24,7 +24,7 @@ local builds, but required for the packaged Linux receiver because they enable
 receiver discovery advertisement.
 
 macOS receiver builds require macOS 12 or later, Xcode command-line tools,
-Homebrew, and the pinned OBS Studio and FFmpeg sources prepared by
+Homebrew, and the pinned CMake, OBS Studio, and FFmpeg dependencies prepared by
 `scripts/receiver/macos/prepare-cambridge-build-dependencies.sh`.
 
 ## Repository layout
