@@ -22,6 +22,7 @@ duration_seconds="${CAMBRIDGE_DURATION_SECONDS:-60}"
 decoder_mode="${CAMBRIDGE_DECODER_MODE:-auto}"
 capture_output="${CAMBRIDGE_CAPTURE_OUTPUT:-0}"
 sender_mode="${CAMBRIDGE_SENDER_MODE:-python}"
+discovery_expectation="${CAMBRIDGE_EXPECT_DISCOVERY:-optional}"
 poll_interval_seconds=1
 obs_wait_seconds=30
 obs_shutdown_wait_seconds=5
@@ -95,6 +96,10 @@ case "${sender_mode}" in
     python|swift) ;;
     *) fail "sender mode must be python or swift" ;;
 esac
+case "${discovery_expectation}" in
+    optional|required|unavailable) ;;
+    *) fail "discovery expectation must be optional, required, or unavailable" ;;
+esac
 [[ "${duration_seconds}" =~ ^[1-9][0-9]*$ ]] || fail "duration must be a positive integer"
 [[ "${rotation_degrees}" =~ ^(0|90|180|270)$ ]] || fail "rotation must be 0, 90, 180, or 270 degrees"
 
@@ -149,6 +154,18 @@ for ((attempt = 0; attempt < obs_wait_seconds; attempt += poll_interval_seconds)
 done
 rg -q 'loaded module=cambridge-obs-plugin' "${obs_log}" || fail "OBS did not load the CamBridge OBS plugin"
 rg -q 'listening:control=' "${obs_log}" || fail "OBS source did not begin listening"
+case "${discovery_expectation}" in
+    required)
+        rg -q 'discovery:service_type=' "${obs_log}" \
+            || fail "receiver discovery registration was not reported"
+        ;;
+    unavailable)
+        rg -q 'discovery_unavailable:' "${obs_log}" \
+            || fail "receiver did not report degraded discovery"
+        ;;
+    optional)
+        ;;
+esac
 
 printf 'timestamp_seconds\tresident_kib\tthreads\tfile_descriptors\tcpu_percent\n' >"${metrics_log}"
 (

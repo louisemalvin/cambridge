@@ -5,6 +5,11 @@ file(READ "${release_version_file}" cambridge_release_version)
 string(STRIP "${cambridge_release_version}" cambridge_release_version)
 project(cambridge-obs-plugin VERSION "${cambridge_release_version}" LANGUAGES CXX)
 
+set(protocol_contract_file "${CMAKE_CURRENT_SOURCE_DIR}/../../../protocol/cambridge-stream-contract.json")
+file(READ "${protocol_contract_file}" protocol_contract_json)
+string(JSON CAMBRIDGE_DISCOVERY_SERVICE_TYPE GET "${protocol_contract_json}"
+       discovery serviceType)
+
 option(CAMBRIDGE_BUILD_PLUGIN "Build the OBS source module" ON)
 option(CAMBRIDGE_BUILD_TESTS "Build CamBridge tests" ON)
 option(CAMBRIDGE_BUILD_SHARED_TESTS_ONLY
@@ -73,9 +78,15 @@ if(CAMBRIDGE_BUILD_PLUGIN)
         OUTPUT_NAME "cambridge-obs-plugin"
     )
     if(APPLE)
+        set(CAMBRIDGE_VERSION "${PROJECT_VERSION}")
+        configure_file(
+            "${CMAKE_CURRENT_SOURCE_DIR}/cmake/macos/Info.plist.in"
+            "${CMAKE_CURRENT_BINARY_DIR}/cambridge-obs-plugin-Info.plist"
+            @ONLY
+        )
         set_target_properties(cambridge-obs-plugin PROPERTIES
             MACOSX_BUNDLE_INFO_PLIST
-                "${CMAKE_CURRENT_SOURCE_DIR}/cmake/macos/Info.plist.in"
+                "${CMAKE_CURRENT_BINARY_DIR}/cambridge-obs-plugin-Info.plist"
             XCODE_ATTRIBUTE_GENERATE_INFOPLIST_FILE NO
         )
     endif()
@@ -163,6 +174,18 @@ if(CAMBRIDGE_BUILD_TESTS AND BUILD_TESTING)
     if(NOT CAMBRIDGE_BUILD_SHARED_TESTS_ONLY)
         cambridge_add_test(cambridge-obs-plugin-native-importer-policy-tests
             tests/native_importer_policy_tests.cpp
+        )
+    endif()
+
+    if(APPLE)
+        cambridge_add_test(cambridge-obs-plugin-bonjour-tests
+            tests/bonjour_lifecycle_tests.cpp
+            src/platform/macos/discovery_advertiser_macos.cpp
+            src/discovery_metadata.cpp
+            src/network_address_candidates.cpp
+        )
+        target_link_libraries(cambridge-obs-plugin-bonjour-tests PRIVATE
+            ${CAMBRIDGE_DNS_SD_LINK_LIBRARIES}
         )
     endif()
 endif()

@@ -21,7 +21,7 @@
     <string>CamBridge uses the local network to receive video from the phone.</string>
     <key>NSBonjourServices</key>
     <array>
-        <string>_cambridge._tcp</string>
+        <string>@CAMBRIDGE_DISCOVERY_SERVICE_TYPE@</string>
     </array>
 </dict>
 </plist>
