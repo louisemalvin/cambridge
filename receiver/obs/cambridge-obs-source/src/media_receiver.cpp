@@ -1,5 +1,6 @@
 #include "media_receiver.hpp"
 
+#include "platform/posix/posix_compat.hpp"
 #include "protocol_contract.generated.hpp"
 #include "receiver_constants.hpp"
 
@@ -8,7 +9,6 @@
 #include <cstring>
 #include <netinet/in.h>
 #include <poll.h>
-#include <pthread.h>
 #include <sys/socket.h>
 #include <time.h>
 #include <unistd.h>
@@ -21,7 +21,7 @@ namespace {
 
 constexpr int kInvalidSocket = -1;
 constexpr int kAddressFamily = AF_INET;
-constexpr int kSocketType = SOCK_DGRAM | SOCK_CLOEXEC;
+constexpr int kSocketType = SOCK_DGRAM;
 constexpr int kSocketProtocol = IPPROTO_UDP;
 constexpr int kSocketReuseEnabled = 1;
 constexpr std::size_t kMinimumReceiveBufferBytes = 64 * 1024;
@@ -65,9 +65,8 @@ bool MediaReceiver::start(std::string &error)
         error = "invalid media receiver bounds";
         return false;
     }
-    const int descriptor = socket(kAddressFamily, kSocketType, kSocketProtocol);
+    const int descriptor = posix::create_cloexec_socket(kAddressFamily, kSocketType, kSocketProtocol, error);
     if (descriptor == kInvalidSocket) {
-        error = std::strerror(errno);
         return false;
     }
     setsockopt(descriptor, SOL_SOCKET, SO_REUSEADDR, &kSocketReuseEnabled, sizeof(kSocketReuseEnabled));
@@ -128,7 +127,7 @@ bool MediaReceiver::accepts_source(const std::string &source) const
 
 void MediaReceiver::run()
 {
-    pthread_setname_np(pthread_self(), "cambridge-rx");
+    posix::set_current_thread_name("cambridge-rx");
     std::vector<std::uint8_t> buffer(config_.maximum_datagram_bytes);
     RtpH264Assembler assembler(
         config_.maximum_access_unit_bytes,

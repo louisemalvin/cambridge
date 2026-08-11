@@ -1,5 +1,6 @@
 #include "decoder.hpp"
 
+#include "platform/posix/posix_compat.hpp"
 #include "protocol_contract.generated.hpp"
 
 extern "C" {
@@ -13,7 +14,6 @@ extern "C" {
 #include <cerrno>
 #include <cstring>
 #include <limits>
-#include <pthread.h>
 
 namespace cambridge {
 namespace {
@@ -589,7 +589,7 @@ void Decoder::report(const std::string &event)
 
 void Decoder::run()
 {
-    pthread_setname_np(pthread_self(), "cambridge-decode");
+    posix::set_current_thread_name("cambridge-decode");
     while (true) {
         AccessUnit access_unit;
         DecoderConfig config;

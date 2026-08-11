@@ -1,5 +1,6 @@
 #include "control_server.hpp"
 
+#include "platform/posix/posix_compat.hpp"
 #include "protocol_contract.generated.hpp"
 #include "receiver_constants.hpp"
 
@@ -8,7 +9,6 @@
 #include <cstring>
 #include <netinet/in.h>
 #include <poll.h>
-#include <pthread.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -45,7 +45,7 @@ bool receive_exact(int fd, std::uint8_t *data, std::size_t size)
         if (poll_result == 0) {
             continue;
         }
-        const ssize_t received = recv(fd, data + offset, size - offset, MSG_NOSIGNAL);
+        const ssize_t received = recv(fd, data + offset, size - offset, 0);
         if (received <= 0) {
             return false;
         }
@@ -58,7 +58,7 @@ bool send_exact(int fd, const std::uint8_t *data, std::size_t size)
 {
     std::size_t offset = 0;
     while (offset < size) {
-        const ssize_t sent = send(fd, data + offset, size - offset, MSG_NOSIGNAL);
+        const ssize_t sent = posix::send_without_sigpipe(fd, data + offset, size - offset, 0);
         if (sent <= 0) {
             return false;
         }
@@ -100,9 +100,8 @@ bool ControlServer::start(std::string &error)
         error = "control port is outside the valid network range";
         return false;
     }
-    const int descriptor = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, IPPROTO_TCP);
+    const int descriptor = posix::create_cloexec_socket(AF_INET, SOCK_STREAM, IPPROTO_TCP, error);
     if (descriptor == kInvalidSocket) {
-        error = std::strerror(errno);
         return false;
     }
     int reuse = 1;
@@ -231,7 +230,7 @@ bool ControlServer::write_frame(int fd, const std::string &json)
 
 void ControlServer::run()
 {
-    pthread_setname_np(pthread_self(), "cambridge-control");
+    posix::set_current_thread_name("cambridge-control");
     while (true) {
         int descriptor = kInvalidSocket;
         {
@@ -246,7 +245,9 @@ void ControlServer::run()
         }
         sockaddr_in peer{};
         socklen_t peer_size = sizeof(peer);
-        const int client = accept4(descriptor, reinterpret_cast<sockaddr *>(&peer), &peer_size, SOCK_CLOEXEC);
+        std::string accept_error;
+        const int client = posix::accept_cloexec(
+            descriptor, reinterpret_cast<sockaddr *>(&peer), &peer_size, accept_error);
         if (client == kInvalidSocket) {
             continue;
         }
