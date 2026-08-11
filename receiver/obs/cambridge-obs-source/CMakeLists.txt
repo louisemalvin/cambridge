@@ -39,8 +39,10 @@ add_library(cambridge-obs-plugin MODULE
     src/network_address_candidates.cpp
     src/platform/interfaces/native_decoder_adapter.hpp
     src/platform/interfaces/native_frame.hpp
+    src/platform/interfaces/native_frame_importer.hpp
     src/platform/linux/native_decoder_linux.cpp
     src/platform/linux/native_frame_linux.hpp
+    src/platform/linux/native_frame_importer_linux.cpp
     src/platform/posix/posix_compat.cpp
     src/protocol_contract.generated.hpp
     src/receiver_constants.hpp
@@ -175,6 +177,16 @@ if(BUILD_TESTING)
         -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror
     )
     add_test(NAME cambridge-obs-plugin-frame-lifetime-tests COMMAND cambridge-obs-plugin-frame-lifetime-tests)
+
+    add_executable(cambridge-obs-plugin-native-importer-policy-tests
+        tests/native_importer_policy_tests.cpp
+    )
+    target_compile_features(cambridge-obs-plugin-native-importer-policy-tests PRIVATE cxx_std_17)
+    target_compile_options(cambridge-obs-plugin-native-importer-policy-tests PRIVATE
+        -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror
+    )
+    add_test(NAME cambridge-obs-plugin-native-importer-policy-tests
+        COMMAND cambridge-obs-plugin-native-importer-policy-tests)
 endif()
 
 install(TARGETS cambridge-obs-plugin

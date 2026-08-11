@@ -84,8 +84,8 @@ command -v obs >/dev/null 2>&1 || fail "OBS is required"
 ffmpeg_path=$(command -v ffmpeg) || fail "ffmpeg is required"
 python_path=$(command -v python3) || fail "python3 is required"
 case "${decoder_mode}" in
-    auto|cpu) ;;
-    *) fail "decoder mode must be auto or cpu" ;;
+    auto|cpu|native_required) ;;
+    *) fail "decoder mode must be auto, cpu, or native_required" ;;
 esac
 case "${capture_output}" in
     0|1) ;;

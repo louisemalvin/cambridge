@@ -112,11 +112,14 @@ bool dump_button_clicked(obs_properties_t *, obs_property_t *, void *data)
 
 CamBridgeSource::CamBridgeSource(SourceConfig config, obs_source_t *source)
     : config_(std::move(config)), source_(source),
-      renderer_(RendererConfig{config_.transparent_placeholder}, [this](const std::string &event) {
-          report(event);
-      }, [this](std::uint64_t generation, MediaPathFailureCode code, const std::string &detail) {
-          post_media_path_failure({generation, code, detail});
-      })
+      renderer_(RendererConfig{config_.transparent_placeholder}, create_native_frame_importer(),
+                [this](const std::string &event) {
+                    report(event);
+                },
+                [this](std::uint64_t generation, MediaPathFailureCode code,
+                       const std::string &detail) {
+                    post_media_path_failure({generation, code, detail});
+                })
 {
 }
 

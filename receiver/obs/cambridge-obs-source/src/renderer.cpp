@@ -1,17 +1,9 @@
 #include "renderer.hpp"
 
-#include "platform/linux/native_frame_linux.hpp"
 #include "protocol_contract.generated.hpp"
-
-#include <drm_fourcc.h>
-
-#include <libavutil/hwcontext_drm.h>
 
 #include <obs/obs.h>
 
-#include <array>
-#include <cstring>
-#include <limits>
 #include <time.h>
 
 namespace cambridge {
@@ -26,10 +18,8 @@ constexpr std::uint32_t kNv12TextureLevels = 1;
 constexpr std::uint32_t kNoTextureFlags = 0;
 constexpr std::uint32_t kDynamicTextureFlags = GS_DYNAMIC;
 constexpr std::uint32_t kNoFlip = 0;
-constexpr std::uint32_t kSingleDmabufPlaneCount = 1;
 constexpr std::uint32_t kNv12ChromaColumnsDivisor = 2;
 constexpr std::uint32_t kNv12ChromaRowsDivisor = 2;
-constexpr std::uint32_t kNv12PlaneCount = 2;
 constexpr char kNv12EffectName[] = "cambridge-nv12.effect";
 constexpr char kNv12Effect[] = R"(
 uniform float4x4 ViewProj;
@@ -104,8 +94,10 @@ std::uint64_t monotonic_time_ns()
 
 } // namespace
 
-Renderer::Renderer(RendererConfig config, EventCallback on_event, MediaPathFailureCallback on_failure)
-    : config_(config), on_event_(std::move(on_event)), on_failure_(std::move(on_failure))
+Renderer::Renderer(RendererConfig config, std::unique_ptr<NativeFrameImporter> importer,
+                   EventCallback on_event, MediaPathFailureCallback on_failure)
+    : config_(config), importer_(std::move(importer)), on_event_(std::move(on_event)),
+      on_failure_(std::move(on_failure))
 {
     static_assert(kTextureSlotCount == contract::kTexturePoolSlots);
 }
@@ -160,25 +152,6 @@ void Renderer::ensure_graphics_resources()
     graphics_resources_ready_ = true;
 }
 
-void Renderer::query_dmabuf_capabilities()
-{
-    if (dma_buf_capabilities_checked_) {
-        return;
-    }
-    enum gs_dmabuf_flags flags = GS_DMABUF_FLAG_NONE;
-    uint32_t *formats = nullptr;
-    size_t format_count = 0;
-    dma_buf_supported_ = gs_query_dmabuf_capabilities(&flags, &formats, &format_count);
-    if (formats) {
-        bfree(formats);
-    }
-    dma_buf_capabilities_checked_ = true;
-    report((dma_buf_supported_ ? "obs_dma_buf_capabilities_available" :
-                                "obs_dma_buf_capabilities_unavailable") +
-           std::string(":flags=") + std::to_string(static_cast<std::uint32_t>(flags)) +
-           ":format_count=" + std::to_string(format_count));
-}
-
 NativeSetupResult Renderer::prepare_native_session(std::uint32_t maximum_width,
                                                    std::uint32_t maximum_height)
 {
@@ -189,16 +162,17 @@ NativeSetupResult Renderer::prepare_native_session(std::uint32_t maximum_width,
     if (!placeholder_ || !nv12_effect_) {
         return {NativeSetupStatus::Failed, "OBS graphics resources are unavailable"};
     }
-    query_dmabuf_capabilities();
-    if (!dma_buf_supported_) {
-        return {NativeSetupStatus::Unsupported, "OBS DMA-BUF import is unavailable"};
+    if (!importer_) {
+        return {NativeSetupStatus::Unsupported, "native frame importer is unavailable"};
     }
-    return {NativeSetupStatus::Ready, {}};
+    return importer_->prepare(maximum_width, maximum_height);
 }
 
 void Renderer::discard_prepared_native_session()
 {
-    // Native preparation currently reserves only bounded capability state.
+    if (importer_) {
+        importer_->reset();
+    }
 }
 
 void Renderer::activate_session_media_path(SessionMediaPath path)
@@ -262,95 +236,35 @@ bool Renderer::update_cpu_slot(TextureSlot &slot, const VideoFramePtr &frame)
     return true;
 }
 
-bool Renderer::update_dmabuf_slot(TextureSlot &slot, const VideoFramePtr &frame)
+bool Renderer::update_native_slot(TextureSlot &slot, const VideoFramePtr &frame)
 {
     const auto *storage = frame ? std::get_if<NativeFrameStorage>(&frame->storage) : nullptr;
-    const auto *native_frame = storage && storage->frame
-                                   ? dynamic_cast<const LinuxNativeFrame *>(storage->frame.get())
-                                   : nullptr;
-    if (!native_frame || !native_frame->drm_frame() || !dma_buf_supported_) {
-        report("dma_buf_frame_unavailable");
+    if (!storage || !storage->frame || !importer_) {
+        report("native_frame_unavailable");
         return false;
     }
-    auto *descriptor = reinterpret_cast<AVDRMFrameDescriptor *>(native_frame->drm_frame()->data[0]);
-    if (!descriptor || descriptor->nb_layers == 0 || descriptor->layers[0].nb_planes == 0) {
-        report("dma_buf_descriptor_empty");
+    NativeImportResult result = importer_->import_frame(storage->frame, frame->frame_generation);
+    if (!result.imported_texture) {
+        if (!result.error.empty()) {
+            report(result.error);
+        }
         return false;
     }
-    std::array<const AVDRMPlaneDescriptor *, kNv12PlaneCount> planes{};
-    if (descriptor->nb_layers == 1 && descriptor->layers[0].format == DRM_FORMAT_NV12 &&
-        descriptor->layers[0].nb_planes == kNv12PlaneCount) {
-        planes[0] = &descriptor->layers[0].planes[0];
-        planes[1] = &descriptor->layers[0].planes[1];
-    } else if (descriptor->nb_layers == kNv12PlaneCount && descriptor->layers[0].nb_planes == 1 &&
-               descriptor->layers[1].nb_planes == 1 && descriptor->layers[0].format == DRM_FORMAT_R8 &&
-               descriptor->layers[1].format == DRM_FORMAT_GR88) {
-        planes[0] = &descriptor->layers[0].planes[0];
-        planes[1] = &descriptor->layers[1].planes[0];
-    } else {
-        report("dma_buf_format_unsupported:layers=" + std::to_string(descriptor->nb_layers) +
-               ":first_planes=" + std::to_string(descriptor->layers[0].nb_planes) +
-               ":first_format=" + std::to_string(descriptor->layers[0].format));
+    if (result.imported_texture->format() != ImportedTextureFormat::Nv12) {
+        report("native_texture_format_unsupported");
         return false;
     }
-    constexpr std::array<std::uint32_t, kNv12PlaneCount> drm_formats = {DRM_FORMAT_R8, DRM_FORMAT_GR88};
-    constexpr std::array<enum gs_color_format, kNv12PlaneCount> obs_formats = {GS_R8, GS_R8G8};
-    const std::array<std::uint32_t, kNv12PlaneCount> plane_widths = {
-        frame->width, (frame->width + kNv12ChromaColumnsDivisor - 1U) / kNv12ChromaColumnsDivisor};
-    const std::array<std::uint32_t, kNv12PlaneCount> plane_heights = {
-        frame->height, (frame->height + kNv12ChromaRowsDivisor - 1U) / kNv12ChromaRowsDivisor};
-    std::array<int, kNv12PlaneCount> fds{};
-    std::array<std::uint32_t, kNv12PlaneCount> strides{};
-    std::array<std::uint32_t, kNv12PlaneCount> offsets{};
-    std::array<std::uint64_t, kNv12PlaneCount> modifiers{};
-    for (std::size_t plane = 0; plane < kNv12PlaneCount; ++plane) {
-        const AVDRMPlaneDescriptor &plane_descriptor = *planes[plane];
-        if (plane_descriptor.object_index >= descriptor->nb_objects) {
-            report("dma_buf_plane_object_out_of_range");
-            return false;
-        }
-        const AVDRMObjectDescriptor &object = descriptor->objects[plane_descriptor.object_index];
-        if (object.fd < 0 || plane_descriptor.pitch <= 0 || plane_descriptor.offset < 0 ||
-            static_cast<std::uint64_t>(plane_descriptor.pitch) > std::numeric_limits<std::uint32_t>::max() ||
-            static_cast<std::uint64_t>(plane_descriptor.offset) > std::numeric_limits<std::uint32_t>::max()) {
-            report("dma_buf_plane_metadata_invalid");
-            return false;
-        }
-        fds[plane] = object.fd;
-        strides[plane] = static_cast<std::uint32_t>(plane_descriptor.pitch);
-        offsets[plane] = static_cast<std::uint32_t>(plane_descriptor.offset);
-        modifiers[plane] = object.format_modifier;
-    }
-    if (!dma_buf_layout_reported_) {
-        report("dma_buf_layout:fourcc=" + std::to_string(descriptor->layers[0].format) +
-               ":planes=" + std::to_string(descriptor->layers[0].nb_planes) +
-               ":stride0=" + std::to_string(strides[0]) + ":stride1=" + std::to_string(strides[1]) +
-               ":offset0=" + std::to_string(offsets[0]) + ":offset1=" + std::to_string(offsets[1]) +
-               ":modifier0=" + std::to_string(modifiers[0]) + ":modifier1=" +
-               std::to_string(modifiers[1]) + ":sync=implicit");
-        dma_buf_layout_reported_ = true;
-    }
-    std::array<gs_texture_t *, kNv12PlaneCount> textures{};
-    for (std::size_t plane = 0; plane < kNv12PlaneCount; ++plane) {
-        textures[plane] = gs_texture_create_from_dmabuf(
-            plane_widths[plane], plane_heights[plane], drm_formats[plane], obs_formats[plane],
-            kSingleDmabufPlaneCount, &fds[plane], &strides[plane], &offsets[plane], &modifiers[plane]);
-        if (!textures[plane]) {
-            for (gs_texture_t *texture : textures) {
-                if (texture) {
-                    gs_texture_destroy(texture);
-                }
-            }
-            report("dma_buf_texture_import_failed:format=" + std::to_string(drm_formats[plane]) +
-                   ":modifier=" + std::to_string(modifiers[plane]));
-            return false;
-        }
+    if (!result.imported_texture->primary_texture() || !result.imported_texture->chroma_texture()) {
+        report("native_texture_planes_unavailable");
+        return false;
     }
     destroy_slot(slot);
-    slot.texture = textures[0];
-    slot.uv_texture = textures[1];
+    slot.texture = result.imported_texture->primary_texture();
+    slot.uv_texture = result.imported_texture->chroma_texture();
+    slot.imported_texture = std::move(result.imported_texture);
     slot.frame = frame;
     slot.generation = frame->frame_generation;
+    gpu_copies_.fetch_add(result.gpu_copy_count);
     return true;
 }
 
@@ -368,7 +282,7 @@ bool Renderer::update_slot(TextureSlot &slot, const VideoFramePtr &frame)
             fail(frame, MediaPathFailureCode::NativeImport, "native session received CPU frame storage");
             return false;
         }
-        if (update_dmabuf_slot(slot, frame)) {
+        if (update_native_slot(slot, frame)) {
             if (active_render_mode_ != kOpaqueRenderMode) {
                 active_render_mode_ = kOpaqueRenderMode;
                 report("render_mode=dma_buf_direct");
@@ -443,9 +357,10 @@ void Renderer::draw_cpu(const TextureSlot &slot, std::uint32_t output_width, std
     }
 }
 
-void Renderer::draw_dmabuf(const TextureSlot &slot, std::uint32_t output_width, std::uint32_t output_height)
+void Renderer::draw_native(const TextureSlot &slot, std::uint32_t output_width, std::uint32_t output_height)
 {
-    if (!slot.frame) {
+    if (!slot.frame || !slot.imported_texture ||
+        slot.imported_texture->format() != ImportedTextureFormat::Nv12) {
         draw_placeholder(output_width, output_height);
         return;
     }
@@ -480,8 +395,8 @@ bool Renderer::render(const VideoFramePtr &frame, std::uint32_t output_width, st
             return false;
         }
     }
-    if (active_media_path_ == SessionMediaPath::Native && slot->texture) {
-        draw_dmabuf(*slot, output_width, output_height);
+    if (active_media_path_ == SessionMediaPath::Native && slot->imported_texture) {
+        draw_native(*slot, output_width, output_height);
     } else {
         draw_cpu(*slot, output_width, output_height, frame->color_range == "full", frame->rotation_degrees);
     }
@@ -490,10 +405,12 @@ bool Renderer::render(const VideoFramePtr &frame, std::uint32_t output_width, st
 
 void Renderer::destroy_slot(TextureSlot &slot)
 {
-    if (slot.texture) {
+    const bool has_imported_texture = static_cast<bool>(slot.imported_texture);
+    slot.imported_texture.reset();
+    if (!has_imported_texture && slot.texture) {
         gs_texture_destroy(slot.texture);
     }
-    if (slot.uv_texture) {
+    if (!has_imported_texture && slot.uv_texture) {
         gs_texture_destroy(slot.uv_texture);
     }
     slot = TextureSlot{};
@@ -515,9 +432,10 @@ void Renderer::reset()
         gs_effect_destroy(nv12_effect_);
         nv12_effect_ = nullptr;
     }
+    if (importer_) {
+        importer_->reset();
+    }
     graphics_resources_ready_ = false;
-    dma_buf_capabilities_checked_ = false;
-    dma_buf_layout_reported_ = false;
     active_media_path_ = SessionMediaPath::Unselected;
     failed_generation_ = 0;
 }
