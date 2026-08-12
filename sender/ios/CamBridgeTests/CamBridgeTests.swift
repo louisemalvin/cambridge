@@ -218,6 +218,9 @@ final class CamBridgeTests: XCTestCase {
         )
 
         model.setBitrateText("1")
+        model.selectResolution(SenderVideoCatalog.fullHd.id)
+        model.selectFrameRate(SenderVideoCatalog.defaultFrameRate)
+        XCTAssertEqual(model.bitrateText, "1")
         model.selectResolution(SenderVideoCatalog.resolution2k.id)
         XCTAssertEqual(model.bitrateText, "9")
         model.selectFrameRate(60)

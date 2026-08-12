@@ -22,8 +22,8 @@ final class CoordinatorLifecycleTests: XCTestCase {
         )
         let configuration = try StreamConfiguration(
             resolution: SenderVideoCatalog.fullHd,
-            fps: 30,
-            bitrateBps: 5_000_000,
+            fps: 60,
+            bitrateBps: 1_000_000,
             orientation: .zero
         )
 
@@ -45,11 +45,30 @@ final class CoordinatorLifecycleTests: XCTestCase {
         XCTAssertEqual(identity.generation, UInt64(CamBridgeContract.Validation.minimumGeneration))
         XCTAssertEqual(activeConfiguration, configuration)
         XCTAssertEqual(mediaPort, CamBridgeContract.Defaults.controlPort + CamBridgeContract.Defaults.mediaPortOffset)
+        guard case let .hello(_, _, profileId, codedWidth, codedHeight, rotation, fps, bitrateBps) = await control.hello() else {
+            return XCTFail("expected one exact hello")
+        }
+        XCTAssertEqual(profileId, SenderVideoCatalog.profileID)
+        XCTAssertEqual(codedWidth, SenderVideoCatalog.fullHd.codedWidth)
+        XCTAssertEqual(codedHeight, SenderVideoCatalog.fullHd.codedHeight)
+        XCTAssertEqual(rotation, .zero)
+        XCTAssertEqual(fps, 60)
+        XCTAssertEqual(bitrateBps, 1_000_000)
         let startCount = await capture.startCount()
         XCTAssertEqual(startCount, 1)
+        await capture.simulateCameraControls(position: .front, zoomRatio: CameraZoomPolicy.telephotoTarget)
+        let afterCameraControls = await coordinator.snapshotStream()
+        guard case let .streaming(controlIdentity, controlConfiguration, _) = afterCameraControls.state else {
+            return XCTFail("camera controls must retain the streaming wire state")
+        }
+        XCTAssertEqual(controlIdentity, identity)
+        XCTAssertEqual(controlConfiguration, configuration)
 
         _ = await coordinator.stop()
         _ = await coordinator.stop()
+        let diagnostics = await coordinator.diagnostics()
+        XCTAssertEqual(diagnostics?.cameraPosition, CameraPosition.front.rawValue)
+        XCTAssertEqual(diagnostics?.cameraZoomRatio, CameraZoomPolicy.telephotoTarget)
 
         let stoppedSnapshot = await coordinator.snapshotStream()
         let stopCount = await capture.stopCount()
@@ -85,6 +104,64 @@ final class CoordinatorLifecycleTests: XCTestCase {
         XCTAssertEqual(secondStopCount, 2)
         XCTAssertEqual(secondDatagramCloseCount, 2)
         XCTAssertEqual(secondControlCloseCount, 2)
+    }
+
+    func testCameraAndEncoderRejectionsAttemptExactConfigurationOnceBeforeControlConnect() async throws {
+        let endpoint = try ReceiverEndpoint(host: "127.0.0.1")
+        let receiver = try ReceiverCapabilities(
+            receiverId: "test-receiver",
+            displayName: "Test Receiver",
+            maxLongEdge: CamBridgeContract.Geometry.maximumLongEdge,
+            maxShortEdge: CamBridgeContract.Geometry.maximumShortEdge
+        )
+        let configuration = try StreamConfiguration(
+            resolution: SenderVideoCatalog.resolution2k,
+            fps: 60,
+            bitrateBps: 1_000_000,
+            orientation: .ninety
+        )
+
+        for rejection in RejectingCaptureService.Rejection.allCases {
+            let capture = RejectingCaptureService(rejection: rejection)
+            let control = FakeSessionControl()
+            let coordinator = StreamSessionCoordinator(
+                capture: capture,
+                controlFactory: FakeSessionControlFactory(connection: control),
+                datagramFactory: FakeDatagramFactory(sender: FakeDatagramSender())
+            )
+
+            let result = await coordinator.start(
+                endpoint: endpoint,
+                controlTarget: .manual(endpoint),
+                receiver: receiver,
+                configuration: configuration,
+                cameraPosition: .back
+            )
+
+            guard case let .failure(failure) = result else {
+                return XCTFail("\(rejection) must fail the single Start attempt")
+            }
+            switch (rejection, failure) {
+            case (.camera, .cameraUnavailable(_)), (.encoder, .encoderUnavailable(_)):
+                break
+            default:
+                XCTFail("unexpected mapped failure: \(failure)")
+            }
+            let prepareCount = await capture.prepareCount()
+            let stopCount = await capture.stopCount()
+            let receivedConfiguration = await capture.receivedConfiguration()
+            let connectCount = await control.connectCount()
+            XCTAssertEqual(prepareCount, 1)
+            XCTAssertEqual(stopCount, 1)
+            XCTAssertEqual(receivedConfiguration, configuration)
+            XCTAssertEqual(connectCount, 0)
+            let diagnostics = await coordinator.diagnostics()
+            XCTAssertEqual(diagnostics?.codedWidth, configuration.geometry.codedWidth)
+            XCTAssertEqual(diagnostics?.codedHeight, configuration.geometry.codedHeight)
+            XCTAssertEqual(diagnostics?.fps, configuration.fps)
+            XCTAssertEqual(diagnostics?.bitrateBps, configuration.bitrateBps)
+            XCTAssertEqual(diagnostics?.startStage, "preparing_capture_and_encoder")
+        }
     }
 
     func testStopInvalidatesStartWhileCapturePreparationIsSuspended() async throws {
@@ -439,6 +516,7 @@ private actor FakeCaptureService: StreamCaptureControlling {
     private var callback: (@Sendable (Result<EncodedAccessUnit, VideoToolboxEncoderError>) -> Void)?
     private var preparedConfiguration: StreamConfiguration?
     private var successfulAccessUnits = 0
+    private var currentCameraState = CameraState.initial
 
     func prepare(
         configuration: StreamConfiguration,
@@ -458,7 +536,7 @@ private actor FakeCaptureService: StreamCaptureControlling {
     }
 
     func cameraState() async -> CameraState {
-        .initial
+        currentCameraState
     }
 
     func encoderMetrics() async -> VideoToolboxEncoderMetrics? {
@@ -484,6 +562,56 @@ private actor FakeCaptureService: StreamCaptureControlling {
         if case .success = result { successfulAccessUnits += 1 }
         callback?(result)
     }
+
+    func simulateCameraControls(position: CameraPosition, zoomRatio: Double) {
+        currentCameraState.position = position
+        currentCameraState.zoomRatio = zoomRatio
+    }
+}
+
+private actor RejectingCaptureService: StreamCaptureControlling {
+    enum Rejection: CaseIterable, Sendable {
+        case camera
+        case encoder
+    }
+
+    private let rejection: Rejection
+    private var prepares = 0
+    private var stops = 0
+    private var configuration: StreamConfiguration?
+
+    init(rejection: Rejection) {
+        self.rejection = rejection
+    }
+
+    func prepare(
+        configuration: StreamConfiguration,
+        position: CameraPosition,
+        onAccessUnit: @escaping @Sendable (Result<EncodedAccessUnit, VideoToolboxEncoderError>) -> Void
+    ) async throws {
+        prepares += 1
+        self.configuration = configuration
+        switch rejection {
+        case .camera:
+            throw CaptureServiceError.formatUnavailable
+        case .encoder:
+            throw VideoToolboxEncoderError.propertyFailed("average-bitrate", -1)
+        }
+    }
+
+    func start() async throws {
+        XCTFail("rejected capture must never start")
+    }
+
+    func stop() async {
+        stops += 1
+    }
+
+    func cameraState() async -> CameraState { .initial }
+    func encoderMetrics() async -> VideoToolboxEncoderMetrics? { nil }
+    func prepareCount() -> Int { prepares }
+    func stopCount() -> Int { stops }
+    func receivedConfiguration() -> StreamConfiguration? { configuration }
 }
 
 private actor BlockingCaptureService: StreamCaptureControlling {
@@ -545,6 +673,8 @@ private actor FakeSessionControl: CamBridgeControlConnectionProtocol {
     private var closed = false
     private var closes = 0
     private var stops = 0
+    private var connects = 0
+    private var lastHello: ControlMessage?
 
     init(response: ControlMessage? = nil) {
         self.configuredResponse = response
@@ -552,6 +682,7 @@ private actor FakeSessionControl: CamBridgeControlConnectionProtocol {
     }
 
     func connect() async throws {
+        connects += 1
         connected = true
         closed = false
         response = configuredResponse
@@ -561,6 +692,7 @@ private actor FakeSessionControl: CamBridgeControlConnectionProtocol {
         guard connected else { throw CamBridgeControlConnectionError.notConnected }
         switch message {
         case let .hello(sessionId, generation, profileId, _, _, _, _, _):
+            lastHello = message
             if response == nil {
                 response = .accepted(
                     sessionId: sessionId,
@@ -605,6 +737,8 @@ private actor FakeSessionControl: CamBridgeControlConnectionProtocol {
     func didClose() -> Bool { closed }
     func closeCount() -> Int { closes }
     func stopCount() -> Int { stops }
+    func connectCount() -> Int { connects }
+    func hello() -> ControlMessage? { lastHello }
 }
 
 private struct FakeSessionControlFactory: CamBridgeControlConnectionFactory {

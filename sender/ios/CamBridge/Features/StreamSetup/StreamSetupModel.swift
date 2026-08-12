@@ -204,6 +204,7 @@ public final class StreamSetupModel {
     }
 
     public func selectResolution(_ resolutionID: String) {
+        guard resolutionID != selectedResolutionID else { return }
         guard let resolution = SenderVideoCatalog.resolution(id: resolutionID),
               let suggestedBitrate = SenderVideoCatalog.suggestedBitrateBps(
                 resolution: resolution,
@@ -220,6 +221,7 @@ public final class StreamSetupModel {
     }
 
     public func selectFrameRate(_ fps: Int) {
+        guard fps != selectedFPS else { return }
         guard SenderVideoCatalog.frameRates.contains(fps),
               let resolution = selectedResolution,
               let suggestedBitrate = SenderVideoCatalog.suggestedBitrateBps(
