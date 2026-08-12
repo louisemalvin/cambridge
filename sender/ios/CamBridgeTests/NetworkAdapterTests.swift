@@ -1,9 +1,76 @@
 import XCTest
 import UIKit
+@preconcurrency import Network
 import CamBridgeCore
 @testable import CamBridge
 
 final class NetworkAdapterTests: XCTestCase {
+    func testLiveControlConnectionExchangesFramedMessagesAndHandlesRemoteEOF() async throws {
+        let listener = try NWListener(using: .tcp, on: .any)
+        let listenerQueue = DispatchQueue(label: "dev.cambridge.sender.tests.control-listener")
+        let (incomingConnections, incomingContinuation) = AsyncStream.makeStream(of: NWConnection.self)
+        listener.newConnectionHandler = { connection in
+            incomingContinuation.yield(connection)
+        }
+        defer {
+            incomingContinuation.finish()
+            listener.cancel()
+        }
+        let listenerPort = try await start(listener: listener, queue: listenerQueue)
+        let expectedHello = ControlMessage.hello(
+            sessionId: "loopback-session",
+            generation: UInt64(CamBridgeContract.Validation.minimumGeneration),
+            profileId: SenderVideoCatalog.profileID,
+            codedWidth: SenderVideoCatalog.fullHd.codedWidth,
+            codedHeight: SenderVideoCatalog.fullHd.codedHeight,
+            rotation: .ninety,
+            fps: 60,
+            bitrateBps: SenderVideoCatalog.minimumBitrateMbps * SenderVideoCatalog.bitrateUnitBps
+        )
+        let expectedAccepted = ControlMessage.accepted(
+            sessionId: "loopback-session",
+            generation: UInt64(CamBridgeContract.Validation.minimumGeneration),
+            profileId: SenderVideoCatalog.profileID,
+            mediaPort: CamBridgeContract.Defaults.controlPort + CamBridgeContract.Defaults.mediaPortOffset,
+            maxLongEdge: CamBridgeContract.Geometry.maximumLongEdge,
+            maxShortEdge: CamBridgeContract.Geometry.maximumShortEdge
+        )
+        let serverTask = Task {
+            let serverConnection = try await firstConnection(from: incomingConnections)
+            defer { serverConnection.cancel() }
+            try await start(connection: serverConnection, queue: listenerQueue)
+            let hello = try await receiveControlMessage(from: serverConnection)
+            let responsePayload = try ControlMessageCodec.encode(expectedAccepted)
+            let responseFrame = try ControlFrameEncoder.frame(responsePayload)
+            let splitIndex = responseFrame.index(
+                responseFrame.startIndex,
+                offsetBy: responseFrame.count / Self.responseFragmentDivisor
+            )
+            try await send(Data(responseFrame[..<splitIndex]), on: serverConnection)
+            try await Task.sleep(nanoseconds: Self.responseFragmentDelayNanoseconds)
+            try await send(Data(responseFrame[splitIndex...]), on: serverConnection)
+            try await finishWriting(on: serverConnection)
+            return hello
+        }
+        defer { serverTask.cancel() }
+
+        let endpoint = try ReceiverEndpoint(
+            host: "127.0.0.1",
+            controlPort: Int(listenerPort.rawValue)
+        )
+        let control = CamBridgeControlConnection(target: .manual(endpoint))
+        try await control.connect()
+        try await control.send(expectedHello)
+        let accepted = try await control.receive()
+        let eof = try await control.receive()
+        let receivedHello = try await serverTask.value
+        await control.close()
+
+        XCTAssertEqual(receivedHello, expectedHello)
+        XCTAssertEqual(accepted, expectedAccepted)
+        XCTAssertNil(eof)
+    }
+
     func testProbeValidatesCapabilitiesAndClosesConnection() async throws {
         let endpoint = try ReceiverEndpoint(host: "127.0.0.1")
         let connection = FakeControlConnection()
@@ -132,6 +199,125 @@ final class NetworkAdapterTests: XCTestCase {
         XCTAssertEqual(resolver.rotation(interfaceOrientation: .landscapeLeft), .oneEighty)
         XCTAssertEqual(resolver.rotation(interfaceOrientation: .portraitUpsideDown), .twoSeventy)
         XCTAssertEqual(resolver.rotation(interfaceOrientation: .unknown), .zero)
+    }
+
+    private static let responseFragmentDivisor = 2
+    private static let responseFragmentDelayNanoseconds: UInt64 = 20_000_000
+}
+
+private enum LoopbackControlServerError: Error {
+    case listenerFailed(String)
+    case listenerMissingPort
+    case connectionFailed(String)
+    case connectionClosed
+}
+
+private func start(listener: NWListener, queue: DispatchQueue) async throws -> NWEndpoint.Port {
+    try await withCheckedThrowingContinuation { continuation in
+        listener.stateUpdateHandler = { state in
+            switch state {
+            case .ready:
+                listener.stateUpdateHandler = nil
+                guard let port = listener.port else {
+                    continuation.resume(throwing: LoopbackControlServerError.listenerMissingPort)
+                    return
+                }
+                continuation.resume(returning: port)
+            case let .failed(error):
+                listener.stateUpdateHandler = nil
+                continuation.resume(throwing: LoopbackControlServerError.listenerFailed(String(describing: error)))
+            case .cancelled:
+                listener.stateUpdateHandler = nil
+                continuation.resume(throwing: LoopbackControlServerError.connectionClosed)
+            default:
+                break
+            }
+        }
+        listener.start(queue: queue)
+    }
+}
+
+private func firstConnection(from connections: AsyncStream<NWConnection>) async throws -> NWConnection {
+    for await connection in connections { return connection }
+    throw LoopbackControlServerError.connectionClosed
+}
+
+private func start(connection: NWConnection, queue: DispatchQueue) async throws {
+    try await withCheckedThrowingContinuation { continuation in
+        connection.stateUpdateHandler = { state in
+            switch state {
+            case .ready:
+                connection.stateUpdateHandler = nil
+                continuation.resume()
+            case let .failed(error):
+                connection.stateUpdateHandler = nil
+                continuation.resume(throwing: LoopbackControlServerError.connectionFailed(String(describing: error)))
+            case .cancelled:
+                connection.stateUpdateHandler = nil
+                continuation.resume(throwing: LoopbackControlServerError.connectionClosed)
+            default:
+                break
+            }
+        }
+        connection.start(queue: queue)
+    }
+}
+
+private func receiveControlMessage(from connection: NWConnection) async throws -> ControlMessage {
+    var decoder = ControlFrameDecoder()
+    while true {
+        let data = try await receiveData(from: connection)
+        if let payload = try decoder.append(data).first {
+            return try ControlMessageCodec.decode(payload)
+        }
+    }
+}
+
+private func receiveData(from connection: NWConnection) async throws -> Data {
+    try await withCheckedThrowingContinuation { continuation in
+        connection.receive(
+            minimumIncompleteLength: MemoryLayout<UInt8>.size,
+            maximumLength: CamBridgeContract.Control.maximumMessageBytes + MemoryLayout<UInt32>.size
+        ) { data, _, isComplete, error in
+            if let error {
+                continuation.resume(throwing: LoopbackControlServerError.connectionFailed(String(describing: error)))
+            } else if let data, !data.isEmpty {
+                continuation.resume(returning: data)
+            } else if isComplete {
+                continuation.resume(throwing: LoopbackControlServerError.connectionClosed)
+            } else {
+                continuation.resume(throwing: LoopbackControlServerError.connectionFailed("empty receive"))
+            }
+        }
+    }
+}
+
+private func send(_ data: Data, on connection: NWConnection) async throws {
+    try await withCheckedThrowingContinuation { continuation in
+        connection.send(content: data, completion: .contentProcessed { error in
+            if let error {
+                continuation.resume(throwing: LoopbackControlServerError.connectionFailed(String(describing: error)))
+            } else {
+                continuation.resume()
+            }
+        })
+    }
+}
+
+private func finishWriting(on connection: NWConnection) async throws {
+    try await withCheckedThrowingContinuation { continuation in
+        connection.send(
+            content: nil,
+            contentContext: .finalMessage,
+            isComplete: true,
+            completion: .contentProcessed { error in
+                if let error {
+                    continuation.resume(throwing: LoopbackControlServerError.connectionFailed(String(describing: error)))
+                } else {
+                    continuation.resume()
+                }
+            }
+        )
     }
 }
 
