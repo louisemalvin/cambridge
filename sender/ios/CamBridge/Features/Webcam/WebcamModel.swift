@@ -76,7 +76,10 @@ public final class WebcamModel {
                 try await capture.setZoomRatio(ratio)
                 cameraControlError = nil
             } catch {
-                cameraControlError = "Zoom failed: \(String(describing: error))"
+                cameraControlError = "Zoom is unavailable right now."
+                logger.event("camera_zoom_failed", category: .camera, fields: [
+                    "failure": String(describing: error),
+                ])
             }
         }
     }
@@ -91,7 +94,7 @@ public final class WebcamModel {
                 try await capture.switchCamera()
                 logger.event("camera_facing_switched", category: .camera)
             } catch {
-                cameraControlError = "Camera switch failed: \(String(describing: error))"
+                cameraControlError = "Couldn’t switch cameras."
                 logger.event("camera_facing_switch_failed", category: .camera, fields: [
                     "failure": String(describing: error),
                 ])

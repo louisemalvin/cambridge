@@ -113,9 +113,12 @@ public actor CaptureService {
 
     public func start() async throws {
         guard let session else { throw CaptureServiceError.notPrepared }
-        sessionQueue.sync {
-            guard !session.isRunning else { return }
-            session.startRunning()
+        let isRunning = sessionQueue.sync {
+            if !session.isRunning { session.startRunning() }
+            return session.isRunning
+        }
+        guard isRunning else {
+            throw CaptureServiceError.runtimeError("Capture session did not enter the running state")
         }
     }
 
@@ -155,6 +158,7 @@ public actor CaptureService {
     }
 
     public func cameraState() async -> CameraState {
+        state.activeStabilization = Self.activeStabilization(for: videoOutput?.connection(with: .video))
         state
     }
 
@@ -189,6 +193,7 @@ public actor CaptureService {
 
     public func switchCamera() async throws {
         guard let session,
+              let currentDevice = device,
               let currentInput = videoInput,
               let output = videoOutput,
               let configuration = activeConfiguration,
@@ -212,29 +217,76 @@ public actor CaptureService {
         } catch {
             throw CaptureServiceError.configurationFailed(String(describing: error))
         }
-        let targetZoomMapping = try sessionQueue.sync {
-            try Self.configure(
-                device: targetDevice,
-                format: targetFormat.format,
-                fps: configuration.fps
-            )
-        }
         let switchResult = sessionQueue.sync { () -> CameraSwitchResult in
+            let currentFormat = currentDevice.activeFormat
             session.beginConfiguration()
             session.removeInput(currentInput)
             guard session.canAddInput(targetInput) else {
-                let restored = session.canAddInput(currentInput)
-                if restored {
-                    session.addInput(currentInput)
-                    Self.configureOutputConnection(output.connection(with: .video))
-                }
+                let restored = Self.restoreCameraInput(
+                    currentInput,
+                    device: currentDevice,
+                    format: currentFormat,
+                    fps: configuration.fps,
+                    session: session,
+                    output: output
+                )
                 session.commitConfiguration()
-                return restored ? .rejected : .rollbackFailed
+                return restored && Self.matchesRequestedCameraConfiguration(
+                    device: currentDevice,
+                    format: currentFormat,
+                    fps: configuration.fps
+                ) ? .rejected : .rollbackFailed
             }
             session.addInput(targetInput)
             Self.configureOutputConnection(output.connection(with: .video))
+            let targetZoomMapping: CameraZoomMapping
+            do {
+                targetZoomMapping = try Self.configure(
+                    device: targetDevice,
+                    format: targetFormat.format,
+                    fps: configuration.fps
+                )
+            } catch {
+                session.removeInput(targetInput)
+                let restored = Self.restoreCameraInput(
+                    currentInput,
+                    device: currentDevice,
+                    format: currentFormat,
+                    fps: configuration.fps,
+                    session: session,
+                    output: output
+                )
+                session.commitConfiguration()
+                return restored && Self.matchesRequestedCameraConfiguration(
+                    device: currentDevice,
+                    format: currentFormat,
+                    fps: configuration.fps
+                ) ? .rejected : .rollbackFailed
+            }
             session.commitConfiguration()
-            return .switched
+            guard Self.matchesRequestedCameraConfiguration(
+                device: targetDevice,
+                format: targetFormat.format,
+                fps: configuration.fps
+            ) else {
+                session.beginConfiguration()
+                session.removeInput(targetInput)
+                let restored = Self.restoreCameraInput(
+                    currentInput,
+                    device: currentDevice,
+                    format: currentFormat,
+                    fps: configuration.fps,
+                    session: session,
+                    output: output
+                )
+                session.commitConfiguration()
+                return restored && Self.matchesRequestedCameraConfiguration(
+                    device: currentDevice,
+                    format: currentFormat,
+                    fps: configuration.fps
+                ) ? .rejected : .rollbackFailed
+            }
+            return .switched(targetZoomMapping)
         }
         switch switchResult {
         case .rejected:
@@ -242,26 +294,21 @@ public actor CaptureService {
         case .rollbackFailed:
             state.runtimeError = "Camera switch failed and the prior input could not be restored"
             throw CaptureServiceError.runtimeError(state.runtimeError ?? "Camera switch rollback failed")
-        case .switched:
-            break
+        case let .switched(targetZoomMapping):
+            self.device = targetDevice
+            videoInput = targetInput
+            selectedPosition = targetPosition
+            zoomMapping = targetZoomMapping
+            state.position = targetPosition
+            state.selectedDeviceID = targetDevice.uniqueID
+            state.selectedFormat = targetFormat.descriptor
+            state.minimumZoomRatio = targetZoomMapping.minimumUserRatio
+            state.maximumZoomRatio = targetZoomMapping.maximumUserRatio
+            state.zoomRatio = CameraZoomPolicy.normalTarget
+            state.zoomTargets = targetZoomMapping.targets
         }
-        self.device = targetDevice
-        videoInput = targetInput
-        selectedPosition = targetPosition
-        zoomMapping = targetZoomMapping
-        state.position = targetPosition
-        state.selectedDeviceID = targetDevice.uniqueID
-        state.selectedFormat = targetFormat.descriptor
-        state.minimumZoomRatio = targetZoomMapping.minimumUserRatio
-        state.maximumZoomRatio = targetZoomMapping.maximumUserRatio
-        state.zoomRatio = CameraZoomPolicy.normalTarget
-        state.zoomTargets = targetZoomMapping.targets
         state.runtimeError = nil
-        if let connection = output.connection(with: .video), connection.isVideoStabilizationSupported {
-            state.activeStabilization = CameraStabilizationPreference(mode: connection.activeVideoStabilizationMode)
-        } else {
-            state.activeStabilization = .off
-        }
+        state.activeStabilization = Self.activeStabilization(for: output.connection(with: .video))
         state.systemPressureLevel = CameraSystemPressureLevel(level: targetDevice.systemPressureState.level)
         observeSystemPressure(on: targetDevice)
         let orientation = SessionOrientationResolver().resolve(
@@ -327,12 +374,12 @@ public actor CaptureService {
             session.addInput(input)
             session.addOutput(output)
             do {
+                Self.configureOutputConnection(output.connection(with: .video))
                 configuredZoomMapping = try Self.configure(
                     device: device,
                     format: avFormat,
                     fps: configuration.fps
                 )
-                Self.configureOutputConnection(output.connection(with: .video))
             } catch {
                 configurationError = .configurationFailed(String(describing: error))
             }
@@ -343,26 +390,55 @@ public actor CaptureService {
         guard let configuredZoomMapping = configurationResult.zoomMapping else {
             throw CaptureServiceError.configurationFailed("Camera zoom mapping was not configured")
         }
+        let exactZoomMapping: CameraZoomMapping
+        if sessionQueue.sync(execute: {
+            Self.matchesRequestedCameraConfiguration(device: device, format: avFormat, fps: configuration.fps)
+        }) {
+            exactZoomMapping = configuredZoomMapping
+        } else {
+            exactZoomMapping = try sessionQueue.sync {
+                var mapping: CameraZoomMapping?
+                var configurationError: Error?
+                session.beginConfiguration()
+                Self.disableOutputStabilization(output.connection(with: .video))
+                do {
+                    mapping = try Self.configure(device: device, format: avFormat, fps: configuration.fps)
+                } catch {
+                    configurationError = error
+                }
+                session.commitConfiguration()
+                if let configurationError { throw configurationError }
+                guard let mapping else {
+                    throw CaptureServiceError.configurationFailed("Camera zoom mapping was not configured")
+                }
+                guard Self.matchesRequestedCameraConfiguration(
+                    device: device,
+                    format: avFormat,
+                    fps: configuration.fps
+                ) else {
+                    throw CaptureServiceError.configurationFailed(
+                        "Camera changed the requested format or fixed frame duration"
+                    )
+                }
+                return mapping
+            }
+        }
         self.session = session
         self.device = device
         self.videoInput = input
         self.videoOutput = output
         self.selectedPosition = device.position == .front ? .front : .back
-        zoomMapping = configuredZoomMapping
+        zoomMapping = exactZoomMapping
         selectedPreviewOrientation(configuration.orientation)
         state.authorization = authorizationState()
         state.position = selectedPosition
         state.selectedDeviceID = device.uniqueID
         state.selectedFormat = format.descriptor
-        state.minimumZoomRatio = configuredZoomMapping.minimumUserRatio
-        state.maximumZoomRatio = configuredZoomMapping.maximumUserRatio
-        state.zoomRatio = configuredZoomMapping.userRatio(forRawRatio: Double(device.videoZoomFactor))
-        state.zoomTargets = configuredZoomMapping.targets
-        if let connection = output.connection(with: .video), connection.isVideoStabilizationSupported {
-            state.activeStabilization = CameraStabilizationPreference(mode: connection.activeVideoStabilizationMode)
-        } else {
-            state.activeStabilization = .off
-        }
+        state.minimumZoomRatio = exactZoomMapping.minimumUserRatio
+        state.maximumZoomRatio = exactZoomMapping.maximumUserRatio
+        state.zoomRatio = exactZoomMapping.userRatio(forRawRatio: Double(device.videoZoomFactor))
+        state.zoomTargets = exactZoomMapping.targets
+        state.activeStabilization = Self.activeStabilization(for: output.connection(with: .video))
         state.interruption = nil
         state.runtimeError = nil
         state.systemPressureLevel = CameraSystemPressureLevel(level: device.systemPressureState.level)
@@ -497,6 +573,46 @@ public actor CaptureService {
         }
     }
 
+    private static func disableOutputStabilization(_ connection: AVCaptureConnection?) {
+        guard let connection, connection.isVideoStabilizationSupported else { return }
+        connection.preferredVideoStabilizationMode = .off
+    }
+
+    private static func activeStabilization(for connection: AVCaptureConnection?) -> CameraStabilizationPreference {
+        guard let connection, connection.isVideoStabilizationSupported else { return .off }
+        return CameraStabilizationPreference(mode: connection.activeVideoStabilizationMode)
+    }
+
+    private static func matchesRequestedCameraConfiguration(
+        device: AVCaptureDevice,
+        format: AVCaptureDevice.Format,
+        fps: Int
+    ) -> Bool {
+        let duration = CMTime(value: singleFrameDurationNumerator, timescale: CMTimeScale(fps))
+        return device.activeFormat === format
+            && device.activeVideoMinFrameDuration == duration
+            && device.activeVideoMaxFrameDuration == duration
+    }
+
+    private static func restoreCameraInput(
+        _ input: AVCaptureDeviceInput,
+        device: AVCaptureDevice,
+        format: AVCaptureDevice.Format,
+        fps: Int,
+        session: AVCaptureSession,
+        output: AVCaptureVideoDataOutput
+    ) -> Bool {
+        guard session.canAddInput(input) else { return false }
+        session.addInput(input)
+        configureOutputConnection(output.connection(with: .video))
+        do {
+            _ = try configure(device: device, format: format, fps: fps)
+            return matchesRequestedCameraConfiguration(device: device, format: format, fps: fps)
+        } catch {
+            return false
+        }
+    }
+
     private static func configurePreviewConnection(
         _ connection: AVCaptureConnection?,
         position: CameraPosition,
@@ -516,7 +632,7 @@ public actor CaptureService {
     private static let unrotatedVideoAngle: CGFloat = 0
 
     private enum CameraSwitchResult {
-        case switched
+        case switched(CameraZoomMapping)
         case rejected
         case rollbackFailed
     }
