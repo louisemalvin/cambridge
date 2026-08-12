@@ -46,7 +46,7 @@ private final class UITestFixtureModel {
     static let firstReceiverID = "fixture-receiver-one"
     static let secondReceiverID = "fixture-receiver-two"
 
-    var route: AppModel.Route = .setup
+    var route: AppModel.Route = .settings
     var permission: CameraPermission = .notDetermined
     var selectedCameraID = UITestFixtureModel.cameraID
     var selectedReceiverID: String?
@@ -155,7 +155,7 @@ private final class UITestFixtureModel {
     func confirmStop() {
         isStopConfirmationPresented = false
         streamPhase = .idle
-        route = .setup
+        route = .settings
     }
 
     func simulateTerminalFailure() {
@@ -176,34 +176,48 @@ private final class UITestFixtureModel {
 
 struct UITestFixtureRootView: View {
     @State private var model = UITestFixtureModel()
+    @State private var path: [AppModel.Route] = []
 
     var body: some View {
-        UITestFixtureTabs(model: model)
+        NavigationStack(path: $path) {
+            UITestFixtureSettingsView(model: model) {
+                model.route = .setup
+            }
+            .navigationDestination(for: AppModel.Route.self) { route in
+                switch route {
+                case .setup:
+                    UITestFixtureSetupView(model: model)
+                case .webcam:
+                    UITestFixtureWebcamView(model: model) {
+                        path.append(.settings)
+                    }
+                case .settings:
+                    UITestFixtureSettingsView(model: model) {
+                        model.route = .setup
+                    }
+                }
+            }
+        }
+        .onAppear {
+            path = navigationPath(for: model.route)
+        }
+        .onChange(of: model.route) { _, route in
+            path = navigationPath(for: route)
+        }
+        .onChange(of: path) { _, newPath in
+            guard newPath.isEmpty, model.route != .settings else { return }
+            model.route = .settings
+        }
     }
-}
 
-private struct UITestFixtureTabs: View {
-    @Bindable var model: UITestFixtureModel
-
-    var body: some View {
-        VStack(spacing: .zero) {
-            HStack(spacing: UITestFixtureLayout.standardSpacing) {
-                Button("Setup") { model.route = .setup }
-                    .accessibilityIdentifier("setup-tab")
-                Button("Webcam") { model.route = .webcam }
-                    .accessibilityIdentifier("webcam-tab")
-                Button("Settings") { model.route = .settings }
-                    .accessibilityIdentifier("settings-tab")
-            }
-            .padding(.horizontal)
-            switch model.route {
-            case .setup:
-                UITestFixtureSetupView(model: model)
-            case .webcam:
-                UITestFixtureWebcamView(model: model)
-            case .settings:
-                UITestFixtureSettingsView(model: model)
-            }
+    private func navigationPath(for route: AppModel.Route) -> [AppModel.Route] {
+        switch route {
+        case .settings:
+            []
+        case .setup:
+            [.setup]
+        case .webcam:
+            [.setup, .webcam]
         }
     }
 }
@@ -212,9 +226,8 @@ private struct UITestFixtureSetupView: View {
     @Bindable var model: UITestFixtureModel
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: UITestFixtureLayout.standardSpacing) {
+        ScrollView {
+            VStack(alignment: .leading, spacing: UITestFixtureLayout.standardSpacing) {
                     Text("CamBridge")
                         .font(.title2)
                         .accessibilityIdentifier("setup-screen-title")
@@ -344,51 +357,55 @@ private struct UITestFixtureSetupView: View {
                             .font(.caption)
                             .accessibilityIdentifier("capability-report-status")
                     }
-                }
-                .padding()
             }
-            .navigationTitle("CamBridge")
+            .padding()
         }
+        .navigationTitle("Stream setup")
     }
 }
 
 private struct UITestFixtureWebcamView: View {
     @Bindable var model: UITestFixtureModel
+    let onShowSettings: () -> Void
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: UITestFixtureLayout.standardSpacing) {
-                Text("Streaming to " + model.selectedReceiverName)
-                    .accessibilityIdentifier("webcam-status")
-                Button("Stop stream", action: model.requestStop)
-                    .accessibilityIdentifier("stop-stream")
-                Button("Simulate terminal failure", action: model.simulateTerminalFailure)
-                    .accessibilityIdentifier("simulate-terminal-failure")
-            }
-            .padding()
-            .navigationTitle("Webcam")
-            .alert("Stop stream?", isPresented: $model.isStopConfirmationPresented) {
-                Button("Cancel", role: .cancel, action: model.cancelStop)
-                    .accessibilityIdentifier("cancel-stop")
-                Button("Stop", role: .destructive, action: model.confirmStop)
-                    .accessibilityIdentifier("confirm-stop")
-            } message: {
-                Text("The stream will end and return to Setup.")
-            }
+        VStack(spacing: UITestFixtureLayout.standardSpacing) {
+            Text("Streaming to " + model.selectedReceiverName)
+                .accessibilityIdentifier("webcam-status")
+            Button("Settings", action: onShowSettings)
+                .accessibilityIdentifier("webcam-settings")
+            Button("Stop stream", action: model.requestStop)
+                .accessibilityIdentifier("stop-stream")
+            Button("Simulate terminal failure", action: model.simulateTerminalFailure)
+                .accessibilityIdentifier("simulate-terminal-failure")
+        }
+        .padding()
+        .navigationTitle("Webcam")
+        .toolbar(.hidden, for: .navigationBar)
+        .alert("Stop stream?", isPresented: $model.isStopConfirmationPresented) {
+            Button("Cancel", role: .cancel, action: model.cancelStop)
+                .accessibilityIdentifier("cancel-stop")
+            Button("Stop", role: .destructive, action: model.confirmStop)
+                .accessibilityIdentifier("confirm-stop")
+        } message: {
+            Text("The stream will end and return to Settings.")
         }
     }
 }
 
 private struct UITestFixtureSettingsView: View {
     @Bindable var model: UITestFixtureModel
+    let onOpenStreamSetup: () -> Void
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
+        ScrollView {
                 VStack(alignment: .leading, spacing: UITestFixtureLayout.standardSpacing) {
                     Text("Settings")
                         .font(.title2)
                         .accessibilityIdentifier("settings-screen-title")
+                    Button("Streaming setup", action: onOpenStreamSetup)
+                        .disabled(model.isStreamActive)
+                        .accessibilityIdentifier("open-stream-setup")
                     VStack(alignment: .leading, spacing: UITestFixtureLayout.standardSpacing) {
                         Text("Stream preferences")
                             .font(.headline)
@@ -442,11 +459,10 @@ private struct UITestFixtureSettingsView: View {
                     }
                 }
                 .padding()
-            }
-            }
-            .navigationTitle("Settings")
         }
+        .navigationTitle("Settings")
     }
+}
 
 private enum UITestFixtureLayout {
     static let standardSpacing: CGFloat = 16

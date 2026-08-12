@@ -2,19 +2,20 @@ import XCTest
 
 @MainActor
 final class CamBridgeUITests: XCTestCase {
-    func testSetupLaunchesAndNavigatesToSettingsAndBack() {
+    func testSettingsLaunchesAndNavigatesToSetupAndBack() {
         let app = launchFixture()
 
-        assertExists(element(app, id: "start-stream"))
-        tap(app, id: "settings-tab")
         assertExists(element(app, id: "settings-screen-title"))
-        tap(app, id: "setup-tab")
+        tap(app, id: "open-stream-setup")
         assertExists(element(app, id: "setup-screen-title"))
+        app.navigationBars.buttons.firstMatch.tap()
+        assertExists(element(app, id: "settings-screen-title"))
     }
 
     func testPermissionStatesAndCameraAccessAreDeterministic() {
         let app = launchFixture()
 
+        tap(app, id: "open-stream-setup")
         tap(app, id: "permission-denied")
         assertLabelContains(element(app, id: "camera-permission-state"), "Denied")
         tap(app, id: "permission-restricted")
@@ -26,6 +27,7 @@ final class CamBridgeUITests: XCTestCase {
     func testReceiverDiscoveryAndManualProbeStates() {
         let app = launchFixture()
 
+        tap(app, id: "open-stream-setup")
         assertLabelContains(element(app, id: "receiver-status"), "Select")
         tap(app, id: "fixture-receiver-one")
         assertLabelContains(element(app, id: "receiver-status"), "Fixture OBS One")
@@ -43,6 +45,7 @@ final class CamBridgeUITests: XCTestCase {
 
     func testUnsupportedModeExplainsWhyStartIsDisabledUntilSelectionsAreValid() {
         let app = launchFixture()
+        tap(app, id: "open-stream-setup")
         let start = element(app, id: "start-stream")
 
         assertEnabled(start, false)
@@ -87,6 +90,8 @@ final class CamBridgeUITests: XCTestCase {
         let stop = alert.descendants(matching: .button)["confirm-stop"].firstMatch
         assertExists(stop)
         stop.tap()
+        assertExists(element(app, id: "settings-screen-title"))
+        tap(app, id: "open-stream-setup")
         assertExists(element(app, id: "start-stream"))
     }
 
@@ -105,36 +110,34 @@ final class CamBridgeUITests: XCTestCase {
 
     func testSettingsEditsAreAvailableIdleAndLockedDuringActiveStream() {
         let app = launchFixture()
-        tap(app, id: "settings-tab")
         let idleMode = element(app, id: "settings-mode-1080p30")
         assertEnabled(idleMode, true)
         idleMode.tap()
 
-        tap(app, id: "setup-tab")
         configureValidStart(app)
         startAndComplete(app)
-        tap(app, id: "settings-tab")
+        tap(app, id: "webcam-settings")
 
         assertExists(element(app, id: "settings-locked"))
         assertEnabled(idleMode, false)
 
-        tap(app, id: "webcam-tab")
+        app.navigationBars.buttons.firstMatch.tap()
         tap(app, id: "stop-stream")
         let stopAlert = app.alerts["Stop stream?"]
         assertExists(stopAlert)
         let stop = stopAlert.descendants(matching: .button)["confirm-stop"].firstMatch
         assertExists(stop)
         stop.tap()
-        tap(app, id: "settings-tab")
         assertEnabled(idleMode, true)
     }
 
     func testPreStreamCapabilityReportCanBeCopied() {
         let app = launchFixture()
+        tap(app, id: "open-stream-setup")
         tap(app, id: "copy-capability-report")
 
         assertLabelContains(element(app, id: "capability-report-status"), "copied")
-        tap(app, id: "settings-tab")
+        app.navigationBars.buttons.firstMatch.tap()
         tap(app, id: "copy-capability-report-settings")
         assertExists(element(app, id: "copy-capability-report-settings"))
     }
@@ -147,6 +150,7 @@ final class CamBridgeUITests: XCTestCase {
     }
 
     private func configureValidStart(_ app: XCUIApplication) {
+        tap(app, id: "open-stream-setup")
         tap(app, id: "permission-authorized")
         tap(app, id: "fixture-receiver-one")
         tap(app, id: "mode-1080p30")

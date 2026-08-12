@@ -2,33 +2,60 @@ import SwiftUI
 
 struct RootView: View {
     @Bindable private var model: AppModel
+    @State private var path: [AppModel.Route] = []
 
     init(model: AppModel) {
         _model = Bindable(wrappedValue: model)
     }
 
     var body: some View {
-        TabView(selection: $model.route) {
-            StreamSetupScreen(model: model.setupModel)
-                .tabItem {
-                    Label("Setup", systemImage: "antenna.radiowaves.left.and.right")
-                        .accessibilityIdentifier("setup-tab")
+        NavigationStack(path: $path) {
+            settingsScreen
+                .navigationDestination(for: AppModel.Route.self) { route in
+                    switch route {
+                    case .setup:
+                        StreamSetupScreen(model: model.setupModel)
+                    case .webcam:
+                        WebcamScreen(model: model.webcamModel) {
+                            path.append(.settings)
+                        }
+                    case .settings:
+                        settingsScreen
+                    }
                 }
-                .tag(AppModel.Route.setup)
-            WebcamScreen(model: model.webcamModel)
-                .tabItem {
-                    Label("Webcam", systemImage: "video")
-                        .accessibilityIdentifier("webcam-tab")
-                }
-                .tag(AppModel.Route.webcam)
-            SettingsScreen(model: model.settingsModel) {
+        }
+        .onAppear {
+            path = navigationPath(for: model.route)
+        }
+        .onChange(of: model.route) { _, route in
+            path = navigationPath(for: route)
+        }
+        .onChange(of: path) { _, newPath in
+            guard newPath.isEmpty, model.route != .settings else { return }
+            model.route = .settings
+        }
+    }
+
+    private var settingsScreen: some View {
+        SettingsScreen(
+            model: model.settingsModel,
+            onCopyCapabilityReport: {
                 Task { await model.copyCapabilityReport() }
+            },
+            onOpenStreamSetup: {
+                model.route = .setup
             }
-                .tabItem {
-                    Label("Settings", systemImage: "gear")
-                        .accessibilityIdentifier("settings-tab")
-                }
-                .tag(AppModel.Route.settings)
+        )
+    }
+
+    private func navigationPath(for route: AppModel.Route) -> [AppModel.Route] {
+        switch route {
+        case .settings:
+            []
+        case .setup:
+            [.setup]
+        case .webcam:
+            [.setup, .webcam]
         }
     }
 }

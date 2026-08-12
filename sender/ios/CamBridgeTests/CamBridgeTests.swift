@@ -8,7 +8,7 @@ final class CamBridgeTests: XCTestCase {
     func testApplicationDependenciesConstructWithoutStartingNetworkOrCamera() {
         let environment = AppEnvironment()
 
-        XCTAssertEqual(environment.appModel.route, .setup)
+        XCTAssertEqual(environment.appModel.route, .settings)
         XCTAssertEqual(environment.appModel.streamSnapshot.state, .idle)
     }
 

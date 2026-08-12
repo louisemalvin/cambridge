@@ -66,8 +66,8 @@ IDs and manual-address fallback as Linux.
 ## Start a stream
 
 1. Make sure OBS is running with the CamBridge source present.
-2. Open CamBridge on the phone and open **Stream setup**.
-3. Wait for the receiver check to find the OBS computer.
+2. Open CamBridge on the phone. The app opens to **Settings**.
+3. Open **Streaming setup**, then wait for the receiver check to find the OBS computer.
    If more than one receiver is available, choose the intended computer from
    the selector; CamBridge never selects an arbitrary discovery result.
    If discovery cannot find it, enter the OBS computer's IP address or host in

@@ -2,6 +2,12 @@ import SwiftUI
 
 struct WebcamScreen: View {
     @Bindable var model: WebcamModel
+    let onShowSettings: () -> Void
+
+    init(model: WebcamModel, onShowSettings: @escaping () -> Void = {}) {
+        self.model = model
+        self.onShowSettings = onShowSettings
+    }
 
     var body: some View {
         ZStack {
@@ -16,6 +22,12 @@ struct WebcamScreen: View {
                         .padding(.vertical, WebcamScreenMetrics.statusVerticalPadding)
                         .background(.black.opacity(WebcamScreenMetrics.statusBackgroundOpacity), in: Capsule())
                     Spacer()
+                    Button(action: onShowSettings) {
+                        Image(systemName: "gear")
+                    }
+                    .accessibilityLabel("Settings")
+                    .accessibilityIdentifier("webcam-settings")
+                    .buttonStyle(.borderedProminent)
                     Button {
                         model.toggleDimmedPresentation()
                     } label: {
@@ -50,6 +62,8 @@ struct WebcamScreen: View {
         } message: {
             Text("The receiver session will be closed. Start again from setup when you are ready.")
         }
+        .navigationBarBackButtonHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
     }
 }
 

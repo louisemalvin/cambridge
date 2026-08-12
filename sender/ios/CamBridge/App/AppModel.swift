@@ -6,13 +6,13 @@ import CamBridgeCore
 @MainActor
 @Observable
 public final class AppModel {
-    public enum Route: String, CaseIterable, Sendable {
+    public enum Route: String, CaseIterable, Hashable, Sendable {
         case setup
         case webcam
         case settings
     }
 
-    public var route: Route = .setup
+    public var route: Route = .settings
     public private(set) var streamSnapshot: StreamSessionSnapshot
     public private(set) var lastFailure: StreamFailure?
 
@@ -68,7 +68,7 @@ public final class AppModel {
                     self.route = .webcam
                 }
                 if case .idle = snapshot.state, self.route == .webcam {
-                    self.route = .setup
+                    self.route = .settings
                 }
             }
         }
