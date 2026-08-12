@@ -8,7 +8,9 @@ public protocol StreamOrientationProviding {
 }
 
 @MainActor
-public struct InterfaceOrientationProvider: StreamOrientationProviding {
+public final class InterfaceOrientationProvider: StreamOrientationProviding {
+    private var lastValidRotation: StreamRotation?
+
     public init() {}
 
     public func currentRotation() -> StreamRotation {
@@ -18,7 +20,13 @@ public struct InterfaceOrientationProvider: StreamOrientationProviding {
         let scene = scenes.first(where: { scene in
             scene.windows.contains(where: \.isKeyWindow)
         }) ?? scenes.first(where: { $0.activationState == .foregroundActive }) ?? scenes.first
-        return SessionOrientationResolver().rotation(interfaceOrientation: scene?.interfaceOrientation ?? .unknown)
+        let interfaceOrientation = scene?.interfaceOrientation ?? .unknown
+        guard interfaceOrientation != .unknown else {
+            return lastValidRotation ?? .zero
+        }
+        let rotation = SessionOrientationResolver().rotation(interfaceOrientation: interfaceOrientation)
+        lastValidRotation = rotation
+        return rotation
     }
 }
 

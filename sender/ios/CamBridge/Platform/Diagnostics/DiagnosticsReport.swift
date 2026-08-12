@@ -32,6 +32,7 @@ public struct DiagnosticsReport: Codable, Equatable, Sendable {
     public let bitrateBps: Int?
     public let requestedStabilization: String?
     public let activeStabilization: String?
+    public let startStage: String?
     public let encoderIdentity: String?
     public let encoderIdentityUnavailableReason: String?
     public let encoderUsesHardwareAccelerated: Bool?
@@ -68,6 +69,7 @@ public struct DiagnosticsReport: Codable, Equatable, Sendable {
         configuration: StreamConfiguration?,
         requestedStabilization: String?,
         activeStabilization: String?,
+        startStage: String?,
         encoderIdentity: String?,
         encoderIdentityUnavailableReason: String?,
         encoderUsesHardwareAccelerated: Bool?,
@@ -118,6 +120,7 @@ public struct DiagnosticsReport: Codable, Equatable, Sendable {
         self.bitrateBps = configuration?.bitrateBps
         self.requestedStabilization = requestedStabilization
         self.activeStabilization = activeStabilization
+        self.startStage = startStage
         self.encoderIdentity = encoderIdentity
         self.encoderIdentityUnavailableReason = encoderIdentityUnavailableReason
         self.encoderUsesHardwareAccelerated = encoderUsesHardwareAccelerated

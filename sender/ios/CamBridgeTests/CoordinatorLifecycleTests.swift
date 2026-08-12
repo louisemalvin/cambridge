@@ -63,6 +63,7 @@ final class CoordinatorLifecycleTests: XCTestCase {
         XCTAssertNotNil(diagnostics)
         XCTAssertEqual(diagnostics?.sessionId, identity.sessionId)
         XCTAssertEqual(diagnostics?.generation, identity.generation)
+        XCTAssertEqual(diagnostics?.startStage, "streaming")
 
         let secondStartResult = await coordinator.start(
             endpoint: endpoint,
@@ -246,9 +247,11 @@ final class CoordinatorLifecycleTests: XCTestCase {
         let stopCount = await control.stopCount()
         let datagramCloseCount = await datagram.closeCount()
         let captureStopCount = await capture.stopCount()
+        let diagnostics = await coordinator.diagnostics()
         XCTAssertEqual(stopCount, 1)
         XCTAssertEqual(datagramCloseCount, 1)
         XCTAssertEqual(captureStopCount, 1)
+        XCTAssertEqual(diagnostics?.startStage, "connecting_media_transport")
     }
 
     func testReceiverErrorDuringHelloMapsToReceiverRejected() async throws {

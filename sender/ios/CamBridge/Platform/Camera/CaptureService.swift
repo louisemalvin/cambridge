@@ -83,23 +83,28 @@ public actor CaptureService {
         ) else {
             throw CaptureServiceError.formatUnavailable
         }
-        let encoder = VideoToolboxEncoder()
-        encoder.onAccessUnit = onAccessUnit
-        do {
-            try encoder.prepare(configuration: configuration)
-        } catch {
-            encoder.invalidate()
-            throw error
-        }
         do {
             try await configure(
                 device: device,
                 format: format,
-                configuration: configuration,
-                encoder: encoder
+                configuration: configuration
             )
         } catch {
+            throw error
+        }
+        let encoder = VideoToolboxEncoder()
+        encoder.onAccessUnit = onAccessUnit
+        do {
+            try encoder.prepare(configuration: configuration)
+            guard let output = videoOutput else { throw CaptureServiceError.notPrepared }
+            let delegate = CaptureOutputDelegate(encoder: encoder)
+            sessionQueue.sync {
+                output.setSampleBufferDelegate(delegate, queue: encoder.inputQueue)
+            }
+            outputDelegate = delegate
+        } catch {
             encoder.invalidate()
+            await stop()
             throw error
         }
         self.encoder = encoder
@@ -289,8 +294,7 @@ public actor CaptureService {
     private func configure(
         device: AVCaptureDevice,
         format: CameraFormatSelection,
-        configuration: StreamConfiguration,
-        encoder: VideoToolboxEncoder
+        configuration: StreamConfiguration
     ) async throws {
         let session = AVCaptureSession()
         let input: AVCaptureDeviceInput
@@ -308,7 +312,6 @@ public actor CaptureService {
             kCVPixelBufferWidthKey as String: configuration.geometry.codedWidth,
             kCVPixelBufferHeightKey as String: configuration.geometry.codedHeight,
         ]
-        let delegate = CaptureOutputDelegate(encoder: encoder)
         let avFormat = format.format
         let canAddInputAndOutput = sessionQueue.sync {
             session.canAddInput(input) && session.canAddOutput(output)
@@ -333,9 +336,6 @@ public actor CaptureService {
             } catch {
                 configurationError = .configurationFailed(String(describing: error))
             }
-            if configurationError == nil {
-                output.setSampleBufferDelegate(delegate, queue: encoder.inputQueue)
-            }
             session.commitConfiguration()
             return (configurationError, configuredZoomMapping)
         }
@@ -347,7 +347,6 @@ public actor CaptureService {
         self.device = device
         self.videoInput = input
         self.videoOutput = output
-        self.outputDelegate = delegate
         self.selectedPosition = device.position == .front ? .front : .back
         zoomMapping = configuredZoomMapping
         selectedPreviewOrientation(configuration.orientation)

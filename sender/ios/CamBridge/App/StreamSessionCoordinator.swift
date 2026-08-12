@@ -20,6 +20,16 @@ private enum StreamStartOperationError: Error {
     case invalidated
 }
 
+private enum StreamStartStage: String, Sendable {
+    case preparingCapture = "preparing_capture_and_encoder"
+    case connectingControl = "connecting_control"
+    case sendingHello = "sending_hello"
+    case awaitingAcceptance = "awaiting_receiver_acceptance"
+    case connectingMedia = "connecting_media_transport"
+    case startingCapture = "starting_capture"
+    case streaming
+}
+
 public protocol RTPDatagramSenderFactory: Sendable {
     func make(host: String, port: Int) throws -> any RTPDatagramSending
 }
@@ -78,6 +88,7 @@ public actor StreamSessionCoordinator {
     private var stateTransitions: [String] = []
     private var activeStartOperationID: UUID?
     private var invalidatedStartFailure: StreamFailure?
+    private var activeStartStage: StreamStartStage?
     private var cleaning = false
     private var stateContinuation: AsyncStream<StreamSessionSnapshot>.Continuation?
 
@@ -152,6 +163,7 @@ public actor StreamSessionCoordinator {
             stateTransitions.removeAll(keepingCapacity: true)
             activeStartOperationID = operationID
             invalidatedStartFailure = nil
+            activeStartStage = nil
             publishSnapshot()
             logger.event("stream_start_requested", category: .session)
 
@@ -159,6 +171,7 @@ public actor StreamSessionCoordinator {
             encodedQueue = queue
             let control = controlFactory.make(target: controlTarget)
             controlConnection = control
+            enterStartStage(.preparingCapture)
             try await capture.prepare(configuration: configuration, position: cameraPosition) { [weak self, weak queue] result in
                 guard let queue else { return }
                 switch result {
@@ -169,8 +182,10 @@ public actor StreamSessionCoordinator {
                 }
             }
             try ensureStartOperationIsActive(operationID)
+            enterStartStage(.connectingControl)
             try await control.connect()
             try ensureStartOperationIsActive(operationID)
+            enterStartStage(.sendingHello)
             try await sendControlMessageWithTimeout(control, message: .hello(
                 sessionId: identity.sessionId,
                 generation: identity.generation,
@@ -182,6 +197,7 @@ public actor StreamSessionCoordinator {
                 bitrateBps: configuration.bitrateBps
             ))
             try ensureStartOperationIsActive(operationID)
+            enterStartStage(.awaitingAcceptance)
             guard let accepted = try await receiveWithTimeout(control) else {
                 throw StreamFailure.receiverUnavailable
             }
@@ -199,6 +215,7 @@ public actor StreamSessionCoordinator {
             guard case let .accepted(_, _, _, mediaPort, _, _) = accepted else {
                 throw StreamFailure.incompatibleProtocol
             }
+            enterStartStage(.connectingMedia)
             let candidateHosts = mediaHosts.isEmpty ? [endpoint.host] : mediaHosts
             var sender: (any RTPDatagramSending)?
             var lastTransportError: Error?
@@ -224,12 +241,14 @@ public actor StreamSessionCoordinator {
                 throw lastTransportError ?? StreamFailure.transportFailed("no discovered media address connected")
             }
             datagramSender = sender
+            enterStartStage(.startingCapture)
             try await capture.start()
             try ensureStartOperationIsActive(operationID)
             try stateMachine.accept(accepted)
             startMediaTask(queue: queue, sender: sender)
             startControlTask(control: control)
             startCameraStateTask()
+            enterStartStage(.streaming)
             publishSnapshot()
             activeStartOperationID = nil
             return .success(())
@@ -391,6 +410,10 @@ public actor StreamSessionCoordinator {
 
     private func failStart(_ failure: StreamFailure) async {
         guard activeStartOperationID != nil else { return }
+        logger.error(
+            "stream start failed at \(activeStartStage?.rawValue ?? "before_resource_setup"): \(failure.recoverySummary)",
+            category: .session
+        )
         activeStartOperationID = nil
         stateMachine.fail(failure)
         recordStateTransition()
@@ -445,6 +468,7 @@ public actor StreamSessionCoordinator {
                 configuration: configuration,
                 requestedStabilization: requestedStabilizationValue,
                 activeStabilization: cameraState.activeStabilization.rawValue,
+                startStage: activeStartStage?.rawValue,
                 encoderIdentity: encoderMetrics?.encoderIdentity,
                 encoderIdentityUnavailableReason: encoderMetrics?.encoderIdentityUnavailableReason,
                 encoderUsesHardwareAccelerated: encoderMetrics?.encoderUsesHardwareAccelerated,
@@ -488,6 +512,7 @@ public actor StreamSessionCoordinator {
         activeEndpoint = nil
         activeConfiguration = nil
         activeIdentity = nil
+        activeStartStage = nil
         receiverAccepted = false
         runId = nil
     }
@@ -510,6 +535,11 @@ public actor StreamSessionCoordinator {
             return .transportFailed(String(describing: error))
         }
         return .unexpected(String(describing: error))
+    }
+
+    private func enterStartStage(_ stage: StreamStartStage) {
+        activeStartStage = stage
+        logger.info("stream start stage: \(stage.rawValue)", category: .session)
     }
 
     private func ensureStartOperationIsActive(_ operationID: UUID) throws {
