@@ -17,7 +17,6 @@ public final class StreamSetupModel {
         public let displayName: String
         public let endpoint: ReceiverEndpoint
         public let target: ReceiverControlTarget
-        public let capabilities: ReceiverCapabilities
         public let mediaHosts: [String]
         public let discoveredServiceName: String?
 
@@ -26,7 +25,6 @@ public final class StreamSetupModel {
             displayName: String,
             endpoint: ReceiverEndpoint,
             target: ReceiverControlTarget,
-            capabilities: ReceiverCapabilities,
             mediaHosts: [String],
             discoveredServiceName: String? = nil
         ) {
@@ -34,7 +32,6 @@ public final class StreamSetupModel {
             self.displayName = displayName
             self.endpoint = endpoint
             self.target = target
-            self.capabilities = capabilities
             self.mediaHosts = mediaHosts
             self.discoveredServiceName = discoveredServiceName
         }
@@ -268,7 +265,6 @@ public final class StreamSetupModel {
                 displayName: capabilities.displayName,
                 endpoint: endpoint,
                 target: .manual(endpoint),
-                capabilities: capabilities,
                 mediaHosts: [endpoint.host]
             )
             receivers = [choice]
@@ -304,7 +300,6 @@ public final class StreamSetupModel {
         let result = await sessionCoordinator.start(
             endpoint: receiver.endpoint,
             controlTarget: receiver.target,
-            receiver: receiver.capabilities,
             configuration: configuration,
             cameraPosition: .back,
             mediaHosts: receiver.mediaHosts
@@ -388,7 +383,6 @@ public final class StreamSetupModel {
                 displayName: capabilities.displayName,
                 endpoint: endpoint,
                 target: .bonjour(candidate.serviceEndpoint),
-                capabilities: capabilities,
                 mediaHosts: candidate.metadata.ipv4Addresses,
                 discoveredServiceName: candidate.serviceName
             )

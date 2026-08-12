@@ -27,12 +27,6 @@ public struct StreamConfiguration: Codable, Equatable, Hashable, Sendable {
         self.orientation = orientation
         self.geometry = geometry
     }
-
-    public func validate(receiver: ReceiverCapabilities) throws {
-        guard receiver.supports(geometry, rotation: orientation) else {
-            throw StreamConfigurationError.receiverGeometryUnsupported
-        }
-    }
 }
 
 public enum StreamConfigurationError: Error, Equatable, Sendable {

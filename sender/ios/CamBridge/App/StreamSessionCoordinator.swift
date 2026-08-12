@@ -38,7 +38,6 @@ public protocol StreamSessionStarting: Sendable {
     func start(
         endpoint: ReceiverEndpoint,
         controlTarget: ReceiverControlTarget,
-        receiver: ReceiverCapabilities,
         configuration: StreamConfiguration,
         cameraPosition: CameraPosition,
         mediaHosts: [String]
@@ -140,7 +139,6 @@ public actor StreamSessionCoordinator {
     public func start(
         endpoint: ReceiverEndpoint,
         controlTarget: ReceiverControlTarget,
-        receiver: ReceiverCapabilities,
         configuration: StreamConfiguration,
         cameraPosition: CameraPosition = .back,
         mediaHosts: [String] = []
@@ -151,7 +149,6 @@ public actor StreamSessionCoordinator {
         let operationID = UUID()
         var didBeginStart = false
         do {
-            try configuration.validate(receiver: receiver)
             let identity = try generationAllocator.allocate(sessionId: "session-\(UUID().uuidString)")
             try stateMachine.beginStart(identity: identity, configuration: configuration)
             didBeginStart = true

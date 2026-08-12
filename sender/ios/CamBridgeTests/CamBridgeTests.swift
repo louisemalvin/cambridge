@@ -163,14 +163,14 @@ final class CamBridgeTests: XCTestCase {
     }
 
     @MainActor
-    func testSetupUsesIndependentDefaultsAndStartsOneExactManualOverride() async throws {
+    func testSetupIgnoresProbeGeometryAndStartsOneExactManualOverride() async throws {
         let settings = FakeSetupSettingsStore()
         let session = FakeSetupSession()
         let receiver = try ReceiverCapabilities(
             receiverId: "fixture-receiver",
             displayName: "Fixture Receiver",
-            maxLongEdge: CamBridgeContract.Geometry.maximumLongEdge,
-            maxShortEdge: CamBridgeContract.Geometry.maximumShortEdge
+            maxLongEdge: CamBridgeContract.Geometry.minimumDimension,
+            maxShortEdge: CamBridgeContract.Geometry.minimumDimension
         )
         let model = StreamSetupModel(
             settingsStore: settings,
@@ -318,7 +318,6 @@ private actor FakeSetupSession: StreamSessionStarting {
     func start(
         endpoint: ReceiverEndpoint,
         controlTarget: ReceiverControlTarget,
-        receiver: ReceiverCapabilities,
         configuration: StreamConfiguration,
         cameraPosition: CameraPosition,
         mediaHosts: [String]

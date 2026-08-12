@@ -14,12 +14,6 @@ final class CoordinatorLifecycleTests: XCTestCase {
             firstGeneration: UInt64(CamBridgeContract.Validation.minimumGeneration)
         )
         let endpoint = try ReceiverEndpoint(host: "127.0.0.1")
-        let receiver = try ReceiverCapabilities(
-            receiverId: "test-receiver",
-            displayName: "Test Receiver",
-            maxLongEdge: CamBridgeContract.Geometry.maximumLongEdge,
-            maxShortEdge: CamBridgeContract.Geometry.maximumShortEdge
-        )
         let configuration = try StreamConfiguration(
             resolution: SenderVideoCatalog.fullHd,
             fps: 60,
@@ -30,7 +24,6 @@ final class CoordinatorLifecycleTests: XCTestCase {
         let startResult = await coordinator.start(
             endpoint: endpoint,
             controlTarget: ReceiverControlTarget.manual(endpoint),
-            receiver: receiver,
             configuration: configuration,
             cameraPosition: .back
         )
@@ -87,7 +80,6 @@ final class CoordinatorLifecycleTests: XCTestCase {
         let secondStartResult = await coordinator.start(
             endpoint: endpoint,
             controlTarget: ReceiverControlTarget.manual(endpoint),
-            receiver: receiver,
             configuration: configuration,
             cameraPosition: .back
         )
@@ -119,12 +111,6 @@ final class CoordinatorLifecycleTests: XCTestCase {
             datagramFactory: ControlledDatagramFactory(sender: datagram)
         )
         let endpoint = try ReceiverEndpoint(host: "127.0.0.1")
-        let receiver = try ReceiverCapabilities(
-            receiverId: "test-receiver",
-            displayName: "Test Receiver",
-            maxLongEdge: CamBridgeContract.Geometry.maximumLongEdge,
-            maxShortEdge: CamBridgeContract.Geometry.maximumShortEdge
-        )
         let configuration = try StreamConfiguration(
             resolution: SenderVideoCatalog.fullHd,
             fps: SenderVideoCatalog.defaultFrameRate,
@@ -135,7 +121,6 @@ final class CoordinatorLifecycleTests: XCTestCase {
         let result = await coordinator.start(
             endpoint: endpoint,
             controlTarget: .manual(endpoint),
-            receiver: receiver,
             configuration: configuration,
             cameraPosition: .back
         )
@@ -150,12 +135,6 @@ final class CoordinatorLifecycleTests: XCTestCase {
 
     func testCameraAndEncoderRejectionsAttemptExactConfigurationOnceBeforeControlConnect() async throws {
         let endpoint = try ReceiverEndpoint(host: "127.0.0.1")
-        let receiver = try ReceiverCapabilities(
-            receiverId: "test-receiver",
-            displayName: "Test Receiver",
-            maxLongEdge: CamBridgeContract.Geometry.maximumLongEdge,
-            maxShortEdge: CamBridgeContract.Geometry.maximumShortEdge
-        )
         let configuration = try StreamConfiguration(
             resolution: SenderVideoCatalog.resolution2k,
             fps: 60,
@@ -175,7 +154,6 @@ final class CoordinatorLifecycleTests: XCTestCase {
             let result = await coordinator.start(
                 endpoint: endpoint,
                 controlTarget: .manual(endpoint),
-                receiver: receiver,
                 configuration: configuration,
                 cameraPosition: .back
             )
@@ -217,12 +195,6 @@ final class CoordinatorLifecycleTests: XCTestCase {
             firstGeneration: UInt64(CamBridgeContract.Validation.minimumGeneration)
         )
         let endpoint = try ReceiverEndpoint(host: "127.0.0.1")
-        let receiver = try ReceiverCapabilities(
-            receiverId: "test-receiver",
-            displayName: "Test Receiver",
-            maxLongEdge: CamBridgeContract.Geometry.maximumLongEdge,
-            maxShortEdge: CamBridgeContract.Geometry.maximumShortEdge
-        )
         let configuration = try StreamConfiguration(
             resolution: SenderVideoCatalog.fullHd,
             fps: 30,
@@ -234,7 +206,6 @@ final class CoordinatorLifecycleTests: XCTestCase {
             await coordinator.start(
                 endpoint: endpoint,
                 controlTarget: ReceiverControlTarget.manual(endpoint),
-                receiver: receiver,
                 configuration: configuration,
                 cameraPosition: .back
             )
@@ -270,12 +241,6 @@ final class CoordinatorLifecycleTests: XCTestCase {
             firstGeneration: UInt64(CamBridgeContract.Validation.minimumGeneration)
         )
         let endpoint = try ReceiverEndpoint(host: "127.0.0.1")
-        let receiver = try ReceiverCapabilities(
-            receiverId: "test-receiver",
-            displayName: "Test Receiver",
-            maxLongEdge: CamBridgeContract.Geometry.maximumLongEdge,
-            maxShortEdge: CamBridgeContract.Geometry.maximumShortEdge
-        )
         let configuration = try StreamConfiguration(
             resolution: SenderVideoCatalog.fullHd,
             fps: 30,
@@ -293,7 +258,6 @@ final class CoordinatorLifecycleTests: XCTestCase {
         let startResult = await coordinator.start(
             endpoint: endpoint,
             controlTarget: ReceiverControlTarget.manual(endpoint),
-            receiver: receiver,
             configuration: configuration,
             cameraPosition: .back
         )
@@ -337,12 +301,6 @@ final class CoordinatorLifecycleTests: XCTestCase {
             datagramFactory: FakeDatagramFactory(sender: FakeDatagramSender())
         )
         let endpoint = try ReceiverEndpoint(host: "127.0.0.1")
-        let receiver = try ReceiverCapabilities(
-            receiverId: "test-receiver",
-            displayName: "Test Receiver",
-            maxLongEdge: CamBridgeContract.Geometry.maximumLongEdge,
-            maxShortEdge: CamBridgeContract.Geometry.maximumShortEdge
-        )
         let configuration = try StreamConfiguration(
             resolution: SenderVideoCatalog.resolution2k,
             fps: SenderVideoCatalog.defaultFrameRate,
@@ -360,7 +318,6 @@ final class CoordinatorLifecycleTests: XCTestCase {
         let result = await coordinator.start(
             endpoint: endpoint,
             controlTarget: .manual(endpoint),
-            receiver: receiver,
             configuration: configuration,
             cameraPosition: .back
         )
@@ -395,12 +352,6 @@ final class CoordinatorLifecycleTests: XCTestCase {
             firstGeneration: UInt64(CamBridgeContract.Validation.minimumGeneration)
         )
         let endpoint = try ReceiverEndpoint(host: "127.0.0.1")
-        let receiver = try ReceiverCapabilities(
-            receiverId: "test-receiver",
-            displayName: "Test Receiver",
-            maxLongEdge: CamBridgeContract.Geometry.maximumLongEdge,
-            maxShortEdge: CamBridgeContract.Geometry.maximumShortEdge
-        )
         let configuration = try StreamConfiguration(
             resolution: SenderVideoCatalog.fullHd,
             fps: 30,
@@ -411,7 +362,6 @@ final class CoordinatorLifecycleTests: XCTestCase {
         let result = await coordinator.start(
             endpoint: endpoint,
             controlTarget: ReceiverControlTarget.manual(endpoint),
-            receiver: receiver,
             configuration: configuration,
             cameraPosition: .back
         )
@@ -442,12 +392,6 @@ final class CoordinatorLifecycleTests: XCTestCase {
             firstGeneration: UInt64(CamBridgeContract.Validation.minimumGeneration)
         )
         let endpoint = try ReceiverEndpoint(host: "127.0.0.1")
-        let receiver = try ReceiverCapabilities(
-            receiverId: "test-receiver",
-            displayName: "Test Receiver",
-            maxLongEdge: CamBridgeContract.Geometry.maximumLongEdge,
-            maxShortEdge: CamBridgeContract.Geometry.maximumShortEdge
-        )
         let configuration = try StreamConfiguration(
             resolution: SenderVideoCatalog.fullHd,
             fps: 30,
@@ -458,7 +402,6 @@ final class CoordinatorLifecycleTests: XCTestCase {
         let result = await coordinator.start(
             endpoint: endpoint,
             controlTarget: ReceiverControlTarget.manual(endpoint),
-            receiver: receiver,
             configuration: configuration,
             cameraPosition: .back
         )
@@ -485,12 +428,6 @@ final class CoordinatorLifecycleTests: XCTestCase {
             firstGeneration: UInt64(CamBridgeContract.Validation.minimumGeneration)
         )
         let endpoint = try ReceiverEndpoint(host: "127.0.0.1")
-        let receiver = try ReceiverCapabilities(
-            receiverId: "test-receiver",
-            displayName: "Test Receiver",
-            maxLongEdge: CamBridgeContract.Geometry.maximumLongEdge,
-            maxShortEdge: CamBridgeContract.Geometry.maximumShortEdge
-        )
         let configuration = try StreamConfiguration(
             resolution: SenderVideoCatalog.fullHd,
             fps: 30,
@@ -501,7 +438,6 @@ final class CoordinatorLifecycleTests: XCTestCase {
         let result = await coordinator.start(
             endpoint: endpoint,
             controlTarget: ReceiverControlTarget.manual(endpoint),
-            receiver: receiver,
             configuration: configuration,
             cameraPosition: .back
         )
@@ -540,12 +476,6 @@ final class CoordinatorLifecycleTests: XCTestCase {
             firstGeneration: UInt64(CamBridgeContract.Validation.minimumGeneration)
         )
         let endpoint = try ReceiverEndpoint(host: "127.0.0.1")
-        let receiver = try ReceiverCapabilities(
-            receiverId: "test-receiver",
-            displayName: "Test Receiver",
-            maxLongEdge: CamBridgeContract.Geometry.maximumLongEdge,
-            maxShortEdge: CamBridgeContract.Geometry.maximumShortEdge
-        )
         let configuration = try StreamConfiguration(
             resolution: SenderVideoCatalog.fullHd,
             fps: 30,
@@ -556,7 +486,6 @@ final class CoordinatorLifecycleTests: XCTestCase {
         let result = await coordinator.start(
             endpoint: endpoint,
             controlTarget: ReceiverControlTarget.manual(endpoint),
-            receiver: receiver,
             configuration: configuration,
             cameraPosition: .back
         )
