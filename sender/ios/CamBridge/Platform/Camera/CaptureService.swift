@@ -235,7 +235,10 @@ public actor CaptureService {
                     output: output
                 )
                 session.commitConfiguration()
-                return restored && Self.matchesRequestedCameraConfiguration(
+                return Self.restoredCameraInputIsUsable(
+                    restored,
+                    session: session,
+                    output: output,
                     device: currentDevice,
                     format: currentFormat,
                     fps: configuration.fps
@@ -243,7 +246,7 @@ public actor CaptureService {
             }
             session.addInput(targetInput)
             Self.configureOutputConnection(output.connection(with: .video))
-            let targetZoomMapping: CameraZoomMapping
+            var targetZoomMapping: CameraZoomMapping
             do {
                 targetZoomMapping = try Self.configure(
                     device: targetDevice,
@@ -261,13 +264,51 @@ public actor CaptureService {
                     output: output
                 )
                 session.commitConfiguration()
-                return restored && Self.matchesRequestedCameraConfiguration(
+                return Self.restoredCameraInputIsUsable(
+                    restored,
+                    session: session,
+                    output: output,
                     device: currentDevice,
                     format: currentFormat,
                     fps: configuration.fps
                 ) ? .rejected : .rollbackFailed
             }
             session.commitConfiguration()
+            if !Self.matchesRequestedCameraConfiguration(
+                device: targetDevice,
+                format: targetFormat.format,
+                fps: configuration.fps
+            ) {
+                do {
+                    targetZoomMapping = try Self.configureExactWithoutStabilization(
+                        session: session,
+                        output: output,
+                        device: targetDevice,
+                        format: targetFormat.format,
+                        fps: configuration.fps
+                    )
+                } catch {
+                    session.beginConfiguration()
+                    session.removeInput(targetInput)
+                    let restored = Self.restoreCameraInput(
+                        currentInput,
+                        device: currentDevice,
+                        format: currentFormat,
+                        fps: configuration.fps,
+                        session: session,
+                        output: output
+                    )
+                    session.commitConfiguration()
+                    return Self.restoredCameraInputIsUsable(
+                        restored,
+                        session: session,
+                        output: output,
+                        device: currentDevice,
+                        format: currentFormat,
+                        fps: configuration.fps
+                    ) ? .rejected : .rollbackFailed
+                }
+            }
             guard Self.matchesRequestedCameraConfiguration(
                 device: targetDevice,
                 format: targetFormat.format,
@@ -284,7 +325,10 @@ public actor CaptureService {
                     output: output
                 )
                 session.commitConfiguration()
-                return restored && Self.matchesRequestedCameraConfiguration(
+                return Self.restoredCameraInputIsUsable(
+                    restored,
+                    session: session,
+                    output: output,
                     device: currentDevice,
                     format: currentFormat,
                     fps: configuration.fps
@@ -401,30 +445,13 @@ public actor CaptureService {
             exactZoomMapping = configuredZoomMapping
         } else {
             exactZoomMapping = try sessionQueue.sync {
-                var mapping: CameraZoomMapping?
-                var configurationError: Error?
-                session.beginConfiguration()
-                Self.disableOutputStabilization(output.connection(with: .video))
-                do {
-                    mapping = try Self.configure(device: device, format: avFormat, fps: configuration.fps)
-                } catch {
-                    configurationError = error
-                }
-                session.commitConfiguration()
-                if let configurationError { throw configurationError }
-                guard let mapping else {
-                    throw CaptureServiceError.configurationFailed("Camera zoom mapping was not configured")
-                }
-                guard Self.matchesRequestedCameraConfiguration(
+                try Self.configureExactWithoutStabilization(
+                    session: session,
+                    output: output,
                     device: device,
                     format: avFormat,
                     fps: configuration.fps
-                ) else {
-                    throw CaptureServiceError.configurationFailed(
-                        "Camera changed the requested format or fixed frame duration"
-                    )
-                }
-                return mapping
+                )
             }
         }
         self.session = session
@@ -587,6 +614,35 @@ public actor CaptureService {
         return CameraStabilizationPreference(mode: connection.activeVideoStabilizationMode)
     }
 
+    private static func configureExactWithoutStabilization(
+        session: AVCaptureSession,
+        output: AVCaptureVideoDataOutput,
+        device: AVCaptureDevice,
+        format: AVCaptureDevice.Format,
+        fps: Int
+    ) throws -> CameraZoomMapping {
+        var mapping: CameraZoomMapping?
+        var configurationError: Error?
+        session.beginConfiguration()
+        disableOutputStabilization(output.connection(with: .video))
+        do {
+            mapping = try configure(device: device, format: format, fps: fps)
+        } catch {
+            configurationError = error
+        }
+        session.commitConfiguration()
+        if let configurationError { throw configurationError }
+        guard let mapping else {
+            throw CaptureServiceError.configurationFailed("Camera zoom mapping was not configured")
+        }
+        guard matchesRequestedCameraConfiguration(device: device, format: format, fps: fps) else {
+            throw CaptureServiceError.configurationFailed(
+                "Camera changed the requested format or fixed frame duration"
+            )
+        }
+        return mapping
+    }
+
     private static func matchesRequestedCameraConfiguration(
         device: AVCaptureDevice,
         format: AVCaptureDevice.Format,
@@ -615,6 +671,27 @@ public actor CaptureService {
         } catch {
             return false
         }
+    }
+
+    private static func restoredCameraInputIsUsable(
+        _ restored: Bool,
+        session: AVCaptureSession,
+        output: AVCaptureVideoDataOutput,
+        device: AVCaptureDevice,
+        format: AVCaptureDevice.Format,
+        fps: Int
+    ) -> Bool {
+        guard restored else { return false }
+        if matchesRequestedCameraConfiguration(device: device, format: format, fps: fps) {
+            return true
+        }
+        return (try? configureExactWithoutStabilization(
+            session: session,
+            output: output,
+            device: device,
+            format: format,
+            fps: fps
+        )) != nil
     }
 
     private static func configurePreviewConnection(
