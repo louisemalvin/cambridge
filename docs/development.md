@@ -34,7 +34,7 @@ Homebrew, and the pinned CMake, OBS Studio, and FFmpeg dependencies prepared by
 - `receiver/obs/` — shared OBS receiver
 - `protocol/` — shared wire contract, schema, and examples
 - `scripts/sender/` and `scripts/receiver/` — platform-specific checks and fixtures
-- `sender/cambridge-video-modes.json` — shared Android/iOS phone mode catalog
+- `sender/cambridge-video-settings.json` — shared Android/iOS resolution, frame-rate, and bitrate defaults
 
 ## Repository checks
 

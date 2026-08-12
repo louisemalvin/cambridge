@@ -71,28 +71,6 @@ public struct CameraFormatDescriptor: Equatable, Sendable {
     }
 }
 
-public struct CameraCapabilitySnapshot: Equatable, Sendable {
-    public let device: CameraDeviceDescriptor
-    public let minimumZoomRatio: Double
-    public let maximumZoomRatio: Double
-    public let supportedStabilization: [CameraStabilizationPreference]
-    public let modeCapabilities: [CameraModeCapability]
-
-    public init(
-        device: CameraDeviceDescriptor,
-        minimumZoomRatio: Double,
-        maximumZoomRatio: Double,
-        supportedStabilization: [CameraStabilizationPreference],
-        modeCapabilities: [CameraModeCapability]
-    ) {
-        self.device = device
-        self.minimumZoomRatio = minimumZoomRatio
-        self.maximumZoomRatio = maximumZoomRatio
-        self.supportedStabilization = supportedStabilization
-        self.modeCapabilities = modeCapabilities
-    }
-}
-
 public enum CameraStabilizationPreference: String, Codable, CaseIterable, Equatable, Sendable {
     case auto
     case off

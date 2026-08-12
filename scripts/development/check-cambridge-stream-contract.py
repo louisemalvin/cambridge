@@ -20,6 +20,7 @@ KOTLIN_CONTRACT_PATH = (
     / "sender/android/app/src/main/java/dev/cambridge/sender/connection/control/cambridge/CamBridgeStreamContract.kt"
 )
 KOTLIN_CATALOG_PATH = REPOSITORY_ROOT / "sender/android/app/src/main/java/dev/cambridge/sender/session/VideoProfiles.kt"
+SENDER_SETTINGS_PATH = REPOSITORY_ROOT / "sender/cambridge-video-settings.json"
 CPP_GENERATOR_PATH = REPOSITORY_ROOT / "scripts/development/generate-cambridge-cpp-contract.py"
 CPP_CONTRACT_PATH = REPOSITORY_ROOT / "receiver/obs/cambridge-obs-source/src/protocol_contract.generated.hpp"
 LEGACY_CPP_CONTRACT_PATH = REPOSITORY_ROOT / "receiver/obs/cambridge-obs-source/src/protocol_contract.hpp"
@@ -52,7 +53,7 @@ def check_scalar(text: str, pattern: str, expected: Any, description: str, parse
 
 
 def check_phone_catalog(catalog_text: str) -> None:
-    required_ids = {"720p30", "1080p30", "1080p60", "2k30", "2k60"}
+    required_ids = {"1080p30", "1080p60", "2k30", "2k60"}
     found_ids = set(re.findall(r'id = "([^"]+)"', catalog_text))
     if not required_ids.issubset(found_ids):
         raise AssertionError("the Android phone catalog is missing a required mode")
@@ -65,7 +66,7 @@ def check_phone_catalog(catalog_text: str) -> None:
         if field not in catalog_text:
             raise AssertionError(f"Android phone catalog must define {field}")
     if "val normal" not in catalog_text or "val all" not in catalog_text:
-        raise AssertionError("Android phone catalog must distinguish normal and smoke modes")
+        raise AssertionError("Android compatibility catalog must expose generated profile collections")
 
 
 def check_no_receiver_presets() -> None:
@@ -107,6 +108,7 @@ def main() -> int:
     schema = json.loads(read(SCHEMA_PATH))
     kotlin_contract = read(KOTLIN_CONTRACT_PATH)
     kotlin_catalog = read(KOTLIN_CATALOG_PATH)
+    sender_settings = json.loads(read(SENDER_SETTINGS_PATH))
     cpp_contract = read(CPP_CONTRACT_PATH)
     fixture = read(FIXTURE_PATH)
     android_smoke = read(ANDROID_SMOKE_PATH)
@@ -234,6 +236,9 @@ def main() -> int:
         example = json.loads(read(REPOSITORY_ROOT / "protocol/examples" / example_name))
         if example["protocolVersion"] != protocol_version:
             raise AssertionError(f"{example_name} protocol version is out of sync")
+        if example_name in {"cambridge-hello.json", "cambridge-accepted.json"} \
+                and example["profileId"] != sender_settings["profileId"]:
+            raise AssertionError(f"{example_name} must use the opaque sender profile ID")
 
     print("CamBridge stream contract parity: OK")
     return 0

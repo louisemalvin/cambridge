@@ -54,7 +54,6 @@ object StreamPresentationMapper {
         VideoProfiles.PROFILE_2K60.id -> UiText.Resource(R.string.profile_2k30)
         VideoProfiles.PROFILE_1080P30.id -> UiText.Resource(R.string.profile_1080p30)
         VideoProfiles.PROFILE_1080P60.id -> UiText.Resource(R.string.profile_1080p30)
-        VideoProfiles.PROFILE_720P30.id -> UiText.Resource(R.string.profile_720p30)
         else -> UiText.Plain(profile.id)
     }
 

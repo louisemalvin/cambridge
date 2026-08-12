@@ -4,7 +4,7 @@ import CamBridgeCore
 @Test("state machine accepts one exact session and stops idempotently")
 func stateMachineLifecycle() throws {
     let identity = try SessionIdentity(sessionId: CamBridgeTestFixtures.sessionId, generation: CamBridgeTestFixtures.generation)
-    let configuration = try StreamConfiguration(mode: VideoMode.mode2k30, bitrateBps: 18_000_000, orientation: .ninety)
+    let configuration = try StreamConfiguration(resolution: SenderVideoCatalog.resolution2k, fps: 30, bitrateBps: 18_000_000, orientation: .ninety)
     var machine = StreamStateMachine()
     try machine.beginStart(identity: identity, configuration: configuration)
     try machine.accept(CamBridgeTestFixtures.accepted())
@@ -20,11 +20,11 @@ func stateMachineLifecycle() throws {
 @Test("state machine rejects stale identity and profile responses")
 func stateMachineValidation() throws {
     let identity = try SessionIdentity(sessionId: CamBridgeTestFixtures.sessionId, generation: CamBridgeTestFixtures.generation)
-    let configuration = try StreamConfiguration(mode: VideoMode.mode2k30, bitrateBps: 18_000_000, orientation: .zero)
+    let configuration = try StreamConfiguration(resolution: SenderVideoCatalog.resolution2k, fps: 30, bitrateBps: 18_000_000, orientation: .zero)
     var machine = StreamStateMachine()
     try machine.beginStart(identity: identity, configuration: configuration)
     #expect(throws: Error.self) {
-        try machine.accept(.accepted(sessionId: "other", generation: identity.generation, profileId: configuration.mode.id, mediaPort: 55_032, maxLongEdge: 3840, maxShortEdge: 2160))
+        try machine.accept(.accepted(sessionId: "other", generation: identity.generation, profileId: SenderVideoCatalog.profileID, mediaPort: 55_032, maxLongEdge: 3840, maxShortEdge: 2160))
     }
 }
 

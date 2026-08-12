@@ -29,14 +29,13 @@ public final class AppModel {
         browser: BonjourReceiverBrowser,
         probe: CamBridgeReceiverProbe,
         capture: CaptureService,
-        encoderProbe: EncoderCapabilityProbe,
         sessionCoordinator: StreamSessionCoordinator,
         logger: CamBridgeLogger
     ) {
         self.sessionCoordinator = sessionCoordinator
         streamSnapshot = StreamSessionSnapshot(state: .idle, runId: nil, identity: nil)
         preferencesState = SenderPreferencesState(settingsStore: settingsStore)
-        setupModel = StreamSetupModel(preferencesState: preferencesState, browser: browser, probe: probe, capture: capture, encoderProbe: encoderProbe, sessionCoordinator: sessionCoordinator, logger: logger)
+        setupModel = StreamSetupModel(preferencesState: preferencesState, browser: browser, probe: probe, capture: capture, sessionCoordinator: sessionCoordinator, logger: logger)
         webcamModel = WebcamModel(capture: capture, sessionCoordinator: sessionCoordinator, logger: logger)
         settingsModel = SettingsModel(preferencesState: preferencesState, logger: logger)
         snapshotTask = Task { [weak self] in
@@ -78,9 +77,4 @@ public final class AppModel {
         snapshotTask?.cancel()
     }
 
-    public func copyCapabilityReport() async {
-        let report = await setupModel.generateCapabilityReport()
-        settingsModel.setCapabilityReport(report)
-        UIPasteboard.general.string = report.copyableText()
-    }
 }

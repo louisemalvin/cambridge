@@ -102,13 +102,13 @@ public struct DiagnosticsReport: Codable, Equatable, Sendable {
         self.cameraMaximumFrameRate = cameraState?.selectedFormat?.maximumFrameRate
         self.systemPressureLevel = cameraState?.systemPressureLevel?.rawValue
         self.thermalState = cameraState?.thermalState
-        self.modeId = configuration?.mode.id
+        self.modeId = configuration.map { _ in SenderVideoCatalog.profileID }
         self.codedWidth = configuration?.geometry.codedWidth
         self.codedHeight = configuration?.geometry.codedHeight
         self.displayWidth = configuration.map { $0.geometry.displayDimensions(for: $0.orientation).width }
         self.displayHeight = configuration.map { $0.geometry.displayDimensions(for: $0.orientation).height }
         self.rotationDegrees = configuration?.orientation.degrees
-        self.fps = configuration?.mode.fps
+        self.fps = configuration?.fps
         self.bitrateBps = configuration?.bitrateBps
         self.requestedStabilization = requestedStabilization
         self.activeStabilization = activeStabilization
@@ -138,7 +138,7 @@ public struct DiagnosticsReport: Codable, Equatable, Sendable {
         self.encoderRequiresHardware = configuration.map { _ in true }
         self.encoderRealTime = configuration.map { _ in true }
         self.encoderFrameReorderingDisabled = configuration.map { _ in true }
-        self.encoderKeyframeIntervalSeconds = configuration?.mode.keyframeIntervalSeconds
+        self.encoderKeyframeIntervalSeconds = configuration.map { _ in SenderVideoCatalog.keyframeIntervalSeconds }
     }
 
     public func copyableText() -> String {

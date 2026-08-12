@@ -17,16 +17,6 @@ public protocol CameraSetupServicing: Sendable {
     func requestAuthorization() async -> CameraAuthorizationState
     func availableCameras() async -> [CameraDeviceDescriptor]
     func selectCamera(withID deviceID: String) async -> Bool
-    func modeCapabilities(
-        modes: [VideoMode],
-        receiver: ReceiverCapabilities?,
-        orientation: StreamRotation
-    ) async -> [CameraModeCapability]
-    func capabilitySnapshots(
-        modes: [VideoMode],
-        receiver: ReceiverCapabilities?,
-        orientation: StreamRotation
-    ) async -> [CameraCapabilitySnapshot]
     func cameraState() async -> CameraState
 }
 
@@ -86,26 +76,6 @@ public actor CaptureService {
         return true
     }
 
-    public func modeCapabilities(
-        modes: [VideoMode],
-        receiver: ReceiverCapabilities?,
-        orientation: StreamRotation
-    ) async -> [CameraModeCapability] {
-        guard let deviceID = state.selectedDeviceID,
-              let device = capabilityProbe.device(withID: deviceID) else {
-            return modes.map { CameraModeCapability(mode: $0, supported: false, reason: "No rear camera selected", formatID: nil) }
-        }
-        return capabilityProbe.capabilities(for: device, modes: modes, receiver: receiver, orientation: orientation)
-    }
-
-    public func capabilitySnapshots(
-        modes: [VideoMode],
-        receiver: ReceiverCapabilities?,
-        orientation: StreamRotation
-    ) async -> [CameraCapabilitySnapshot] {
-        capabilityProbe.capabilitySnapshots(modes: modes, receiver: receiver, orientation: orientation)
-    }
-
     public func prepare(
         configuration: StreamConfiguration,
         deviceID: String,
@@ -118,7 +88,11 @@ public actor CaptureService {
         guard let device = capabilityProbe.device(withID: deviceID) else {
             throw CaptureServiceError.deviceUnavailable
         }
-        guard let format = capabilityProbe.exactFormat(for: configuration.mode, on: device) else {
+        guard let format = capabilityProbe.compatibleFormat(
+            for: configuration.resolution,
+            fps: configuration.fps,
+            on: device
+        ) else {
             throw CaptureServiceError.formatUnavailable
         }
         let encoder = VideoToolboxEncoder()
@@ -249,7 +223,7 @@ public actor CaptureService {
 
     private func configure(
         device: AVCaptureDevice,
-        format: CameraFormatDescriptor,
+        format: CameraFormatSelection,
         configuration: StreamConfiguration,
         encoder: VideoToolboxEncoder
     ) async throws {
@@ -262,15 +236,15 @@ public actor CaptureService {
         }
         let output = AVCaptureVideoDataOutput()
         output.alwaysDiscardsLateVideoFrames = true
+        output.automaticallyConfiguresOutputBufferDimensions = false
+        output.deliversPreviewSizedOutputBuffers = false
         output.videoSettings = [
-            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+            kCVPixelBufferWidthKey as String: configuration.geometry.codedWidth,
+            kCVPixelBufferHeightKey as String: configuration.geometry.codedHeight,
         ]
         let delegate = CaptureOutputDelegate(encoder: encoder)
-        guard let avFormat = device.formats.first(where: { candidate in
-            String(describing: ObjectIdentifier(candidate as AnyObject)) == format.formatID
-        }) else {
-            throw CaptureServiceError.formatUnavailable
-        }
+        let avFormat = format.format
         let canAddInputAndOutput = sessionQueue.sync {
             session.canAddInput(input) && session.canAddOutput(output)
         }
@@ -281,13 +255,14 @@ public actor CaptureService {
             var configurationError: CaptureServiceError?
             var supportedStabilization = [CameraStabilizationPreference.off]
             session.beginConfiguration()
+            session.sessionPreset = .inputPriority
             session.addInput(input)
             session.addOutput(output)
             do {
                 try device.lockForConfiguration()
                 defer { device.unlockForConfiguration() }
                 device.activeFormat = avFormat
-                let duration = CMTime(value: Self.singleFrameDurationNumerator, timescale: CMTimeScale(configuration.mode.fps))
+                let duration = CMTime(value: Self.singleFrameDurationNumerator, timescale: CMTimeScale(configuration.fps))
                 device.activeVideoMinFrameDuration = duration
                 device.activeVideoMaxFrameDuration = duration
                 guard device.activeVideoMinFrameDuration == duration,
@@ -331,7 +306,7 @@ public actor CaptureService {
         selectedPreviewOrientation(configuration.orientation)
         state.authorization = authorizationState()
         state.selectedDeviceID = device.uniqueID
-        state.selectedFormat = format
+        state.selectedFormat = format.descriptor
         state.minimumZoomRatio = Double(device.minAvailableVideoZoomFactor)
         state.maximumZoomRatio = Double(device.maxAvailableVideoZoomFactor)
         state.zoomRatio = Double(device.videoZoomFactor)

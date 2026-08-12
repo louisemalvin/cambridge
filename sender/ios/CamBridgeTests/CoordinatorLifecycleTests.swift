@@ -21,8 +21,9 @@ final class CoordinatorLifecycleTests: XCTestCase {
             maxShortEdge: CamBridgeContract.Geometry.maximumShortEdge
         )
         let configuration = try StreamConfiguration(
-            mode: VideoMode.mode1080p30,
-            bitrateBps: VideoMode.mode1080p30.defaultBitrateBps,
+            resolution: SenderVideoCatalog.fullHd,
+            fps: 30,
+            bitrateBps: 5_000_000,
             orientation: .zero
         )
 
@@ -107,8 +108,9 @@ final class CoordinatorLifecycleTests: XCTestCase {
             maxShortEdge: CamBridgeContract.Geometry.maximumShortEdge
         )
         let configuration = try StreamConfiguration(
-            mode: VideoMode.mode1080p30,
-            bitrateBps: VideoMode.mode1080p30.defaultBitrateBps,
+            resolution: SenderVideoCatalog.fullHd,
+            fps: 30,
+            bitrateBps: 5_000_000,
             orientation: .zero
         )
 
@@ -160,8 +162,9 @@ final class CoordinatorLifecycleTests: XCTestCase {
             maxShortEdge: CamBridgeContract.Geometry.maximumShortEdge
         )
         let configuration = try StreamConfiguration(
-            mode: VideoMode.mode1080p30,
-            bitrateBps: VideoMode.mode1080p30.defaultBitrateBps,
+            resolution: SenderVideoCatalog.fullHd,
+            fps: 30,
+            bitrateBps: 5_000_000,
             orientation: .zero
         )
         let snapshots = await coordinator.snapshots()
@@ -226,8 +229,9 @@ final class CoordinatorLifecycleTests: XCTestCase {
             maxShortEdge: CamBridgeContract.Geometry.maximumShortEdge
         )
         let configuration = try StreamConfiguration(
-            mode: VideoMode.mode1080p30,
-            bitrateBps: VideoMode.mode1080p30.defaultBitrateBps,
+            resolution: SenderVideoCatalog.fullHd,
+            fps: 30,
+            bitrateBps: 5_000_000,
             orientation: .zero
         )
 
@@ -271,8 +275,9 @@ final class CoordinatorLifecycleTests: XCTestCase {
             maxShortEdge: CamBridgeContract.Geometry.maximumShortEdge
         )
         let configuration = try StreamConfiguration(
-            mode: VideoMode.mode1080p30,
-            bitrateBps: VideoMode.mode1080p30.defaultBitrateBps,
+            resolution: SenderVideoCatalog.fullHd,
+            fps: 30,
+            bitrateBps: 5_000_000,
             orientation: .zero
         )
 
@@ -314,8 +319,9 @@ final class CoordinatorLifecycleTests: XCTestCase {
             maxShortEdge: CamBridgeContract.Geometry.maximumShortEdge
         )
         let configuration = try StreamConfiguration(
-            mode: VideoMode.mode1080p30,
-            bitrateBps: VideoMode.mode1080p30.defaultBitrateBps,
+            resolution: SenderVideoCatalog.fullHd,
+            fps: 30,
+            bitrateBps: 5_000_000,
             orientation: .zero
         )
 
@@ -369,8 +375,9 @@ final class CoordinatorLifecycleTests: XCTestCase {
             maxShortEdge: CamBridgeContract.Geometry.maximumShortEdge
         )
         let configuration = try StreamConfiguration(
-            mode: VideoMode.mode1080p30,
-            bitrateBps: VideoMode.mode1080p30.defaultBitrateBps,
+            resolution: SenderVideoCatalog.fullHd,
+            fps: 30,
+            bitrateBps: 5_000_000,
             orientation: .zero
         )
 

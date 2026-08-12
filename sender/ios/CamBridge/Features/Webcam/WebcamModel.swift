@@ -30,10 +30,10 @@ public final class WebcamModel {
                 switch snapshot.state {
                 case let .connecting(_, configuration):
                     self.failure = nil
-                    self.statusText = "Connecting · \(configuration.mode.id)"
+                    self.statusText = "Connecting · \(configuration.resolution.displayName)"
                 case let .streaming(_, configuration, _):
                     self.failure = nil
-                    self.statusText = "Streaming · \(configuration.mode.id) · \(configuration.mode.fps) fps"
+                    self.statusText = "Streaming · \(configuration.resolution.displayName) · \(configuration.fps) fps"
                 case let .failed(failure):
                     self.failure = failure
                     self.statusText = failure.recoverySummary
@@ -71,12 +71,6 @@ public final class WebcamModel {
     public func setZoomRatio(_ ratio: Double) {
         Task {
             try? await capture.setZoomRatio(ratio)
-        }
-    }
-
-    public func setStabilization(_ preference: CameraStabilizationPreference) {
-        Task {
-            try? await capture.setStabilization(preference)
         }
     }
 

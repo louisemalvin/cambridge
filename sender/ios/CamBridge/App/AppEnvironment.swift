@@ -8,7 +8,6 @@ public final class AppEnvironment {
     public let browser: BonjourReceiverBrowser
     public let probe: CamBridgeReceiverProbe
     public let capture: CaptureService
-    public let encoderProbe: EncoderCapabilityProbe
     public let sessionCoordinator: StreamSessionCoordinator
     public let appModel: AppModel
     public let lifecycleController: AppLifecycleController
@@ -19,9 +18,8 @@ public final class AppEnvironment {
         browser = BonjourReceiverBrowser()
         probe = CamBridgeReceiverProbe()
         capture = CaptureService()
-        encoderProbe = EncoderCapabilityProbe()
         sessionCoordinator = StreamSessionCoordinator(capture: capture, logger: logger)
-        appModel = AppModel(settingsStore: settingsStore, browser: browser, probe: probe, capture: capture, encoderProbe: encoderProbe, sessionCoordinator: sessionCoordinator, logger: logger)
+        appModel = AppModel(settingsStore: settingsStore, browser: browser, probe: probe, capture: capture, sessionCoordinator: sessionCoordinator, logger: logger)
         lifecycleController = AppLifecycleController(sessionCoordinator: sessionCoordinator, logger: logger)
     }
 }

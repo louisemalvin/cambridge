@@ -179,11 +179,11 @@ public actor StreamSessionCoordinator {
             try await sendControlMessageWithTimeout(control, message: .hello(
                 sessionId: identity.sessionId,
                 generation: identity.generation,
-                profileId: configuration.mode.id,
+                profileId: SenderVideoCatalog.profileID,
                 codedWidth: configuration.geometry.codedWidth,
                 codedHeight: configuration.geometry.codedHeight,
                 rotation: configuration.orientation,
-                fps: configuration.mode.fps,
+                fps: configuration.fps,
                 bitrateBps: configuration.bitrateBps
             ))
             try ensureStartOperationIsActive(operationID)

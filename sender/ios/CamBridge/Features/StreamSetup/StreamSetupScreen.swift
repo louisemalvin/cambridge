@@ -7,25 +7,15 @@ struct StreamSetupScreen: View {
     var body: some View {
         Form {
             ReceiverSelectionView(model: model)
-            Section("Camera") {
-                Picker("Rear camera", selection: Binding(
-                    get: { model.selectedCameraID ?? "" },
-                    set: { model.selectCamera($0) }
-                )) {
-                    ForEach(model.cameraDevices) { device in
-                        Text(device.name).tag(device.id)
-                    }
-                }
-                .disabled(model.isStreamActive)
-                .accessibilityIdentifier("camera-picker")
-                if model.cameraAuthorization != .authorized {
+            if model.cameraAuthorization != .authorized {
+                Section("Camera") {
                     Button("Allow camera access") {
                         Task { await model.requestCameraAccess() }
                     }
                     .accessibilityIdentifier("request-camera-access")
                 }
             }
-            VideoModeSelectionView(model: model)
+            StreamSettingsSelectionView(model: model)
                 .disabled(model.isStreamActive)
             Section {
                 Button {
@@ -41,15 +31,6 @@ struct StreamSetupScreen: View {
                 }
                 .disabled(!model.canStart)
                 .accessibilityIdentifier("start-stream")
-            }
-            Section("Diagnostics") {
-                Text("Local diagnostic report: camera identifiers are included; receiver hosts are redacted. It can be copied before Start.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                Button("Copy capability report") {
-                    Task { await model.copyCapabilityReport() }
-                }
-                .accessibilityIdentifier("copy-capability-report")
             }
             if !model.statusMessage.isEmpty {
                 Section {

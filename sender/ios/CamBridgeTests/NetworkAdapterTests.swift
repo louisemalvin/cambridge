@@ -47,12 +47,12 @@ final class NetworkAdapterTests: XCTestCase {
         let connection = FakeControlConnection(response: .hello(
             sessionId: "unexpected-session",
             generation: UInt64(CamBridgeContract.Validation.minimumGeneration),
-            profileId: VideoMode.mode1080p30.id,
-            codedWidth: VideoMode.mode1080p30.codedWidth,
-            codedHeight: VideoMode.mode1080p30.codedHeight,
+            profileId: SenderVideoCatalog.profileID,
+            codedWidth: SenderVideoCatalog.fullHd.codedWidth,
+            codedHeight: SenderVideoCatalog.fullHd.codedHeight,
             rotation: .zero,
-            fps: VideoMode.mode1080p30.fps,
-            bitrateBps: VideoMode.mode1080p30.defaultBitrateBps
+            fps: SenderVideoCatalog.defaultFrameRate,
+            bitrateBps: 5_000_000
         ), respondToProbe: false)
         let probe = CamBridgeReceiverProbe(factory: FakeControlConnectionFactory(connection: connection))
 

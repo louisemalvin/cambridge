@@ -10,8 +10,6 @@ public enum VideoToolboxEncoderError: Error, Equatable, Sendable {
     case notPrepared
     case hardwareEncoderUnavailable
     case createFailed(OSStatus)
-    case supportedPropertiesFailed(OSStatus)
-    case unsupportedBitrateRange
     case propertyFailed(String, OSStatus)
     case prepareFailed(OSStatus)
     case frameFailed(OSStatus)
@@ -36,12 +34,6 @@ public struct VideoToolboxEncoderMetrics: Equatable, Sendable {
     public let lastPresentationTimeMicroseconds: Int64?
 }
 
-public struct VideoToolboxEncoderCapability: Equatable, Sendable {
-    public let bitrateRange: ClosedRange<Int>
-    public let encoderIdentity: String?
-    public let encoderIdentityUnavailableReason: String?
-}
-
 public final class VideoToolboxEncoder {
     public let inputQueue: DispatchQueue
     public var onAccessUnit: (@Sendable (Result<EncodedAccessUnit, VideoToolboxEncoderError>) -> Void)?
@@ -63,61 +55,6 @@ public final class VideoToolboxEncoder {
     public init(queueLabel: String = "dev.cambridge.sender.encoder") {
         inputQueue = DispatchQueue(label: queueLabel, qos: .userInitiated)
         inputQueue.setSpecific(key: Self.inputQueueKey, value: Self.inputQueueMarker)
-    }
-
-    public static func supportedBitrateRange(for mode: VideoMode) throws -> ClosedRange<Int> {
-        try supportedEncoderCapability(for: mode).bitrateRange
-    }
-
-    public static func supportedEncoderCapability(for mode: VideoMode) throws -> VideoToolboxEncoderCapability {
-        guard let geometry = mode.geometry else {
-            throw VideoToolboxEncoderError.unsupportedBitrateRange
-        }
-        let encoderSpecification = Self.hardwareEncoderSpecification()
-        var encoderID: CFString?
-        var supportedProperties: CFDictionary?
-        let status = VTCopySupportedPropertyDictionaryForEncoder(
-            width: Int32(geometry.codedWidth),
-            height: Int32(geometry.codedHeight),
-            codecType: kCMVideoCodecType_H264,
-            encoderSpecification: encoderSpecification as CFDictionary,
-            encoderIDOut: &encoderID,
-            supportedPropertiesOut: &supportedProperties
-        )
-        guard status == noErr else {
-            throw VideoToolboxEncoderError.supportedPropertiesFailed(status)
-        }
-        guard let supportedProperties else {
-            throw VideoToolboxEncoderError.unsupportedBitrateRange
-        }
-        let propertyDictionary = supportedProperties as NSDictionary
-        guard let bitrateProperty = propertyDictionary[kVTCompressionPropertyKey_AverageBitRate as String] as? NSDictionary else {
-            throw VideoToolboxEncoderError.unsupportedBitrateRange
-        }
-        if let minimum = Self.number(
-            in: bitrateProperty,
-            forKey: kVTPropertySupportedValueMinimumKey
-        ), let maximum = Self.number(
-            in: bitrateProperty,
-            forKey: kVTPropertySupportedValueMaximumKey
-        ), minimum <= maximum {
-            return VideoToolboxEncoderCapability(
-                bitrateRange: minimum...maximum,
-                encoderIdentity: encoderID.map { $0 as String },
-                encoderIdentityUnavailableReason: encoderID == nil ? "VideoToolbox returned no encoder identifier" : nil
-            )
-        }
-        if let values = bitrateProperty[kVTPropertySupportedValueListKey as String] as? [NSNumber],
-           let minimum = values.map(\.intValue).min(),
-           let maximum = values.map(\.intValue).max(),
-           minimum <= maximum {
-            return VideoToolboxEncoderCapability(
-                bitrateRange: minimum...maximum,
-                encoderIdentity: encoderID.map { $0 as String },
-                encoderIdentityUnavailableReason: encoderID == nil ? "VideoToolbox returned no encoder identifier" : nil
-            )
-        }
-        throw VideoToolboxEncoderError.unsupportedBitrateRange
     }
 
     deinit {
@@ -327,10 +264,10 @@ public final class VideoToolboxEncoder {
     private func setProperties(session: VTCompressionSession, configuration: StreamConfiguration) throws {
         try set(session: session, key: kVTCompressionPropertyKey_RealTime, value: true, name: "real-time")
         try set(session: session, key: kVTCompressionPropertyKey_AllowFrameReordering, value: false, name: "frame-reordering")
-        try set(session: session, key: kVTCompressionPropertyKey_ExpectedFrameRate, value: configuration.mode.fps, name: "frame-rate")
+        try set(session: session, key: kVTCompressionPropertyKey_ExpectedFrameRate, value: configuration.fps, name: "frame-rate")
         try set(session: session, key: kVTCompressionPropertyKey_AverageBitRate, value: configuration.bitrateBps, name: "average-bitrate")
-        try set(session: session, key: kVTCompressionPropertyKey_MaxKeyFrameInterval, value: configuration.mode.keyframeIntervalSeconds * configuration.mode.fps, name: "keyframe-interval")
-        try set(session: session, key: kVTCompressionPropertyKey_MaxKeyFrameIntervalDuration, value: Double(configuration.mode.keyframeIntervalSeconds), name: "keyframe-duration")
+        try set(session: session, key: kVTCompressionPropertyKey_MaxKeyFrameInterval, value: SenderVideoCatalog.keyframeIntervalSeconds * configuration.fps, name: "keyframe-interval")
+        try set(session: session, key: kVTCompressionPropertyKey_MaxKeyFrameIntervalDuration, value: Double(SenderVideoCatalog.keyframeIntervalSeconds), name: "keyframe-duration")
         let dataRateLimits = try Self.dataRateLimits(
             bitrateBps: configuration.bitrateBps,
             windowSeconds: Self.rateLimitWindowSeconds
@@ -465,13 +402,6 @@ public final class VideoToolboxEncoder {
         let scaled = CMTimeConvertScale(time, timescale: Self.microsecondsTimeScale, method: .quickTime)
         guard scaled.isValid else { throw VideoToolboxEncoderError.malformedSample }
         return scaled.value
-    }
-
-    private static func number(in dictionary: NSDictionary, forKey key: CFString) -> Int? {
-        guard let number = dictionary[key as String] as? NSNumber else { return nil }
-        let value = number.intValue
-        guard NSNumber(value: value) == number else { return nil }
-        return value
     }
 
     private func invalidateOnInputQueue() {

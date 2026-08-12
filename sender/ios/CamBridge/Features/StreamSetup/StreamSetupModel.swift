@@ -1,6 +1,5 @@
 import Foundation
 import Observation
-import UIKit
 import CamBridgeCore
 
 @MainActor
@@ -22,7 +21,15 @@ public final class StreamSetupModel {
         public let mediaHosts: [String]
         public let discoveredServiceName: String?
 
-        init(id: String, displayName: String, endpoint: ReceiverEndpoint, target: ReceiverControlTarget, capabilities: ReceiverCapabilities, mediaHosts: [String], discoveredServiceName: String? = nil) {
+        init(
+            id: String,
+            displayName: String,
+            endpoint: ReceiverEndpoint,
+            target: ReceiverControlTarget,
+            capabilities: ReceiverCapabilities,
+            mediaHosts: [String],
+            discoveredServiceName: String? = nil
+        ) {
             self.id = id
             self.displayName = displayName
             self.endpoint = endpoint
@@ -38,69 +45,56 @@ public final class StreamSetupModel {
     public var selectedReceiverID: String?
     public var manualHost = ""
     public private(set) var selectedReceiver: ReceiverChoice?
-    public private(set) var cameraDevices: [CameraDeviceDescriptor] = []
-    public var selectedCameraID: String?
-    public private(set) var modeCapabilities: [CameraModeCapability] = []
-    public var selectedModeID: String {
-        get { preferencesState.preferences.modeId }
-        set { selectMode(newValue) }
-    }
-    public var selectedBitrateBps: Int {
-        get { preferencesState.preferences.bitrateBps }
-        set { setBitrate(newValue) }
-    }
-    public var selectedOrientation: StreamRotation {
-        get { preferencesState.preferences.orientation }
-        set { selectOrientation(newValue) }
-    }
-    public var selectedStabilization: CameraStabilizationPreference {
-        get { CameraStabilizationPreference(rawValue: preferencesState.preferences.stabilizationPreference) ?? .auto }
-        set { setStabilization(newValue) }
-    }
-    public private(set) var stabilizationOptions: [CameraStabilizationPreference] = CameraState.initial.supportedStabilization
     public private(set) var cameraAuthorization: CameraAuthorizationState = .notDetermined
     public private(set) var isStarting = false
-    public var isStreamActive: Bool { preferencesState.isStreamActive }
     public private(set) var statusMessage = "Checking for OBS receivers…"
-    public private(set) var capabilityReport: CapabilityReport?
     public var failure: StreamFailure?
+    public var bitrateText: String
 
-    public var selectedMode: VideoMode? {
-        VideoMode.productModes.first(where: { $0.id == selectedModeID })
+    public var selectedResolutionID: String {
+        get { preferencesState.preferences.resolutionId }
+        set { selectResolution(newValue) }
     }
 
-    public var bitrateOptions: [Int] {
-        guard let selectedMode,
-              let capability = selectedModeCapability,
-              let minimum = capability.encoderMinimumBitrateBps,
-              let maximum = capability.encoderMaximumBitrateBps else {
-            return []
-        }
-        return selectedMode.steppedBitrates(encoderRange: minimum...maximum)
+    public var selectedFPS: Int {
+        get { preferencesState.preferences.fps }
+        set { selectFrameRate(newValue) }
     }
+
+    public var selectedResolution: VideoResolution? {
+        SenderVideoCatalog.resolution(id: selectedResolutionID)
+    }
+
+    public var selectedBitrateBps: Int? {
+        BitrateInput.bitsPerSecond(fromWholeMegabits: bitrateText)
+    }
+
+    public var isStreamActive: Bool { preferencesState.isStreamActive }
 
     public var canStart: Bool {
-        !isStarting && !isStreamActive && cameraAuthorization == .authorized && receiverStatus == .ready && selectedReceiver != nil && selectedModeCapability?.supported == true && selectedCameraID != nil && bitrateOptions.contains(selectedBitrateBps)
+        !isStarting
+            && !isStreamActive
+            && cameraAuthorization == .authorized
+            && receiverStatus == .ready
+            && selectedReceiver != nil
+            && selectedResolution != nil
+            && SenderVideoCatalog.frameRates.contains(selectedFPS)
+            && selectedBitrateBps != nil
+            && selectedCameraID != nil
     }
 
     private let preferencesState: SenderPreferencesState
     private let browser: any ReceiverBrowsing
     private let probe: any ReceiverProbing
     private let capture: any CameraSetupServicing
-    private let encoderProbe: any EncoderCapabilityProbing
     private let sessionCoordinator: any StreamSessionStarting
     private let logger: CamBridgeLogger
-    private let capabilityReportBuilder: any CapabilityReportBuilding
-    private let appVersion: String
-    private let buildVersion: String
-    private let operatingSystem: String
-    private let deviceModel: String
     private let preferredReceiverID: String?
     @ObservationIgnored private var discoveryTask: Task<Void, Never>?
-    @ObservationIgnored private var capabilityTask: Task<Void, Never>?
+    @ObservationIgnored private var cameraTask: Task<Void, Never>?
     @ObservationIgnored private var preferenceTask: Task<Void, Never>?
     private var cameraRefreshID: UUID?
-    private var capabilityRefreshID: UUID?
+    private var selectedCameraID: String?
     private var hasExplicitReceiverSelection = false
 
     public init(
@@ -108,31 +102,22 @@ public final class StreamSetupModel {
         browser: any ReceiverBrowsing,
         probe: any ReceiverProbing,
         capture: any CameraSetupServicing,
-        encoderProbe: any EncoderCapabilityProbing,
         sessionCoordinator: any StreamSessionStarting,
-        logger: CamBridgeLogger,
-        capabilityReportBuilder: any CapabilityReportBuilding = CapabilityReportBuilder(),
-        appVersion: String? = nil,
-        buildVersion: String? = nil,
-        operatingSystem: String? = nil,
-        deviceModel: String? = nil
+        logger: CamBridgeLogger
     ) {
-        self.preferencesState = SenderPreferencesState(settingsStore: settingsStore)
+        let preferencesState = SenderPreferencesState(settingsStore: settingsStore)
+        self.preferencesState = preferencesState
         self.browser = browser
         self.probe = probe
         self.capture = capture
-        self.encoderProbe = encoderProbe
         self.sessionCoordinator = sessionCoordinator
         self.logger = logger
-        self.capabilityReportBuilder = capabilityReportBuilder
-        self.appVersion = appVersion ?? (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown")
-        self.buildVersion = buildVersion ?? (Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown")
-        self.operatingSystem = operatingSystem ?? ProcessInfo.processInfo.operatingSystemVersionString
-        self.deviceModel = deviceModel ?? UIDevice.current.model
-        let preferences = self.preferencesState.preferences
-        self.preferredReceiverID = preferences.receiverId
-        self.manualHost = preferences.receiverHost ?? ""
-        self.selectedReceiverID = preferences.receiverId
+        preferredReceiverID = preferencesState.preferences.receiverId
+        manualHost = preferencesState.preferences.receiverHost ?? ""
+        selectedReceiverID = preferencesState.preferences.receiverId
+        bitrateText = BitrateInput.wholeMegabits(
+            fromBitsPerSecond: preferencesState.preferences.bitrateBps
+        ) ?? ""
     }
 
     public init(
@@ -140,39 +125,28 @@ public final class StreamSetupModel {
         browser: any ReceiverBrowsing,
         probe: any ReceiverProbing,
         capture: any CameraSetupServicing,
-        encoderProbe: any EncoderCapabilityProbing,
         sessionCoordinator: any StreamSessionStarting,
-        logger: CamBridgeLogger,
-        capabilityReportBuilder: any CapabilityReportBuilding = CapabilityReportBuilder(),
-        appVersion: String? = nil,
-        buildVersion: String? = nil,
-        operatingSystem: String? = nil,
-        deviceModel: String? = nil
+        logger: CamBridgeLogger
     ) {
         self.preferencesState = preferencesState
         self.browser = browser
         self.probe = probe
         self.capture = capture
-        self.encoderProbe = encoderProbe
         self.sessionCoordinator = sessionCoordinator
         self.logger = logger
-        self.capabilityReportBuilder = capabilityReportBuilder
-        self.appVersion = appVersion ?? (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown")
-        self.buildVersion = buildVersion ?? (Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown")
-        self.operatingSystem = operatingSystem ?? ProcessInfo.processInfo.operatingSystemVersionString
-        self.deviceModel = deviceModel ?? UIDevice.current.model
-        let preferences = preferencesState.preferences
-        preferredReceiverID = preferences.receiverId
-        manualHost = preferences.receiverHost ?? ""
-        selectedReceiverID = preferences.receiverId
+        preferredReceiverID = preferencesState.preferences.receiverId
+        manualHost = preferencesState.preferences.receiverHost ?? ""
+        selectedReceiverID = preferencesState.preferences.receiverId
+        bitrateText = BitrateInput.wholeMegabits(
+            fromBitsPerSecond: preferencesState.preferences.bitrateBps
+        ) ?? ""
     }
 
     public func startDiscovery() {
         discoveryTask?.cancel()
-        capabilityTask?.cancel()
+        cameraTask?.cancel()
         preferenceTask?.cancel()
         cameraRefreshID = nil
-        capabilityRefreshID = nil
         logger.event("discovery_started", category: .discovery)
         discoveryTask = Task { [weak self] in
             guard let self else { return }
@@ -182,16 +156,15 @@ public final class StreamSetupModel {
                 await self.handleDiscovery(event)
             }
         }
-        capabilityTask = Task { [weak self] in
-            guard let self else { return }
-            await self.refreshCameraAndModes()
+        cameraTask = Task { [weak self] in
+            await self?.refreshCameraAndModes()
         }
         preferenceTask = Task { [weak self] in
             guard let self else { return }
-            let changes = self.preferencesState.changes()
-            for await _ in changes {
+            let changes = preferencesState.changes()
+            for await preferences in changes {
                 guard !Task.isCancelled else { return }
-                await self.refreshModeCapabilities()
+                self.syncBitrateText(with: preferences)
             }
         }
     }
@@ -199,12 +172,11 @@ public final class StreamSetupModel {
     public func stopDiscovery() {
         discoveryTask?.cancel()
         discoveryTask = nil
-        capabilityTask?.cancel()
-        capabilityTask = nil
+        cameraTask?.cancel()
+        cameraTask = nil
         preferenceTask?.cancel()
         preferenceTask = nil
         cameraRefreshID = nil
-        capabilityRefreshID = nil
         logger.event("discovery_stopped", category: .discovery)
         Task { await browser.stop() }
     }
@@ -214,21 +186,12 @@ public final class StreamSetupModel {
         cameraRefreshID = refreshID
         cameraAuthorization = await capture.authorizationState()
         guard cameraRefreshID == refreshID else { return }
-        cameraDevices = await capture.availableCameras()
+        let cameras = await capture.availableCameras()
         guard cameraRefreshID == refreshID else { return }
-        if selectedCameraID == nil || !cameraDevices.contains(where: { $0.id == selectedCameraID }) {
-            selectedCameraID = cameraDevices.first?.id
-        }
+        selectedCameraID = cameras.first?.id
         if let selectedCameraID {
             _ = await capture.selectCamera(withID: selectedCameraID)
-            guard cameraRefreshID == refreshID else { return }
         }
-        stabilizationOptions = await capture.cameraState().supportedStabilization
-        guard cameraRefreshID == refreshID else { return }
-        if !stabilizationOptions.contains(selectedStabilization) {
-            setStabilization(stabilizationOptions.first ?? .off)
-        }
-        await refreshModeCapabilities()
     }
 
     public func requestCameraAccess() async {
@@ -236,171 +199,50 @@ public final class StreamSetupModel {
         await refreshCameraAndModes()
     }
 
-    public func generateCapabilityReport() async -> CapabilityReport {
-        let authorization = await capture.authorizationState()
-        let snapshots = await capture.capabilitySnapshots(
-            modes: VideoMode.productModes,
-            receiver: selectedReceiver?.capabilities,
-            orientation: selectedOrientation
-        )
-        let cameras = snapshots.map { snapshot in
-            let modes = snapshot.modeCapabilities.map { capability in
-                let encoderCapability = capability.supported
-                    ? encoderProbe.probe(mode: capability.mode, bitrateBps: capability.mode.defaultBitrateBps)
-                    : nil
-                return CapabilityReportMode(capability: capability, encoder: encoderCapability)
-            }
-            return CapabilityReportCamera(snapshot: snapshot, modes: modes)
-        }
-        let receiver = selectedReceiver.map {
-            CapabilityReportReceiver(
-                receiverId: $0.capabilities.receiverId,
-                displayName: $0.capabilities.displayName,
-                maxLongEdge: $0.capabilities.maxLongEdge,
-                maxShortEdge: $0.capabilities.maxShortEdge
-            )
-        }
-        let report = capabilityReportBuilder.build(CapabilityReportInput(
-            appVersion: appVersion,
-            buildVersion: buildVersion,
-            operatingSystem: operatingSystem,
-            deviceModel: deviceModel,
-            cameraAuthorization: Self.authorizationReportValue(authorization),
-            cameras: cameras,
-            selectedCameraID: selectedCameraID,
-            receiver: receiver,
-            selectedModeID: selectedModeID,
-            selectedBitrateBps: selectedBitrateBps,
-            selectedOrientationDegrees: selectedOrientation.degrees,
-            selectedStabilization: selectedStabilization.rawValue,
-            selectedReceiverDisplayName: selectedReceiver?.displayName
-        ))
-        capabilityReport = report
-        return report
-    }
-
-    public func copyCapabilityReport() async {
-        let report = await generateCapabilityReport()
-        UIPasteboard.general.string = report.copyableText()
-        logger.event("capability_report_copied", category: .app)
-    }
-
-    public func refreshModeCapabilities() async {
-        let refreshID = UUID()
-        capabilityRefreshID = refreshID
-        guard selectedCameraID != nil else {
-            modeCapabilities = VideoMode.productModes.map { CameraModeCapability(mode: $0, supported: false, reason: "No rear camera", formatID: nil) }
-            return
-        }
-        let cameraCapabilities = await capture.modeCapabilities(
-            modes: VideoMode.productModes,
-            receiver: selectedReceiver?.capabilities,
-            orientation: selectedOrientation
-        )
-        guard capabilityRefreshID == refreshID else { return }
-        modeCapabilities = cameraCapabilities.map { cameraCapability in
-            guard cameraCapability.supported else { return cameraCapability }
-            let encoderCapability = encoderProbe.probe(mode: cameraCapability.mode, bitrateBps: cameraCapability.mode.defaultBitrateBps)
-            guard encoderCapability.supported else {
-                return CameraModeCapability(
-                    mode: cameraCapability.mode,
-                    supported: false,
-                    reason: cameraCapability.reason ?? encoderCapability.reason,
-                    formatID: cameraCapability.formatID,
-                    formatWidth: cameraCapability.formatWidth,
-                    formatHeight: cameraCapability.formatHeight,
-                    supportedFrameRateRanges: cameraCapability.supportedFrameRateRanges,
-                    supportedStabilization: cameraCapability.supportedStabilization,
-                    encoderIdentity: encoderCapability.encoderIdentity,
-                    encoderIdentityUnavailableReason: encoderCapability.encoderIdentityUnavailableReason,
-                    encoderUsesHardwareAccelerated: encoderCapability.encoderUsesHardwareAccelerated,
-                    encoderHardwareAvailabilityReason: encoderCapability.encoderHardwareAvailabilityReason
-                )
-            }
-            return CameraModeCapability(
-                mode: cameraCapability.mode,
-                supported: true,
-                reason: nil,
-                formatID: cameraCapability.formatID,
-                formatWidth: cameraCapability.formatWidth,
-                formatHeight: cameraCapability.formatHeight,
-                supportedFrameRateRanges: cameraCapability.supportedFrameRateRanges,
-                supportedStabilization: cameraCapability.supportedStabilization,
-                encoderMinimumBitrateBps: encoderCapability.minimumBitrateBps,
-                encoderMaximumBitrateBps: encoderCapability.maximumBitrateBps,
-                encoderIdentity: encoderCapability.encoderIdentity,
-                encoderIdentityUnavailableReason: encoderCapability.encoderIdentityUnavailableReason,
-                encoderUsesHardwareAccelerated: encoderCapability.encoderUsesHardwareAccelerated,
-                encoderHardwareAvailabilityReason: encoderCapability.encoderHardwareAvailabilityReason
-            )
-        }
-        if selectedModeCapability?.supported != true {
-            if let fallbackModeID = modeCapabilities.first(where: { $0.supported })?.mode.id,
-               fallbackModeID != selectedModeID {
-                updatePreferences { preferences in
-                    preferences.modeId = fallbackModeID
-                    if let mode = VideoMode.productModes.first(where: { $0.id == fallbackModeID }) {
-                        preferences.bitrateBps = mode.defaultBitrateBps
-                    }
-                }
-            }
-        }
-        if let selectedModeCapability, selectedModeCapability.supported {
-            stabilizationOptions = selectedModeCapability.supportedStabilization
-            if !stabilizationOptions.contains(selectedStabilization) {
-                setStabilization(stabilizationOptions.first ?? .off)
-            }
-        } else {
-            stabilizationOptions = [.off]
-            setStabilization(.off)
-        }
-        if let firstBitrate = bitrateOptions.first, !bitrateOptions.contains(selectedBitrateBps) {
-            setBitrate(min(max(selectedBitrateBps, firstBitrate), bitrateOptions.last ?? firstBitrate))
-        }
-    }
-
     public func selectReceiver(_ receiverID: String) {
         hasExplicitReceiverSelection = true
         selectedReceiverID = receiverID
         selectedReceiver = receivers.first(where: { $0.id == receiverID })
         receiverStatus = selectedReceiver == nil ? .selectionRequired : .ready
-        scheduleModeCapabilityRefresh()
     }
 
-    public func selectMode(_ modeID: String) {
-        guard VideoMode.productModes.contains(where: { $0.id == modeID }) else { return }
-        let changed = updatePreferences { preferences in
-            preferences.modeId = modeID
-            if let defaultBitrate = VideoMode.productModes.first(where: { $0.id == modeID })?.defaultBitrateBps {
-                preferences.bitrateBps = defaultBitrate
-            }
+    public func selectResolution(_ resolutionID: String) {
+        guard let resolution = SenderVideoCatalog.resolution(id: resolutionID),
+              let suggestedBitrate = SenderVideoCatalog.suggestedBitrateBps(
+                resolution: resolution,
+                fps: selectedFPS
+              ),
+              let suggestedText = BitrateInput.wholeMegabits(fromBitsPerSecond: suggestedBitrate) else {
+            return
         }
-        if changed { scheduleModeCapabilityRefresh() }
-    }
-
-    public func selectOrientation(_ orientation: StreamRotation) {
-        if updatePreferences({ $0.orientation = orientation }) {
-            scheduleModeCapabilityRefresh()
+        bitrateText = suggestedText
+        _ = updatePreferences { preferences in
+            preferences.resolutionId = resolution.id
+            preferences.bitrateBps = suggestedBitrate
         }
     }
 
-    public func setBitrate(_ bitrateBps: Int) {
+    public func selectFrameRate(_ fps: Int) {
+        guard SenderVideoCatalog.frameRates.contains(fps),
+              let resolution = selectedResolution,
+              let suggestedBitrate = SenderVideoCatalog.suggestedBitrateBps(
+                resolution: resolution,
+                fps: fps
+              ),
+              let suggestedText = BitrateInput.wholeMegabits(fromBitsPerSecond: suggestedBitrate) else {
+            return
+        }
+        bitrateText = suggestedText
+        _ = updatePreferences { preferences in
+            preferences.fps = fps
+            preferences.bitrateBps = suggestedBitrate
+        }
+    }
+
+    public func setBitrateText(_ text: String) {
+        bitrateText = text
+        guard let bitrateBps = BitrateInput.bitsPerSecond(fromWholeMegabits: text) else { return }
         _ = updatePreferences { $0.bitrateBps = bitrateBps }
-    }
-
-    public func setStabilization(_ stabilization: CameraStabilizationPreference) {
-        _ = updatePreferences { $0.stabilizationPreference = stabilization.rawValue }
-    }
-
-    public func selectCamera(_ cameraID: String) {
-        guard cameraDevices.contains(where: { $0.id == cameraID }) else { return }
-        selectedCameraID = cameraID
-        capabilityTask?.cancel()
-        capabilityTask = Task { [weak self] in
-            guard let self else { return }
-            _ = await self.capture.selectCamera(withID: cameraID)
-            await self.refreshModeCapabilities()
-        }
     }
 
     public func setManualHost(_ host: String) {
@@ -422,14 +264,20 @@ public final class StreamSetupModel {
         switch result {
         case let .success(capabilities):
             logger.event("manual_receiver_probe_succeeded", category: .discovery, fields: ["receiverId": capabilities.receiverId])
-            let choice = ReceiverChoice(id: capabilities.receiverId, displayName: capabilities.displayName, endpoint: endpoint, target: .manual(endpoint), capabilities: capabilities, mediaHosts: [endpoint.host])
+            let choice = ReceiverChoice(
+                id: capabilities.receiverId,
+                displayName: capabilities.displayName,
+                endpoint: endpoint,
+                target: .manual(endpoint),
+                capabilities: capabilities,
+                mediaHosts: [endpoint.host]
+            )
             receivers = [choice]
             hasExplicitReceiverSelection = true
             selectedReceiverID = choice.id
             selectedReceiver = choice
             receiverStatus = .ready
             statusMessage = "Ready: \(choice.displayName)"
-            await refreshModeCapabilities()
         case let .failure(failure):
             logger.event("manual_receiver_probe_failed", category: .discovery, fields: ["failure": failure.recoverySummary])
             receiverStatus = .unavailable(failure.recoverySummary)
@@ -440,34 +288,48 @@ public final class StreamSetupModel {
     public func startStream() async {
         guard canStart,
               let receiver = selectedReceiver,
-              let mode = selectedMode,
+              let resolution = selectedResolution,
+              let bitrateBps = selectedBitrateBps,
               let cameraID = selectedCameraID,
-              let configuration = try? StreamConfiguration(mode: mode, bitrateBps: selectedBitrateBps, orientation: selectedOrientation) else {
-            failure = .invalidConfiguration("Choose a supported receiver, camera, mode, orientation, and bitrate.")
+              let configuration = try? StreamConfiguration(
+                resolution: resolution,
+                fps: selectedFPS,
+                bitrateBps: bitrateBps,
+                orientation: .zero
+              ) else {
+            failure = .invalidConfiguration("Choose a receiver and enter valid resolution, FPS, and bitrate settings.")
             return
         }
         isStarting = true
         failure = nil
         statusMessage = "Starting stream…"
-        let authorization = await capture.authorizationState()
-        let effectiveAuthorization: CameraAuthorizationState
-        if authorization == .authorized {
-            effectiveAuthorization = authorization
-        } else {
-            effectiveAuthorization = await capture.requestAuthorization()
-        }
-        guard effectiveAuthorization == .authorized else {
-            cameraAuthorization = effectiveAuthorization
-            isStarting = false
-            failure = .permissionDenied
-            return
-        }
-        let result = await sessionCoordinator.start(endpoint: receiver.endpoint, controlTarget: receiver.target, receiver: receiver.capabilities, configuration: configuration, cameraDeviceID: cameraID, stabilization: selectedStabilization, mediaHosts: receiver.mediaHosts)
+        let result = await sessionCoordinator.start(
+            endpoint: receiver.endpoint,
+            controlTarget: receiver.target,
+            receiver: receiver.capabilities,
+            configuration: configuration,
+            cameraDeviceID: cameraID,
+            stabilization: .auto,
+            mediaHosts: receiver.mediaHosts
+        )
         isStarting = false
         switch result {
         case .success:
-            logger.event("stream_start_succeeded", category: .session, fields: ["mode": mode.id])
-            preferencesState.commitAccepted(SenderPreferences(modeId: mode.id, bitrateBps: selectedBitrateBps, orientation: selectedOrientation, stabilizationPreference: selectedStabilization.rawValue, receiverId: receiver.id, receiverDisplayName: receiver.displayName, receiverHost: receiver.endpoint.host, receiverControlPort: receiver.endpoint.controlPort))
+            logger.event("stream_start_succeeded", category: .session, fields: [
+                "width": String(resolution.codedWidth),
+                "height": String(resolution.codedHeight),
+                "fps": String(selectedFPS),
+                "bitrateBps": String(bitrateBps),
+            ])
+            preferencesState.commitAccepted(SenderPreferences(
+                resolutionId: resolution.id,
+                fps: selectedFPS,
+                bitrateBps: bitrateBps,
+                receiverId: receiver.id,
+                receiverDisplayName: receiver.displayName,
+                receiverHost: receiver.endpoint.host,
+                receiverControlPort: receiver.endpoint.controlPort
+            ))
             statusMessage = "Streaming to \(receiver.displayName)"
         case let .failure(failure):
             logger.event("stream_start_failed", category: .session, fields: ["failure": failure.recoverySummary])
@@ -484,16 +346,8 @@ public final class StreamSetupModel {
 
     deinit {
         discoveryTask?.cancel()
-        capabilityTask?.cancel()
+        cameraTask?.cancel()
         preferenceTask?.cancel()
-    }
-
-    private func scheduleModeCapabilityRefresh() {
-        capabilityTask?.cancel()
-        capabilityTask = Task { [weak self] in
-            guard let self else { return }
-            await self.refreshModeCapabilities()
-        }
     }
 
     @discardableResult
@@ -503,8 +357,12 @@ public final class StreamSetupModel {
         return preferencesState.update(preferences)
     }
 
-    private var selectedModeCapability: CameraModeCapability? {
-        modeCapabilities.first(where: { $0.mode.id == selectedModeID })
+    private func syncBitrateText(with preferences: SenderPreferences) {
+        guard let storedText = BitrateInput.wholeMegabits(fromBitsPerSecond: preferences.bitrateBps),
+              BitrateInput.bitsPerSecond(fromWholeMegabits: bitrateText) != preferences.bitrateBps else {
+            return
+        }
+        bitrateText = storedText
     }
 
     private func handleDiscovery(_ event: BonjourReceiverBrowserEvent) async {
@@ -515,7 +373,11 @@ public final class StreamSetupModel {
             statusMessage = "Bonjour unavailable; enter a receiver manually."
         case let .discovered(candidate):
             guard let host = candidate.metadata.ipv4Addresses.first,
-                  let endpoint = try? ReceiverEndpoint(host: host, receiverId: candidate.metadata.receiverId, displayName: candidate.metadata.displayName) else {
+                  let endpoint = try? ReceiverEndpoint(
+                    host: host,
+                    receiverId: candidate.metadata.receiverId,
+                    displayName: candidate.metadata.displayName
+                  ) else {
                 return
             }
             let result = await probe.probe(target: .bonjour(candidate.serviceEndpoint))
@@ -524,14 +386,21 @@ public final class StreamSetupModel {
                 logger.event("discovery_probe_identity_mismatch", category: .discovery)
                 return
             }
-            let choice = ReceiverChoice(id: capabilities.receiverId, displayName: capabilities.displayName, endpoint: endpoint, target: .bonjour(candidate.serviceEndpoint), capabilities: capabilities, mediaHosts: candidate.metadata.ipv4Addresses, discoveredServiceName: candidate.serviceName)
+            let choice = ReceiverChoice(
+                id: capabilities.receiverId,
+                displayName: capabilities.displayName,
+                endpoint: endpoint,
+                target: .bonjour(candidate.serviceEndpoint),
+                capabilities: capabilities,
+                mediaHosts: candidate.metadata.ipv4Addresses,
+                discoveredServiceName: candidate.serviceName
+            )
             receivers.removeAll(where: { $0.id == choice.id })
             receivers.append(choice)
             if selectedReceiverID == choice.id {
                 selectedReceiver = choice
             }
             reconcileReceiverSelection()
-            await refreshModeCapabilities()
         case let .removed(receiverId):
             receivers.removeAll { choice in
                 choice.id == receiverId && choice.discoveredServiceName != nil
@@ -542,14 +411,15 @@ public final class StreamSetupModel {
                 selectedReceiverID = nil
             }
             reconcileReceiverSelection()
-            await refreshModeCapabilities()
         }
     }
 
     private func reconcileReceiverSelection() {
         guard !hasExplicitReceiverSelection else {
             receiverStatus = selectedReceiver == nil ? .selectionRequired : .ready
-            statusMessage = selectedReceiver == nil ? "Select an OBS receiver" : "Ready: \(selectedReceiver?.displayName ?? "Receiver")"
+            statusMessage = selectedReceiver == nil
+                ? "Select an OBS receiver"
+                : "Ready: \(selectedReceiver?.displayName ?? "Receiver")"
             return
         }
         if let preferredReceiverID,
@@ -577,17 +447,4 @@ public final class StreamSetupModel {
     }
 
     private static let singleReceiverCount = 1
-
-    private static func authorizationReportValue(_ authorization: CameraAuthorizationState) -> String {
-        switch authorization {
-        case .notDetermined:
-            "notDetermined"
-        case .authorized:
-            "authorized"
-        case .denied:
-            "denied"
-        case .restricted:
-            "restricted"
-        }
-    }
 }

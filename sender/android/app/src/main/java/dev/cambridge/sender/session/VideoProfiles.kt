@@ -5,28 +5,17 @@ import dev.cambridge.sender.model.VideoProfile
 
 object VideoProfiles {
     const val MEGABIT = 1_000_000
-
-    val PROFILE_720P30: VideoProfile = VideoProfile(
-        id = "720p30",
-        width = 1280,
-        height = 720,
-        fps = 30,
-        minimumBitrateBps = 2000000,
-        defaultBitrateBps = 4000000,
-        maximumBitrateBps = 8000000,
-        bitrateStepBps = 1000000,
-        keyframeIntervalSeconds = 1,
-    )
+    const val PROFILE_ID = "sender"
 
     val PROFILE_1080P30: VideoProfile = VideoProfile(
         id = "1080p30",
         width = 1920,
         height = 1080,
         fps = 30,
-        minimumBitrateBps = 4000000,
-        defaultBitrateBps = 8000000,
-        maximumBitrateBps = 16000000,
-        bitrateStepBps = 1000000,
+        minimumBitrateBps = 1_000_000,
+        defaultBitrateBps = 5_000_000,
+        maximumBitrateBps = 100_000_000,
+        bitrateStepBps = 1_000_000,
         keyframeIntervalSeconds = 1,
     )
 
@@ -35,10 +24,10 @@ object VideoProfiles {
         width = 1920,
         height = 1080,
         fps = 60,
-        minimumBitrateBps = 8000000,
-        defaultBitrateBps = 16000000,
-        maximumBitrateBps = 32000000,
-        bitrateStepBps = 1000000,
+        minimumBitrateBps = 1_000_000,
+        defaultBitrateBps = 10_000_000,
+        maximumBitrateBps = 100_000_000,
+        bitrateStepBps = 1_000_000,
         keyframeIntervalSeconds = 1,
     )
 
@@ -47,10 +36,10 @@ object VideoProfiles {
         width = 2560,
         height = 1440,
         fps = 30,
-        minimumBitrateBps = 9000000,
-        defaultBitrateBps = 18000000,
-        maximumBitrateBps = 36000000,
-        bitrateStepBps = 1000000,
+        minimumBitrateBps = 1_000_000,
+        defaultBitrateBps = 9_000_000,
+        maximumBitrateBps = 100_000_000,
+        bitrateStepBps = 1_000_000,
         keyframeIntervalSeconds = 1,
     )
 
@@ -59,17 +48,17 @@ object VideoProfiles {
         width = 2560,
         height = 1440,
         fps = 60,
-        minimumBitrateBps = 18000000,
-        defaultBitrateBps = 36000000,
-        maximumBitrateBps = 72000000,
-        bitrateStepBps = 1000000,
+        minimumBitrateBps = 1_000_000,
+        defaultBitrateBps = 18_000_000,
+        maximumBitrateBps = 100_000_000,
+        bitrateStepBps = 1_000_000,
         keyframeIntervalSeconds = 1,
     )
 
     val normal: List<VideoProfile> = listOf(PROFILE_1080P30, PROFILE_1080P60, PROFILE_2K30, PROFILE_2K60)
-    val all: List<VideoProfile> = listOf(PROFILE_720P30, PROFILE_1080P30, PROFILE_1080P60, PROFILE_2K30, PROFILE_2K60)
+    val all: List<VideoProfile> = normal
     val qualityProfiles: List<VideoProfile> = normal.distinctBy { profile -> profile.width to profile.height }
-    val default: VideoProfile = PROFILE_2K30
+    val default: VideoProfile = PROFILE_1080P30
 
     fun modeFor(width: Int, height: Int, fps: Int): VideoProfile? = all.firstOrNull { profile ->
         profile.width == width && profile.height == height && profile.fps == fps

@@ -20,15 +20,6 @@ struct CameraControlsView: View {
                 Text(String(format: CameraControlsMetrics.zoomDisplayFormat, model.cameraState.zoomRatio))
                     .monospacedDigit()
             }
-            Picker("Stabilization", selection: Binding(
-                get: { model.cameraState.activeStabilization },
-                set: { model.setStabilization($0) }
-            )) {
-                ForEach(model.cameraState.supportedStabilization, id: \.self) { preference in
-                    Text(preference.displayName).tag(preference)
-                }
-            }
-            .accessibilityIdentifier("webcam-stabilization-picker")
         }
         .padding(CameraControlsMetrics.panelPadding)
         .background(

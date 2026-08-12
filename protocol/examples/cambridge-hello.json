@@ -3,7 +3,7 @@
   "type": "hello",
   "sessionId": "run-example-session",
   "generation": 1,
-  "profileId": "2k30",
+  "profileId": "sender",
   "codec": "h264",
   "codedWidth": 2560,
   "codedHeight": 1440,

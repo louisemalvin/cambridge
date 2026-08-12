@@ -42,7 +42,7 @@ public struct StreamStateMachine: Sendable {
         guard identity.matches(sessionId: sessionId, generation: generation) else {
             throw StreamStateMachineError.identityMismatch
         }
-        guard configuration.mode.id == profileId else {
+        guard SenderVideoCatalog.profileID == profileId else {
             throw StreamStateMachineError.profileMismatch
         }
         guard mediaPort >= CamBridgeContract.Validation.minimumPort,
