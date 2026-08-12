@@ -32,6 +32,13 @@ NATIVE_FIXTURE_PATH = REPOSITORY_ROOT / "scripts/receiver/linux/test-cambridge-f
 IOS_STREAM_SETTINGS_VIEW_PATH = (
     REPOSITORY_ROOT / "sender/ios/CamBridge/Features/StreamSetup/StreamSettingsSelectionView.swift"
 )
+IOS_PRODUCTION_ROOT = REPOSITORY_ROOT / "sender/ios/CamBridge"
+IOS_REMOVED_CAPABILITY_PATHS = (
+    IOS_PRODUCTION_ROOT / "Features/StreamSetup/VideoModeSelectionView.swift",
+    IOS_PRODUCTION_ROOT / "Platform/Camera/CameraCapabilityProbe.swift",
+    IOS_PRODUCTION_ROOT / "Platform/Diagnostics/CapabilityReport.swift",
+    IOS_PRODUCTION_ROOT / "Platform/Encoding/EncoderCapabilityProbe.swift",
+)
 
 
 def read(path: Path) -> str:
@@ -106,6 +113,29 @@ def check_ios_stream_settings_surface() -> None:
     for term in forbidden_terms:
         if term in lowered:
             raise AssertionError(f"iOS production stream settings expose forbidden platform control: {term}")
+
+
+def check_ios_direct_start_path() -> None:
+    for path in IOS_REMOVED_CAPABILITY_PATHS:
+        if path.exists():
+            raise AssertionError(f"obsolete iOS capability path still exists: {path}")
+    production_source = "\n".join(read(path) for path in IOS_PRODUCTION_ROOT.rglob("*.swift"))
+    forbidden_tokens = (
+        "CameraCapabilityProbe",
+        "EncoderCapabilityProbe",
+        "CapabilityReport",
+        "VTSessionCopySupportedPropertyDictionary",
+        "supportedBitrateRange",
+        "bitrateRange",
+    )
+    for token in forbidden_tokens:
+        if token in production_source:
+            raise AssertionError(f"iOS production code contains forbidden capability gate: {token}")
+    encoder_creation_count = production_source.count("VTCompressionSessionCreate(")
+    if encoder_creation_count != 1:
+        raise AssertionError(
+            f"iOS must contain exactly one real VideoToolbox encoder creation path; found {encoder_creation_count}"
+        )
 
 
 def check_generated_cpp_contract() -> None:
@@ -241,6 +271,7 @@ def main() -> int:
     check_phone_catalog(kotlin_catalog)
     check_no_receiver_presets()
     check_ios_stream_settings_surface()
+    check_ios_direct_start_path()
     if '"profiles"' in read(CONTRACT_PATH) or '"profiles"' in read(REPOSITORY_ROOT / "protocol/examples/cambridge-capabilities.json"):
         raise AssertionError("v6 contract examples must not contain profiles")
     if "--width" not in fixture or "--bitrate-bps" not in fixture:
