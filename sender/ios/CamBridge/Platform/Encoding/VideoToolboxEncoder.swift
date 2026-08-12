@@ -14,8 +14,7 @@ public enum VideoToolboxEncoderError: Error, Equatable, Sendable {
     case prepareFailed(OSStatus)
     case frameFailed(OSStatus)
     case outputFailed(OSStatus)
-    case invalidDataRateLimit
-    case dataRateLimitOverflow
+    case inputDimensionsMismatch(expectedWidth: Int, expectedHeight: Int, actualWidth: Int, actualHeight: Int)
     case missingFormatDescription
     case missingParameterSets
     case malformedSample
@@ -27,6 +26,7 @@ public struct VideoToolboxEncoderMetrics: Equatable, Sendable {
     public let encoderIdentityUnavailableReason: String?
     public let encoderUsesHardwareAccelerated: Bool?
     public let encoderHardwareAvailabilityReason: String?
+    public let advisoryPropertyFailures: [String]
     public let encodedAccessUnits: Int
     public let encodedKeyframes: Int
     public let encodedBytes: Int
@@ -46,6 +46,7 @@ public final class VideoToolboxEncoder {
     private var encoderIdentityUnavailableReason: String?
     private var encoderUsesHardwareAccelerated: Bool?
     private var encoderHardwareAvailabilityReason: String?
+    private var advisoryPropertyFailures: [String] = []
     private var encodedAccessUnits = Int.zero
     private var encodedKeyframes = Int.zero
     private var encodedBytes = Int.zero
@@ -102,14 +103,12 @@ public final class VideoToolboxEncoder {
             encoderIdentityUnavailableReason = nil
             encoderUsesHardwareAccelerated = nil
             encoderHardwareAvailabilityReason = nil
+            advisoryPropertyFailures.removeAll(keepingCapacity: true)
             do {
                 try setProperties(session: session, configuration: configuration)
                 let prepareStatus = VTCompressionSessionPrepareToEncodeFrames(session)
                 guard prepareStatus == noErr else { throw VideoToolboxEncoderError.prepareFailed(prepareStatus) }
                 readSessionProperties(session)
-                guard encoderUsesHardwareAccelerated == true else {
-                    throw VideoToolboxEncoderError.hardwareEncoderUnavailable
-                }
             } catch {
                 VTCompressionSessionInvalidate(session)
                 compressionSession = nil
@@ -121,22 +120,59 @@ public final class VideoToolboxEncoder {
 
     public func submit(sampleBuffer: CMSampleBuffer) {
         dispatchPrecondition(condition: .onQueue(inputQueue))
-        guard let session = compressionSession, let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
+        guard let session = compressionSession,
+              let configuration,
+              let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
             onAccessUnit?(.failure(.notPrepared))
             return
         }
+        let actualWidth = CVPixelBufferGetWidth(imageBuffer)
+        let actualHeight = CVPixelBufferGetHeight(imageBuffer)
+        do {
+            try Self.validateInputDimensions(
+                width: actualWidth,
+                height: actualHeight,
+                configuration: configuration
+            )
+        } catch let error as VideoToolboxEncoderError {
+            onAccessUnit?(.failure(error))
+            return
+        } catch {
+            onAccessUnit?(.failure(.malformedSample))
+            return
+        }
         let presentationTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+        let frameDuration = CMTime(
+            value: Self.singleFrameDurationNumerator,
+            timescale: CMTimeScale(configuration.fps)
+        )
         let status = VTCompressionSessionEncodeFrame(
             session,
             imageBuffer: imageBuffer,
             presentationTimeStamp: presentationTime,
-            duration: .invalid,
+            duration: frameDuration,
             frameProperties: nil,
             sourceFrameRefcon: nil,
             infoFlagsOut: nil
         )
         if status != noErr {
             onAccessUnit?(.failure(.frameFailed(status)))
+        }
+    }
+
+    static func validateInputDimensions(
+        width: Int,
+        height: Int,
+        configuration: StreamConfiguration
+    ) throws {
+        guard width == configuration.geometry.codedWidth,
+              height == configuration.geometry.codedHeight else {
+            throw VideoToolboxEncoderError.inputDimensionsMismatch(
+                expectedWidth: configuration.geometry.codedWidth,
+                expectedHeight: configuration.geometry.codedHeight,
+                actualWidth: width,
+                actualHeight: height
+            )
         }
     }
 
@@ -157,6 +193,7 @@ public final class VideoToolboxEncoder {
                 encoderIdentityUnavailableReason: encoderIdentityUnavailableReason,
                 encoderUsesHardwareAccelerated: encoderUsesHardwareAccelerated,
                 encoderHardwareAvailabilityReason: encoderHardwareAvailabilityReason,
+                advisoryPropertyFailures: advisoryPropertyFailures,
                 encodedAccessUnits: encodedAccessUnits,
                 encodedKeyframes: encodedKeyframes,
                 encodedBytes: encodedBytes,
@@ -262,38 +299,17 @@ public final class VideoToolboxEncoder {
     }
 
     private func setProperties(session: VTCompressionSession, configuration: StreamConfiguration) throws {
-        try set(session: session, key: kVTCompressionPropertyKey_RealTime, value: true, name: "real-time")
         try set(session: session, key: kVTCompressionPropertyKey_AllowFrameReordering, value: false, name: "frame-reordering")
-        try set(session: session, key: kVTCompressionPropertyKey_ExpectedFrameRate, value: configuration.fps, name: "frame-rate")
         try set(session: session, key: kVTCompressionPropertyKey_AverageBitRate, value: configuration.bitrateBps, name: "average-bitrate")
         try set(session: session, key: kVTCompressionPropertyKey_MaxKeyFrameInterval, value: SenderVideoCatalog.keyframeIntervalSeconds * configuration.fps, name: "keyframe-interval")
-        try set(session: session, key: kVTCompressionPropertyKey_MaxKeyFrameIntervalDuration, value: Double(SenderVideoCatalog.keyframeIntervalSeconds), name: "keyframe-duration")
-        let dataRateLimits = try Self.dataRateLimits(
-            bitrateBps: configuration.bitrateBps,
-            windowSeconds: Self.rateLimitWindowSeconds
-        )
-        try set(
+        setAdvisory(session: session, key: kVTCompressionPropertyKey_RealTime, value: true, name: "real-time")
+        setAdvisory(session: session, key: kVTCompressionPropertyKey_ExpectedFrameRate, value: configuration.fps, name: "frame-rate-hint")
+        setAdvisory(
             session: session,
-            key: kVTCompressionPropertyKey_DataRateLimits,
-            value: dataRateLimits as NSArray,
-            name: Self.dataRateLimitsPropertyName
+            key: kVTCompressionPropertyKey_MaxKeyFrameIntervalDuration,
+            value: Double(SenderVideoCatalog.keyframeIntervalSeconds),
+            name: "keyframe-duration-hint"
         )
-    }
-
-    // VideoToolbox defines each data-rate limit as a byte count followed by a
-    // time interval. Keep the conversion here so the property shape and unit
-    // boundary are tested without requiring a physical encoder.
-    static func dataRateLimits(bitrateBps: Int, windowSeconds: Int) throws -> [NSNumber] {
-        guard bitrateBps > .zero, windowSeconds > .zero else {
-            throw VideoToolboxEncoderError.invalidDataRateLimit
-        }
-        let (windowBits, overflow) = bitrateBps.multipliedReportingOverflow(by: windowSeconds)
-        guard !overflow else { throw VideoToolboxEncoderError.dataRateLimitOverflow }
-        let wholeBytes = windowBits / Self.bitsPerByte
-        let roundedByte = windowBits % Self.bitsPerByte == .zero ? .zero : Self.byteIncrement
-        let allowedBytes = wholeBytes + roundedByte
-        guard allowedBytes > .zero else { throw VideoToolboxEncoderError.invalidDataRateLimit }
-        return [NSNumber(value: allowedBytes), NSNumber(value: windowSeconds)]
     }
 
     private func readSessionProperties(_ session: VTCompressionSession) {
@@ -340,14 +356,21 @@ public final class VideoToolboxEncoder {
                 kVTVideoEncoderSpecification_RequireHardwareAcceleratedVideoEncoder as String: true
             ]
         }
-        // The SDK exposes this key as an iOS 17.4 symbol, but VideoToolbox
-        // accepts the documented key on earlier supported deployment targets.
+        // The public symbol is unavailable to older SDK deployment targets,
+        // but the documented encoder-specification key has the same CFString.
         return [Self.legacyHardwareSpecificationKey: true]
     }
 
     private func set(session: VTCompressionSession, key: CFString, value: Any, name: String) throws {
         let status = VTSessionSetProperty(session, key: key, value: value as CFTypeRef)
         guard status == noErr else { throw VideoToolboxEncoderError.propertyFailed(name, status) }
+    }
+
+    private func setAdvisory(session: VTCompressionSession, key: CFString, value: Any, name: String) {
+        let status = VTSessionSetProperty(session, key: key, value: value as CFTypeRef)
+        if status != noErr {
+            advisoryPropertyFailures.append("\(name): \(status)")
+        }
     }
 
     private func refreshFormatDescription(_ formatDescription: CMFormatDescription) throws {
@@ -419,16 +442,14 @@ public final class VideoToolboxEncoder {
         encoderIdentityUnavailableReason = nil
         encoderUsesHardwareAccelerated = nil
         encoderHardwareAvailabilityReason = nil
+        advisoryPropertyFailures.removeAll(keepingCapacity: true)
         firstPresentationTimeMicroseconds = nil
         lastPresentationTimeMicroseconds = nil
     }
 
     private static let microsecondsTimeScale: CMTimeScale = 1_000_000
-    private static let rateLimitWindowSeconds = 2
-    private static let bitsPerByte = 8
-    private static let byteIncrement = 1
-    private static let dataRateLimitsPropertyName = kVTCompressionPropertyKey_DataRateLimits as String
-    private static let legacyHardwareSpecificationKey = "EnableHardwareAcceleratedVideoEncoder"
+    private static let singleFrameDurationNumerator: Int64 = 1
+    private static let legacyHardwareSpecificationKey = "RequireHardwareAcceleratedVideoEncoder"
     private static let legacyHardwareUsePropertyKey = "UsingHardwareAcceleratedVideoEncoder"
     private static let inputQueueKey = DispatchSpecificKey<UInt8>()
     private static let inputQueueMarker: UInt8 = 1

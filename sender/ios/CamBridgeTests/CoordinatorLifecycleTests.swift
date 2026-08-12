@@ -32,8 +32,7 @@ final class CoordinatorLifecycleTests: XCTestCase {
             controlTarget: ReceiverControlTarget.manual(endpoint),
             receiver: receiver,
             configuration: configuration,
-            cameraDeviceID: "camera-test",
-            stabilization: CameraStabilizationPreference.off
+            cameraPosition: .back
         )
 
         guard case .success = startResult else {
@@ -47,9 +46,7 @@ final class CoordinatorLifecycleTests: XCTestCase {
         XCTAssertEqual(activeConfiguration, configuration)
         XCTAssertEqual(mediaPort, CamBridgeContract.Defaults.controlPort + CamBridgeContract.Defaults.mediaPortOffset)
         let startCount = await capture.startCount()
-        let stabilization = await capture.stabilization()
         XCTAssertEqual(startCount, 1)
-        XCTAssertEqual(stabilization, .off)
 
         _ = await coordinator.stop()
         _ = await coordinator.stop()
@@ -72,8 +69,7 @@ final class CoordinatorLifecycleTests: XCTestCase {
             controlTarget: ReceiverControlTarget.manual(endpoint),
             receiver: receiver,
             configuration: configuration,
-            cameraDeviceID: "camera-test",
-            stabilization: CameraStabilizationPreference.off
+            cameraPosition: .back
         )
         guard case .success = secondStartResult else {
             return XCTFail("expected a stopped coordinator to accept a new start")
@@ -120,8 +116,7 @@ final class CoordinatorLifecycleTests: XCTestCase {
                 controlTarget: ReceiverControlTarget.manual(endpoint),
                 receiver: receiver,
                 configuration: configuration,
-                cameraDeviceID: "camera-test",
-                stabilization: CameraStabilizationPreference.off
+                cameraPosition: .back
             )
         }
         await capture.waitUntilPrepareEntered()
@@ -180,8 +175,7 @@ final class CoordinatorLifecycleTests: XCTestCase {
             controlTarget: ReceiverControlTarget.manual(endpoint),
             receiver: receiver,
             configuration: configuration,
-            cameraDeviceID: "camera-test",
-            stabilization: CameraStabilizationPreference.off
+            cameraPosition: .back
         )
         guard case .success = startResult else {
             return XCTFail("expected fake receiver to accept the stream")
@@ -240,8 +234,7 @@ final class CoordinatorLifecycleTests: XCTestCase {
             controlTarget: ReceiverControlTarget.manual(endpoint),
             receiver: receiver,
             configuration: configuration,
-            cameraDeviceID: "camera-test",
-            stabilization: CameraStabilizationPreference.off
+            cameraPosition: .back
         )
 
         guard case let .failure(failure) = result else {
@@ -286,8 +279,7 @@ final class CoordinatorLifecycleTests: XCTestCase {
             controlTarget: ReceiverControlTarget.manual(endpoint),
             receiver: receiver,
             configuration: configuration,
-            cameraDeviceID: "camera-test",
-            stabilization: CameraStabilizationPreference.off
+            cameraPosition: .back
         )
 
         guard case let .failure(resultFailure) = result else {
@@ -330,8 +322,7 @@ final class CoordinatorLifecycleTests: XCTestCase {
             controlTarget: ReceiverControlTarget.manual(endpoint),
             receiver: receiver,
             configuration: configuration,
-            cameraDeviceID: "camera-test",
-            stabilization: CameraStabilizationPreference.off
+            cameraPosition: .back
         )
         guard case .success = result else {
             return XCTFail("expected fake receiver to accept the stream")
@@ -386,8 +377,7 @@ final class CoordinatorLifecycleTests: XCTestCase {
             controlTarget: ReceiverControlTarget.manual(endpoint),
             receiver: receiver,
             configuration: configuration,
-            cameraDeviceID: "camera-test",
-            stabilization: CameraStabilizationPreference.off
+            cameraPosition: .back
         )
         guard case .success = result else {
             return XCTFail("expected fake receiver to accept the stream")
@@ -440,12 +430,11 @@ final class CoordinatorLifecycleTests: XCTestCase {
 private actor FakeCaptureService: StreamCaptureControlling {
     private var starts = 0
     private var stops = 0
-    private var selectedStabilization: CameraStabilizationPreference = .auto
     private var callback: (@Sendable (Result<EncodedAccessUnit, VideoToolboxEncoderError>) -> Void)?
 
     func prepare(
         configuration: StreamConfiguration,
-        deviceID: String,
+        position: CameraPosition,
         onAccessUnit: @escaping @Sendable (Result<EncodedAccessUnit, VideoToolboxEncoderError>) -> Void
     ) async throws {
         callback = onAccessUnit
@@ -453,10 +442,6 @@ private actor FakeCaptureService: StreamCaptureControlling {
 
     func start() async throws {
         starts += 1
-    }
-
-    func setStabilization(_ preference: CameraStabilizationPreference) async throws {
-        selectedStabilization = preference
     }
 
     func stop() async {
@@ -473,8 +458,6 @@ private actor FakeCaptureService: StreamCaptureControlling {
 
     func startCount() -> Int { starts }
     func stopCount() -> Int { stops }
-    func stabilization() -> CameraStabilizationPreference { selectedStabilization }
-
     func emit(_ result: Result<EncodedAccessUnit, VideoToolboxEncoderError>) {
         callback?(result)
     }
@@ -485,12 +468,11 @@ private actor BlockingCaptureService: StreamCaptureControlling {
     private var prepareEnteredWaiter: CheckedContinuation<Void, Never>?
     private var prepareRelease: CheckedContinuation<Void, Never>?
     private var starts = 0
-    private var selectedStabilization: CameraStabilizationPreference = .auto
     private var stops = 0
 
     func prepare(
         configuration: StreamConfiguration,
-        deviceID: String,
+        position: CameraPosition,
         onAccessUnit: @escaping @Sendable (Result<EncodedAccessUnit, VideoToolboxEncoderError>) -> Void
     ) async throws {
         prepareEntered = true
@@ -503,10 +485,6 @@ private actor BlockingCaptureService: StreamCaptureControlling {
 
     func start() async throws {
         starts += 1
-    }
-
-    func setStabilization(_ preference: CameraStabilizationPreference) async throws {
-        selectedStabilization = preference
     }
 
     func stop() async {

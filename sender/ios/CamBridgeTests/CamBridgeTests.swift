@@ -81,6 +81,36 @@ final class CamBridgeTests: XCTestCase {
         )
     }
 
+    func testEncoderInputMustMatchSelectedCodedDimensions() throws {
+        let configuration = try StreamConfiguration(
+            resolution: SenderVideoCatalog.resolution2k,
+            fps: 60,
+            bitrateBps: 18_000_000,
+            orientation: .zero
+        )
+
+        XCTAssertNoThrow(try VideoToolboxEncoder.validateInputDimensions(
+            width: SenderVideoCatalog.resolution2k.codedWidth,
+            height: SenderVideoCatalog.resolution2k.codedHeight,
+            configuration: configuration
+        ))
+        XCTAssertThrowsError(try VideoToolboxEncoder.validateInputDimensions(
+            width: SenderVideoCatalog.fullHd.codedWidth,
+            height: SenderVideoCatalog.fullHd.codedHeight,
+            configuration: configuration
+        )) { error in
+            XCTAssertEqual(
+                error as? VideoToolboxEncoderError,
+                .inputDimensionsMismatch(
+                    expectedWidth: SenderVideoCatalog.resolution2k.codedWidth,
+                    expectedHeight: SenderVideoCatalog.resolution2k.codedHeight,
+                    actualWidth: SenderVideoCatalog.fullHd.codedWidth,
+                    actualHeight: SenderVideoCatalog.fullHd.codedHeight
+                )
+            )
+        }
+    }
+
     @MainActor
     func testFreshSettingsUseFullHD30AtFiveMbps() {
         let store = FakeSetupSettingsStore()
@@ -136,7 +166,7 @@ final class CamBridgeTests: XCTestCase {
         XCTAssertEqual(model.selectedFPS, 30)
         XCTAssertEqual(model.bitrateText, "5")
 
-        await model.refreshCameraAndModes()
+        await model.refreshCameraAuthorization()
         model.setManualHost("192.168.1.10")
         await model.probeManualReceiver()
         model.selectFrameRate(60)
@@ -195,15 +225,6 @@ final class CamBridgeTests: XCTestCase {
         XCTAssertFalse(model.canStart)
     }
 
-    func testVideoToolboxDataRateLimitUsesBytesForTheConfiguredWindow() throws {
-        let limits = try VideoToolboxEncoder.dataRateLimits(
-            bitrateBps: 18_000_000,
-            windowSeconds: 1
-        )
-
-        XCTAssertEqual(limits, [2_250_000, 1])
-    }
-
     @MainActor
     func testBackgroundLifecycleRequestsTerminalSessionCleanup() async {
         let session = FakeBackgroundSession()
@@ -256,29 +277,12 @@ private struct FakeSetupProbe: ReceiverProbing {
 }
 
 private actor FakeSetupCamera: CameraSetupServicing {
-    private let camera = CameraDeviceDescriptor(
-        id: "fixture-camera",
-        name: "Fixture rear camera",
-        position: .back,
-        isVirtual: false
-    )
-    private var selectedCameraID: String?
-
     func authorizationState() async -> CameraAuthorizationState { .authorized }
     func requestAuthorization() async -> CameraAuthorizationState { .authorized }
-    func availableCameras() async -> [CameraDeviceDescriptor] { [camera] }
-
-    func selectCamera(withID deviceID: String) async -> Bool {
-        guard deviceID == camera.id else { return false }
-        selectedCameraID = deviceID
-        return true
-    }
 
     func cameraState() async -> CameraState {
         var state = CameraState.initial
         state.authorization = .authorized
-        state.devices = [camera]
-        state.selectedDeviceID = selectedCameraID
         return state
     }
 }
@@ -292,8 +296,7 @@ private actor FakeSetupSession: StreamSessionStarting {
         controlTarget: ReceiverControlTarget,
         receiver: ReceiverCapabilities,
         configuration: StreamConfiguration,
-        cameraDeviceID: String,
-        stabilization: CameraStabilizationPreference,
+        cameraPosition: CameraPosition,
         mediaHosts: [String]
     ) async -> Result<Void, StreamFailure> {
         starts += 1

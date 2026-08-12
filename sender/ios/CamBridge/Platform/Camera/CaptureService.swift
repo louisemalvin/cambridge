@@ -15,8 +15,6 @@ public enum CaptureServiceError: Error, Equatable, Sendable {
 public protocol CameraSetupServicing: Sendable {
     func authorizationState() async -> CameraAuthorizationState
     func requestAuthorization() async -> CameraAuthorizationState
-    func availableCameras() async -> [CameraDeviceDescriptor]
-    func selectCamera(withID deviceID: String) async -> Bool
     func cameraState() async -> CameraState
 }
 
@@ -64,28 +62,16 @@ public actor CaptureService {
         return current
     }
 
-    public func availableCameras() async -> [CameraDeviceDescriptor] {
-        let cameras = capabilityProbe.rearCameraDescriptors()
-        state.devices = cameras
-        return cameras
-    }
-
-    public func selectCamera(withID deviceID: String) async -> Bool {
-        guard capabilityProbe.device(withID: deviceID) != nil else { return false }
-        state.selectedDeviceID = deviceID
-        return true
-    }
-
     public func prepare(
         configuration: StreamConfiguration,
-        deviceID: String,
+        position: CameraPosition,
         onAccessUnit: @escaping @Sendable (Result<EncodedAccessUnit, VideoToolboxEncoderError>) -> Void
     ) async throws {
         guard session == nil, encoder == nil else {
             throw CaptureServiceError.configurationFailed("Capture service is already prepared")
         }
         guard authorizationState() == .authorized else { throw CaptureServiceError.permissionDenied }
-        guard let device = capabilityProbe.device(withID: deviceID) else {
+        guard let device = capabilityProbe.defaultDevice(position: position) else {
             throw CaptureServiceError.deviceUnavailable
         }
         guard let format = capabilityProbe.compatibleFormat(
@@ -147,8 +133,7 @@ public actor CaptureService {
         state.minimumZoomRatio = CameraState.defaultZoomRatio
         state.maximumZoomRatio = CameraState.defaultZoomRatio
         state.zoomRatio = CameraState.defaultZoomRatio
-        state.supportedStabilization = [.auto, .off]
-        state.activeStabilization = .auto
+        state.activeStabilization = .off
         removeNotifications()
     }
 
@@ -186,27 +171,6 @@ public actor CaptureService {
             device.videoZoomFactor = CGFloat(bounded)
         }
         state.zoomRatio = bounded
-    }
-
-    public func setStabilization(_ preference: CameraStabilizationPreference) async throws {
-        guard let device, let connection = videoOutput?.connection(with: .video) else {
-            throw CaptureServiceError.notPrepared
-        }
-        guard let mode = preference.avFoundationMode else {
-            throw CaptureServiceError.configurationFailed("Requested video stabilization mode requires a newer iOS version")
-        }
-        if preference != .off && !connection.isVideoStabilizationSupported {
-            state.activeStabilization = .off
-            return
-        }
-        guard device.activeFormat.isVideoStabilizationModeSupported(mode) else {
-            throw CaptureServiceError.configurationFailed("Requested video stabilization mode is unavailable")
-        }
-        let activeMode = try sessionQueue.sync {
-            connection.preferredVideoStabilizationMode = mode
-            return connection.activeVideoStabilizationMode
-        }
-        state.activeStabilization = CameraStabilizationPreference(mode: activeMode)
     }
 
     public func selectedPreviewOrientation(_ orientation: StreamRotation) {
@@ -251,9 +215,8 @@ public actor CaptureService {
         guard canAddInputAndOutput else {
             throw CaptureServiceError.configurationFailed("Capture session rejected the video input or output")
         }
-        let configurationResult = sessionQueue.sync { () -> (CaptureServiceError?, [CameraStabilizationPreference]) in
+        let configurationResult = sessionQueue.sync { () -> CaptureServiceError? in
             var configurationError: CaptureServiceError?
-            var supportedStabilization = [CameraStabilizationPreference.off]
             session.beginConfiguration()
             session.sessionPreset = .inputPriority
             session.addInput(input)
@@ -265,19 +228,13 @@ public actor CaptureService {
                 let duration = CMTime(value: Self.singleFrameDurationNumerator, timescale: CMTimeScale(configuration.fps))
                 device.activeVideoMinFrameDuration = duration
                 device.activeVideoMaxFrameDuration = duration
+                if let connection = output.connection(with: .video),
+                   connection.isVideoStabilizationSupported {
+                    connection.preferredVideoStabilizationMode = .auto
+                }
                 guard device.activeVideoMinFrameDuration == duration,
                       device.activeVideoMaxFrameDuration == duration else {
                     throw CaptureServiceError.configurationFailed("Camera rejected the requested fixed frame duration")
-                }
-                supportedStabilization = CameraStabilizationPreference.allCases.filter { preference in
-                    guard let mode = preference.avFoundationMode else { return false }
-                    return avFormat.isVideoStabilizationModeSupported(mode)
-                }
-                if !supportedStabilization.contains(.off) {
-                    supportedStabilization.insert(.off, at: .zero)
-                }
-                if let connection = output.connection(with: .video), !connection.isVideoStabilizationSupported {
-                    supportedStabilization = [.off]
                 }
             } catch {
                 configurationError = .configurationFailed(String(describing: error))
@@ -285,24 +242,16 @@ public actor CaptureService {
             if configurationError == nil {
                 output.setSampleBufferDelegate(delegate, queue: encoder.inputQueue)
             }
-            if configurationError == nil,
-               let connection = output.connection(with: .video),
-               connection.isVideoStabilizationSupported,
-               supportedStabilization.contains(.standard) {
-                connection.preferredVideoStabilizationMode = .standard
-            }
             session.commitConfiguration()
-            return (configurationError, supportedStabilization)
+            return configurationError
         }
-        if let configurationError = configurationResult.0 { throw configurationError }
-        let supportedStabilization = configurationResult.1
+        if let configurationError = configurationResult { throw configurationError }
         self.session = session
         self.device = device
         self.videoInput = input
         self.videoOutput = output
         self.outputDelegate = delegate
         self.selectedPosition = device.position == .front ? .front : .back
-        state.supportedStabilization = supportedStabilization
         selectedPreviewOrientation(configuration.orientation)
         state.authorization = authorizationState()
         state.selectedDeviceID = device.uniqueID

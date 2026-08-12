@@ -14,20 +14,6 @@ public enum CameraPosition: String, Codable, Equatable, Sendable {
     case front
 }
 
-public struct CameraDeviceDescriptor: Identifiable, Codable, Equatable, Sendable {
-    public let id: String
-    public let name: String
-    public let position: CameraPosition
-    public let isVirtual: Bool
-
-    public init(id: String, name: String, position: CameraPosition, isVirtual: Bool) {
-        self.id = id
-        self.name = name
-        self.position = position
-        self.isVirtual = isVirtual
-    }
-}
-
 public struct CameraFormatDescriptor: Equatable, Sendable {
     public let formatID: String
     public let width: Int
@@ -80,25 +66,6 @@ public enum CameraStabilizationPreference: String, Codable, CaseIterable, Equata
     case previewOptimized
     case cinematicExtendedEnhanced
 
-    public var displayName: String {
-        switch self {
-        case .auto:
-            "Auto"
-        case .off:
-            "Off"
-        case .standard:
-            "Standard"
-        case .cinematic:
-            "Cinematic"
-        case .cinematicExtended:
-            "Cinematic Extended"
-        case .previewOptimized:
-            "Preview Optimized"
-        case .cinematicExtendedEnhanced:
-            "Cinematic Extended Enhanced"
-        }
-    }
-
     public init(mode: AVCaptureVideoStabilizationMode) {
         if #available(iOS 18.0, *), mode == .cinematicExtendedEnhanced {
             self = CameraStabilizationPreference.cinematicExtendedEnhanced
@@ -122,25 +89,6 @@ public enum CameraStabilizationPreference: String, Codable, CaseIterable, Equata
         }
     }
 
-    public var avFoundationMode: AVCaptureVideoStabilizationMode? {
-        switch self {
-        case .auto:
-            return AVCaptureVideoStabilizationMode.auto
-        case .off:
-            return AVCaptureVideoStabilizationMode.off
-        case .standard:
-            return AVCaptureVideoStabilizationMode.standard
-        case .cinematic:
-            return AVCaptureVideoStabilizationMode.cinematic
-        case .cinematicExtended:
-            return AVCaptureVideoStabilizationMode.cinematicExtended
-        case .previewOptimized:
-            return AVCaptureVideoStabilizationMode.previewOptimized
-        case .cinematicExtendedEnhanced:
-            guard #available(iOS 18.0, *) else { return nil }
-            return .cinematicExtendedEnhanced
-        }
-    }
 }
 
 public enum CameraInterruptionReason: Equatable, Sendable {
@@ -187,13 +135,11 @@ public enum CameraSystemPressureLevel: String, Codable, Equatable, Sendable {
 
 public struct CameraState: Equatable, Sendable {
     public var authorization: CameraAuthorizationState
-    public var devices: [CameraDeviceDescriptor]
     public var selectedDeviceID: String?
     public var selectedFormat: CameraFormatDescriptor?
     public var zoomRatio: Double
     public var minimumZoomRatio: Double
     public var maximumZoomRatio: Double
-    public var supportedStabilization: [CameraStabilizationPreference]
     public var activeStabilization: CameraStabilizationPreference
     public var interruption: CameraInterruptionReason?
     public var runtimeError: String?
@@ -203,14 +149,12 @@ public struct CameraState: Equatable, Sendable {
     public static var initial: CameraState {
         CameraState(
             authorization: .notDetermined,
-            devices: [],
             selectedDeviceID: nil,
             selectedFormat: nil,
             zoomRatio: Self.defaultZoomRatio,
             minimumZoomRatio: Self.defaultZoomRatio,
             maximumZoomRatio: Self.defaultZoomRatio,
-            supportedStabilization: [.auto, .off],
-            activeStabilization: .auto,
+            activeStabilization: .off,
             interruption: nil,
             runtimeError: nil,
             systemPressureLevel: nil,

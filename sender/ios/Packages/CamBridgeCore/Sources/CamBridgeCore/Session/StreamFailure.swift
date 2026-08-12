@@ -5,8 +5,8 @@ public enum StreamFailure: Error, Codable, Equatable, Sendable {
     case receiverUnavailable
     case incompatibleProtocol
     case invalidConfiguration(String)
-    case cameraUnavailable
-    case encoderUnavailable
+    case cameraUnavailable(String)
+    case encoderUnavailable(String)
     case controlConnectionFailed(String)
     case receiverRejected(String)
     case transportFailed(String)
@@ -25,10 +25,10 @@ public enum StreamFailure: Error, Codable, Equatable, Sendable {
             "The receiver does not support CamBridge protocol v6."
         case .invalidConfiguration:
             "Choose a supported video mode and bitrate."
-        case .cameraUnavailable:
-            "The selected camera is not currently available."
-        case .encoderUnavailable:
-            "This device cannot hardware-encode the selected mode."
+        case let .cameraUnavailable(reason):
+            "Camera setup failed: \(reason)"
+        case let .encoderUnavailable(reason):
+            "Hardware H.264 setup failed: \(reason)"
         case .controlConnectionFailed, .transportFailed:
             "Check the local network and try Start again."
         case .receiverRejected:

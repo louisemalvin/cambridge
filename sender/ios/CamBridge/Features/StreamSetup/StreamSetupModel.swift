@@ -80,7 +80,6 @@ public final class StreamSetupModel {
             && selectedResolution != nil
             && SenderVideoCatalog.frameRates.contains(selectedFPS)
             && selectedBitrateBps != nil
-            && selectedCameraID != nil
     }
 
     private let preferencesState: SenderPreferencesState
@@ -94,7 +93,6 @@ public final class StreamSetupModel {
     @ObservationIgnored private var cameraTask: Task<Void, Never>?
     @ObservationIgnored private var preferenceTask: Task<Void, Never>?
     private var cameraRefreshID: UUID?
-    private var selectedCameraID: String?
     private var hasExplicitReceiverSelection = false
 
     public init(
@@ -157,7 +155,7 @@ public final class StreamSetupModel {
             }
         }
         cameraTask = Task { [weak self] in
-            await self?.refreshCameraAndModes()
+            await self?.refreshCameraAuthorization()
         }
         preferenceTask = Task { [weak self] in
             guard let self else { return }
@@ -181,22 +179,16 @@ public final class StreamSetupModel {
         Task { await browser.stop() }
     }
 
-    public func refreshCameraAndModes() async {
+    public func refreshCameraAuthorization() async {
         let refreshID = UUID()
         cameraRefreshID = refreshID
         cameraAuthorization = await capture.authorizationState()
         guard cameraRefreshID == refreshID else { return }
-        let cameras = await capture.availableCameras()
-        guard cameraRefreshID == refreshID else { return }
-        selectedCameraID = cameras.first?.id
-        if let selectedCameraID {
-            _ = await capture.selectCamera(withID: selectedCameraID)
-        }
     }
 
     public func requestCameraAccess() async {
         cameraAuthorization = await capture.requestAuthorization()
-        await refreshCameraAndModes()
+        await refreshCameraAuthorization()
     }
 
     public func selectReceiver(_ receiverID: String) {
@@ -290,7 +282,6 @@ public final class StreamSetupModel {
               let receiver = selectedReceiver,
               let resolution = selectedResolution,
               let bitrateBps = selectedBitrateBps,
-              let cameraID = selectedCameraID,
               let configuration = try? StreamConfiguration(
                 resolution: resolution,
                 fps: selectedFPS,
@@ -308,8 +299,7 @@ public final class StreamSetupModel {
             controlTarget: receiver.target,
             receiver: receiver.capabilities,
             configuration: configuration,
-            cameraDeviceID: cameraID,
-            stabilization: .auto,
+            cameraPosition: .back,
             mediaHosts: receiver.mediaHosts
         )
         isStarting = false
@@ -341,7 +331,7 @@ public final class StreamSetupModel {
     public func retry() async {
         _ = await sessionCoordinator.stop()
         failure = nil
-        await refreshCameraAndModes()
+        await refreshCameraAuthorization()
     }
 
     deinit {

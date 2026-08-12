@@ -11,10 +11,26 @@ public struct CameraFormatSelection {
 public struct CameraCapabilityProbe: Sendable {
     public init() {}
 
-    public func rearCameraDescriptors() -> [CameraDeviceDescriptor] {
-        discoveryDevices()
-            .filter { $0.position == .back }
-            .map(descriptor(for:))
+    public func defaultDevice(position: CameraPosition) -> AVCaptureDevice? {
+        let avPosition: AVCaptureDevice.Position = position == .front ? .front : .back
+        let preferredTypes: [AVCaptureDevice.DeviceType]
+        switch position {
+        case .back:
+            preferredTypes = [
+                .builtInTripleCamera,
+                .builtInDualWideCamera,
+                .builtInDualCamera,
+                .builtInWideAngleCamera,
+            ]
+        case .front:
+            preferredTypes = [
+                .builtInTrueDepthCamera,
+                .builtInWideAngleCamera,
+            ]
+        }
+        return preferredTypes.lazy.compactMap { deviceType in
+            AVCaptureDevice.default(deviceType, for: .video, position: avPosition)
+        }.first
     }
 
     public func compatibleFormat(
@@ -61,33 +77,4 @@ public struct CameraCapabilityProbe: Sendable {
         }
     }
 
-    public func device(withID identifier: String) -> AVCaptureDevice? {
-        discoveryDevices().first(where: { $0.uniqueID == identifier })
-    }
-
-    private func descriptor(for device: AVCaptureDevice) -> CameraDeviceDescriptor {
-        CameraDeviceDescriptor(
-            id: device.uniqueID,
-            name: device.localizedName,
-            position: device.position == .front ? .front : .back,
-            isVirtual: device.deviceType == .builtInDualCamera
-                || device.deviceType == .builtInDualWideCamera
-                || device.deviceType == .builtInTripleCamera
-        )
-    }
-
-    private func discoveryDevices() -> [AVCaptureDevice] {
-        AVCaptureDevice.DiscoverySession(
-            deviceTypes: [
-                .builtInWideAngleCamera,
-                .builtInUltraWideCamera,
-                .builtInTelephotoCamera,
-                .builtInDualCamera,
-                .builtInDualWideCamera,
-                .builtInTripleCamera,
-            ],
-            mediaType: .video,
-            position: .unspecified
-        ).devices
-    }
 }

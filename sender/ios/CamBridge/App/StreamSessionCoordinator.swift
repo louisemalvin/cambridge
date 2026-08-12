@@ -5,11 +5,10 @@ import CamBridgeCore
 public protocol StreamCaptureControlling: Sendable {
     func prepare(
         configuration: StreamConfiguration,
-        deviceID: String,
+        position: CameraPosition,
         onAccessUnit: @escaping @Sendable (Result<EncodedAccessUnit, VideoToolboxEncoderError>) -> Void
     ) async throws
     func start() async throws
-    func setStabilization(_ preference: CameraStabilizationPreference) async throws
     func stop() async
     func cameraState() async -> CameraState
     func encoderMetrics() async -> VideoToolboxEncoderMetrics?
@@ -31,8 +30,7 @@ public protocol StreamSessionStarting: Sendable {
         controlTarget: ReceiverControlTarget,
         receiver: ReceiverCapabilities,
         configuration: StreamConfiguration,
-        cameraDeviceID: String,
-        stabilization: CameraStabilizationPreference,
+        cameraPosition: CameraPosition,
         mediaHosts: [String]
     ) async -> Result<Void, StreamFailure>
     func stop() async -> Result<Void, Never>
@@ -76,7 +74,6 @@ public actor StreamSessionCoordinator {
     private var activeConfiguration: StreamConfiguration?
     private var activeIdentity: SessionIdentity?
     private var receiverAccepted = false
-    private var requestedStabilization: CameraStabilizationPreference = .auto
     private var lastDiagnostics: DiagnosticsReport?
     private var stateTransitions: [String] = []
     private var activeStartOperationID: UUID?
@@ -134,8 +131,7 @@ public actor StreamSessionCoordinator {
         controlTarget: ReceiverControlTarget,
         receiver: ReceiverCapabilities,
         configuration: StreamConfiguration,
-        cameraDeviceID: String,
-        stabilization: CameraStabilizationPreference = .auto,
+        cameraPosition: CameraPosition = .back,
         mediaHosts: [String] = []
     ) async -> Result<Void, StreamFailure> {
         guard case .idle = stateMachine.state else {
@@ -152,7 +148,6 @@ public actor StreamSessionCoordinator {
             activeIdentity = identity
             activeEndpoint = endpoint
             activeConfiguration = configuration
-            requestedStabilization = stabilization
             receiverAccepted = false
             stateTransitions.removeAll(keepingCapacity: true)
             activeStartOperationID = operationID
@@ -164,7 +159,7 @@ public actor StreamSessionCoordinator {
             encodedQueue = queue
             let control = controlFactory.make(target: controlTarget)
             controlConnection = control
-            try await capture.prepare(configuration: configuration, deviceID: cameraDeviceID) { [weak self, weak queue] result in
+            try await capture.prepare(configuration: configuration, position: cameraPosition) { [weak self, weak queue] result in
                 guard let queue else { return }
                 switch result {
                 case let .success(accessUnit):
@@ -230,8 +225,6 @@ public actor StreamSessionCoordinator {
             }
             datagramSender = sender
             try await capture.start()
-            try ensureStartOperationIsActive(operationID)
-            try await capture.setStabilization(stabilization)
             try ensureStartOperationIsActive(operationID)
             try stateMachine.accept(accepted)
             startMediaTask(queue: queue, sender: sender)
@@ -373,7 +366,7 @@ public actor StreamSessionCoordinator {
 }
 
     private func handleEncoderFailure(_ error: VideoToolboxEncoderError) async {
-        await handleTerminalFailure(.encoderUnavailable)
+        await handleTerminalFailure(.encoderUnavailable(String(describing: error)))
     }
 
     private func handleTransportFailure(_ error: Error) async {
@@ -438,7 +431,7 @@ public actor StreamSessionCoordinator {
             let buildVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown"
             let receiver = activeEndpoint
             let configuration = activeConfiguration
-            let requestedStabilizationValue = requestedStabilization.rawValue
+            let requestedStabilizationValue = CameraStabilizationPreference.auto.rawValue
             let stateTransitionsSnapshot = stateTransitions
             let deviceModel = await MainActor.run { UIDevice.current.localizedModel }
             lastDiagnostics = DiagnosticsReport(
@@ -456,6 +449,7 @@ public actor StreamSessionCoordinator {
                 encoderIdentityUnavailableReason: encoderMetrics?.encoderIdentityUnavailableReason,
                 encoderUsesHardwareAccelerated: encoderMetrics?.encoderUsesHardwareAccelerated,
                 encoderHardwareAvailabilityReason: encoderMetrics?.encoderHardwareAvailabilityReason,
+                encoderAdvisoryPropertyFailures: encoderMetrics?.advisoryPropertyFailures ?? [],
                 encodedAccessUnits: encoderMetrics?.encodedAccessUnits ?? .zero,
                 encodedKeyframes: encoderMetrics?.encodedKeyframes ?? .zero,
                 encodedBytes: encoderMetrics?.encodedBytes ?? .zero,
@@ -502,8 +496,13 @@ public actor StreamSessionCoordinator {
         if error is CancellationError { return .cancelled }
         if error is StreamStartOperationError { return .cancelled }
         if let failure = error as? StreamFailure { return failure }
-        if error is CaptureServiceError { return .cameraUnavailable }
-        if error is VideoToolboxEncoderError { return .encoderUnavailable }
+        if let captureError = error as? CaptureServiceError {
+            if captureError == .permissionDenied { return .permissionDenied }
+            return .cameraUnavailable(String(describing: captureError))
+        }
+        if let encoderError = error as? VideoToolboxEncoderError {
+            return .encoderUnavailable(String(describing: encoderError))
+        }
         if error is CamBridgeControlConnectionError {
             return .controlConnectionFailed(String(describing: error))
         }
