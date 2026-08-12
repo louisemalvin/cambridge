@@ -163,7 +163,7 @@ public actor CaptureService {
 
     public func cameraState() async -> CameraState {
         state.activeStabilization = Self.activeStabilization(for: videoOutput?.connection(with: .video))
-        state
+        return state
     }
 
     public func previewLayer() -> AVCaptureVideoPreviewLayer? {
