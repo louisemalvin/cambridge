@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 import CamBridgeCore
 @testable import CamBridge
 
@@ -121,6 +122,16 @@ final class NetworkAdapterTests: XCTestCase {
 
         XCTAssertEqual(rearAngles, [0, 90, 180, 270])
         XCTAssertEqual(frontAngles, [180, 90, 0, 270])
+    }
+
+    func testInterfaceOrientationMapsToFrozenWireRotation() {
+        let resolver = SessionOrientationResolver()
+
+        XCTAssertEqual(resolver.rotation(interfaceOrientation: .landscapeRight), .zero)
+        XCTAssertEqual(resolver.rotation(interfaceOrientation: .portrait), .ninety)
+        XCTAssertEqual(resolver.rotation(interfaceOrientation: .landscapeLeft), .oneEighty)
+        XCTAssertEqual(resolver.rotation(interfaceOrientation: .portraitUpsideDown), .twoSeventy)
+        XCTAssertEqual(resolver.rotation(interfaceOrientation: .unknown), .zero)
     }
 }
 

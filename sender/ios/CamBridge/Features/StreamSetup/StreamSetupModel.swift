@@ -88,6 +88,7 @@ public final class StreamSetupModel {
     private let capture: any CameraSetupServicing
     private let sessionCoordinator: any StreamSessionStarting
     private let logger: CamBridgeLogger
+    private let orientationProvider: any StreamOrientationProviding
     private let preferredReceiverID: String?
     @ObservationIgnored private var discoveryTask: Task<Void, Never>?
     @ObservationIgnored private var cameraTask: Task<Void, Never>?
@@ -101,7 +102,8 @@ public final class StreamSetupModel {
         probe: any ReceiverProbing,
         capture: any CameraSetupServicing,
         sessionCoordinator: any StreamSessionStarting,
-        logger: CamBridgeLogger
+        logger: CamBridgeLogger,
+        orientationProvider: any StreamOrientationProviding = InterfaceOrientationProvider()
     ) {
         let preferencesState = SenderPreferencesState(settingsStore: settingsStore)
         self.preferencesState = preferencesState
@@ -110,6 +112,7 @@ public final class StreamSetupModel {
         self.capture = capture
         self.sessionCoordinator = sessionCoordinator
         self.logger = logger
+        self.orientationProvider = orientationProvider
         preferredReceiverID = preferencesState.preferences.receiverId
         manualHost = preferencesState.preferences.receiverHost ?? ""
         selectedReceiverID = preferencesState.preferences.receiverId
@@ -124,7 +127,8 @@ public final class StreamSetupModel {
         probe: any ReceiverProbing,
         capture: any CameraSetupServicing,
         sessionCoordinator: any StreamSessionStarting,
-        logger: CamBridgeLogger
+        logger: CamBridgeLogger,
+        orientationProvider: any StreamOrientationProviding = InterfaceOrientationProvider()
     ) {
         self.preferencesState = preferencesState
         self.browser = browser
@@ -132,6 +136,7 @@ public final class StreamSetupModel {
         self.capture = capture
         self.sessionCoordinator = sessionCoordinator
         self.logger = logger
+        self.orientationProvider = orientationProvider
         preferredReceiverID = preferencesState.preferences.receiverId
         manualHost = preferencesState.preferences.receiverHost ?? ""
         selectedReceiverID = preferencesState.preferences.receiverId
@@ -286,7 +291,7 @@ public final class StreamSetupModel {
                 resolution: resolution,
                 fps: selectedFPS,
                 bitrateBps: bitrateBps,
-                orientation: .zero
+                orientation: orientationProvider.currentRotation()
               ) else {
             failure = .invalidConfiguration("Choose a receiver and enter valid resolution, FPS, and bitrate settings.")
             return

@@ -159,7 +159,8 @@ final class CamBridgeTests: XCTestCase {
             probe: FakeSetupProbe(capabilities: receiver),
             capture: FakeSetupCamera(),
             sessionCoordinator: session,
-            logger: CamBridgeLogger()
+            logger: CamBridgeLogger(),
+            orientationProvider: FakeOrientationProvider(rotation: .ninety)
         )
 
         XCTAssertEqual(model.selectedResolutionID, SenderVideoCatalog.fullHd.id)
@@ -180,6 +181,7 @@ final class CamBridgeTests: XCTestCase {
         XCTAssertEqual(configuration?.resolution, SenderVideoCatalog.fullHd)
         XCTAssertEqual(configuration?.fps, 60)
         XCTAssertEqual(configuration?.bitrateBps, 1_000_000)
+        XCTAssertEqual(configuration?.orientation, .ninety)
         XCTAssertEqual(settings.load().bitrateBps, 1_000_000)
         let startCount = await session.startCount()
         XCTAssertEqual(startCount, 1)
@@ -307,6 +309,13 @@ private actor FakeSetupSession: StreamSessionStarting {
     func stop() async -> Result<Void, Never> { .success(()) }
     func startCount() -> Int { starts }
     func lastConfiguration() -> StreamConfiguration? { configuration }
+}
+
+@MainActor
+private struct FakeOrientationProvider: StreamOrientationProviding {
+    let rotation: StreamRotation
+
+    func currentRotation() -> StreamRotation { rotation }
 }
 
 private actor FakeBackgroundSession: StreamBackgroundEnding {
