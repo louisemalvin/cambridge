@@ -29,6 +29,9 @@ CPP_SOURCE_PATH = REPOSITORY_ROOT / "receiver/obs/cambridge-obs-source/src/cambr
 FIXTURE_PATH = REPOSITORY_ROOT / "scripts/receiver/common/cambridge-fixture.py"
 ANDROID_SMOKE_PATH = REPOSITORY_ROOT / "scripts/sender/android/test-emulator-cambridge.sh"
 NATIVE_FIXTURE_PATH = REPOSITORY_ROOT / "scripts/receiver/linux/test-cambridge-fixture.sh"
+IOS_STREAM_SETTINGS_VIEW_PATH = (
+    REPOSITORY_ROOT / "sender/ios/CamBridge/Features/StreamSetup/StreamSettingsSelectionView.swift"
+)
 
 
 def read(path: Path) -> str:
@@ -84,6 +87,25 @@ def check_no_receiver_presets() -> None:
                 raise AssertionError(f"receiver production code contains forbidden preset token {token}: {path}")
     if re.search(r"profile\s*==|profile->|profile_ids", read(CPP_SOURCE_PATH) + read(CPP_PROTOCOL_PATH)):
         raise AssertionError("receiver production code still validates or advertises a profile catalog")
+
+
+def check_ios_stream_settings_surface() -> None:
+    settings_view = read(IOS_STREAM_SETTINGS_VIEW_PATH)
+    required_fragments = (
+        'Picker("Resolution"',
+        "ForEach(SenderVideoCatalog.resolutions",
+        'Picker("Frame rate"',
+        "ForEach(SenderVideoCatalog.frameRates",
+        'TextField(\n                    "Bitrate"',
+    )
+    for fragment in required_fragments:
+        if fragment not in settings_view:
+            raise AssertionError(f"iOS production setup is missing independent settings UI: {fragment}")
+    forbidden_terms = ("orientation", "stabilization", "camera id", "physical camera")
+    lowered = settings_view.lower()
+    for term in forbidden_terms:
+        if term in lowered:
+            raise AssertionError(f"iOS production stream settings expose forbidden platform control: {term}")
 
 
 def check_generated_cpp_contract() -> None:
@@ -218,6 +240,7 @@ def main() -> int:
 
     check_phone_catalog(kotlin_catalog)
     check_no_receiver_presets()
+    check_ios_stream_settings_surface()
     if '"profiles"' in read(CONTRACT_PATH) or '"profiles"' in read(REPOSITORY_ROOT / "protocol/examples/cambridge-capabilities.json"):
         raise AssertionError("v6 contract examples must not contain profiles")
     if "--width" not in fixture or "--bitrate-bps" not in fixture:

@@ -45,7 +45,12 @@ private final class UITestFixtureModel {
     var manualProbeMessage = "Manual receiver not probed"
     var resolutionID = SenderVideoCatalog.defaultResolution.id
     var fps = SenderVideoCatalog.defaultFrameRate
-    var bitrateText = "5"
+    var bitrateText = BitrateInput.wholeMegabits(
+        fromBitsPerSecond: SenderVideoCatalog.suggestedBitrateBps(
+            resolution: SenderVideoCatalog.defaultResolution,
+            fps: SenderVideoCatalog.defaultFrameRate
+        ) ?? SenderVideoCatalog.minimumBitrateMbps * SenderVideoCatalog.bitrateUnitBps
+    ) ?? ""
     var streamPhase = StreamPhase.idle
     var failureMessage: String?
     var isStopConfirmationPresented = false
@@ -228,10 +233,10 @@ private struct UITestFixtureSetupView: View {
                         .accessibilityIdentifier("resolution-2k")
                     Text("Frame rate: \(model.fps) fps")
                         .accessibilityIdentifier("selected-frame-rate")
-                    Button("30 fps") { model.setFrameRate(30) }
-                        .accessibilityIdentifier("frame-rate-30")
-                    Button("60 fps") { model.setFrameRate(60) }
-                        .accessibilityIdentifier("frame-rate-60")
+                    ForEach(SenderVideoCatalog.frameRates, id: \.self) { frameRate in
+                        Button("\(frameRate) fps") { model.setFrameRate(frameRate) }
+                            .accessibilityIdentifier("frame-rate-\(frameRate)")
+                    }
                     Text("Bitrate: \(model.bitrateText) Mbps")
                         .accessibilityIdentifier("selected-bitrate")
                     Button("Use 1 Mbps") { model.setBitrate("1") }
