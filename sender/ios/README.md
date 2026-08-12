@@ -4,6 +4,9 @@ The iOS sender is a native Swift/SwiftUI application for iOS 17 and later. It
 uses the CamBridge v6 control contract and RFC 6184 H.264 RTP over UDP used by
 the unchanged Linux OBS receiver.
 
+Its current product behavior is defined by
+[`simple-phone-sender.md`](../../internal/implementation-contracts/simple-phone-sender.md).
+
 Open `CamBridge.xcodeproj` directly in Xcode. Signing is automatic and the
 committed project intentionally has no development team. Select a local team
 only in Xcode when installing on a device. No account, certificate,
@@ -23,10 +26,10 @@ On macOS, run the unsigned simulator project checks with:
 ```
 
 Physical camera, VideoToolbox hardware, local-network permission, signing, and
-OBS glass-to-glass behavior require the Mac-lab validation checklist produced
-by the implementation handoff.
+OBS glass-to-glass behavior require validation on a signed physical-device
+build; the scripts above cannot validate them.
 
 The Swift fixture is test-only and is invoked by the native Linux harness with
 `CAMBRIDGE_SENDER_MODE=swift`. The production app never uses its POSIX socket
-adapter. Until the macOS and physical gates are retained, this directory is an
+adapter. Until the macOS and physical gates are validated, this directory is an
 install candidate rather than a public iOS support claim.
