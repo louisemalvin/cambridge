@@ -11,6 +11,8 @@ public final class WebcamModel {
     public var isStopConfirmationPresented = false
     public private(set) var statusText = "Waiting for stream"
     public private(set) var failure: StreamFailure?
+    public private(set) var cameraControlError: String?
+    public private(set) var isSwitchingCamera = false
 
     public let capture: CaptureService
     private let sessionCoordinator: StreamSessionCoordinator
@@ -70,7 +72,30 @@ public final class WebcamModel {
 
     public func setZoomRatio(_ ratio: Double) {
         Task {
-            try? await capture.setZoomRatio(ratio)
+            do {
+                try await capture.setZoomRatio(ratio)
+                cameraControlError = nil
+            } catch {
+                cameraControlError = "Zoom failed: \(String(describing: error))"
+            }
+        }
+    }
+
+    public func switchCamera() {
+        guard !isSwitchingCamera else { return }
+        isSwitchingCamera = true
+        cameraControlError = nil
+        Task {
+            defer { isSwitchingCamera = false }
+            do {
+                try await capture.switchCamera()
+                logger.event("camera_facing_switched", category: .camera)
+            } catch {
+                cameraControlError = "Camera switch failed: \(String(describing: error))"
+                logger.event("camera_facing_switch_failed", category: .camera, fields: [
+                    "failure": String(describing: error),
+                ])
+            }
         }
     }
 

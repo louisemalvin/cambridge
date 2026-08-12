@@ -3,6 +3,7 @@ import SwiftUI
 struct WebcamScreen: View {
     @Bindable var model: WebcamModel
     let onShowSettings: () -> Void
+    @State private var magnificationStart: Double? = nil
 
     init(model: WebcamModel, onShowSettings: @escaping () -> Void = {}) {
         self.model = model
@@ -14,6 +15,17 @@ struct WebcamScreen: View {
             Color.black.ignoresSafeArea()
             CameraPreviewView(capture: model.capture)
                 .ignoresSafeArea()
+                .gesture(
+                    MagnifyGesture()
+                        .onChanged { value in
+                            let startingRatio = magnificationStart ?? model.cameraState.zoomRatio
+                            magnificationStart = startingRatio
+                            model.setZoomRatio(startingRatio * Double(value.magnification))
+                        }
+                        .onEnded { _ in
+                            magnificationStart = nil
+                        }
+                )
             VStack {
                 HStack {
                     Label(model.statusText, systemImage: "circle.fill")
@@ -38,6 +50,13 @@ struct WebcamScreen: View {
                 }
                 .padding()
                 Spacer()
+                if let cameraControlError = model.cameraControlError {
+                    Text(cameraControlError)
+                        .font(.footnote)
+                        .foregroundStyle(.white)
+                        .padding(WebcamScreenMetrics.cameraErrorPadding)
+                        .background(.red.opacity(WebcamScreenMetrics.cameraErrorBackgroundOpacity), in: Capsule())
+                }
                 CameraControlsView(model: model)
                 HStack {
                     Button("Stop stream", role: .destructive) { model.requestStop() }
@@ -71,4 +90,6 @@ private enum WebcamScreenMetrics {
     static let statusVerticalPadding: CGFloat = 8
     static let statusBackgroundOpacity: Double = 0.55
     static let dimmedOverlayOpacity: Double = 0.88
+    static let cameraErrorPadding: CGFloat = 8
+    static let cameraErrorBackgroundOpacity: Double = 0.8
 }

@@ -13,11 +13,13 @@ public struct DiagnosticsReport: Codable, Equatable, Sendable {
     public let receiverId: String?
     public let receiverHost: String?
     public let cameraID: String?
+    public let cameraPosition: String?
     public let cameraFormatID: String?
     public let cameraFormatWidth: Int?
     public let cameraFormatHeight: Int?
     public let cameraMinimumFrameRate: Double?
     public let cameraMaximumFrameRate: Double?
+    public let cameraZoomRatio: Double?
     public let systemPressureLevel: String?
     public let thermalState: String?
     public let modeId: String?
@@ -97,11 +99,13 @@ public struct DiagnosticsReport: Codable, Equatable, Sendable {
         self.receiverId = receiver?.receiverId
         self.receiverHost = receiver.map(Self.redactedHost)
         self.cameraID = cameraState?.selectedDeviceID
+        self.cameraPosition = cameraState?.position.rawValue
         self.cameraFormatID = cameraState?.selectedFormat?.formatID
         self.cameraFormatWidth = cameraState?.selectedFormat?.width
         self.cameraFormatHeight = cameraState?.selectedFormat?.height
         self.cameraMinimumFrameRate = cameraState?.selectedFormat?.minimumFrameRate
         self.cameraMaximumFrameRate = cameraState?.selectedFormat?.maximumFrameRate
+        self.cameraZoomRatio = cameraState?.zoomRatio
         self.systemPressureLevel = cameraState?.systemPressureLevel?.rawValue
         self.thermalState = cameraState?.thermalState
         self.modeId = configuration.map { _ in SenderVideoCatalog.profileID }

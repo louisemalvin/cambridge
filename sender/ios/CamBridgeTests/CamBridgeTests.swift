@@ -111,6 +111,25 @@ final class CamBridgeTests: XCTestCase {
         }
     }
 
+    func testZoomMappingExposesOnlyProductFacingTargetsAndCap() {
+        let multiCamera = CameraZoomMapping(
+            rawMinimum: 1,
+            rawMaximum: 40,
+            displayMultiplier: 0.5
+        )
+        let singleCamera = CameraZoomMapping(
+            rawMinimum: 1,
+            rawMaximum: 123.75,
+            displayMultiplier: 1
+        )
+
+        XCTAssertEqual(multiCamera.targets, [0.5, 1, 2])
+        XCTAssertEqual(multiCamera.rawRatio(forUserRatio: 1), 2)
+        XCTAssertEqual(multiCamera.maximumUserRatio, CameraZoomPolicy.maximumUserZoomRatio)
+        XCTAssertEqual(singleCamera.targets, [1, 2])
+        XCTAssertEqual(singleCamera.maximumUserRatio, CameraZoomPolicy.maximumUserZoomRatio)
+    }
+
     @MainActor
     func testFreshSettingsUseFullHD30AtFiveMbps() {
         let store = FakeSetupSettingsStore()

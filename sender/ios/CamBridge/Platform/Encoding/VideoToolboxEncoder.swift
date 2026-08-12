@@ -52,6 +52,7 @@ public final class VideoToolboxEncoder {
     private var encodedBytes = Int.zero
     private var firstPresentationTimeMicroseconds: Int64?
     private var lastPresentationTimeMicroseconds: Int64?
+    private var forceNextKeyframe = false
 
     public init(queueLabel: String = "dev.cambridge.sender.encoder") {
         inputQueue = DispatchQueue(label: queueLabel, qos: .userInitiated)
@@ -99,6 +100,7 @@ public final class VideoToolboxEncoder {
             encodedBytes = .zero
             firstPresentationTimeMicroseconds = nil
             lastPresentationTimeMicroseconds = nil
+            forceNextKeyframe = false
             encoderIdentity = nil
             encoderIdentityUnavailableReason = nil
             encoderUsesHardwareAccelerated = nil
@@ -146,17 +148,32 @@ public final class VideoToolboxEncoder {
             value: Self.singleFrameDurationNumerator,
             timescale: CMTimeScale(configuration.fps)
         )
+        let frameProperties: CFDictionary? = forceNextKeyframe
+            ? [kVTEncodeFrameOptionKey_ForceKeyFrame as String: true] as CFDictionary
+            : nil
         let status = VTCompressionSessionEncodeFrame(
             session,
             imageBuffer: imageBuffer,
             presentationTimeStamp: presentationTime,
             duration: frameDuration,
-            frameProperties: nil,
+            frameProperties: frameProperties,
             sourceFrameRefcon: nil,
             infoFlagsOut: nil
         )
         if status != noErr {
             onAccessUnit?(.failure(.frameFailed(status)))
+        } else {
+            forceNextKeyframe = false
+        }
+    }
+
+    public func requestKeyframe() {
+        if DispatchQueue.getSpecific(key: Self.inputQueueKey) == Self.inputQueueMarker {
+            forceNextKeyframe = true
+        } else {
+            inputQueue.sync {
+                forceNextKeyframe = true
+            }
         }
     }
 
@@ -445,6 +462,7 @@ public final class VideoToolboxEncoder {
         advisoryPropertyFailures.removeAll(keepingCapacity: true)
         firstPresentationTimeMicroseconds = nil
         lastPresentationTimeMicroseconds = nil
+        forceNextKeyframe = false
     }
 
     private static let microsecondsTimeScale: CMTimeScale = 1_000_000
