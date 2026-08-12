@@ -8,7 +8,7 @@ public struct CameraFormatSelection {
     public let descriptor: CameraFormatDescriptor
 }
 
-public struct CameraCapabilityProbe: Sendable {
+public struct CameraDeviceSelector: Sendable {
     public init() {}
 
     public func defaultDevice(position: CameraPosition) -> AVCaptureDevice? {

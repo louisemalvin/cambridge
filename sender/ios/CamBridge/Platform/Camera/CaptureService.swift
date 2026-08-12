@@ -21,7 +21,7 @@ public protocol CameraSetupServicing: Sendable {
 public actor CaptureService {
     public private(set) var state: CameraState = .initial
 
-    private let capabilityProbe: CameraCapabilityProbe
+    private let cameraSelector: CameraDeviceSelector
     private let sessionQueue = DispatchQueue(label: "dev.cambridge.sender.capture")
     private var session: AVCaptureSession?
     private var device: AVCaptureDevice?
@@ -37,8 +37,8 @@ public actor CaptureService {
     private var activeConfiguration: StreamConfiguration?
     private var zoomMapping: CameraZoomMapping?
 
-    public init(capabilityProbe: CameraCapabilityProbe = CameraCapabilityProbe()) {
-        self.capabilityProbe = capabilityProbe
+    public init(cameraSelector: CameraDeviceSelector = CameraDeviceSelector()) {
+        self.cameraSelector = cameraSelector
     }
 
     public func authorizationState() -> CameraAuthorizationState {
@@ -73,10 +73,10 @@ public actor CaptureService {
             throw CaptureServiceError.configurationFailed("Capture service is already prepared")
         }
         guard authorizationState() == .authorized else { throw CaptureServiceError.permissionDenied }
-        guard let device = capabilityProbe.defaultDevice(position: position) else {
+        guard let device = cameraSelector.defaultDevice(position: position) else {
             throw CaptureServiceError.deviceUnavailable
         }
-        guard let format = capabilityProbe.compatibleFormat(
+        guard let format = cameraSelector.compatibleFormat(
             for: configuration.resolution,
             fps: configuration.fps,
             on: device
@@ -196,10 +196,10 @@ public actor CaptureService {
             throw CaptureServiceError.notPrepared
         }
         let targetPosition = selectedPosition.opposite
-        guard let targetDevice = capabilityProbe.defaultDevice(position: targetPosition) else {
+        guard let targetDevice = cameraSelector.defaultDevice(position: targetPosition) else {
             throw CaptureServiceError.deviceUnavailable
         }
-        guard let targetFormat = capabilityProbe.compatibleFormat(
+        guard let targetFormat = cameraSelector.compatibleFormat(
             for: configuration.resolution,
             fps: configuration.fps,
             on: targetDevice

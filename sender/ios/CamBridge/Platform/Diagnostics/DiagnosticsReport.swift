@@ -22,7 +22,7 @@ public struct DiagnosticsReport: Codable, Equatable, Sendable {
     public let cameraZoomRatio: Double?
     public let systemPressureLevel: String?
     public let thermalState: String?
-    public let modeId: String?
+    public let profileId: String?
     public let codedWidth: Int?
     public let codedHeight: Int?
     public let displayWidth: Int?
@@ -110,7 +110,7 @@ public struct DiagnosticsReport: Codable, Equatable, Sendable {
         self.cameraZoomRatio = cameraState?.zoomRatio
         self.systemPressureLevel = cameraState?.systemPressureLevel?.rawValue
         self.thermalState = cameraState?.thermalState
-        self.modeId = configuration.map { _ in SenderVideoCatalog.profileID }
+        self.profileId = configuration.map { _ in SenderVideoCatalog.profileID }
         self.codedWidth = configuration?.geometry.codedWidth
         self.codedHeight = configuration?.geometry.codedHeight
         self.displayWidth = configuration.map { $0.geometry.displayDimensions(for: $0.orientation).width }

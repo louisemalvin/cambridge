@@ -61,10 +61,10 @@ final class CamBridgeTests: XCTestCase {
                 maximumFrameRate: 30
             ),
         ]
-        let probe = CameraCapabilityProbe()
+        let selector = CameraDeviceSelector()
 
         XCTAssertEqual(
-            probe.compatibleFormatDescriptor(
+            selector.compatibleFormatDescriptor(
                 for: SenderVideoCatalog.resolution2k,
                 fps: 30,
                 in: formats
