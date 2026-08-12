@@ -40,6 +40,11 @@ struct StreamSettingsSelectionView: View {
                     .foregroundStyle(.orange)
                     .accessibilityIdentifier("bitrate-validation")
             }
+
+            Text("These are requested settings. Availability depends on this iPhone; Start tries them once and never changes them.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .accessibilityIdentifier("exact-start-explanation")
         }
     }
 }
