@@ -120,6 +120,10 @@ public actor CaptureService {
         guard isRunning else {
             throw CaptureServiceError.runtimeError("Capture session did not enter the running state")
         }
+        // Request a fresh IDR after the session is running so the already-armed
+        // RTP consumer starts OBS with a decodable access unit even if an
+        // earlier callback raced capture startup.
+        encoder?.requestKeyframe()
     }
 
     public func stop() async {

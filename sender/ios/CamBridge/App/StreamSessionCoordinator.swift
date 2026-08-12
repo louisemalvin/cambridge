@@ -241,11 +241,15 @@ public actor StreamSessionCoordinator {
                 throw lastTransportError ?? StreamFailure.transportFailed("no discovered media address connected")
             }
             datagramSender = sender
+            // Arm the bounded media consumer before AVFoundation can deliver
+            // the first IDR. The queue also retains a pending keyframe until
+            // this consumer takes it, so OBS receives a decoder refresh point
+            // immediately instead of waiting for the next keyframe interval.
+            startMediaTask(queue: queue, sender: sender)
             enterStartStage(.startingCapture)
             try await capture.start()
             try ensureStartOperationIsActive(operationID)
             try stateMachine.accept(accepted)
-            startMediaTask(queue: queue, sender: sender)
             startControlTask(control: control)
             startCameraStateTask()
             enterStartStage(.streaming)

@@ -66,9 +66,9 @@ final class CoordinatorLifecycleTests: XCTestCase {
 
         _ = await coordinator.stop()
         _ = await coordinator.stop()
-        let diagnostics = await coordinator.diagnostics()
-        XCTAssertEqual(diagnostics?.cameraPosition, CameraPosition.front.rawValue)
-        XCTAssertEqual(diagnostics?.cameraZoomRatio, CameraZoomPolicy.telephotoTarget)
+        let cameraDiagnostics = await coordinator.diagnostics()
+        XCTAssertEqual(cameraDiagnostics?.cameraPosition, CameraPosition.front.rawValue)
+        XCTAssertEqual(cameraDiagnostics?.cameraZoomRatio, CameraZoomPolicy.telephotoTarget)
 
         let stoppedSnapshot = await coordinator.snapshotStream()
         let stopCount = await capture.stopCount()
@@ -104,6 +104,48 @@ final class CoordinatorLifecycleTests: XCTestCase {
         XCTAssertEqual(secondStopCount, 2)
         XCTAssertEqual(secondDatagramCloseCount, 2)
         XCTAssertEqual(secondControlCloseCount, 2)
+    }
+
+    func testCaptureStartupDeliversTheInitialKeyframeBeforeLaterFrames() async throws {
+        let capture = FakeCaptureService(accessUnitsOnStart: [
+            Self.startupKeyframe,
+            Self.startupDeltaFrame,
+        ])
+        let control = FakeSessionControl()
+        let datagram = ControlledDatagramSender()
+        let coordinator = StreamSessionCoordinator(
+            capture: capture,
+            controlFactory: FakeSessionControlFactory(connection: control),
+            datagramFactory: ControlledDatagramFactory(sender: datagram)
+        )
+        let endpoint = try ReceiverEndpoint(host: "127.0.0.1")
+        let receiver = try ReceiverCapabilities(
+            receiverId: "test-receiver",
+            displayName: "Test Receiver",
+            maxLongEdge: CamBridgeContract.Geometry.maximumLongEdge,
+            maxShortEdge: CamBridgeContract.Geometry.maximumShortEdge
+        )
+        let configuration = try StreamConfiguration(
+            resolution: SenderVideoCatalog.fullHd,
+            fps: SenderVideoCatalog.defaultFrameRate,
+            bitrateBps: SenderVideoCatalog.minimumBitrateMbps * SenderVideoCatalog.bitrateUnitBps,
+            orientation: .zero
+        )
+
+        let result = await coordinator.start(
+            endpoint: endpoint,
+            controlTarget: .manual(endpoint),
+            receiver: receiver,
+            configuration: configuration,
+            cameraPosition: .back
+        )
+        guard case .success = result else {
+            return XCTFail("expected fake receiver to accept the stream")
+        }
+        await datagram.waitUntilPacketCount(atLeast: Self.firstPacketCount)
+        let packets = await datagram.packets()
+        XCTAssertEqual(packets.first?.last, Self.startupIDRNALHeader)
+        _ = await coordinator.stop()
     }
 
     func testCameraAndEncoderRejectionsAttemptExactConfigurationOnceBeforeControlConnect() async throws {
@@ -503,6 +545,19 @@ final class CoordinatorLifecycleTests: XCTestCase {
         presentationTimeMicroseconds: 3,
         isKeyframe: false
     )
+    private static let startupIDRNALHeader: UInt8 = 0x65
+    private static let startupDeltaNALHeader: UInt8 = 0x41
+    private static let startupKeyframe = EncodedAccessUnit(
+        data: Data([0x00, 0x00, 0x00, 0x01, startupIDRNALHeader]),
+        presentationTimeMicroseconds: .zero,
+        isKeyframe: true
+    )
+    private static let startupDeltaFrame = EncodedAccessUnit(
+        data: Data([0x00, 0x00, 0x00, 0x01, startupDeltaNALHeader]),
+        presentationTimeMicroseconds: 1,
+        isKeyframe: false
+    )
+    private static let firstPacketCount = 1
     private static let expectedFragmentCount = 2
     private static let rtpSequenceHighByteOffset = 2
     private static let rtpSequenceLowByteOffset = 3
@@ -511,12 +566,17 @@ final class CoordinatorLifecycleTests: XCTestCase {
 }
 
 private actor FakeCaptureService: StreamCaptureControlling {
+    private let accessUnitsOnStart: [EncodedAccessUnit]
     private var starts = 0
     private var stops = 0
     private var callback: (@Sendable (Result<EncodedAccessUnit, VideoToolboxEncoderError>) -> Void)?
     private var preparedConfiguration: StreamConfiguration?
     private var successfulAccessUnits = 0
     private var currentCameraState = CameraState.initial
+
+    init(accessUnitsOnStart: [EncodedAccessUnit] = []) {
+        self.accessUnitsOnStart = accessUnitsOnStart
+    }
 
     func prepare(
         configuration: StreamConfiguration,
@@ -529,6 +589,10 @@ private actor FakeCaptureService: StreamCaptureControlling {
 
     func start() async throws {
         starts += 1
+        for accessUnit in accessUnitsOnStart {
+            successfulAccessUnits += 1
+            callback?(.success(accessUnit))
+        }
     }
 
     func stop() async {
