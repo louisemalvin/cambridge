@@ -1,6 +1,6 @@
 # CamBridge iOS sender
 
-The iOS sender is a native Swift/SwiftUI application for iOS 17 and later. It
+The iOS sender is a native Swift/SwiftUI application for iOS 17.4 and later. It
 uses the CamBridge v6 control contract and RFC 6184 H.264 RTP over UDP used by
 the unchanged Linux OBS receiver.
 

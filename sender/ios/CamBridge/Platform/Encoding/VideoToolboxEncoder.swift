@@ -100,7 +100,7 @@ public final class VideoToolboxEncoder {
             encodedBytes = .zero
             firstPresentationTimeMicroseconds = nil
             lastPresentationTimeMicroseconds = nil
-            forceNextKeyframe = false
+            forceNextKeyframe = true
             encoderIdentity = nil
             encoderIdentityUnavailableReason = nil
             encoderUsesHardwareAccelerated = nil
@@ -318,9 +318,14 @@ public final class VideoToolboxEncoder {
     private func setProperties(session: VTCompressionSession, configuration: StreamConfiguration) throws {
         try set(session: session, key: kVTCompressionPropertyKey_AllowFrameReordering, value: false, name: "frame-reordering")
         try set(session: session, key: kVTCompressionPropertyKey_AverageBitRate, value: configuration.bitrateBps, name: "average-bitrate")
-        try set(session: session, key: kVTCompressionPropertyKey_MaxKeyFrameInterval, value: SenderVideoCatalog.keyframeIntervalSeconds * configuration.fps, name: "keyframe-interval")
         setAdvisory(session: session, key: kVTCompressionPropertyKey_RealTime, value: true, name: "real-time")
         setAdvisory(session: session, key: kVTCompressionPropertyKey_ExpectedFrameRate, value: configuration.fps, name: "frame-rate-hint")
+        setAdvisory(
+            session: session,
+            key: kVTCompressionPropertyKey_MaxKeyFrameInterval,
+            value: SenderVideoCatalog.keyframeIntervalSeconds * configuration.fps,
+            name: "keyframe-interval"
+        )
         setAdvisory(
             session: session,
             key: kVTCompressionPropertyKey_MaxKeyFrameIntervalDuration,
@@ -337,13 +342,10 @@ public final class VideoToolboxEncoder {
             encoderIdentityUnavailableReason = "VideoToolbox encoder identity unavailable (status: \(encoderProperty.status))"
         }
 
-        let hardwarePropertyKey: CFString
-        if #available(iOS 17.4, *) {
-            hardwarePropertyKey = kVTCompressionPropertyKey_UsingHardwareAcceleratedVideoEncoder
-        } else {
-            hardwarePropertyKey = Self.legacyHardwareUsePropertyKey as CFString
-        }
-        let hardwareProperty = Self.copySessionProperty(session, key: hardwarePropertyKey)
+        let hardwareProperty = Self.copySessionProperty(
+            session,
+            key: kVTCompressionPropertyKey_UsingHardwareAcceleratedVideoEncoder
+        )
         if hardwareProperty.status == noErr, let value = hardwareProperty.value as? NSNumber {
             encoderUsesHardwareAccelerated = value.boolValue
         } else {
@@ -368,14 +370,9 @@ public final class VideoToolboxEncoder {
     }
 
     private static func hardwareEncoderSpecification() -> [String: Any] {
-        if #available(iOS 17.4, *) {
-            return [
-                kVTVideoEncoderSpecification_RequireHardwareAcceleratedVideoEncoder as String: true
-            ]
-        }
-        // The public symbol is unavailable to older SDK deployment targets,
-        // but the documented encoder-specification key has the same CFString.
-        return [Self.legacyHardwareSpecificationKey: true]
+        [
+            kVTVideoEncoderSpecification_RequireHardwareAcceleratedVideoEncoder as String: true
+        ]
     }
 
     private func set(session: VTCompressionSession, key: CFString, value: Any, name: String) throws {
@@ -467,8 +464,6 @@ public final class VideoToolboxEncoder {
 
     private static let microsecondsTimeScale: CMTimeScale = 1_000_000
     private static let singleFrameDurationNumerator: Int64 = 1
-    private static let legacyHardwareSpecificationKey = "RequireHardwareAcceleratedVideoEncoder"
-    private static let legacyHardwareUsePropertyKey = "UsingHardwareAcceleratedVideoEncoder"
     private static let inputQueueKey = DispatchSpecificKey<UInt8>()
     private static let inputQueueMarker: UInt8 = 1
     private static let counterIncrement = 1

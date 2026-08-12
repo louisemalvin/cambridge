@@ -64,7 +64,7 @@ stream.
 
 ### iOS sender candidate
 
-The iOS project is under `sender/ios/` and targets iOS 17 or later. Its
+The iOS project is under `sender/ios/` and targets iOS 17.4 or later. Its
 platform-neutral `CamBridgeCore` package owns the generated v6 contract,
 control framing, H.264 normalization, RTP packetization, session state, and
 bounded queue policy. The app target owns AVFoundation, VideoToolbox,

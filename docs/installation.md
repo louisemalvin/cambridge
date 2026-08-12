@@ -9,7 +9,7 @@ path, but macOS is not a supported downloadable receiver yet. Its arm64 and
 x86_64 VideoToolbox/Metal/Bonjour acceptance and clean-machine package gates
 must pass before the public installation path changes.
 
-The repository also contains an iOS 17 sender install candidate. It is not a
+The repository also contains an iOS 17.4 sender install candidate. It is not a
 released or supported platform yet: Apple-target compilation, signing, a real
 iPhone camera/encoder, and glass-to-glass behavior must be validated on macOS
 before the public support statement changes.

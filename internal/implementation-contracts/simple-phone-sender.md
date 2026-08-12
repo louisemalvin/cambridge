@@ -240,7 +240,7 @@ ratio.
 Source-format selection is deterministic platform plumbing and does not appear
 in the normal UI.
 
-On iOS 17+, the native adapter may select the smallest compatible larger 16:9
+On the iOS 17.4+ sender, the native adapter may select the smallest compatible larger 16:9
 active format and ask `AVCaptureVideoDataOutput` for explicit NV12 target
 buffer dimensions with automatic preview sizing disabled. Every delivered
 pixel buffer is checked against the selected dimensions before VideoToolbox.
