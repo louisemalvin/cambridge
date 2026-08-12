@@ -293,8 +293,11 @@
 			baseConfigurationReference = CB2000000000000000000005 /* Debug.xcconfig */;
 			buildSettings = {
 				CLANG_ENABLE_OBJC_WEAK = YES;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 64PL2GSPCK;
 				INFOPLIST_FILE = CamBridge/Resources/Info.plist;
+				PROVISIONING_PROFILE_SPECIFIER = "";
 			};
 			name = Debug;
 		};
@@ -303,8 +306,11 @@
 			baseConfigurationReference = CB2000000000000000000006 /* Release.xcconfig */;
 			buildSettings = {
 				CLANG_ENABLE_OBJC_WEAK = YES;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 64PL2GSPCK;
 				INFOPLIST_FILE = CamBridge/Resources/Info.plist;
+				PROVISIONING_PROFILE_SPECIFIER = "";
 			};
 			name = Release;
 		};
