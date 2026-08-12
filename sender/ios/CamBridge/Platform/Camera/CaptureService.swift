@@ -402,34 +402,42 @@ public actor CaptureService {
         output.alwaysDiscardsLateVideoFrames = true
         output.automaticallyConfiguresOutputBufferDimensions = false
         output.deliversPreviewSizedOutputBuffers = false
-        output.videoSettings = [
-            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
-            kCVPixelBufferWidthKey as String: configuration.geometry.codedWidth,
-            kCVPixelBufferHeightKey as String: configuration.geometry.codedHeight,
-        ]
         let avFormat = format.format
-        let canAddInputAndOutput = sessionQueue.sync {
-            session.canAddInput(input) && session.canAddOutput(output)
-        }
-        guard canAddInputAndOutput else {
-            throw CaptureServiceError.configurationFailed("Capture session rejected the video input or output")
-        }
         let configurationResult = sessionQueue.sync { () -> (error: CaptureServiceError?, zoomMapping: CameraZoomMapping?) in
             var configurationError: CaptureServiceError?
             var configuredZoomMapping: CameraZoomMapping?
             session.beginConfiguration()
             session.sessionPreset = .inputPriority
-            session.addInput(input)
-            session.addOutput(output)
-            do {
-                Self.configureOutputConnection(output.connection(with: .video))
-                configuredZoomMapping = try Self.configure(
-                    device: device,
-                    format: avFormat,
-                    fps: configuration.fps
-                )
-            } catch {
-                configurationError = .configurationFailed(String(describing: error))
+            if session.canAddInput(input) {
+                session.addInput(input)
+                do {
+                    configuredZoomMapping = try Self.configure(
+                        device: device,
+                        format: avFormat,
+                        fps: configuration.fps
+                    )
+                } catch {
+                    configurationError = .configurationFailed(String(describing: error))
+                }
+                if configurationError == nil {
+                    // AVFoundation validates explicit output dimensions against
+                    // the device's current activeFormat. Select the compatible
+                    // source first so a valid larger-source downscale cannot be
+                    // rejected against the device's previous default format.
+                    output.videoSettings = [
+                        kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+                        kCVPixelBufferWidthKey as String: configuration.geometry.codedWidth,
+                        kCVPixelBufferHeightKey as String: configuration.geometry.codedHeight,
+                    ]
+                    if session.canAddOutput(output) {
+                        session.addOutput(output)
+                        Self.configureOutputConnection(output.connection(with: .video))
+                    } else {
+                        configurationError = .configurationFailed("Capture session rejected the video output")
+                    }
+                }
+            } else {
+                configurationError = .configurationFailed("Capture session rejected the video input")
             }
             session.commitConfiguration()
             return (configurationError, configuredZoomMapping)
