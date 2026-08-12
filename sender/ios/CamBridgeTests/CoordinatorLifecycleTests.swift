@@ -328,6 +328,62 @@ final class CoordinatorLifecycleTests: XCTestCase {
         XCTAssertTrue(diagnostics?.receiverAccepted == true)
     }
 
+    func testWrongCameraBufferDimensionsReportTheCameraStage() async throws {
+        let capture = FakeCaptureService()
+        let control = FakeSessionControl()
+        let coordinator = StreamSessionCoordinator(
+            capture: capture,
+            controlFactory: FakeSessionControlFactory(connection: control),
+            datagramFactory: FakeDatagramFactory(sender: FakeDatagramSender())
+        )
+        let endpoint = try ReceiverEndpoint(host: "127.0.0.1")
+        let receiver = try ReceiverCapabilities(
+            receiverId: "test-receiver",
+            displayName: "Test Receiver",
+            maxLongEdge: CamBridgeContract.Geometry.maximumLongEdge,
+            maxShortEdge: CamBridgeContract.Geometry.maximumShortEdge
+        )
+        let configuration = try StreamConfiguration(
+            resolution: SenderVideoCatalog.resolution2k,
+            fps: SenderVideoCatalog.defaultFrameRate,
+            bitrateBps: SenderVideoCatalog.minimumBitrateMbps * SenderVideoCatalog.bitrateUnitBps,
+            orientation: .zero
+        )
+        let snapshots = await coordinator.snapshots()
+        let failureTask = Task { () -> StreamSessionSnapshot? in
+            for await snapshot in snapshots {
+                if case .failed = snapshot.state { return snapshot }
+            }
+            return nil
+        }
+
+        let result = await coordinator.start(
+            endpoint: endpoint,
+            controlTarget: .manual(endpoint),
+            receiver: receiver,
+            configuration: configuration,
+            cameraPosition: .back
+        )
+        guard case .success = result else {
+            return XCTFail("expected fake receiver to accept the stream")
+        }
+        await capture.emit(.failure(.inputDimensionsMismatch(
+            expectedWidth: configuration.geometry.codedWidth,
+            expectedHeight: configuration.geometry.codedHeight,
+            actualWidth: SenderVideoCatalog.fullHd.codedWidth,
+            actualHeight: SenderVideoCatalog.fullHd.codedHeight
+        )))
+
+        let failedSnapshot = await failureTask.value
+        guard case let .failed(failure)? = failedSnapshot?.state,
+              case .cameraUnavailable = failure else {
+            return XCTFail("wrong AVFoundation buffer dimensions must report the camera stage")
+        }
+        let diagnostics = await coordinator.diagnostics()
+        XCTAssertEqual(diagnostics?.terminalFailure, failure)
+        XCTAssertTrue(diagnostics?.receiverAccepted == true)
+    }
+
     func testAcceptedStartFailureSendsMatchingStopBeforeCleanup() async throws {
         let capture = FakeCaptureService()
         let control = FakeSessionControl()

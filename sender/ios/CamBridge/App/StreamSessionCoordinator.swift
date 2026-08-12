@@ -389,7 +389,14 @@ public actor StreamSessionCoordinator {
 }
 
     private func handleEncoderFailure(_ error: VideoToolboxEncoderError) async {
-        await handleTerminalFailure(.encoderUnavailable(String(describing: error)))
+        let failure: StreamFailure
+        switch error {
+        case .inputDimensionsMismatch:
+            failure = .cameraUnavailable(String(describing: error))
+        default:
+            failure = .encoderUnavailable(String(describing: error))
+        }
+        await handleTerminalFailure(failure)
     }
 
     private func handleTransportFailure(_ error: Error) async {
