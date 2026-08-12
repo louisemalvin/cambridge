@@ -29,6 +29,14 @@ Physical camera, VideoToolbox hardware, local-network permission, signing, and
 OBS glass-to-glass behavior require validation on a signed physical-device
 build; the scripts above cannot validate them.
 
+For a physical pass, keep the OBS CamBridge source active, then verify all four
+resolution/FPS combinations plus Full HD 60 at 1 Mbps. Confirm Start either
+streams the exact request or reports its failing stage, front/back flip and
+0.5x/1x/2x or pinch zoom leave the wire settings unchanged, and Stop releases
+the camera before the next Start. Copied diagnostics identify capture/encoder,
+TCP connect, hello, receiver acceptance, UDP setup, and capture-start failures
+without exposing the receiver host.
+
 The Swift fixture is test-only and is invoked by the native Linux harness with
 `CAMBRIDGE_SENDER_MODE=swift`. The production app never uses its POSIX socket
 adapter. Until the macOS and physical gates are validated, this directory is an

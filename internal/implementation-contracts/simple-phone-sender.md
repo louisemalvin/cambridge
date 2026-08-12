@@ -79,10 +79,17 @@ Opening the screen, connecting a receiver, or pressing Start must not replace
 a manual bitrate. Changing resolution or frame rate again applies the new
 default again.
 
-The bitrate input is displayed in Mbps and converted deterministically to
-integer bits per second. It must accept `1 Mbps`. It may accept other values
-that convert exactly to an integer within the v6 bitrate bounds. Invalid input
-is rejected; it is never silently rounded or clamped.
+The bitrate input accepts base-10 whole Mbps from `1` through `100`. `N Mbps`
+means exactly `N * 1,000,000` bits per second. Fractions, exponents, grouping,
+rounding, and clamping are not accepted. Invalid or partial text is not
+committed and disables Start without opening camera, encoder, or network
+resources.
+
+A committed manual bitrate persists across screen reopen, app restart, failed
+Start, and Stop. Only an actual resolution or FPS value change replaces it
+with a suggestion. Upgrade migration maps the prior combined mode to its
+resolution and FPS and preserves a prior whole-Mbps bitrate when it remains
+within the new input bounds.
 
 The default table is convenience, not a hardware limit. A valid manual value
 must not be intersected with or rejected because of an advertised encoder
@@ -130,17 +137,22 @@ platform has no logical camera. The product does not rank or ask the user to
 select physical lenses.
 
 A live front/back switch keeps the same resolution, FPS, bitrate, receiver,
-and wire session. If the other facing cannot supply the active settings, the
-sender keeps the current camera and reports a camera-switch error. It does not
-change the stream settings.
+wire rotation, and wire session. It resets zoom to `1x` and recomputes the
+available pills. If the other facing cannot supply the active settings, the
+sender makes one best-effort restoration of the current camera and reports a
+camera-switch error. If restoration itself fails, the sender stops cleanly.
+It never changes the stream settings.
+
+The front preview is mirrored in the familiar camera style. Transmitted pixels
+are never mirrored; v6 has no mirroring field.
 
 ### Zoom
 
 The live camera screen provides:
 
 - a `1x` pill;
-- familiar pills such as `0.5x` and `2x` only when supported by the active
-  logical or virtual camera; and
+- exactly `0.5x` and `2x` pills when those user-facing targets are supported
+  by the active logical or virtual camera; and
 - pinch-to-zoom within the supported user-facing range.
 
 The pills are zoom targets, not physical-lens selectors. The platform camera
@@ -155,12 +167,22 @@ receiver.
 The normal UI does not expose wire-rotation choices or framework stabilization
 modes.
 
-The sender derives orientation from the device at Start and keeps that wire
-rotation for the session. A new orientation takes effect after Stop and a new
-Start.
+The sender snapshots the active interface/display orientation at Start, maps
+it to one clockwise v6 quarter-turn, and keeps that wire rotation for the
+session. An unknown orientation uses the last valid interface orientation, or
+landscape-right when none exists. Mid-stream device rotation does not change
+the wire value. A new orientation takes effect after Stop and a new Start.
 
-The sender leaves stabilization at the platform's normal automatic or default
-behavior. Platform stabilization details may appear in diagnostics only.
+On iOS, the capture connection requests AVFoundation `.auto` once while the
+capture graph is configured and again after a facing switch. On Android, each
+initial capture and facing switch requests one advertised mode in this order:
+preview stabilization, video stabilization, then optical stabilization. The
+Android request explicitly disables the other stabilization family.
+
+Stabilization may resolve to Off for the selected camera, resolution, or FPS.
+That outcome does not disable Start, retry another mode, or change stream
+settings. Requested and applied stabilization are diagnostics only. The
+user-facing promise is "automatically when supported," not "always enabled."
 
 ## Start
 
@@ -176,6 +198,12 @@ Start performs one direct attempt:
 7. Require the matching receiver `accepted` response.
 8. Send H.264 RTP to the accepted UDP media port.
 
+Setup, Settings, diagnostics, startup, and prior failures must not build or
+retain a camera-by-FPS-by-encoder capability matrix, instantiate a throwaway
+encoder, query or intersect an encoder bitrate range, filter or disable a
+product choice, or rewrite a selection. The v6 probe remains solely for
+receiver reachability and identity.
+
 The sender must not gate Start on:
 
 - encoder-advertised minimum or maximum bitrate;
@@ -187,6 +215,9 @@ The sender must not gate Start on:
 Missing or differently shaped encoder metadata is not proof that H.264 or a
 bitrate is unavailable. Creation and configuration of the real encoder is the
 test.
+
+Start may inspect camera formats only to choose the one deterministic source
+for that attempt. It creates and configures exactly one real hardware encoder.
 
 The configured bitrate is an encoder target. The sender announces the exact
 target selected by the user; instantaneous encoded output may naturally vary.
@@ -208,6 +239,13 @@ ratio.
 
 Source-format selection is deterministic platform plumbing and does not appear
 in the normal UI.
+
+On iOS 17+, the native adapter may select the smallest compatible larger 16:9
+active format and ask `AVCaptureVideoDataOutput` for explicit NV12 target
+buffer dimensions with automatic preview sizing disabled. Every delivered
+pixel buffer is checked against the selected dimensions before VideoToolbox.
+VideoToolbox is never relied on to resize. Different-aspect sources and
+upscaling are rejected.
 
 ## Wire values
 

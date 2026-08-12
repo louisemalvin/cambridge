@@ -33,7 +33,7 @@ with hardware-accelerated decoding where supported.
 4. Put the phone and computer on the same trusted network, open CamBridge,
    and allow camera access.
 5. Open Stream setup, choose the OBS computer when more than one is available,
-   choose resolution, frame rate, bitrate, and orientation, then press
+   choose resolution, frame rate, and bitrate, then press
    **Start stream**.
 
 ## Current Platform Support
@@ -42,8 +42,9 @@ with hardware-accelerated decoding where supported.
 | --- | --- | --- |
 | Android | Linux x86_64/amd64 + OBS Studio | Supported |
 | Android | macOS 12+ + OBS Studio | Implementation present; physical acceptance pending |
+| iOS 17+ | Linux x86_64/amd64 + OBS Studio | Install candidate; physical acceptance pending |
 
-An iOS sender and Windows and ARM Linux receivers are not currently supported.
+Windows and ARM Linux receivers are not currently supported.
 The macOS receiver is not a supported downloadable product until its arm64 and
 x86_64 physical acceptance, clean-machine package installation, and release
 verification gates pass.

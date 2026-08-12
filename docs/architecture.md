@@ -70,12 +70,16 @@ control framing, H.264 normalization, RTP packetization, session state, and
 bounded queue policy. The app target owns AVFoundation, VideoToolbox,
 Network.framework, SwiftUI, persistence, and diagnostics.
 
-The iOS sender uses exact AVFoundation formats and a temporary hardware
-VideoToolbox probe before offering a shared sender mode. It keeps coded video
-geometry separate from the four clockwise wire rotations; preview orientation
-is configured independently. Bonjour TXT addresses are candidates only: each
-selected receiver is probed over TCP before Start, and the accepted media port
-is used for the connected UDP path.
+The iOS sender exposes independent resolution, frame-rate, and bitrate values
+from the shared sender settings source. Start selects the default AVFoundation
+logical camera and its smallest compatible same-aspect source, configures
+explicit target pixel-buffer dimensions, and creates one real
+hardware-required VideoToolbox session. There is no camera/encoder capability
+matrix or temporary encoder. Coded geometry stays separate from the clockwise
+wire rotation, and preview orientation and mirroring are configured
+independently. Bonjour TXT addresses are candidates only: each selected
+receiver is probed over TCP before Start, and the accepted media port is used
+for the connected UDP path.
 
 ### Control and media transport
 

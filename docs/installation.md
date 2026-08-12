@@ -105,6 +105,6 @@ On a Mac with Xcode 16.4 or newer, open `sender/ios/CamBridge.xcodeproj`
 directly. Select the local Personal Team or paid team in Xcode for a device
 run; no team, certificate, profile, or account information is committed.
 Choose an iPhone destination, grant camera and local-network permission, and
-run the pre-install and physical validation matrix from the development
-handoff. The unsigned simulator check cannot validate the camera, hardware
-VideoToolbox, or local-network behavior.
+run the checks and concise physical validation in the
+[iOS sender README](../sender/ios/README.md). The unsigned simulator check cannot validate the
+camera, hardware VideoToolbox, or local-network behavior.

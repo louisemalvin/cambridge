@@ -250,7 +250,8 @@ the failed NSD operation and Android error code when one is available.
 
 The iOS physical validation matrix is deliberately not reported as complete
 on Linux. Before calling iOS supported, a Mac-lab run must retain the Xcode
-version, iPhone model/iOS version, offered exact formats, encoder identity,
+version, iPhone model/iOS version, requested and applied source/output formats,
+encoder identity,
 all four orientations, camera controls, interruption/background behavior,
 queue/drop/thermal diagnostics, and OBS hardware plus CPU-fallback results.
 

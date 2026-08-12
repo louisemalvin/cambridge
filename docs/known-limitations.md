@@ -52,11 +52,13 @@ discovery is degraded; manual receiver addressing remains available.
 The native iOS sender project and Linux Swift interoperability fixture are
 present, but iOS support remains an install candidate until macOS Xcode checks
 and physical-device validation are retained. Linux cannot establish whether a
-particular iPhone exposes an exact shared mode, a usable hardware H.264
-encoder, the requested stabilization modes, or the expected preview/OBS
+particular iPhone can produce each selected output/FPS combination, create the
+required hardware H.264 encoder, or present the expected preview/OBS
 orientation.
 
 iOS streaming is foreground-only. Backgrounding, camera interruption, system
 pressure, terminal control loss, and terminal UDP failure end the session; the
-app does not reconnect automatically. Unsupported exact camera modes are
-omitted rather than scaled or silently downgraded.
+app does not reconnect automatically. All four product combinations remain
+selectable. Start makes one exact attempt using native same-aspect AVFoundation
+output scaling when available; an unsupported request fails clearly and is
+never silently downgraded.
