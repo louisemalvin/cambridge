@@ -458,16 +458,23 @@ public actor CaptureService {
 
     private static func zoomMapping(for device: AVCaptureDevice) -> CameraZoomMapping {
         let displayMultiplier: Double
-        switch device.deviceType {
-        case .builtInTripleCamera, .builtInDualWideCamera:
-            if let wideSwitchFactor = device.virtualDeviceSwitchOverVideoZoomFactors.first?.doubleValue,
-               wideSwitchFactor > .zero {
-                displayMultiplier = CameraZoomPolicy.normalTarget / wideSwitchFactor
-            } else {
+        if #available(iOS 18.0, *) {
+            displayMultiplier = Double(device.displayVideoZoomFactorMultiplier)
+        } else {
+            // iOS 17 lacks Apple's display multiplier. On the logical cameras
+            // that include ultra-wide, the first documented switch-over factor
+            // is the raw factor for the normal 1× constituent.
+            switch device.deviceType {
+            case .builtInTripleCamera, .builtInDualWideCamera:
+                if let wideSwitchFactor = device.virtualDeviceSwitchOverVideoZoomFactors.first?.doubleValue,
+                   wideSwitchFactor > .zero {
+                    displayMultiplier = CameraZoomPolicy.normalTarget / wideSwitchFactor
+                } else {
+                    displayMultiplier = CameraZoomPolicy.normalTarget
+                }
+            default:
                 displayMultiplier = CameraZoomPolicy.normalTarget
             }
-        default:
-            displayMultiplier = CameraZoomPolicy.normalTarget
         }
         return CameraZoomMapping(
             rawMinimum: Double(device.minAvailableVideoZoomFactor),
