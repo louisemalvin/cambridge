@@ -203,7 +203,10 @@ final class CoordinatorLifecycleTests: XCTestCase {
         XCTAssertTrue(controlDidClose)
         XCTAssertEqual(captureStopCount, 1)
         XCTAssertEqual(diagnostics?.receiverHost, "[redacted]")
-        XCTAssertFalse(diagnostics?.copyableText().contains("synthetic transport failure") == true)
+        XCTAssertTrue(diagnostics?.copyableText().contains("synthetic transport failure") == true)
+        XCTAssertEqual(diagnostics?.appliedCodedWidth, SenderVideoCatalog.fullHd.codedWidth)
+        XCTAssertEqual(diagnostics?.appliedCodedHeight, SenderVideoCatalog.fullHd.codedHeight)
+        XCTAssertTrue(diagnostics?.receiverAccepted == true)
     }
 
     func testAcceptedStartFailureSendsMatchingStopBeforeCleanup() async throws {
@@ -434,12 +437,15 @@ private actor FakeCaptureService: StreamCaptureControlling {
     private var starts = 0
     private var stops = 0
     private var callback: (@Sendable (Result<EncodedAccessUnit, VideoToolboxEncoderError>) -> Void)?
+    private var preparedConfiguration: StreamConfiguration?
+    private var successfulAccessUnits = 0
 
     func prepare(
         configuration: StreamConfiguration,
         position: CameraPosition,
         onAccessUnit: @escaping @Sendable (Result<EncodedAccessUnit, VideoToolboxEncoderError>) -> Void
     ) async throws {
+        preparedConfiguration = configuration
         callback = onAccessUnit
     }
 
@@ -456,12 +462,26 @@ private actor FakeCaptureService: StreamCaptureControlling {
     }
 
     func encoderMetrics() async -> VideoToolboxEncoderMetrics? {
-        nil
+        VideoToolboxEncoderMetrics(
+            encoderIdentity: nil,
+            encoderIdentityUnavailableReason: "not provided by test capture",
+            encoderUsesHardwareAccelerated: true,
+            encoderHardwareAvailabilityReason: nil,
+            advisoryPropertyFailures: [],
+            encodedAccessUnits: successfulAccessUnits,
+            encodedKeyframes: successfulAccessUnits,
+            encodedBytes: .zero,
+            inputWidth: successfulAccessUnits > .zero ? preparedConfiguration?.geometry.codedWidth : nil,
+            inputHeight: successfulAccessUnits > .zero ? preparedConfiguration?.geometry.codedHeight : nil,
+            firstPresentationTimeMicroseconds: successfulAccessUnits > .zero ? .zero : nil,
+            lastPresentationTimeMicroseconds: successfulAccessUnits > .zero ? .zero : nil
+        )
     }
 
     func startCount() -> Int { starts }
     func stopCount() -> Int { stops }
     func emit(_ result: Result<EncodedAccessUnit, VideoToolboxEncoderError>) {
+        if case .success = result { successfulAccessUnits += 1 }
         callback?(result)
     }
 }

@@ -30,6 +30,8 @@ public struct VideoToolboxEncoderMetrics: Equatable, Sendable {
     public let encodedAccessUnits: Int
     public let encodedKeyframes: Int
     public let encodedBytes: Int
+    public let inputWidth: Int?
+    public let inputHeight: Int?
     public let firstPresentationTimeMicroseconds: Int64?
     public let lastPresentationTimeMicroseconds: Int64?
 }
@@ -50,6 +52,8 @@ public final class VideoToolboxEncoder {
     private var encodedAccessUnits = Int.zero
     private var encodedKeyframes = Int.zero
     private var encodedBytes = Int.zero
+    private var inputWidth: Int?
+    private var inputHeight: Int?
     private var firstPresentationTimeMicroseconds: Int64?
     private var lastPresentationTimeMicroseconds: Int64?
     private var forceNextKeyframe = false
@@ -98,6 +102,8 @@ public final class VideoToolboxEncoder {
             encodedAccessUnits = .zero
             encodedKeyframes = .zero
             encodedBytes = .zero
+            inputWidth = nil
+            inputHeight = nil
             firstPresentationTimeMicroseconds = nil
             lastPresentationTimeMicroseconds = nil
             forceNextKeyframe = true
@@ -143,6 +149,8 @@ public final class VideoToolboxEncoder {
             onAccessUnit?(.failure(.malformedSample))
             return
         }
+        inputWidth = actualWidth
+        inputHeight = actualHeight
         let presentationTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
         let frameDuration = CMTime(
             value: Self.singleFrameDurationNumerator,
@@ -214,6 +222,8 @@ public final class VideoToolboxEncoder {
                 encodedAccessUnits: encodedAccessUnits,
                 encodedKeyframes: encodedKeyframes,
                 encodedBytes: encodedBytes,
+                inputWidth: inputWidth,
+                inputHeight: inputHeight,
                 firstPresentationTimeMicroseconds: firstPresentationTimeMicroseconds,
                 lastPresentationTimeMicroseconds: lastPresentationTimeMicroseconds
             )
@@ -459,6 +469,8 @@ public final class VideoToolboxEncoder {
         advisoryPropertyFailures.removeAll(keepingCapacity: true)
         firstPresentationTimeMicroseconds = nil
         lastPresentationTimeMicroseconds = nil
+        inputWidth = nil
+        inputHeight = nil
         forceNextKeyframe = false
     }
 

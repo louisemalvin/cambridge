@@ -25,10 +25,10 @@ public enum StreamFailure: Error, Codable, Equatable, Sendable {
             "The receiver does not support CamBridge protocol v6."
         case .invalidConfiguration:
             "Choose a supported video mode and bitrate."
-        case let .cameraUnavailable(reason):
-            "Camera setup failed: \(reason)"
-        case let .encoderUnavailable(reason):
-            "Hardware H.264 setup failed: \(reason)"
+        case .cameraUnavailable:
+            "The camera rejected the selected resolution or frame rate."
+        case .encoderUnavailable:
+            "Hardware H.264 rejected the selected stream settings."
         case .controlConnectionFailed, .transportFailed:
             "Check the local network and try Start again."
         case .receiverRejected:

@@ -49,3 +49,14 @@ func manualBitrateOverride() throws {
     #expect(configuration.fps == 60)
     #expect(configuration.bitrateBps == 1_000_000)
 }
+
+@Test("user recovery text identifies the stage without exposing platform details")
+func stageOnlyRecoveryText() {
+    let camera = StreamFailure.cameraUnavailable("AVFoundation private diagnostic")
+    let encoder = StreamFailure.encoderUnavailable("VideoToolbox status -1")
+
+    #expect(!camera.recoverySummary.contains("private diagnostic"))
+    #expect(!encoder.recoverySummary.contains("-1"))
+    #expect(camera.recoverySummary.contains("camera"))
+    #expect(encoder.recoverySummary.contains("H.264"))
+}
