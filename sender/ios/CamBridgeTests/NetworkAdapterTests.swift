@@ -37,7 +37,9 @@ final class NetworkAdapterTests: XCTestCase {
             maxLongEdge: CamBridgeContract.Geometry.maximumLongEdge,
             maxShortEdge: CamBridgeContract.Geometry.maximumShortEdge
         )
-        let serverTask = Task {
+        let responseFragmentDivisor = Self.responseFragmentDivisor
+        let responseFragmentDelayNanoseconds = Self.responseFragmentDelayNanoseconds
+        let serverTask = Task { @Sendable in
             let serverConnection = try await firstConnection(from: incomingConnections)
             defer { serverConnection.cancel() }
             try await start(connection: serverConnection, queue: listenerQueue)
@@ -46,10 +48,10 @@ final class NetworkAdapterTests: XCTestCase {
             let responseFrame = try ControlFrameEncoder.frame(responsePayload)
             let splitIndex = responseFrame.index(
                 responseFrame.startIndex,
-                offsetBy: responseFrame.count / Self.responseFragmentDivisor
+                offsetBy: responseFrame.count / responseFragmentDivisor
             )
             try await send(Data(responseFrame[..<splitIndex]), on: serverConnection)
-            try await Task.sleep(nanoseconds: Self.responseFragmentDelayNanoseconds)
+            try await Task.sleep(nanoseconds: responseFragmentDelayNanoseconds)
             try await send(Data(responseFrame[splitIndex...]), on: serverConnection)
             try await finishWriting(on: serverConnection)
             return hello
