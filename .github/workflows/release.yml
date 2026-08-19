@@ -64,6 +64,8 @@ jobs:
   native:
     needs: verify-version
     runs-on: ubuntu-26.04
+    env:
+      LD_LIBRARY_PATH: ${{ github.workspace }}/build/cambridge-obs-dependencies/obs/lib
     steps:
       - uses: actions/checkout@v4
       - name: Install native dependencies
