@@ -8,9 +8,11 @@ final class NetworkAdapterTests: XCTestCase {
     func testLiveControlConnectionExchangesFramedMessagesAndHandlesRemoteEOF() async throws {
         let listener = try NWListener(using: .tcp, on: .any)
         let listenerQueue = DispatchQueue(label: "dev.cambridge.sender.tests.control-listener")
-        let (incomingConnections, incomingContinuation) = AsyncStream.makeStream(of: NWConnection.self)
+        let (incomingConnections, incomingContinuation) = AsyncStream.makeStream(
+            of: SendableLoopbackConnection.self
+        )
         listener.newConnectionHandler = { connection in
-            incomingContinuation.yield(connection)
+            incomingContinuation.yield(SendableLoopbackConnection(connection))
         }
         defer {
             incomingContinuation.finish()
@@ -212,6 +214,14 @@ private enum LoopbackControlServerError: Error {
     case connectionClosed
 }
 
+private struct SendableLoopbackConnection: @unchecked Sendable {
+    let connection: NWConnection
+
+    init(_ connection: NWConnection) {
+        self.connection = connection
+    }
+}
+
 private func start(listener: NWListener, queue: DispatchQueue) async throws -> NWEndpoint.Port {
     try await withCheckedThrowingContinuation { continuation in
         listener.stateUpdateHandler = { state in
@@ -237,8 +247,10 @@ private func start(listener: NWListener, queue: DispatchQueue) async throws -> N
     }
 }
 
-private func firstConnection(from connections: AsyncStream<NWConnection>) async throws -> NWConnection {
-    for await connection in connections { return connection }
+private func firstConnection(
+    from connections: AsyncStream<SendableLoopbackConnection>
+) async throws -> NWConnection {
+    for await connection in connections { return connection.connection }
     throw LoopbackControlServerError.connectionClosed
 }
 
