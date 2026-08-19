@@ -13,16 +13,20 @@ public struct DiagnosticsReport: Codable, Equatable, Sendable {
     public let receiverId: String?
     public let receiverHost: String?
     public let cameraID: String?
+    public let cameraPosition: String?
     public let cameraFormatID: String?
     public let cameraFormatWidth: Int?
     public let cameraFormatHeight: Int?
     public let cameraMinimumFrameRate: Double?
     public let cameraMaximumFrameRate: Double?
+    public let cameraZoomRatio: Double?
     public let systemPressureLevel: String?
     public let thermalState: String?
-    public let modeId: String?
+    public let profileId: String?
     public let codedWidth: Int?
     public let codedHeight: Int?
+    public let appliedCodedWidth: Int?
+    public let appliedCodedHeight: Int?
     public let displayWidth: Int?
     public let displayHeight: Int?
     public let rotationDegrees: Int?
@@ -30,10 +34,13 @@ public struct DiagnosticsReport: Codable, Equatable, Sendable {
     public let bitrateBps: Int?
     public let requestedStabilization: String?
     public let activeStabilization: String?
+    public let startStage: String?
+    public let receiverAccepted: Bool
     public let encoderIdentity: String?
     public let encoderIdentityUnavailableReason: String?
     public let encoderUsesHardwareAccelerated: Bool?
     public let encoderHardwareAvailabilityReason: String?
+    public let encoderAdvisoryPropertyFailures: [String]
     public let encodedAccessUnits: Int
     public let encodedKeyframes: Int
     public let encodedBytes: Int
@@ -65,10 +72,15 @@ public struct DiagnosticsReport: Codable, Equatable, Sendable {
         configuration: StreamConfiguration?,
         requestedStabilization: String?,
         activeStabilization: String?,
+        startStage: String?,
+        receiverAccepted: Bool,
         encoderIdentity: String?,
         encoderIdentityUnavailableReason: String?,
         encoderUsesHardwareAccelerated: Bool?,
         encoderHardwareAvailabilityReason: String?,
+        encoderAdvisoryPropertyFailures: [String],
+        encoderInputWidth: Int?,
+        encoderInputHeight: Int?,
         encodedAccessUnits: Int,
         encodedKeyframes: Int,
         encodedBytes: Int,
@@ -95,27 +107,34 @@ public struct DiagnosticsReport: Codable, Equatable, Sendable {
         self.receiverId = receiver?.receiverId
         self.receiverHost = receiver.map(Self.redactedHost)
         self.cameraID = cameraState?.selectedDeviceID
+        self.cameraPosition = cameraState?.position.rawValue
         self.cameraFormatID = cameraState?.selectedFormat?.formatID
         self.cameraFormatWidth = cameraState?.selectedFormat?.width
         self.cameraFormatHeight = cameraState?.selectedFormat?.height
         self.cameraMinimumFrameRate = cameraState?.selectedFormat?.minimumFrameRate
         self.cameraMaximumFrameRate = cameraState?.selectedFormat?.maximumFrameRate
+        self.cameraZoomRatio = cameraState?.zoomRatio
         self.systemPressureLevel = cameraState?.systemPressureLevel?.rawValue
         self.thermalState = cameraState?.thermalState
-        self.modeId = configuration?.mode.id
+        self.profileId = configuration.map { _ in SenderVideoCatalog.profileID }
         self.codedWidth = configuration?.geometry.codedWidth
         self.codedHeight = configuration?.geometry.codedHeight
+        self.appliedCodedWidth = encoderInputWidth
+        self.appliedCodedHeight = encoderInputHeight
         self.displayWidth = configuration.map { $0.geometry.displayDimensions(for: $0.orientation).width }
         self.displayHeight = configuration.map { $0.geometry.displayDimensions(for: $0.orientation).height }
         self.rotationDegrees = configuration?.orientation.degrees
-        self.fps = configuration?.mode.fps
+        self.fps = configuration?.fps
         self.bitrateBps = configuration?.bitrateBps
         self.requestedStabilization = requestedStabilization
         self.activeStabilization = activeStabilization
+        self.startStage = startStage
+        self.receiverAccepted = receiverAccepted
         self.encoderIdentity = encoderIdentity
         self.encoderIdentityUnavailableReason = encoderIdentityUnavailableReason
         self.encoderUsesHardwareAccelerated = encoderUsesHardwareAccelerated
         self.encoderHardwareAvailabilityReason = encoderHardwareAvailabilityReason
+        self.encoderAdvisoryPropertyFailures = encoderAdvisoryPropertyFailures
         self.encodedAccessUnits = encodedAccessUnits
         self.encodedKeyframes = encodedKeyframes
         self.encodedBytes = encodedBytes
@@ -126,7 +145,7 @@ public struct DiagnosticsReport: Codable, Equatable, Sendable {
         self.rtpBytesSent = rtpBytesSent
         self.udpFailures = udpFailures
         self.maximumSendDurationNanoseconds = maximumSendDurationNanoseconds
-        self.terminalFailure = terminalFailure.map(Self.redactedFailure)
+        self.terminalFailure = terminalFailure.map { Self.redactedFailure($0, receiverHost: receiver?.host) }
         self.stateTransitions = stateTransitions
         self.firstEncodedAccessUnit = encodedAccessUnits > .zero
         self.firstSentRTPAccessUnit = rtpPacketsSent > .zero
@@ -138,7 +157,7 @@ public struct DiagnosticsReport: Codable, Equatable, Sendable {
         self.encoderRequiresHardware = configuration.map { _ in true }
         self.encoderRealTime = configuration.map { _ in true }
         self.encoderFrameReorderingDisabled = configuration.map { _ in true }
-        self.encoderKeyframeIntervalSeconds = configuration?.mode.keyframeIntervalSeconds
+        self.encoderKeyframeIntervalSeconds = configuration.map { _ in SenderVideoCatalog.keyframeIntervalSeconds }
     }
 
     public func copyableText() -> String {
@@ -150,19 +169,32 @@ public struct DiagnosticsReport: Codable, Equatable, Sendable {
         return "[redacted]"
     }
 
-    private static func redactedFailure(_ failure: StreamFailure) -> StreamFailure {
+    private static func redactedFailure(_ failure: StreamFailure, receiverHost: String?) -> StreamFailure {
         switch failure {
-        case .controlConnectionFailed:
-            .controlConnectionFailed("control connection failed")
-        case .transportFailed:
-            .transportFailed("media transport failed")
-        case .receiverRejected:
-            .receiverRejected("receiver rejected the selected stream")
-        case .unexpected:
-            .unexpected("unexpected stream failure")
+        case let .invalidConfiguration(reason):
+            .invalidConfiguration(redact(reason, receiverHost: receiverHost))
+        case let .cameraUnavailable(reason):
+            .cameraUnavailable(redact(reason, receiverHost: receiverHost))
+        case let .encoderUnavailable(reason):
+            .encoderUnavailable(redact(reason, receiverHost: receiverHost))
+        case let .controlConnectionFailed(reason):
+            .controlConnectionFailed(redact(reason, receiverHost: receiverHost))
+        case let .receiverRejected(reason):
+            .receiverRejected(redact(reason, receiverHost: receiverHost))
+        case let .transportFailed(reason):
+            .transportFailed(redact(reason, receiverHost: receiverHost))
+        case let .interrupted(reason):
+            .interrupted(redact(reason, receiverHost: receiverHost))
+        case let .unexpected(reason):
+            .unexpected(redact(reason, receiverHost: receiverHost))
         default:
             failure
         }
+    }
+
+    private static func redact(_ reason: String, receiverHost: String?) -> String {
+        guard let receiverHost, !receiverHost.isEmpty else { return reason }
+        return reason.replacingOccurrences(of: receiverHost, with: "[redacted]")
     }
 
     private static func frameCadence(

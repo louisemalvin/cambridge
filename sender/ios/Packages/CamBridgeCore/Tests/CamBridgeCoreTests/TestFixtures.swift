@@ -5,11 +5,10 @@ enum CamBridgeTestFixtures {
     static let requestId = "request-test"
     static let sessionId = "session-test"
     static let generation: UInt64 = 7
-    static let profileId = "2k30"
+    static let profileId = SenderVideoCatalog.profileID
     static let sps = Data([0x67, 0x42, 0x00, 0x1f])
     static let pps = Data([0x68, 0xce, 0x06, 0xe2])
     static let idrNAL = Data([0x65, 0x01, 0x02, 0x03])
-    static let recordedEncoderBitrateRange = 5_500_000...12_500_000
 
     static func hello(rotation: StreamRotation = .ninety) -> ControlMessage {
         .hello(

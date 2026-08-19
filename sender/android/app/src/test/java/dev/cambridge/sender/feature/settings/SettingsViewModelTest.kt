@@ -17,7 +17,7 @@ class SettingsViewModelTest {
             snapshot = snapshot(profile = VideoProfiles.PROFILE_2K30),
         )
 
-        assertEquals(VideoProfiles.PROFILE_2K30, VideoProfiles.default)
+        assertEquals(VideoProfiles.PROFILE_1080P30, VideoProfiles.default)
         assertEquals("OFF", state.camera.stabilization.selectedMode.name)
     }
 

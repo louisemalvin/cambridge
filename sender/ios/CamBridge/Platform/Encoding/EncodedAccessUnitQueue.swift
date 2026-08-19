@@ -13,7 +13,9 @@ public enum EncodedAccessUnitQueueError: Error, Equatable, Sendable {
 
 // VideoToolbox invokes its callback synchronously on the encoder's serial
 // queue. The mailbox is deliberately one slot: it is the bounded hand-off into
-// the actor and never creates one Task per encoded frame.
+// the actor and never creates one Task per encoded frame. A queued keyframe is
+// retained until the consumer takes it so a newer delta frame cannot remove
+// the decoder refresh point OBS needs after Start or a camera switch.
 private final class EncodedAccessUnitIngress: @unchecked Sendable {
     private let lock = NSLock()
     private var item: EncodedAccessUnit?
@@ -29,8 +31,10 @@ private final class EncodedAccessUnitIngress: @unchecked Sendable {
             lock.unlock()
             return
         }
-        if item != nil {
-            item = accessUnit
+        if let queuedItem = item {
+            if !queuedItem.isKeyframe || accessUnit.isKeyframe {
+                item = accessUnit
+            }
             drops += Self.oneItem
             waiter = nil
         } else if let pendingWaiter = self.waiter {

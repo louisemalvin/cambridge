@@ -4,7 +4,7 @@ on:
   push:
     paths:
       - "sender/ios/**"
-      - "sender/cambridge-video-modes.json"
+      - "sender/cambridge-video-settings.json"
       - "protocol/**"
       - "scripts/development/generate-cambridge-*.py"
       - "scripts/development/generate-ios-version.py"
@@ -14,7 +14,7 @@ on:
   pull_request:
     paths:
       - "sender/ios/**"
-      - "sender/cambridge-video-modes.json"
+      - "sender/cambridge-video-settings.json"
       - "protocol/**"
       - "scripts/development/generate-cambridge-*.py"
       - "scripts/development/generate-ios-version.py"

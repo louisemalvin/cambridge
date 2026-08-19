@@ -1,0 +1,49 @@
+{
+  "catalogVersion": 2,
+  "profileId": "sender",
+  "bitrateUnitBps": 1000000,
+  "minimumBitrateMbps": 1,
+  "maximumBitrateMbps": 100,
+  "keyframeIntervalSeconds": 1,
+  "defaultResolutionId": "full-hd",
+  "defaultFps": 30,
+  "resolutions": [
+    {
+      "id": "full-hd",
+      "displayName": "Full HD",
+      "compatibilityIdPrefix": "1080p",
+      "codedWidth": 1920,
+      "codedHeight": 1080
+    },
+    {
+      "id": "2k",
+      "displayName": "2K",
+      "compatibilityIdPrefix": "2k",
+      "codedWidth": 2560,
+      "codedHeight": 1440
+    }
+  ],
+  "frameRates": [30, 60],
+  "suggestedBitratesBps": [
+    {
+      "resolutionId": "full-hd",
+      "fps": 30,
+      "bitrateBps": 5000000
+    },
+    {
+      "resolutionId": "full-hd",
+      "fps": 60,
+      "bitrateBps": 10000000
+    },
+    {
+      "resolutionId": "2k",
+      "fps": 30,
+      "bitrateBps": 9000000
+    },
+    {
+      "resolutionId": "2k",
+      "fps": 60,
+      "bitrateBps": 18000000
+    }
+  ]
+}

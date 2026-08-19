@@ -39,9 +39,6 @@ struct RootView: View {
     private var settingsScreen: some View {
         SettingsScreen(
             model: model.settingsModel,
-            onCopyCapabilityReport: {
-                Task { await model.copyCapabilityReport() }
-            },
             onOpenStreamSetup: {
                 model.route = .setup
             }

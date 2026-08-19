@@ -5,11 +5,10 @@ import CamBridgeCore
 public protocol StreamCaptureControlling: Sendable {
     func prepare(
         configuration: StreamConfiguration,
-        deviceID: String,
+        position: CameraPosition,
         onAccessUnit: @escaping @Sendable (Result<EncodedAccessUnit, VideoToolboxEncoderError>) -> Void
     ) async throws
     func start() async throws
-    func setStabilization(_ preference: CameraStabilizationPreference) async throws
     func stop() async
     func cameraState() async -> CameraState
     func encoderMetrics() async -> VideoToolboxEncoderMetrics?
@@ -21,6 +20,16 @@ private enum StreamStartOperationError: Error {
     case invalidated
 }
 
+private enum StreamStartStage: String, Sendable {
+    case preparingCapture = "preparing_capture_and_encoder"
+    case connectingControl = "connecting_control"
+    case sendingHello = "sending_hello"
+    case awaitingAcceptance = "awaiting_receiver_acceptance"
+    case connectingMedia = "connecting_media_transport"
+    case startingCapture = "starting_capture"
+    case streaming
+}
+
 public protocol RTPDatagramSenderFactory: Sendable {
     func make(host: String, port: Int) throws -> any RTPDatagramSending
 }
@@ -29,10 +38,8 @@ public protocol StreamSessionStarting: Sendable {
     func start(
         endpoint: ReceiverEndpoint,
         controlTarget: ReceiverControlTarget,
-        receiver: ReceiverCapabilities,
         configuration: StreamConfiguration,
-        cameraDeviceID: String,
-        stabilization: CameraStabilizationPreference,
+        cameraPosition: CameraPosition,
         mediaHosts: [String]
     ) async -> Result<Void, StreamFailure>
     func stop() async -> Result<Void, Never>
@@ -76,11 +83,11 @@ public actor StreamSessionCoordinator {
     private var activeConfiguration: StreamConfiguration?
     private var activeIdentity: SessionIdentity?
     private var receiverAccepted = false
-    private var requestedStabilization: CameraStabilizationPreference = .auto
     private var lastDiagnostics: DiagnosticsReport?
     private var stateTransitions: [String] = []
     private var activeStartOperationID: UUID?
     private var invalidatedStartFailure: StreamFailure?
+    private var activeStartStage: StreamStartStage?
     private var cleaning = false
     private var stateContinuation: AsyncStream<StreamSessionSnapshot>.Continuation?
 
@@ -132,10 +139,8 @@ public actor StreamSessionCoordinator {
     public func start(
         endpoint: ReceiverEndpoint,
         controlTarget: ReceiverControlTarget,
-        receiver: ReceiverCapabilities,
         configuration: StreamConfiguration,
-        cameraDeviceID: String,
-        stabilization: CameraStabilizationPreference = .auto,
+        cameraPosition: CameraPosition = .back,
         mediaHosts: [String] = []
     ) async -> Result<Void, StreamFailure> {
         guard case .idle = stateMachine.state else {
@@ -144,7 +149,6 @@ public actor StreamSessionCoordinator {
         let operationID = UUID()
         var didBeginStart = false
         do {
-            try configuration.validate(receiver: receiver)
             let identity = try generationAllocator.allocate(sessionId: "session-\(UUID().uuidString)")
             try stateMachine.beginStart(identity: identity, configuration: configuration)
             didBeginStart = true
@@ -152,11 +156,11 @@ public actor StreamSessionCoordinator {
             activeIdentity = identity
             activeEndpoint = endpoint
             activeConfiguration = configuration
-            requestedStabilization = stabilization
             receiverAccepted = false
             stateTransitions.removeAll(keepingCapacity: true)
             activeStartOperationID = operationID
             invalidatedStartFailure = nil
+            activeStartStage = nil
             publishSnapshot()
             logger.event("stream_start_requested", category: .session)
 
@@ -164,7 +168,8 @@ public actor StreamSessionCoordinator {
             encodedQueue = queue
             let control = controlFactory.make(target: controlTarget)
             controlConnection = control
-            try await capture.prepare(configuration: configuration, deviceID: cameraDeviceID) { [weak self, weak queue] result in
+            enterStartStage(.preparingCapture)
+            try await capture.prepare(configuration: configuration, position: cameraPosition) { [weak self, weak queue] result in
                 guard let queue else { return }
                 switch result {
                 case let .success(accessUnit):
@@ -174,19 +179,22 @@ public actor StreamSessionCoordinator {
                 }
             }
             try ensureStartOperationIsActive(operationID)
+            enterStartStage(.connectingControl)
             try await control.connect()
             try ensureStartOperationIsActive(operationID)
+            enterStartStage(.sendingHello)
             try await sendControlMessageWithTimeout(control, message: .hello(
                 sessionId: identity.sessionId,
                 generation: identity.generation,
-                profileId: configuration.mode.id,
+                profileId: SenderVideoCatalog.profileID,
                 codedWidth: configuration.geometry.codedWidth,
                 codedHeight: configuration.geometry.codedHeight,
                 rotation: configuration.orientation,
-                fps: configuration.mode.fps,
+                fps: configuration.fps,
                 bitrateBps: configuration.bitrateBps
             ))
             try ensureStartOperationIsActive(operationID)
+            enterStartStage(.awaitingAcceptance)
             guard let accepted = try await receiveWithTimeout(control) else {
                 throw StreamFailure.receiverUnavailable
             }
@@ -204,6 +212,7 @@ public actor StreamSessionCoordinator {
             guard case let .accepted(_, _, _, mediaPort, _, _) = accepted else {
                 throw StreamFailure.incompatibleProtocol
             }
+            enterStartStage(.connectingMedia)
             let candidateHosts = mediaHosts.isEmpty ? [endpoint.host] : mediaHosts
             var sender: (any RTPDatagramSending)?
             var lastTransportError: Error?
@@ -229,14 +238,18 @@ public actor StreamSessionCoordinator {
                 throw lastTransportError ?? StreamFailure.transportFailed("no discovered media address connected")
             }
             datagramSender = sender
+            // Arm the bounded media consumer before AVFoundation can deliver
+            // the first IDR. The queue also retains a pending keyframe until
+            // this consumer takes it, so OBS receives a decoder refresh point
+            // immediately instead of waiting for the next keyframe interval.
+            startMediaTask(queue: queue, sender: sender)
+            enterStartStage(.startingCapture)
             try await capture.start()
             try ensureStartOperationIsActive(operationID)
-            try await capture.setStabilization(stabilization)
-            try ensureStartOperationIsActive(operationID)
             try stateMachine.accept(accepted)
-            startMediaTask(queue: queue, sender: sender)
             startControlTask(control: control)
             startCameraStateTask()
+            enterStartStage(.streaming)
             publishSnapshot()
             activeStartOperationID = nil
             return .success(())
@@ -373,7 +386,14 @@ public actor StreamSessionCoordinator {
 }
 
     private func handleEncoderFailure(_ error: VideoToolboxEncoderError) async {
-        await handleTerminalFailure(.encoderUnavailable)
+        let failure: StreamFailure
+        switch error {
+        case .inputDimensionsMismatch:
+            failure = .cameraUnavailable(String(describing: error))
+        default:
+            failure = .encoderUnavailable(String(describing: error))
+        }
+        await handleTerminalFailure(failure)
     }
 
     private func handleTransportFailure(_ error: Error) async {
@@ -398,6 +418,10 @@ public actor StreamSessionCoordinator {
 
     private func failStart(_ failure: StreamFailure) async {
         guard activeStartOperationID != nil else { return }
+        logger.error(
+            "stream start failed at \(activeStartStage?.rawValue ?? "before_resource_setup"): \(failure.recoverySummary)",
+            category: .session
+        )
         activeStartOperationID = nil
         stateMachine.fail(failure)
         recordStateTransition()
@@ -438,7 +462,7 @@ public actor StreamSessionCoordinator {
             let buildVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown"
             let receiver = activeEndpoint
             let configuration = activeConfiguration
-            let requestedStabilizationValue = requestedStabilization.rawValue
+            let requestedStabilizationValue = CameraStabilizationPreference.auto.rawValue
             let stateTransitionsSnapshot = stateTransitions
             let deviceModel = await MainActor.run { UIDevice.current.localizedModel }
             lastDiagnostics = DiagnosticsReport(
@@ -452,10 +476,15 @@ public actor StreamSessionCoordinator {
                 configuration: configuration,
                 requestedStabilization: requestedStabilizationValue,
                 activeStabilization: cameraState.activeStabilization.rawValue,
+                startStage: activeStartStage?.rawValue,
+                receiverAccepted: receiverAccepted,
                 encoderIdentity: encoderMetrics?.encoderIdentity,
                 encoderIdentityUnavailableReason: encoderMetrics?.encoderIdentityUnavailableReason,
                 encoderUsesHardwareAccelerated: encoderMetrics?.encoderUsesHardwareAccelerated,
                 encoderHardwareAvailabilityReason: encoderMetrics?.encoderHardwareAvailabilityReason,
+                encoderAdvisoryPropertyFailures: encoderMetrics?.advisoryPropertyFailures ?? [],
+                encoderInputWidth: encoderMetrics?.inputWidth,
+                encoderInputHeight: encoderMetrics?.inputHeight,
                 encodedAccessUnits: encoderMetrics?.encodedAccessUnits ?? .zero,
                 encodedKeyframes: encoderMetrics?.encodedKeyframes ?? .zero,
                 encodedBytes: encoderMetrics?.encodedBytes ?? .zero,
@@ -494,6 +523,7 @@ public actor StreamSessionCoordinator {
         activeEndpoint = nil
         activeConfiguration = nil
         activeIdentity = nil
+        activeStartStage = nil
         receiverAccepted = false
         runId = nil
     }
@@ -502,8 +532,13 @@ public actor StreamSessionCoordinator {
         if error is CancellationError { return .cancelled }
         if error is StreamStartOperationError { return .cancelled }
         if let failure = error as? StreamFailure { return failure }
-        if error is CaptureServiceError { return .cameraUnavailable }
-        if error is VideoToolboxEncoderError { return .encoderUnavailable }
+        if let captureError = error as? CaptureServiceError {
+            if captureError == .permissionDenied { return .permissionDenied }
+            return .cameraUnavailable(String(describing: captureError))
+        }
+        if let encoderError = error as? VideoToolboxEncoderError {
+            return .encoderUnavailable(String(describing: encoderError))
+        }
         if error is CamBridgeControlConnectionError {
             return .controlConnectionFailed(String(describing: error))
         }
@@ -511,6 +546,11 @@ public actor StreamSessionCoordinator {
             return .transportFailed(String(describing: error))
         }
         return .unexpected(String(describing: error))
+    }
+
+    private func enterStartStage(_ stage: StreamStartStage) {
+        activeStartStage = stage
+        logger.info("stream start stage: \(stage.rawValue)", category: .session)
     }
 
     private func ensureStartOperationIsActive(_ operationID: UUID) throws {

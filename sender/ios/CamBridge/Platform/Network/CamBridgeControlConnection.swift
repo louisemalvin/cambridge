@@ -67,7 +67,7 @@ public actor CamBridgeControlConnection: CamBridgeControlConnectionProtocol {
                     try await self.waitUntilReady()
                 }
                 group.addTask {
-                    try await Task.sleep(nanoseconds: Self.requestTimeoutNanoseconds)
+                    try await Task.sleep(nanoseconds: Self.connectTimeoutNanoseconds)
                     throw CamBridgeControlConnectionError.connectTimedOut
                 }
                 guard let result = try await group.next() else {
@@ -356,7 +356,7 @@ public actor CamBridgeControlConnection: CamBridgeControlConnectionProtocol {
     // of permitting an unbounded read-ahead queue.
     private static let messageStreamBufferCapacity = 1
     private static let nanosecondsPerMillisecond: UInt64 = 1_000_000
-    private static let requestTimeoutNanoseconds = UInt64(CamBridgeContract.Control.requestTimeoutMilliseconds) * nanosecondsPerMillisecond
+    private static let connectTimeoutNanoseconds = UInt64(CamBridgeContract.Control.connectTimeoutMilliseconds) * nanosecondsPerMillisecond
 }
 
 public struct LiveCamBridgeControlConnectionFactory: CamBridgeControlConnectionFactory {

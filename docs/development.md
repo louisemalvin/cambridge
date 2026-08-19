@@ -34,7 +34,7 @@ Homebrew, and the pinned CMake, OBS Studio, and FFmpeg dependencies prepared by
 - `receiver/obs/` — shared OBS receiver
 - `protocol/` — shared wire contract, schema, and examples
 - `scripts/sender/` and `scripts/receiver/` — platform-specific checks and fixtures
-- `sender/cambridge-video-modes.json` — shared Android/iOS phone mode catalog
+- `sender/cambridge-video-settings.json` — shared Android/iOS resolution, frame-rate, and bitrate defaults
 
 ## Repository checks
 
@@ -250,7 +250,8 @@ the failed NSD operation and Android error code when one is available.
 
 The iOS physical validation matrix is deliberately not reported as complete
 on Linux. Before calling iOS supported, a Mac-lab run must retain the Xcode
-version, iPhone model/iOS version, offered exact formats, encoder identity,
+version, iPhone model/iOS version, requested and applied source/output formats,
+encoder identity,
 all four orientations, camera controls, interruption/background behavior,
 queue/drop/thermal diagnostics, and OBS hardware plus CPU-fallback results.
 

@@ -5,8 +5,8 @@ public enum StreamFailure: Error, Codable, Equatable, Sendable {
     case receiverUnavailable
     case incompatibleProtocol
     case invalidConfiguration(String)
-    case cameraUnavailable
-    case encoderUnavailable
+    case cameraUnavailable(String)
+    case encoderUnavailable(String)
     case controlConnectionFailed(String)
     case receiverRejected(String)
     case transportFailed(String)
@@ -26,9 +26,9 @@ public enum StreamFailure: Error, Codable, Equatable, Sendable {
         case .invalidConfiguration:
             "Choose a supported video mode and bitrate."
         case .cameraUnavailable:
-            "The selected camera is not currently available."
+            "The camera rejected the selected resolution or frame rate."
         case .encoderUnavailable:
-            "This device cannot hardware-encode the selected mode."
+            "Hardware H.264 rejected the selected stream settings."
         case .controlConnectionFailed, .transportFailed:
             "Check the local network and try Start again."
         case .receiverRejected:

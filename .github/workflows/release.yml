@@ -50,8 +50,12 @@ jobs:
           test -f "${apk}"
           mkdir -p dist
           cp "${apk}" "dist/cambridge-${GITHUB_REF_NAME}.apk"
-          sha256sum "dist/cambridge-${GITHUB_REF_NAME}.apk" \
-            >"dist/cambridge-${GITHUB_REF_NAME}.apk.sha256"
+          (
+            cd dist
+            sha256sum "cambridge-${GITHUB_REF_NAME}.apk" \
+              >"cambridge-${GITHUB_REF_NAME}.apk.sha256"
+            sha256sum --check "cambridge-${GITHUB_REF_NAME}.apk.sha256"
+          )
       - uses: actions/upload-artifact@v4
         with:
           name: android-release
@@ -248,7 +252,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          version="${GITHUB_REF_NAME#v}"
+          release_notes="${RUNNER_TEMP}/cambridge-release-notes.md"
+          awk -v heading="## ${version} " '
+            index($0, heading) == 1 { include = 1; next }
+            include && /^## / { exit }
+            include { print }
+          ' CHANGELOG.md >"${release_notes}"
+          test -s "${release_notes}"
           mapfile -d '' release_assets < <(find dist -type f -print0)
           test "${#release_assets[@]}" -gt 0
           gh release create "${GITHUB_REF_NAME}" "${release_assets[@]}" \
-            --title "CamBridge ${GITHUB_REF_NAME}" --generate-notes
+            --title "CamBridge ${GITHUB_REF_NAME}" --notes-file "${release_notes}"

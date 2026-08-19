@@ -12,22 +12,14 @@ import org.junit.Test
 
 class PhoneVideoCapabilitiesTest {
     @Test
-    fun productCatalogKeepsThePhoneOwnedModeRangesAndDefaults() {
-        assertEquals(2_000_000, VideoProfiles.PROFILE_720P30.minimumBitrateBps)
-        assertEquals(4_000_000, VideoProfiles.PROFILE_720P30.defaultBitrateBps)
-        assertEquals(8_000_000, VideoProfiles.PROFILE_720P30.maximumBitrateBps)
-        assertEquals(4_000_000, VideoProfiles.PROFILE_1080P30.minimumBitrateBps)
-        assertEquals(8_000_000, VideoProfiles.PROFILE_1080P30.defaultBitrateBps)
-        assertEquals(16_000_000, VideoProfiles.PROFILE_1080P30.maximumBitrateBps)
-        assertEquals(8_000_000, VideoProfiles.PROFILE_1080P60.minimumBitrateBps)
-        assertEquals(16_000_000, VideoProfiles.PROFILE_1080P60.defaultBitrateBps)
-        assertEquals(32_000_000, VideoProfiles.PROFILE_1080P60.maximumBitrateBps)
-        assertEquals(9_000_000, VideoProfiles.PROFILE_2K30.minimumBitrateBps)
-        assertEquals(18_000_000, VideoProfiles.PROFILE_2K30.defaultBitrateBps)
-        assertEquals(36_000_000, VideoProfiles.PROFILE_2K30.maximumBitrateBps)
-        assertEquals(18_000_000, VideoProfiles.PROFILE_2K60.minimumBitrateBps)
-        assertEquals(36_000_000, VideoProfiles.PROFILE_2K60.defaultBitrateBps)
-        assertEquals(72_000_000, VideoProfiles.PROFILE_2K60.maximumBitrateBps)
+    fun generatedCompatibilityProfilesUseSharedProductDefaults() {
+        assertEquals(1_000_000, VideoProfiles.PROFILE_1080P30.minimumBitrateBps)
+        assertEquals(5_000_000, VideoProfiles.PROFILE_1080P30.defaultBitrateBps)
+        assertEquals(100_000_000, VideoProfiles.PROFILE_1080P30.maximumBitrateBps)
+        assertEquals(10_000_000, VideoProfiles.PROFILE_1080P60.defaultBitrateBps)
+        assertEquals(9_000_000, VideoProfiles.PROFILE_2K30.defaultBitrateBps)
+        assertEquals(18_000_000, VideoProfiles.PROFILE_2K60.defaultBitrateBps)
+        assertEquals("sender", VideoProfiles.PROFILE_ID)
     }
 
     @Test

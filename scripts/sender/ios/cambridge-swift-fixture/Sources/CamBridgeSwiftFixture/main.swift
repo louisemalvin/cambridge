@@ -38,11 +38,14 @@ private enum FixtureError: Error, CustomStringConvertible {
 private struct FixtureOptions {
     var host = "127.0.0.1"
     var controlPort = CamBridgeContract.Defaults.controlPort
-    var profileID = VideoMode.defaultMode.id
-    var width = VideoMode.defaultMode.codedWidth
-    var height = VideoMode.defaultMode.codedHeight
-    var fps = VideoMode.defaultMode.fps
-    var bitrateBps = VideoMode.defaultMode.defaultBitrateBps
+    var profileID = SenderVideoCatalog.profileID
+    var width = SenderVideoCatalog.defaultResolution.codedWidth
+    var height = SenderVideoCatalog.defaultResolution.codedHeight
+    var fps = SenderVideoCatalog.defaultFrameRate
+    var bitrateBps = SenderVideoCatalog.suggestedBitrateBps(
+        resolution: SenderVideoCatalog.defaultResolution,
+        fps: SenderVideoCatalog.defaultFrameRate
+    ) ?? SenderVideoCatalog.minimumBitrateMbps * SenderVideoCatalog.bitrateUnitBps
     var rotation = StreamRotation.zero
     var accessUnitPath: String? = nil
     var repeatCount = 1

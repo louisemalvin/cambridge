@@ -9,7 +9,7 @@ path, but macOS is not a supported downloadable receiver yet. Its arm64 and
 x86_64 VideoToolbox/Metal/Bonjour acceptance and clean-machine package gates
 must pass before the public installation path changes.
 
-The repository also contains an iOS 17 sender install candidate. It is not a
+The repository also contains an iOS 17.4 sender install candidate. It is not a
 released or supported platform yet: Apple-target compilation, signing, a real
 iPhone camera/encoder, and glass-to-glass behavior must be validated on macOS
 before the public support statement changes.
@@ -77,6 +77,20 @@ IDs and manual-address fallback as Linux.
    replace or downgrade them.
 5. Press **Start stream**. Press **Stop stream** in the app when finished.
 
+## Use the phone as a webcam
+
+CamBridge makes the phone available as an OBS source. To use that source in a
+video-call application:
+
+1. Frame the CamBridge source in an OBS scene.
+2. Start **Virtual Camera** from the OBS Controls dock.
+3. Select **OBS Virtual Camera** as the camera in the other application.
+
+On Linux, OBS Virtual Camera uses `v4l2loopback`. Follow the official
+[OBS Virtual Camera guide](https://obsproject.com/kb/virtual-camera-guide) and
+[troubleshooting guide](https://obsproject.com/kb/virtual-camera-troubleshooting)
+for installation and platform-specific requirements.
+
 ## Network and firewall
 
 Receiver discovery uses the local network. If the phone cannot find OBS, check
@@ -105,6 +119,6 @@ On a Mac with Xcode 16.4 or newer, open `sender/ios/CamBridge.xcodeproj`
 directly. Select the local Personal Team or paid team in Xcode for a device
 run; no team, certificate, profile, or account information is committed.
 Choose an iPhone destination, grant camera and local-network permission, and
-run the pre-install and physical validation matrix from the development
-handoff. The unsigned simulator check cannot validate the camera, hardware
-VideoToolbox, or local-network behavior.
+run the checks and concise physical validation in the
+[iOS sender README](../sender/ios/README.md). The unsigned simulator check cannot validate the
+camera, hardware VideoToolbox, or local-network behavior.

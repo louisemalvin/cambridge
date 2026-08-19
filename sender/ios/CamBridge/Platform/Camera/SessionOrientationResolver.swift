@@ -1,5 +1,34 @@
 import Foundation
+import UIKit
 import CamBridgeCore
+
+@MainActor
+public protocol StreamOrientationProviding {
+    func currentRotation() -> StreamRotation
+}
+
+@MainActor
+public final class InterfaceOrientationProvider: StreamOrientationProviding {
+    private var lastValidRotation: StreamRotation?
+
+    public init() {}
+
+    public func currentRotation() -> StreamRotation {
+        let scenes = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .sorted { $0.session.persistentIdentifier < $1.session.persistentIdentifier }
+        let scene = scenes.first(where: { scene in
+            scene.windows.contains(where: \.isKeyWindow)
+        }) ?? scenes.first(where: { $0.activationState == .foregroundActive }) ?? scenes.first
+        let interfaceOrientation = scene?.interfaceOrientation ?? .unknown
+        guard interfaceOrientation != .unknown else {
+            return lastValidRotation ?? .zero
+        }
+        let rotation = SessionOrientationResolver().rotation(interfaceOrientation: interfaceOrientation)
+        lastValidRotation = rotation
+        return rotation
+    }
+}
 
 public struct SessionOrientationResolution: Equatable, Sendable {
     public let rotation: StreamRotation
@@ -13,6 +42,23 @@ public struct SessionOrientationResolution: Equatable, Sendable {
 
 public struct SessionOrientationResolver: Sendable {
     public init() {}
+
+    public func rotation(interfaceOrientation: UIInterfaceOrientation) -> StreamRotation {
+        switch interfaceOrientation {
+        case .landscapeRight:
+            .zero
+        case .portrait:
+            .ninety
+        case .landscapeLeft:
+            .oneEighty
+        case .portraitUpsideDown:
+            .twoSeventy
+        case .unknown:
+            .zero
+        @unknown default:
+            .zero
+        }
+    }
 
     public func resolve(rotation: StreamRotation, cameraPosition: CameraPosition) -> SessionOrientationResolution {
         let angle: CGFloat

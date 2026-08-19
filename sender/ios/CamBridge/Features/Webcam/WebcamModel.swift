@@ -11,6 +11,8 @@ public final class WebcamModel {
     public var isStopConfirmationPresented = false
     public private(set) var statusText = "Waiting for stream"
     public private(set) var failure: StreamFailure?
+    public private(set) var cameraControlError: String?
+    public private(set) var isSwitchingCamera = false
 
     public let capture: CaptureService
     private let sessionCoordinator: StreamSessionCoordinator
@@ -30,10 +32,10 @@ public final class WebcamModel {
                 switch snapshot.state {
                 case let .connecting(_, configuration):
                     self.failure = nil
-                    self.statusText = "Connecting · \(configuration.mode.id)"
+                    self.statusText = "Connecting · \(configuration.resolution.displayName)"
                 case let .streaming(_, configuration, _):
                     self.failure = nil
-                    self.statusText = "Streaming · \(configuration.mode.id) · \(configuration.mode.fps) fps"
+                    self.statusText = "Streaming · \(configuration.resolution.displayName) · \(configuration.fps) fps"
                 case let .failed(failure):
                     self.failure = failure
                     self.statusText = failure.recoverySummary
@@ -70,13 +72,33 @@ public final class WebcamModel {
 
     public func setZoomRatio(_ ratio: Double) {
         Task {
-            try? await capture.setZoomRatio(ratio)
+            do {
+                try await capture.setZoomRatio(ratio)
+                cameraControlError = nil
+            } catch {
+                cameraControlError = "Zoom is unavailable right now."
+                logger.event("camera_zoom_failed", category: .camera, fields: [
+                    "failure": String(describing: error),
+                ])
+            }
         }
     }
 
-    public func setStabilization(_ preference: CameraStabilizationPreference) {
+    public func switchCamera() {
+        guard !isSwitchingCamera else { return }
+        isSwitchingCamera = true
+        cameraControlError = nil
         Task {
-            try? await capture.setStabilization(preference)
+            defer { isSwitchingCamera = false }
+            do {
+                try await capture.switchCamera()
+                logger.event("camera_facing_switched", category: .camera)
+            } catch {
+                cameraControlError = "Couldn’t switch cameras."
+                logger.event("camera_facing_switch_failed", category: .camera, fields: [
+                    "failure": String(describing: error),
+                ])
+            }
         }
     }
 

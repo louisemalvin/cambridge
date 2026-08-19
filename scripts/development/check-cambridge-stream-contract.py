@@ -20,6 +20,7 @@ KOTLIN_CONTRACT_PATH = (
     / "sender/android/app/src/main/java/dev/cambridge/sender/connection/control/cambridge/CamBridgeStreamContract.kt"
 )
 KOTLIN_CATALOG_PATH = REPOSITORY_ROOT / "sender/android/app/src/main/java/dev/cambridge/sender/session/VideoProfiles.kt"
+SENDER_SETTINGS_PATH = REPOSITORY_ROOT / "sender/cambridge-video-settings.json"
 CPP_GENERATOR_PATH = REPOSITORY_ROOT / "scripts/development/generate-cambridge-cpp-contract.py"
 CPP_CONTRACT_PATH = REPOSITORY_ROOT / "receiver/obs/cambridge-obs-source/src/protocol_contract.generated.hpp"
 LEGACY_CPP_CONTRACT_PATH = REPOSITORY_ROOT / "receiver/obs/cambridge-obs-source/src/protocol_contract.hpp"
@@ -28,6 +29,16 @@ CPP_SOURCE_PATH = REPOSITORY_ROOT / "receiver/obs/cambridge-obs-source/src/cambr
 FIXTURE_PATH = REPOSITORY_ROOT / "scripts/receiver/common/cambridge-fixture.py"
 ANDROID_SMOKE_PATH = REPOSITORY_ROOT / "scripts/sender/android/test-emulator-cambridge.sh"
 NATIVE_FIXTURE_PATH = REPOSITORY_ROOT / "scripts/receiver/linux/test-cambridge-fixture.sh"
+IOS_STREAM_SETTINGS_VIEW_PATH = (
+    REPOSITORY_ROOT / "sender/ios/CamBridge/Features/StreamSetup/StreamSettingsSelectionView.swift"
+)
+IOS_PRODUCTION_ROOT = REPOSITORY_ROOT / "sender/ios/CamBridge"
+IOS_REMOVED_CAPABILITY_PATHS = (
+    IOS_PRODUCTION_ROOT / "Features/StreamSetup/VideoModeSelectionView.swift",
+    IOS_PRODUCTION_ROOT / "Platform/Camera/CameraCapabilityProbe.swift",
+    IOS_PRODUCTION_ROOT / "Platform/Diagnostics/CapabilityReport.swift",
+    IOS_PRODUCTION_ROOT / "Platform/Encoding/EncoderCapabilityProbe.swift",
+)
 
 
 def read(path: Path) -> str:
@@ -52,7 +63,7 @@ def check_scalar(text: str, pattern: str, expected: Any, description: str, parse
 
 
 def check_phone_catalog(catalog_text: str) -> None:
-    required_ids = {"720p30", "1080p30", "1080p60", "2k30", "2k60"}
+    required_ids = {"1080p30", "1080p60", "2k30", "2k60"}
     found_ids = set(re.findall(r'id = "([^"]+)"', catalog_text))
     if not required_ids.issubset(found_ids):
         raise AssertionError("the Android phone catalog is missing a required mode")
@@ -65,7 +76,7 @@ def check_phone_catalog(catalog_text: str) -> None:
         if field not in catalog_text:
             raise AssertionError(f"Android phone catalog must define {field}")
     if "val normal" not in catalog_text or "val all" not in catalog_text:
-        raise AssertionError("Android phone catalog must distinguish normal and smoke modes")
+        raise AssertionError("Android compatibility catalog must expose generated profile collections")
 
 
 def check_no_receiver_presets() -> None:
@@ -83,6 +94,48 @@ def check_no_receiver_presets() -> None:
                 raise AssertionError(f"receiver production code contains forbidden preset token {token}: {path}")
     if re.search(r"profile\s*==|profile->|profile_ids", read(CPP_SOURCE_PATH) + read(CPP_PROTOCOL_PATH)):
         raise AssertionError("receiver production code still validates or advertises a profile catalog")
+
+
+def check_ios_stream_settings_surface() -> None:
+    settings_view = read(IOS_STREAM_SETTINGS_VIEW_PATH)
+    required_fragments = (
+        'Picker("Resolution"',
+        "ForEach(SenderVideoCatalog.resolutions",
+        'Picker("Frame rate"',
+        "ForEach(SenderVideoCatalog.frameRates",
+        'TextField(\n                    "Bitrate"',
+    )
+    for fragment in required_fragments:
+        if fragment not in settings_view:
+            raise AssertionError(f"iOS production setup is missing independent settings UI: {fragment}")
+    forbidden_terms = ("orientation", "stabilization", "camera id", "physical camera")
+    lowered = settings_view.lower()
+    for term in forbidden_terms:
+        if term in lowered:
+            raise AssertionError(f"iOS production stream settings expose forbidden platform control: {term}")
+
+
+def check_ios_direct_start_path() -> None:
+    for path in IOS_REMOVED_CAPABILITY_PATHS:
+        if path.exists():
+            raise AssertionError(f"obsolete iOS capability path still exists: {path}")
+    production_source = "\n".join(read(path) for path in IOS_PRODUCTION_ROOT.rglob("*.swift"))
+    forbidden_tokens = (
+        "CameraCapabilityProbe",
+        "EncoderCapabilityProbe",
+        "CapabilityReport",
+        "VTSessionCopySupportedPropertyDictionary",
+        "supportedBitrateRange",
+        "bitrateRange",
+    )
+    for token in forbidden_tokens:
+        if token in production_source:
+            raise AssertionError(f"iOS production code contains forbidden capability gate: {token}")
+    encoder_creation_count = production_source.count("VTCompressionSessionCreate(")
+    if encoder_creation_count != 1:
+        raise AssertionError(
+            f"iOS must contain exactly one real VideoToolbox encoder creation path; found {encoder_creation_count}"
+        )
 
 
 def check_generated_cpp_contract() -> None:
@@ -107,6 +160,7 @@ def main() -> int:
     schema = json.loads(read(SCHEMA_PATH))
     kotlin_contract = read(KOTLIN_CONTRACT_PATH)
     kotlin_catalog = read(KOTLIN_CATALOG_PATH)
+    sender_settings = json.loads(read(SENDER_SETTINGS_PATH))
     cpp_contract = read(CPP_CONTRACT_PATH)
     fixture = read(FIXTURE_PATH)
     android_smoke = read(ANDROID_SMOKE_PATH)
@@ -216,6 +270,8 @@ def main() -> int:
 
     check_phone_catalog(kotlin_catalog)
     check_no_receiver_presets()
+    check_ios_stream_settings_surface()
+    check_ios_direct_start_path()
     if '"profiles"' in read(CONTRACT_PATH) or '"profiles"' in read(REPOSITORY_ROOT / "protocol/examples/cambridge-capabilities.json"):
         raise AssertionError("v6 contract examples must not contain profiles")
     if "--width" not in fixture or "--bitrate-bps" not in fixture:
@@ -234,6 +290,9 @@ def main() -> int:
         example = json.loads(read(REPOSITORY_ROOT / "protocol/examples" / example_name))
         if example["protocolVersion"] != protocol_version:
             raise AssertionError(f"{example_name} protocol version is out of sync")
+        if example_name in {"cambridge-hello.json", "cambridge-accepted.json"} \
+                and example["profileId"] != sender_settings["profileId"]:
+            raise AssertionError(f"{example_name} must use the opaque sender profile ID")
 
     print("CamBridge stream contract parity: OK")
     return 0

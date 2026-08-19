@@ -3,10 +3,9 @@ import Observation
 import CamBridgeCore
 
 public struct SenderPreferences: Codable, Equatable, Sendable {
-    public var modeId: String
+    public var resolutionId: String
+    public var fps: Int
     public var bitrateBps: Int
-    public var orientation: StreamRotation
-    public var stabilizationPreference: String
     public var receiverId: String?
     public var receiverDisplayName: String?
     public var receiverHost: String?
@@ -14,10 +13,12 @@ public struct SenderPreferences: Codable, Equatable, Sendable {
 
     public static var `default`: SenderPreferences {
         SenderPreferences(
-            modeId: VideoMode.defaultMode.id,
-            bitrateBps: VideoMode.defaultMode.defaultBitrateBps,
-            orientation: .zero,
-            stabilizationPreference: CameraStabilizationPreference.auto.rawValue,
+            resolutionId: SenderVideoCatalog.defaultResolution.id,
+            fps: SenderVideoCatalog.defaultFrameRate,
+            bitrateBps: SenderVideoCatalog.suggestedBitrateBps(
+                resolution: SenderVideoCatalog.defaultResolution,
+                fps: SenderVideoCatalog.defaultFrameRate
+            ) ?? SenderVideoCatalog.minimumBitrateMbps * SenderVideoCatalog.bitrateUnitBps,
             receiverId: nil,
             receiverDisplayName: nil,
             receiverHost: nil,
@@ -43,12 +44,18 @@ public final class SenderSettingsStore: SenderSettingsStoring {
     }
 
     public func load() -> SenderPreferences {
-        guard let data = defaults.data(forKey: Self.preferencesKey),
-              let stored = try? decoder.decode(SenderPreferences.self, from: data),
-              let validated = validate(stored) else {
-            return .default
+        if let data = defaults.data(forKey: Self.preferencesKey),
+           let stored = try? decoder.decode(SenderPreferences.self, from: data),
+           let validated = validate(stored) {
+            return validated
         }
-        return validated
+        if let data = defaults.data(forKey: Self.legacyPreferencesKey),
+           let legacy = try? decoder.decode(LegacySenderPreferences.self, from: data),
+           let migrated = migrate(legacy) {
+            save(migrated)
+            return migrated
+        }
+        return .default
     }
 
     public func save(_ preferences: SenderPreferences) {
@@ -58,11 +65,9 @@ public final class SenderSettingsStore: SenderSettingsStoring {
     }
 
     private func validate(_ preferences: SenderPreferences) -> SenderPreferences? {
-        guard let mode = VideoMode.allModes.first(where: { $0.id == preferences.modeId }),
-              mode.availability == .product,
-              mode.steppedBitrates(encoderRange: CamBridgeContract.Bitrate.minimumBps...CamBridgeContract.Bitrate.maximumBps).contains(preferences.bitrateBps),
-              let stabilization = CameraStabilizationPreference(rawValue: preferences.stabilizationPreference),
-              stabilization.avFoundationMode != nil else {
+        guard SenderVideoCatalog.resolution(id: preferences.resolutionId) != nil,
+              SenderVideoCatalog.frameRates.contains(preferences.fps),
+              BitrateInput.wholeMegabits(fromBitsPerSecond: preferences.bitrateBps) != nil else {
             return nil
         }
         var result = preferences
@@ -86,7 +91,53 @@ public final class SenderSettingsStore: SenderSettingsStoring {
         return result
     }
 
-    private static let preferencesKey = "cambridge.sender.preferences.v1"
+    private func migrate(_ legacy: LegacySenderPreferences) -> SenderPreferences? {
+        let resolution: VideoResolution
+        let fps: Int
+        switch legacy.modeId {
+        case "1080p30":
+            resolution = SenderVideoCatalog.fullHd
+            fps = 30
+        case "1080p60":
+            resolution = SenderVideoCatalog.fullHd
+            fps = 60
+        case "2k30":
+            resolution = SenderVideoCatalog.resolution2k
+            fps = 30
+        case "2k60":
+            resolution = SenderVideoCatalog.resolution2k
+            fps = 60
+        default:
+            return nil
+        }
+        let bitrateBps = BitrateInput.wholeMegabits(fromBitsPerSecond: legacy.bitrateBps) == nil
+            ? SenderVideoCatalog.suggestedBitrateBps(resolution: resolution, fps: fps)
+            : legacy.bitrateBps
+        guard let bitrateBps else { return nil }
+        return validate(SenderPreferences(
+            resolutionId: resolution.id,
+            fps: fps,
+            bitrateBps: bitrateBps,
+            receiverId: legacy.receiverId,
+            receiverDisplayName: legacy.receiverDisplayName,
+            receiverHost: legacy.receiverHost,
+            receiverControlPort: legacy.receiverControlPort
+        ))
+    }
+
+    private struct LegacySenderPreferences: Codable {
+        let modeId: String
+        let bitrateBps: Int
+        let orientation: StreamRotation
+        let stabilizationPreference: String
+        let receiverId: String?
+        let receiverDisplayName: String?
+        let receiverHost: String?
+        let receiverControlPort: Int?
+    }
+
+    private static let preferencesKey = "cambridge.sender.preferences.v2"
+    private static let legacyPreferencesKey = "cambridge.sender.preferences.v1"
 }
 
 @MainActor

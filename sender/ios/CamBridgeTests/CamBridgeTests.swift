@@ -17,54 +17,11 @@ final class CamBridgeTests: XCTestCase {
         XCTAssertEqual(AppModel.Route.allCases, [.setup, .webcam, .settings])
     }
 
-    func testRecordedCameraFormatRequiresExactRequestedFrameRate() {
-        let format = CameraFormatDescriptor(
-            formatID: "format-test",
-            width: VideoMode.mode1080p30.codedWidth,
-            height: VideoMode.mode1080p30.codedHeight,
-            minimumFrameRate: 24,
-            maximumFrameRate: 30
-        )
-
-        XCTAssertTrue(format.supports(fps: VideoMode.mode1080p30.fps))
-        XCTAssertFalse(format.supports(fps: VideoMode.mode1080p60.fps))
-    }
-
-    func testRecordedCameraFormatsSelectExactDimensionsAndFrameRate() {
-        let formats = [
-            CameraFormatDescriptor(
-                formatID: "wrong-dimensions",
-                width: VideoMode.mode720p30.codedWidth,
-                height: VideoMode.mode720p30.codedHeight,
-                minimumFrameRate: 30,
-                maximumFrameRate: 60
-            ),
-            CameraFormatDescriptor(
-                formatID: "exact-1080p30",
-                width: VideoMode.mode1080p30.codedWidth,
-                height: VideoMode.mode1080p30.codedHeight,
-                minimumFrameRate: 24,
-                maximumFrameRate: 30
-            ),
-            CameraFormatDescriptor(
-                formatID: "too-slow",
-                width: VideoMode.mode1080p60.codedWidth,
-                height: VideoMode.mode1080p60.codedHeight,
-                minimumFrameRate: 24,
-                maximumFrameRate: 30
-            )
-        ]
-        let probe = CameraCapabilityProbe()
-
-        XCTAssertEqual(probe.exactFormat(for: VideoMode.mode1080p30, in: formats)?.formatID, "exact-1080p30")
-        XCTAssertNil(probe.exactFormat(for: VideoMode.mode1080p60, in: formats))
-    }
-
-    func testRecordedCameraFormatRequiresOneSupportedRangeToContainFPS() {
+    func testCameraFormatRequiresOneSupportedRangeToContainFPS() {
         let format = CameraFormatDescriptor(
             formatID: "disjoint-ranges",
-            width: VideoMode.mode1080p30.codedWidth,
-            height: VideoMode.mode1080p30.codedHeight,
+            width: SenderVideoCatalog.fullHd.codedWidth,
+            height: SenderVideoCatalog.fullHd.codedHeight,
             supportedFrameRateRanges: [24.0...30.0, 60.0...60.0]
         )
 
@@ -73,351 +30,223 @@ final class CamBridgeTests: XCTestCase {
         XCTAssertTrue(format.supports(fps: 60))
     }
 
-    @MainActor
-    func testCapabilityReportCanBeGeneratedBeforeStreamDiagnosticsExist() async throws {
-        let settings = FakeSetupSettingsStore()
-        let camera = FakeSetupCamera()
-        let probeReceiver = try ReceiverCapabilities(
-            receiverId: "fixture-receiver",
-            displayName: "Fixture receiver",
-            maxLongEdge: CamBridgeContract.Geometry.maximumLongEdge,
-            maxShortEdge: CamBridgeContract.Geometry.maximumShortEdge
-        )
-        let builder = CapabilityReportBuilder(clock: { Date(timeIntervalSince1970: 1_700_000_000) })
-        let model = StreamSetupModel(
-            settingsStore: settings,
-            browser: FakeSetupBrowser(),
-            probe: FakeSetupProbe(capabilities: probeReceiver),
-            capture: camera,
-            encoderProbe: FakeSetupEncoderProbe(),
-            sessionCoordinator: FakeSetupSession(),
-            logger: CamBridgeLogger(),
-            capabilityReportBuilder: builder,
-            appVersion: "1.2.3",
-            buildVersion: "42",
-            operatingSystem: "Test OS",
-            deviceModel: "Test iPhone"
-        )
+    func testCameraFormatSelectionUsesSmallestCompatibleSameAspectSource() {
+        let formats = [
+            CameraFormatDescriptor(
+                formatID: "smaller",
+                width: 1280,
+                height: 720,
+                minimumFrameRate: 30,
+                maximumFrameRate: 60
+            ),
+            CameraFormatDescriptor(
+                formatID: "different-aspect",
+                width: 2048,
+                height: 1536,
+                minimumFrameRate: 30,
+                maximumFrameRate: 60
+            ),
+            CameraFormatDescriptor(
+                formatID: "four-k",
+                width: 3840,
+                height: 2160,
+                minimumFrameRate: 30,
+                maximumFrameRate: 60
+            ),
+            CameraFormatDescriptor(
+                formatID: "exact-two-k",
+                width: 2560,
+                height: 1440,
+                minimumFrameRate: 30,
+                maximumFrameRate: 30
+            ),
+        ]
+        let selector = CameraDeviceSelector()
 
-        let report = await model.generateCapabilityReport()
-
-        XCTAssertEqual(report.schemaVersion, CapabilityReport.currentSchemaVersion)
-        XCTAssertEqual(report.generatedAt, Date(timeIntervalSince1970: 1_700_000_000))
-        XCTAssertEqual(report.appVersion, "1.2.3")
-        XCTAssertEqual(report.cameras.count, 1)
-        XCTAssertNil(report.receiver)
-        XCTAssertNil(report.selectedReceiverDisplayName)
-        XCTAssertNotNil(model.capabilityReport)
-    }
-
-    func testCapabilityReportIncludesCameraModesEncoderIdentityAndRedactsReceiverHost() {
-        let supportedCapability = CameraModeCapability(
-            mode: .mode1080p30,
-            supported: true,
-            reason: nil,
-            formatID: "format-1080p30",
-            formatWidth: 1920,
-            formatHeight: 1080,
-            supportedFrameRateRanges: [24...30],
-            supportedStabilization: [.off, .standard]
-        )
-        let unsupportedCapability = CameraModeCapability(
-            mode: .mode2k60,
-            supported: false,
-            reason: "Receiver geometry limit",
-            formatID: "format-2k60",
-            formatWidth: 2560,
-            formatHeight: 1440,
-            supportedFrameRateRanges: [60...60]
-        )
-        let camera = CameraCapabilitySnapshot(
-            device: CameraDeviceDescriptor(id: "camera-rear-wide", name: "Wide Camera", position: .back, isVirtual: false),
-            minimumZoomRatio: 1,
-            maximumZoomRatio: 8,
-            supportedStabilization: [.off, .standard],
-            modeCapabilities: [supportedCapability, unsupportedCapability]
-        )
-        let report = CapabilityReportBuilder(clock: { Date(timeIntervalSince1970: 1_700_000_001) }).build(
-            CapabilityReportInput(
-                appVersion: "1.2.3",
-                buildVersion: "42",
-                operatingSystem: "Test OS",
-                deviceModel: "Test iPhone",
-                cameraAuthorization: "authorized",
-                cameras: [CapabilityReportCamera(
-                    snapshot: camera,
-                    modes: [
-                        CapabilityReportMode(
-                            capability: supportedCapability,
-                            encoder: EncoderCapability(
-                                modeId: "1080p30",
-                                supported: true,
-                                minimumBitrateBps: 4_000_000,
-                                maximumBitrateBps: 16_000_000,
-                                encoderIdentity: "com.apple.test.h264",
-                                encoderIdentityUnavailableReason: nil,
-                                encoderUsesHardwareAccelerated: true,
-                                encoderHardwareAvailabilityReason: nil,
-                                reason: nil
-                            )
-                        ),
-                        CapabilityReportMode(capability: unsupportedCapability, encoder: nil)
-                    ]
-                )],
-                selectedCameraID: "camera-rear-wide",
-                receiver: CapabilityReportReceiver(
-                    receiverId: "receiver-1",
-                    displayName: "OBS",
-                    maxLongEdge: 2560,
-                    maxShortEdge: 1440,
-                    host: "[redacted]"
-                ),
-                selectedModeID: "1080p30",
-                selectedBitrateBps: 8_000_000,
-                selectedOrientationDegrees: 90,
-                selectedStabilization: CameraStabilizationPreference.standard.rawValue,
-                selectedReceiverDisplayName: "OBS"
-            )
-        )
-
-        let modes = report.cameras[0].modes
-        XCTAssertEqual(report.cameras[0].minimumZoomRatio, 1)
-        XCTAssertEqual(report.cameras[0].maximumZoomRatio, 8)
-        XCTAssertEqual(report.cameras[0].supportedStabilization, ["off", "standard"])
-        XCTAssertEqual(modes[0].encoderIdentity, "com.apple.test.h264")
-        XCTAssertTrue(modes[0].encoderUsesHardwareAccelerated == true)
-        XCTAssertEqual(modes[0].frameRateRanges, [CapabilityReportFrameRateRange(minimum: 24, maximum: 30)])
-        XCTAssertFalse(modes[1].offered)
-        XCTAssertEqual(modes[1].reason, "Receiver geometry limit")
-        XCTAssertEqual(report.receiver?.host, "[redacted]")
-        XCTAssertEqual(report.copyableText(), report.copyableText())
-        XCTAssertFalse(report.copyableText().contains("127.0.0.1"))
-
-        let unavailableIdentity = CapabilityReportMode(
-            capability: supportedCapability,
-            encoder: EncoderCapability(
-                modeId: "1080p30",
-                supported: true,
-                minimumBitrateBps: 4_000_000,
-                maximumBitrateBps: 16_000_000,
-                encoderIdentity: nil,
-                encoderIdentityUnavailableReason: "VideoToolbox returned no encoder identifier",
-                encoderUsesHardwareAccelerated: nil,
-                encoderHardwareAvailabilityReason: "VideoToolbox hardware-use property unavailable",
-                reason: nil
-            )
-        )
-        XCTAssertNil(unavailableIdentity.encoderIdentity)
         XCTAssertEqual(
-            unavailableIdentity.encoderIdentityUnavailableReason,
-            "VideoToolbox returned no encoder identifier"
+            selector.compatibleFormatDescriptor(
+                for: SenderVideoCatalog.resolution2k,
+                fps: 30,
+                in: formats
+            )?.formatID,
+            "exact-two-k"
+        )
+        XCTAssertEqual(
+            selector.compatibleFormatDescriptor(
+                for: SenderVideoCatalog.resolution2k,
+                fps: 60,
+                in: formats
+            )?.formatID,
+            "four-k"
         )
     }
 
+    func testEncoderInputMustMatchSelectedCodedDimensions() throws {
+        let configuration = try StreamConfiguration(
+            resolution: SenderVideoCatalog.resolution2k,
+            fps: 60,
+            bitrateBps: 18_000_000,
+            orientation: .zero
+        )
+
+        XCTAssertNoThrow(try VideoToolboxEncoder.validateInputDimensions(
+            width: SenderVideoCatalog.resolution2k.codedWidth,
+            height: SenderVideoCatalog.resolution2k.codedHeight,
+            configuration: configuration
+        ))
+        XCTAssertThrowsError(try VideoToolboxEncoder.validateInputDimensions(
+            width: SenderVideoCatalog.fullHd.codedWidth,
+            height: SenderVideoCatalog.fullHd.codedHeight,
+            configuration: configuration
+        )) { error in
+            XCTAssertEqual(
+                error as? VideoToolboxEncoderError,
+                .inputDimensionsMismatch(
+                    expectedWidth: SenderVideoCatalog.resolution2k.codedWidth,
+                    expectedHeight: SenderVideoCatalog.resolution2k.codedHeight,
+                    actualWidth: SenderVideoCatalog.fullHd.codedWidth,
+                    actualHeight: SenderVideoCatalog.fullHd.codedHeight
+                )
+            )
+        }
+    }
+
+    func testZoomMappingExposesOnlyProductFacingTargetsAndCap() {
+        let multiCamera = CameraZoomMapping(
+            rawMinimum: 1,
+            rawMaximum: 40,
+            displayMultiplier: 0.5
+        )
+        let singleCamera = CameraZoomMapping(
+            rawMinimum: 1,
+            rawMaximum: 123.75,
+            displayMultiplier: 1
+        )
+
+        XCTAssertEqual(multiCamera.targets, [0.5, 1, 2])
+        XCTAssertEqual(multiCamera.rawRatio(forUserRatio: 1), 2)
+        XCTAssertEqual(multiCamera.maximumUserRatio, CameraZoomPolicy.maximumUserZoomRatio)
+        XCTAssertEqual(singleCamera.targets, [1, 2])
+        XCTAssertEqual(singleCamera.maximumUserRatio, CameraZoomPolicy.maximumUserZoomRatio)
+    }
+
     @MainActor
-    func testInvalidPersistedReceiverFallsBackWithoutCrashing() {
-        let suiteName = "cambridge-settings-test-\(UUID().uuidString)"
+    func testFreshSettingsUseFullHD30AtFiveMbps() {
+        let store = FakeSetupSettingsStore()
+        let preferences = store.load()
+
+        XCTAssertEqual(preferences.resolutionId, SenderVideoCatalog.fullHd.id)
+        XCTAssertEqual(preferences.fps, 30)
+        XCTAssertEqual(preferences.bitrateBps, 5_000_000)
+    }
+
+    @MainActor
+    func testLegacySettingsMigrateIndependentValuesAndPreserveManualBitrate() throws {
+        let suiteName = "CamBridgeTests.legacy-settings.\(UUID().uuidString)"
         guard let defaults = UserDefaults(suiteName: suiteName) else {
-            return XCTFail("the test suite should be available")
+            return XCTFail("failed to create isolated defaults")
         }
         defer { defaults.removePersistentDomain(forName: suiteName) }
-        defaults.set(Data("not-json".utf8), forKey: "cambridge.sender.preferences.v1")
+        let legacy: [String: Any] = [
+            "modeId": "1080p60",
+            "bitrateBps": 1_000_000,
+            "orientation": 90,
+            "stabilizationPreference": "standard",
+        ]
+        defaults.set(try JSONSerialization.data(withJSONObject: legacy), forKey: "cambridge.sender.preferences.v1")
 
-        let store = SenderSettingsStore(defaults: defaults)
+        let preferences = SenderSettingsStore(defaults: defaults).load()
 
-        XCTAssertEqual(store.load(), .default)
+        XCTAssertEqual(preferences.resolutionId, SenderVideoCatalog.fullHd.id)
+        XCTAssertEqual(preferences.fps, 60)
+        XCTAssertEqual(preferences.bitrateBps, 1_000_000)
     }
 
     @MainActor
-    func testSharedPreferenceStatePropagatesInBothDirectionsAndLocksWhileActive() throws {
+    func testSetupIgnoresProbeGeometryAndStartsOneExactManualOverride() async throws {
         let settings = FakeSetupSettingsStore()
-        let preferencesState = SenderPreferencesState(settingsStore: settings)
-        let settingsModel = SettingsModel(preferencesState: preferencesState, logger: CamBridgeLogger())
-        let receiver = try ReceiverCapabilities(
-            receiverId: "fixture-receiver",
-            displayName: "Fixture Receiver",
-            maxLongEdge: CamBridgeContract.Geometry.maximumLongEdge,
-            maxShortEdge: CamBridgeContract.Geometry.maximumShortEdge
-        )
-        let model = StreamSetupModel(
-            preferencesState: preferencesState,
-            browser: FakeSetupBrowser(),
-            probe: FakeSetupProbe(capabilities: receiver),
-            capture: FakeSetupCamera(),
-            encoderProbe: FakeSetupEncoderProbe(),
-            sessionCoordinator: FakeSetupSession(),
-            logger: CamBridgeLogger()
-        )
-
-        var settingsPreferences = settingsModel.preferences
-        settingsPreferences.orientation = .ninety
-        settingsModel.updatePreferences(settingsPreferences)
-        XCTAssertEqual(model.selectedOrientation, .ninety)
-
-        model.selectMode(VideoMode.mode1080p30.id)
-        XCTAssertEqual(settingsModel.preferences.modeId, VideoMode.mode1080p30.id)
-        XCTAssertEqual(settingsModel.preferences.bitrateBps, VideoMode.mode1080p30.defaultBitrateBps)
-
-        let beforeActiveMutation = settingsModel.preferences
-        preferencesState.setStreamActive(true)
-        var rejectedPreferences = beforeActiveMutation
-        rejectedPreferences.orientation = .oneEighty
-        settingsModel.updatePreferences(rejectedPreferences)
-        XCTAssertEqual(settingsModel.preferences, beforeActiveMutation)
-
-        preferencesState.setStreamActive(false)
-        settingsModel.updatePreferences(rejectedPreferences)
-        XCTAssertEqual(model.selectedOrientation, .oneEighty)
-    }
-
-    @MainActor
-    func testWebcamStopConfirmationAndDimmedPresentationReducers() {
-        let environment = AppEnvironment()
-        let model = environment.appModel.webcamModel
-
-        model.requestStop()
-        XCTAssertTrue(model.isStopConfirmationPresented)
-        model.cancelStopRequest()
-        XCTAssertFalse(model.isStopConfirmationPresented)
-
-        model.toggleDimmedPresentation()
-        XCTAssertTrue(model.isDimmed)
-        model.toggleDimmedPresentation()
-        XCTAssertFalse(model.isDimmed)
-    }
-
-    func testSyntheticEncoderAssemblyPrependsParameterSetsToKeyframes() throws {
-        let sps = Data([0x67, 0x64, 0x00, 0x1F])
-        let pps = Data([0x68, 0xEB, 0xEC, 0xB2])
-        let idr = Data([0x65, 0x88, 0x84])
-        let sample = Data([0x00, 0x00, 0x00, 0x03]) + idr
-
-        let accessUnit = try VideoToolboxEncoder.assembleAccessUnit(
-            sampleData: sample,
-            nalLengthBytes: MemoryLayout<UInt32>.size,
-            parameterSets: [sps, pps],
-            isKeyframe: true,
-            presentationTimeMicroseconds: 1_000
-        )
-
-        let startCode = Data([0x00, 0x00, 0x00, 0x01])
-        XCTAssertEqual(accessUnit.data, startCode + sps + startCode + pps + startCode + idr)
-        XCTAssertTrue(accessUnit.isKeyframe)
-        XCTAssertEqual(accessUnit.presentationTimeMicroseconds, 1_000)
-    }
-
-    func testVideoToolboxDataRateLimitsUseFlatByteCountAndWindowArray() throws {
-        let limits = try VideoToolboxEncoder.dataRateLimits(
-            bitrateBps: 8_000_000,
-            windowSeconds: 2
-        )
-
-        XCTAssertEqual(limits.map(\.intValue), [2_000_000, 2])
-        XCTAssertEqual(limits.count, 2)
-    }
-
-    func testVideoToolboxDataRateLimitsRoundNonByteAlignedBitrateUp() throws {
-        let limits = try VideoToolboxEncoder.dataRateLimits(
-            bitrateBps: 9,
-            windowSeconds: 1
-        )
-
-        XCTAssertEqual(limits.map(\.intValue), [2, 1])
-    }
-
-    func testVideoToolboxDataRateLimitsRejectOverflow() {
-        XCTAssertThrowsError(
-            try VideoToolboxEncoder.dataRateLimits(
-                bitrateBps: Int.max,
-                windowSeconds: 2
-            )
-        ) { error in
-            XCTAssertEqual(error as? VideoToolboxEncoderError, .dataRateLimitOverflow)
-        }
-    }
-
-    func testEncodedAccessUnitQueueRetainsOnlyNewestCompleteWork() async throws {
-        let queue = try EncodedAccessUnitQueue(capacity: CamBridgeContract.Media.maxInFlightAccessUnits)
-        let first = EncodedAccessUnit(data: Data([0x01]), presentationTimeMicroseconds: 1, isKeyframe: false)
-        let second = EncodedAccessUnit(data: Data([0x02]), presentationTimeMicroseconds: 2, isKeyframe: false)
-        let newest = EncodedAccessUnit(data: Data([0x03]), presentationTimeMicroseconds: 3, isKeyframe: true)
-
-        _ = await queue.insert(first)
-        _ = await queue.insert(second)
-        let telemetry = await queue.insert(newest)
-
-        XCTAssertEqual(telemetry.occupancy, 1)
-        XCTAssertEqual(telemetry.drops, CamBridgeContract.Media.maxInFlightAccessUnits)
-        let removed = await queue.removeNewest()
-        XCTAssertEqual(removed, newest)
-        await queue.finish()
-        let afterFinish = await queue.removeNewest()
-        XCTAssertNil(afterFinish)
-    }
-
-    func testEncodedAccessUnitQueueWakesOneWaitingConsumer() async throws {
-        let queue = try EncodedAccessUnitQueue(capacity: CamBridgeContract.Media.maxInFlightAccessUnits)
-        let accessUnit = EncodedAccessUnit(data: Data([0x04]), presentationTimeMicroseconds: 4, isKeyframe: true)
-        let consumer = Task { await queue.next() }
-
-        queue.offer(accessUnit)
-
-        let received = await consumer.value
-        XCTAssertEqual(received, accessUnit)
-        await queue.finish()
-    }
-
-    func testEncodedAccessUnitCallbackMailboxRetainsNewestAndStaysWithinBound() async throws {
-        let queue = try EncodedAccessUnitQueue(capacity: CamBridgeContract.Media.maxInFlightAccessUnits)
-        let first = EncodedAccessUnit(data: Data([0x05]), presentationTimeMicroseconds: 5, isKeyframe: false)
-        let second = EncodedAccessUnit(data: Data([0x06]), presentationTimeMicroseconds: 6, isKeyframe: false)
-        let newest = EncodedAccessUnit(data: Data([0x07]), presentationTimeMicroseconds: 7, isKeyframe: true)
-
-        queue.offer(first)
-        queue.offer(second)
-        queue.offer(newest)
-
-        let telemetry = await queue.telemetry()
-        XCTAssertLessThanOrEqual(telemetry.occupancy, CamBridgeContract.Media.maxInFlightAccessUnits)
-        XCTAssertEqual(telemetry.drops, 2)
-        let received = await queue.next()
-        XCTAssertEqual(received, newest)
-        await queue.finish()
-    }
-
-    @MainActor
-    func testStreamSetupUsesInjectedCapabilitiesAndStartsOnce() async throws {
-        let settings = FakeSetupSettingsStore()
-        let browser = FakeSetupBrowser()
         let session = FakeSetupSession()
         let receiver = try ReceiverCapabilities(
             receiverId: "fixture-receiver",
             displayName: "Fixture Receiver",
-            maxLongEdge: CamBridgeContract.Geometry.maximumLongEdge,
-            maxShortEdge: CamBridgeContract.Geometry.maximumShortEdge
+            maxLongEdge: CamBridgeContract.Geometry.minimumDimension,
+            maxShortEdge: CamBridgeContract.Geometry.minimumDimension
         )
         let model = StreamSetupModel(
             settingsStore: settings,
-            browser: browser,
+            browser: FakeSetupBrowser(),
             probe: FakeSetupProbe(capabilities: receiver),
             capture: FakeSetupCamera(),
-            encoderProbe: FakeSetupEncoderProbe(),
             sessionCoordinator: session,
+            logger: CamBridgeLogger(),
+            orientationProvider: FakeOrientationProvider(rotation: .ninety)
+        )
+
+        XCTAssertEqual(model.selectedResolutionID, SenderVideoCatalog.fullHd.id)
+        XCTAssertEqual(model.selectedFPS, 30)
+        XCTAssertEqual(model.bitrateText, "5")
+
+        await model.refreshCameraAuthorization()
+        model.setManualHost("192.168.1.10")
+        await model.probeManualReceiver()
+        model.selectFrameRate(60)
+        XCTAssertEqual(model.bitrateText, "10")
+        model.setBitrateText("1")
+
+        XCTAssertTrue(model.canStart)
+        await model.startStream()
+
+        let configuration = await session.lastConfiguration()
+        XCTAssertEqual(configuration?.resolution, SenderVideoCatalog.fullHd)
+        XCTAssertEqual(configuration?.fps, 60)
+        XCTAssertEqual(configuration?.bitrateBps, 1_000_000)
+        XCTAssertEqual(configuration?.orientation, .ninety)
+        XCTAssertEqual(settings.load().bitrateBps, 1_000_000)
+        let startCount = await session.startCount()
+        XCTAssertEqual(startCount, 1)
+    }
+
+    @MainActor
+    func testResolutionOrFrameRateChangeReplacesManualBitrateWithSuggestion() {
+        let model = StreamSetupModel(
+            settingsStore: FakeSetupSettingsStore(),
+            browser: FakeSetupBrowser(),
+            probe: FakeSetupProbe.unavailable,
+            capture: FakeSetupCamera(),
+            sessionCoordinator: FakeSetupSession(),
             logger: CamBridgeLogger()
         )
 
-        await model.refreshCameraAndModes()
-        model.manualHost = "192.168.1.10"
-        await model.probeManualReceiver()
+        model.setBitrateText("1")
+        model.selectResolution(SenderVideoCatalog.fullHd.id)
+        model.selectFrameRate(SenderVideoCatalog.defaultFrameRate)
+        XCTAssertEqual(model.bitrateText, "1")
+        model.selectResolution(SenderVideoCatalog.resolution2k.id)
+        XCTAssertEqual(model.bitrateText, "9")
+        model.selectFrameRate(60)
+        XCTAssertEqual(model.bitrateText, "18")
+        model.selectResolution(SenderVideoCatalog.fullHd.id)
+        XCTAssertEqual(model.bitrateText, "10")
+    }
 
-        XCTAssertEqual(model.receiverStatus, .ready)
-        XCTAssertTrue(model.canStart)
-        await model.startStream()
-        XCTAssertFalse(model.isStarting)
-        XCTAssertNil(model.failure)
-        XCTAssertEqual(settings.load().receiverId, "fixture-receiver")
-        let startCount = await session.startCount()
-        XCTAssertEqual(startCount, 1)
+    @MainActor
+    func testInvalidBitrateTextIsNotCommitted() {
+        let settings = FakeSetupSettingsStore()
+        let model = StreamSetupModel(
+            settingsStore: settings,
+            browser: FakeSetupBrowser(),
+            probe: FakeSetupProbe.unavailable,
+            capture: FakeSetupCamera(),
+            sessionCoordinator: FakeSetupSession(),
+            logger: CamBridgeLogger()
+        )
+
+        model.setBitrateText("1")
+        model.setBitrateText("1.5")
+
+        XCTAssertNil(model.selectedBitrateBps)
+        XCTAssertEqual(settings.load().bitrateBps, 1_000_000)
+        XCTAssertFalse(model.canStart)
     }
 
     @MainActor
@@ -438,9 +267,7 @@ final class CamBridgeTests: XCTestCase {
 private final class FakeSetupSettingsStore: SenderSettingsStoring {
     private var preferences = SenderPreferences.default
 
-    func load() -> SenderPreferences {
-        preferences
-    }
+    func load() -> SenderPreferences { preferences }
 
     func save(_ preferences: SenderPreferences) {
         self.preferences = preferences
@@ -448,146 +275,68 @@ private final class FakeSetupSettingsStore: SenderSettingsStoring {
 }
 
 private actor FakeSetupBrowser: ReceiverBrowsing {
-    private var stopCalls = 0
-
     func events() async -> AsyncStream<BonjourReceiverBrowserEvent> {
-        AsyncStream(bufferingPolicy: .bufferingNewest(CamBridgeContract.Media.mailboxCapacity)) { continuation in
-            continuation.finish()
-        }
+        AsyncStream { continuation in continuation.finish() }
     }
 
-    func stop() async {
-        stopCalls += 1
-    }
+    func stop() async {}
 }
 
 private struct FakeSetupProbe: ReceiverProbing {
-    let capabilities: ReceiverCapabilities
+    let result: Result<ReceiverCapabilities, StreamFailure>
+
+    init(capabilities: ReceiverCapabilities) {
+        result = .success(capabilities)
+    }
+
+    private init(result: Result<ReceiverCapabilities, StreamFailure>) {
+        self.result = result
+    }
+
+    static let unavailable = FakeSetupProbe(result: .failure(.receiverUnavailable))
 
     func probe(target: ReceiverControlTarget) async -> Result<ReceiverCapabilities, StreamFailure> {
-        .success(capabilities)
+        result
     }
 }
 
 private actor FakeSetupCamera: CameraSetupServicing {
-    private let camera = CameraDeviceDescriptor(
-        id: "fixture-camera",
-        name: "Fixture rear camera",
-        position: .back,
-        isVirtual: false
-    )
-    private var selectedCameraID: String?
-
-    func authorizationState() async -> CameraAuthorizationState {
-        .authorized
-    }
-
-    func requestAuthorization() async -> CameraAuthorizationState {
-        .authorized
-    }
-
-    func availableCameras() async -> [CameraDeviceDescriptor] {
-        [camera]
-    }
-
-    func selectCamera(withID deviceID: String) async -> Bool {
-        guard deviceID == camera.id else { return false }
-        selectedCameraID = deviceID
-        return true
-    }
-
-    func modeCapabilities(
-        modes: [VideoMode],
-        receiver: ReceiverCapabilities?,
-        orientation: StreamRotation
-    ) async -> [CameraModeCapability] {
-        guard selectedCameraID != nil else {
-            return modes.map { CameraModeCapability(mode: $0, supported: false, reason: "No fixture camera selected", formatID: nil) }
-        }
-        return modes.map { mode in
-            let supportedByReceiver: Bool
-            if let geometry = mode.geometry {
-                supportedByReceiver = receiver?.supports(geometry, rotation: orientation) ?? true
-            } else {
-                supportedByReceiver = false
-            }
-            return CameraModeCapability(
-                mode: mode,
-                supported: supportedByReceiver,
-                reason: supportedByReceiver ? nil : "Fixture receiver geometry limit",
-                formatID: "fixture-\(mode.id)",
-                supportedStabilization: [.off]
-            )
-        }
-    }
-
-    func capabilitySnapshots(
-        modes: [VideoMode],
-        receiver: ReceiverCapabilities?,
-        orientation: StreamRotation
-    ) async -> [CameraCapabilitySnapshot] {
-        let capabilities = await modeCapabilities(modes: modes, receiver: receiver, orientation: orientation)
-        return [
-            CameraCapabilitySnapshot(
-                device: camera,
-                minimumZoomRatio: 1,
-                maximumZoomRatio: 6,
-                supportedStabilization: [.off],
-                modeCapabilities: capabilities
-            )
-        ]
-    }
+    func authorizationState() async -> CameraAuthorizationState { .authorized }
+    func requestAuthorization() async -> CameraAuthorizationState { .authorized }
 
     func cameraState() async -> CameraState {
         var state = CameraState.initial
         state.authorization = .authorized
-        state.devices = [camera]
-        state.selectedDeviceID = selectedCameraID
-        state.supportedStabilization = [.off]
-        state.activeStabilization = .off
         return state
-    }
-}
-
-private struct FakeSetupEncoderProbe: EncoderCapabilityProbing {
-    func probe(mode: VideoMode, bitrateBps: Int) -> EncoderCapability {
-        let supported = mode.steppedBitrates(
-            encoderRange: CamBridgeContract.Bitrate.minimumBps...CamBridgeContract.Bitrate.maximumBps
-        ).contains(bitrateBps)
-        return EncoderCapability(
-            modeId: mode.id,
-            supported: supported,
-            minimumBitrateBps: mode.minimumBitrateBps,
-            maximumBitrateBps: mode.maximumBitrateBps,
-            encoderIdentity: supported ? "fixture-encoder" : nil,
-            reason: supported ? nil : "Fixture bitrate rejected"
-        )
     }
 }
 
 private actor FakeSetupSession: StreamSessionStarting {
     private var starts = 0
-    private var stops = 0
+    private var configuration: StreamConfiguration?
 
     func start(
         endpoint: ReceiverEndpoint,
         controlTarget: ReceiverControlTarget,
-        receiver: ReceiverCapabilities,
         configuration: StreamConfiguration,
-        cameraDeviceID: String,
-        stabilization: CameraStabilizationPreference,
+        cameraPosition: CameraPosition,
         mediaHosts: [String]
     ) async -> Result<Void, StreamFailure> {
         starts += 1
+        self.configuration = configuration
         return .success(())
     }
 
-    func stop() async -> Result<Void, Never> {
-        stops += 1
-        return .success(())
-    }
-
+    func stop() async -> Result<Void, Never> { .success(()) }
     func startCount() -> Int { starts }
+    func lastConfiguration() -> StreamConfiguration? { configuration }
+}
+
+@MainActor
+private struct FakeOrientationProvider: StreamOrientationProviding {
+    let rotation: StreamRotation
+
+    func currentRotation() -> StreamRotation { rotation }
 }
 
 private actor FakeBackgroundSession: StreamBackgroundEnding {
@@ -602,7 +351,7 @@ private actor FakeBackgroundSession: StreamBackgroundEnding {
 
     func waitUntilEnded() async {
         if ends > .zero { return }
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+        await withCheckedContinuation { continuation in
             waiter = continuation
         }
     }

@@ -1,21 +1,23 @@
 # CamBridge Architecture
 
-CamBridge has an Android sender and one shared native OBS receiver. A session is
-started explicitly by the user and the receiver handles one active session at
-a time. The public supported path remains Linux; the macOS receiver
-implementation is subject to its physical acceptance and clean-install gates.
+CamBridge connects phone camera senders to one shared native OBS receiver. A
+session is started explicitly by the user and the receiver handles one active
+session at a time. OBS can use the result directly or publish it as a webcam
+through OBS Virtual Camera. The public supported path remains Android to Linux;
+the iOS sender and macOS receiver remain subject to their physical acceptance
+and clean-install gates.
 
 ## Data flow
 
 ```text
-Android camera
-    → Camera2 capture
-    → MediaCodec H.264 encoder
+phone camera
+    → Android Camera2 and MediaCodec, or iOS AVFoundation and VideoToolbox
     → RTP/H.264 over UDP
     → shared OBS source
     → FFmpeg H.264 decoder
     → one locked media path
     → OBS texture
+    → optional OBS Virtual Camera
 ```
 
 The receiver selects its path once, before RTP acceptance:
@@ -64,18 +66,22 @@ stream.
 
 ### iOS sender candidate
 
-The iOS project is under `sender/ios/` and targets iOS 17 or later. Its
+The iOS project is under `sender/ios/` and targets iOS 17.4 or later. Its
 platform-neutral `CamBridgeCore` package owns the generated v6 contract,
 control framing, H.264 normalization, RTP packetization, session state, and
 bounded queue policy. The app target owns AVFoundation, VideoToolbox,
 Network.framework, SwiftUI, persistence, and diagnostics.
 
-The iOS sender uses exact AVFoundation formats and a temporary hardware
-VideoToolbox probe before offering a shared sender mode. It keeps coded video
-geometry separate from the four clockwise wire rotations; preview orientation
-is configured independently. Bonjour TXT addresses are candidates only: each
-selected receiver is probed over TCP before Start, and the accepted media port
-is used for the connected UDP path.
+The iOS sender exposes independent resolution, frame-rate, and bitrate values
+from the shared sender settings source. Start selects the default AVFoundation
+logical camera and its smallest compatible same-aspect source, configures
+explicit target pixel-buffer dimensions, and creates one real
+hardware-required VideoToolbox session. There is no camera/encoder capability
+matrix or temporary encoder. Coded geometry stays separate from the clockwise
+wire rotation, and preview orientation and mirroring are configured
+independently. Bonjour TXT addresses are candidates only: each selected
+receiver is probed over TCP before Start, and the accepted media port is used
+for the connected UDP path.
 
 ### Control and media transport
 

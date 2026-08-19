@@ -15,25 +15,13 @@ public enum CaptureServiceError: Error, Equatable, Sendable {
 public protocol CameraSetupServicing: Sendable {
     func authorizationState() async -> CameraAuthorizationState
     func requestAuthorization() async -> CameraAuthorizationState
-    func availableCameras() async -> [CameraDeviceDescriptor]
-    func selectCamera(withID deviceID: String) async -> Bool
-    func modeCapabilities(
-        modes: [VideoMode],
-        receiver: ReceiverCapabilities?,
-        orientation: StreamRotation
-    ) async -> [CameraModeCapability]
-    func capabilitySnapshots(
-        modes: [VideoMode],
-        receiver: ReceiverCapabilities?,
-        orientation: StreamRotation
-    ) async -> [CameraCapabilitySnapshot]
     func cameraState() async -> CameraState
 }
 
 public actor CaptureService {
     public private(set) var state: CameraState = .initial
 
-    private let capabilityProbe: CameraCapabilityProbe
+    private let cameraSelector: CameraDeviceSelector
     private let sessionQueue = DispatchQueue(label: "dev.cambridge.sender.capture")
     private var session: AVCaptureSession?
     private var device: AVCaptureDevice?
@@ -46,9 +34,11 @@ public actor CaptureService {
     private var cachedPreviewLayer: AVCaptureVideoPreviewLayer?
     private var selectedPosition: CameraPosition = .back
     private var selectedOrientation: StreamRotation = .zero
+    private var activeConfiguration: StreamConfiguration?
+    private var zoomMapping: CameraZoomMapping?
 
-    public init(capabilityProbe: CameraCapabilityProbe = CameraCapabilityProbe()) {
-        self.capabilityProbe = capabilityProbe
+    public init(cameraSelector: CameraDeviceSelector = CameraDeviceSelector()) {
+        self.cameraSelector = cameraSelector
     }
 
     public func authorizationState() -> CameraAuthorizationState {
@@ -74,81 +64,66 @@ public actor CaptureService {
         return current
     }
 
-    public func availableCameras() async -> [CameraDeviceDescriptor] {
-        let cameras = capabilityProbe.rearCameraDescriptors()
-        state.devices = cameras
-        return cameras
-    }
-
-    public func selectCamera(withID deviceID: String) async -> Bool {
-        guard capabilityProbe.device(withID: deviceID) != nil else { return false }
-        state.selectedDeviceID = deviceID
-        return true
-    }
-
-    public func modeCapabilities(
-        modes: [VideoMode],
-        receiver: ReceiverCapabilities?,
-        orientation: StreamRotation
-    ) async -> [CameraModeCapability] {
-        guard let deviceID = state.selectedDeviceID,
-              let device = capabilityProbe.device(withID: deviceID) else {
-            return modes.map { CameraModeCapability(mode: $0, supported: false, reason: "No rear camera selected", formatID: nil) }
-        }
-        return capabilityProbe.capabilities(for: device, modes: modes, receiver: receiver, orientation: orientation)
-    }
-
-    public func capabilitySnapshots(
-        modes: [VideoMode],
-        receiver: ReceiverCapabilities?,
-        orientation: StreamRotation
-    ) async -> [CameraCapabilitySnapshot] {
-        capabilityProbe.capabilitySnapshots(modes: modes, receiver: receiver, orientation: orientation)
-    }
-
     public func prepare(
         configuration: StreamConfiguration,
-        deviceID: String,
+        position: CameraPosition,
         onAccessUnit: @escaping @Sendable (Result<EncodedAccessUnit, VideoToolboxEncoderError>) -> Void
     ) async throws {
         guard session == nil, encoder == nil else {
             throw CaptureServiceError.configurationFailed("Capture service is already prepared")
         }
         guard authorizationState() == .authorized else { throw CaptureServiceError.permissionDenied }
-        guard let device = capabilityProbe.device(withID: deviceID) else {
+        guard let device = cameraSelector.defaultDevice(position: position) else {
             throw CaptureServiceError.deviceUnavailable
         }
-        guard let format = capabilityProbe.exactFormat(for: configuration.mode, on: device) else {
+        guard let format = cameraSelector.compatibleFormat(
+            for: configuration.resolution,
+            fps: configuration.fps,
+            on: device
+        ) else {
             throw CaptureServiceError.formatUnavailable
-        }
-        let encoder = VideoToolboxEncoder()
-        encoder.onAccessUnit = onAccessUnit
-        do {
-            try encoder.prepare(configuration: configuration)
-        } catch {
-            encoder.invalidate()
-            throw error
         }
         do {
             try await configure(
                 device: device,
                 format: format,
-                configuration: configuration,
-                encoder: encoder
+                configuration: configuration
             )
         } catch {
+            throw error
+        }
+        let encoder = VideoToolboxEncoder()
+        encoder.onAccessUnit = onAccessUnit
+        do {
+            try encoder.prepare(configuration: configuration)
+            guard let output = videoOutput else { throw CaptureServiceError.notPrepared }
+            let delegate = CaptureOutputDelegate(encoder: encoder)
+            sessionQueue.sync {
+                output.setSampleBufferDelegate(delegate, queue: encoder.inputQueue)
+            }
+            outputDelegate = delegate
+        } catch {
             encoder.invalidate()
+            await stop()
             throw error
         }
         self.encoder = encoder
+        activeConfiguration = configuration
     }
 
     public func start() async throws {
         guard let session else { throw CaptureServiceError.notPrepared }
-        sessionQueue.sync {
-            guard !session.isRunning else { return }
-            session.startRunning()
+        let isRunning = sessionQueue.sync {
+            if !session.isRunning { session.startRunning() }
+            return session.isRunning
         }
+        guard isRunning else {
+            throw CaptureServiceError.runtimeError("Capture session did not enter the running state")
+        }
+        // Request a fresh IDR after the session is running so the already-armed
+        // RTP consumer starts OBS with a decodable access unit even if an
+        // earlier callback raced capture startup.
+        encoder?.requestKeyframe()
     }
 
     public func stop() async {
@@ -168,13 +143,17 @@ public actor CaptureService {
         device = nil
         videoInput = nil
         videoOutput = nil
+        activeConfiguration = nil
+        zoomMapping = nil
+        selectedPosition = .back
+        state.position = .back
         state.selectedFormat = nil
         state.selectedDeviceID = nil
-        state.minimumZoomRatio = CameraState.defaultZoomRatio
-        state.maximumZoomRatio = CameraState.defaultZoomRatio
-        state.zoomRatio = CameraState.defaultZoomRatio
-        state.supportedStabilization = [.auto, .off]
-        state.activeStabilization = .auto
+        state.minimumZoomRatio = CameraZoomPolicy.normalTarget
+        state.maximumZoomRatio = CameraZoomPolicy.normalTarget
+        state.zoomRatio = CameraZoomPolicy.normalTarget
+        state.zoomTargets = [CameraZoomPolicy.normalTarget]
+        state.activeStabilization = .off
         removeNotifications()
     }
 
@@ -183,7 +162,8 @@ public actor CaptureService {
     }
 
     public func cameraState() async -> CameraState {
-        state
+        state.activeStabilization = Self.activeStabilization(for: videoOutput?.connection(with: .video))
+        return state
     }
 
     public func previewLayer() -> AVCaptureVideoPreviewLayer? {
@@ -193,10 +173,11 @@ public actor CaptureService {
         let layer = sessionQueue.sync {
             let layer = AVCaptureVideoPreviewLayer(session: session)
             layer.videoGravity = .resizeAspectFill
-            if let connection = layer.connection,
-               connection.isVideoRotationAngleSupported(resolution.previewRotationAngle) {
-                connection.videoRotationAngle = resolution.previewRotationAngle
-            }
+            Self.configurePreviewConnection(
+                layer.connection,
+                position: selectedPosition,
+                rotationAngle: resolution.previewRotationAngle
+            )
             return layer
         }
         cachedPreviewLayer = layer
@@ -204,35 +185,192 @@ public actor CaptureService {
     }
 
     public func setZoomRatio(_ ratio: Double) throws {
-        guard let device else { throw CaptureServiceError.notPrepared }
-        let bounded = min(max(ratio, Double(device.minAvailableVideoZoomFactor)), Double(device.maxAvailableVideoZoomFactor))
+        guard let device, let zoomMapping else { throw CaptureServiceError.notPrepared }
+        let rawRatio = zoomMapping.rawRatio(forUserRatio: ratio)
         try sessionQueue.sync {
             try device.lockForConfiguration()
             defer { device.unlockForConfiguration() }
-            device.videoZoomFactor = CGFloat(bounded)
+            device.videoZoomFactor = CGFloat(rawRatio)
         }
-        state.zoomRatio = bounded
+        state.zoomRatio = zoomMapping.userRatio(forRawRatio: rawRatio)
     }
 
-    public func setStabilization(_ preference: CameraStabilizationPreference) async throws {
-        guard let device, let connection = videoOutput?.connection(with: .video) else {
+    public func switchCamera() async throws {
+        guard let session,
+              let currentDevice = device,
+              let currentInput = videoInput,
+              let output = videoOutput,
+              let configuration = activeConfiguration,
+              let encoder else {
             throw CaptureServiceError.notPrepared
         }
-        guard let mode = preference.avFoundationMode else {
-            throw CaptureServiceError.configurationFailed("Requested video stabilization mode requires a newer iOS version")
+        let targetPosition = selectedPosition.opposite
+        guard let targetDevice = cameraSelector.defaultDevice(position: targetPosition) else {
+            throw CaptureServiceError.deviceUnavailable
         }
-        if preference != .off && !connection.isVideoStabilizationSupported {
-            state.activeStabilization = .off
-            return
+        guard let targetFormat = cameraSelector.compatibleFormat(
+            for: configuration.resolution,
+            fps: configuration.fps,
+            on: targetDevice
+        ) else {
+            throw CaptureServiceError.formatUnavailable
         }
-        guard device.activeFormat.isVideoStabilizationModeSupported(mode) else {
-            throw CaptureServiceError.configurationFailed("Requested video stabilization mode is unavailable")
+        let targetInput: AVCaptureDeviceInput
+        do {
+            targetInput = try AVCaptureDeviceInput(device: targetDevice)
+        } catch {
+            throw CaptureServiceError.configurationFailed(String(describing: error))
         }
-        let activeMode = try sessionQueue.sync {
-            connection.preferredVideoStabilizationMode = mode
-            return connection.activeVideoStabilizationMode
+        let switchResult = sessionQueue.sync { () -> CameraSwitchResult in
+            let currentFormat = currentDevice.activeFormat
+            session.beginConfiguration()
+            session.removeInput(currentInput)
+            guard session.canAddInput(targetInput) else {
+                let restored = Self.restoreCameraInput(
+                    currentInput,
+                    device: currentDevice,
+                    format: currentFormat,
+                    fps: configuration.fps,
+                    session: session,
+                    output: output
+                )
+                session.commitConfiguration()
+                return Self.restoredCameraInputIsUsable(
+                    restored,
+                    session: session,
+                    output: output,
+                    device: currentDevice,
+                    format: currentFormat,
+                    fps: configuration.fps
+                ) ? .rejected : .rollbackFailed
+            }
+            session.addInput(targetInput)
+            Self.configureOutputConnection(output.connection(with: .video))
+            var targetZoomMapping: CameraZoomMapping
+            do {
+                targetZoomMapping = try Self.configure(
+                    device: targetDevice,
+                    format: targetFormat.format,
+                    fps: configuration.fps
+                )
+            } catch {
+                session.removeInput(targetInput)
+                let restored = Self.restoreCameraInput(
+                    currentInput,
+                    device: currentDevice,
+                    format: currentFormat,
+                    fps: configuration.fps,
+                    session: session,
+                    output: output
+                )
+                session.commitConfiguration()
+                return Self.restoredCameraInputIsUsable(
+                    restored,
+                    session: session,
+                    output: output,
+                    device: currentDevice,
+                    format: currentFormat,
+                    fps: configuration.fps
+                ) ? .rejected : .rollbackFailed
+            }
+            session.commitConfiguration()
+            if !Self.matchesRequestedCameraConfiguration(
+                device: targetDevice,
+                format: targetFormat.format,
+                fps: configuration.fps
+            ) {
+                do {
+                    targetZoomMapping = try Self.configureExactWithoutStabilization(
+                        session: session,
+                        output: output,
+                        device: targetDevice,
+                        format: targetFormat.format,
+                        fps: configuration.fps
+                    )
+                } catch {
+                    session.beginConfiguration()
+                    session.removeInput(targetInput)
+                    let restored = Self.restoreCameraInput(
+                        currentInput,
+                        device: currentDevice,
+                        format: currentFormat,
+                        fps: configuration.fps,
+                        session: session,
+                        output: output
+                    )
+                    session.commitConfiguration()
+                    return Self.restoredCameraInputIsUsable(
+                        restored,
+                        session: session,
+                        output: output,
+                        device: currentDevice,
+                        format: currentFormat,
+                        fps: configuration.fps
+                    ) ? .rejected : .rollbackFailed
+                }
+            }
+            guard Self.matchesRequestedCameraConfiguration(
+                device: targetDevice,
+                format: targetFormat.format,
+                fps: configuration.fps
+            ) else {
+                session.beginConfiguration()
+                session.removeInput(targetInput)
+                let restored = Self.restoreCameraInput(
+                    currentInput,
+                    device: currentDevice,
+                    format: currentFormat,
+                    fps: configuration.fps,
+                    session: session,
+                    output: output
+                )
+                session.commitConfiguration()
+                return Self.restoredCameraInputIsUsable(
+                    restored,
+                    session: session,
+                    output: output,
+                    device: currentDevice,
+                    format: currentFormat,
+                    fps: configuration.fps
+                ) ? .rejected : .rollbackFailed
+            }
+            return .switched(targetZoomMapping)
         }
-        state.activeStabilization = CameraStabilizationPreference(mode: activeMode)
+        switch switchResult {
+        case .rejected:
+            throw CaptureServiceError.configurationFailed("AVCaptureSession rejected the opposite camera")
+        case .rollbackFailed:
+            state.runtimeError = "Camera switch failed and the prior input could not be restored"
+            throw CaptureServiceError.runtimeError(state.runtimeError ?? "Camera switch rollback failed")
+        case let .switched(targetZoomMapping):
+            self.device = targetDevice
+            videoInput = targetInput
+            selectedPosition = targetPosition
+            zoomMapping = targetZoomMapping
+            state.position = targetPosition
+            state.selectedDeviceID = targetDevice.uniqueID
+            state.selectedFormat = targetFormat.descriptor
+            state.minimumZoomRatio = targetZoomMapping.minimumUserRatio
+            state.maximumZoomRatio = targetZoomMapping.maximumUserRatio
+            state.zoomRatio = CameraZoomPolicy.normalTarget
+            state.zoomTargets = targetZoomMapping.targets
+        }
+        state.runtimeError = nil
+        state.activeStabilization = Self.activeStabilization(for: output.connection(with: .video))
+        state.systemPressureLevel = CameraSystemPressureLevel(level: targetDevice.systemPressureState.level)
+        observeSystemPressure(on: targetDevice)
+        let orientation = SessionOrientationResolver().resolve(
+            rotation: selectedOrientation,
+            cameraPosition: targetPosition
+        )
+        sessionQueue.sync {
+            Self.configurePreviewConnection(
+                cachedPreviewLayer?.connection,
+                position: targetPosition,
+                rotationAngle: orientation.previewRotationAngle
+            )
+        }
+        encoder.requestKeyframe()
     }
 
     public func selectedPreviewOrientation(_ orientation: StreamRotation) {
@@ -240,18 +378,18 @@ public actor CaptureService {
         let resolution = SessionOrientationResolver().resolve(rotation: orientation, cameraPosition: selectedPosition)
         let layer = cachedPreviewLayer
         sessionQueue.sync {
-            if let connection = layer?.connection,
-               connection.isVideoRotationAngleSupported(resolution.previewRotationAngle) {
-                connection.videoRotationAngle = resolution.previewRotationAngle
-            }
+            Self.configurePreviewConnection(
+                layer?.connection,
+                position: selectedPosition,
+                rotationAngle: resolution.previewRotationAngle
+            )
         }
     }
 
     private func configure(
         device: AVCaptureDevice,
-        format: CameraFormatDescriptor,
-        configuration: StreamConfiguration,
-        encoder: VideoToolboxEncoder
+        format: CameraFormatSelection,
+        configuration: StreamConfiguration
     ) async throws {
         let session = AVCaptureSession()
         let input: AVCaptureDeviceInput
@@ -262,84 +400,84 @@ public actor CaptureService {
         }
         let output = AVCaptureVideoDataOutput()
         output.alwaysDiscardsLateVideoFrames = true
-        output.videoSettings = [
-            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
-        ]
-        let delegate = CaptureOutputDelegate(encoder: encoder)
-        guard let avFormat = device.formats.first(where: { candidate in
-            String(describing: ObjectIdentifier(candidate as AnyObject)) == format.formatID
-        }) else {
-            throw CaptureServiceError.formatUnavailable
-        }
-        let canAddInputAndOutput = sessionQueue.sync {
-            session.canAddInput(input) && session.canAddOutput(output)
-        }
-        guard canAddInputAndOutput else {
-            throw CaptureServiceError.configurationFailed("Capture session rejected the video input or output")
-        }
-        let configurationResult = sessionQueue.sync { () -> (CaptureServiceError?, [CameraStabilizationPreference]) in
+        output.automaticallyConfiguresOutputBufferDimensions = false
+        output.deliversPreviewSizedOutputBuffers = false
+        let avFormat = format.format
+        let configurationResult = sessionQueue.sync { () -> (error: CaptureServiceError?, zoomMapping: CameraZoomMapping?) in
             var configurationError: CaptureServiceError?
-            var supportedStabilization = [CameraStabilizationPreference.off]
+            var configuredZoomMapping: CameraZoomMapping?
             session.beginConfiguration()
-            session.addInput(input)
-            session.addOutput(output)
-            do {
-                try device.lockForConfiguration()
-                defer { device.unlockForConfiguration() }
-                device.activeFormat = avFormat
-                let duration = CMTime(value: Self.singleFrameDurationNumerator, timescale: CMTimeScale(configuration.mode.fps))
-                device.activeVideoMinFrameDuration = duration
-                device.activeVideoMaxFrameDuration = duration
-                guard device.activeVideoMinFrameDuration == duration,
-                      device.activeVideoMaxFrameDuration == duration else {
-                    throw CaptureServiceError.configurationFailed("Camera rejected the requested fixed frame duration")
+            session.sessionPreset = .inputPriority
+            if session.canAddInput(input) {
+                session.addInput(input)
+                do {
+                    configuredZoomMapping = try Self.configure(
+                        device: device,
+                        format: avFormat,
+                        fps: configuration.fps
+                    )
+                } catch {
+                    configurationError = .configurationFailed(String(describing: error))
                 }
-                supportedStabilization = CameraStabilizationPreference.allCases.filter { preference in
-                    guard let mode = preference.avFoundationMode else { return false }
-                    return avFormat.isVideoStabilizationModeSupported(mode)
+                if configurationError == nil {
+                    // AVFoundation validates explicit output dimensions against
+                    // the device's current activeFormat. Select the compatible
+                    // source first so a valid larger-source downscale cannot be
+                    // rejected against the device's previous default format.
+                    output.videoSettings = [
+                        kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+                        kCVPixelBufferWidthKey as String: configuration.geometry.codedWidth,
+                        kCVPixelBufferHeightKey as String: configuration.geometry.codedHeight,
+                    ]
+                    if session.canAddOutput(output) {
+                        session.addOutput(output)
+                        Self.configureOutputConnection(output.connection(with: .video))
+                    } else {
+                        configurationError = .configurationFailed("Capture session rejected the video output")
+                    }
                 }
-                if !supportedStabilization.contains(.off) {
-                    supportedStabilization.insert(.off, at: .zero)
-                }
-                if let connection = output.connection(with: .video), !connection.isVideoStabilizationSupported {
-                    supportedStabilization = [.off]
-                }
-            } catch {
-                configurationError = .configurationFailed(String(describing: error))
-            }
-            if configurationError == nil {
-                output.setSampleBufferDelegate(delegate, queue: encoder.inputQueue)
-            }
-            if configurationError == nil,
-               let connection = output.connection(with: .video),
-               connection.isVideoStabilizationSupported,
-               supportedStabilization.contains(.standard) {
-                connection.preferredVideoStabilizationMode = .standard
+            } else {
+                configurationError = .configurationFailed("Capture session rejected the video input")
             }
             session.commitConfiguration()
-            return (configurationError, supportedStabilization)
+            return (configurationError, configuredZoomMapping)
         }
-        if let configurationError = configurationResult.0 { throw configurationError }
-        let supportedStabilization = configurationResult.1
+        if let configurationError = configurationResult.error { throw configurationError }
+        guard let configuredZoomMapping = configurationResult.zoomMapping else {
+            throw CaptureServiceError.configurationFailed("Camera zoom mapping was not configured")
+        }
+        let exactZoomMapping: CameraZoomMapping
+        if sessionQueue.sync(execute: {
+            Self.matchesRequestedCameraConfiguration(device: device, format: avFormat, fps: configuration.fps)
+        }) {
+            exactZoomMapping = configuredZoomMapping
+        } else {
+            exactZoomMapping = try sessionQueue.sync {
+                try Self.configureExactWithoutStabilization(
+                    session: session,
+                    output: output,
+                    device: device,
+                    format: avFormat,
+                    fps: configuration.fps
+                )
+            }
+        }
         self.session = session
         self.device = device
         self.videoInput = input
         self.videoOutput = output
-        self.outputDelegate = delegate
         self.selectedPosition = device.position == .front ? .front : .back
-        state.supportedStabilization = supportedStabilization
+        zoomMapping = exactZoomMapping
         selectedPreviewOrientation(configuration.orientation)
         state.authorization = authorizationState()
+        state.position = selectedPosition
         state.selectedDeviceID = device.uniqueID
-        state.selectedFormat = format
-        state.minimumZoomRatio = Double(device.minAvailableVideoZoomFactor)
-        state.maximumZoomRatio = Double(device.maxAvailableVideoZoomFactor)
-        state.zoomRatio = Double(device.videoZoomFactor)
-        if let connection = output.connection(with: .video), connection.isVideoStabilizationSupported {
-            state.activeStabilization = CameraStabilizationPreference(mode: connection.activeVideoStabilizationMode)
-        } else {
-            state.activeStabilization = .off
-        }
+        state.selectedFormat = format.descriptor
+        state.minimumZoomRatio = exactZoomMapping.minimumUserRatio
+        state.maximumZoomRatio = exactZoomMapping.maximumUserRatio
+        state.zoomRatio = exactZoomMapping.userRatio(forRawRatio: Double(device.videoZoomFactor))
+        state.zoomTargets = exactZoomMapping.targets
+        state.activeStabilization = Self.activeStabilization(for: output.connection(with: .video))
         state.interruption = nil
         state.runtimeError = nil
         state.systemPressureLevel = CameraSystemPressureLevel(level: device.systemPressureState.level)
@@ -365,11 +503,7 @@ public actor CaptureService {
                 Task { await self?.updateThermalState() }
             }
         ]
-        if let device {
-            systemPressureObservation = device.observe(\AVCaptureDevice.systemPressureState, options: [.new]) { [weak self] _, _ in
-                Task { await self?.updateSystemPressure() }
-            }
-        }
+        if let device { observeSystemPressure(on: device) }
     }
 
     private func removeNotifications() {
@@ -377,6 +511,13 @@ public actor CaptureService {
         notificationTokens.removeAll(keepingCapacity: true)
         systemPressureObservation?.invalidate()
         systemPressureObservation = nil
+    }
+
+    private func observeSystemPressure(on device: AVCaptureDevice) {
+        systemPressureObservation?.invalidate()
+        systemPressureObservation = device.observe(\AVCaptureDevice.systemPressureState, options: [.new]) { [weak self] _, _ in
+            Task { await self?.updateSystemPressure() }
+        }
     }
 
     private func handleInterruption(reasonValue: Int?) {
@@ -410,8 +551,180 @@ public actor CaptureService {
         state.thermalState = String(describing: ProcessInfo.processInfo.thermalState)
     }
 
-    fileprivate static let defaultZoomRatio: Double = 1
+    private static func configure(
+        device: AVCaptureDevice,
+        format: AVCaptureDevice.Format,
+        fps: Int
+    ) throws -> CameraZoomMapping {
+        try device.lockForConfiguration()
+        defer { device.unlockForConfiguration() }
+        device.activeFormat = format
+        let duration = CMTime(value: singleFrameDurationNumerator, timescale: CMTimeScale(fps))
+        device.activeVideoMinFrameDuration = duration
+        device.activeVideoMaxFrameDuration = duration
+        guard device.activeVideoMinFrameDuration == duration,
+              device.activeVideoMaxFrameDuration == duration else {
+            throw CaptureServiceError.configurationFailed("Camera rejected the requested fixed frame duration")
+        }
+        let mapping = zoomMapping(for: device)
+        device.videoZoomFactor = CGFloat(mapping.rawRatio(forUserRatio: CameraZoomPolicy.normalTarget))
+        return mapping
+    }
+
+    private static func zoomMapping(for device: AVCaptureDevice) -> CameraZoomMapping {
+        let displayMultiplier: Double
+        if #available(iOS 18.0, *) {
+            displayMultiplier = Double(device.displayVideoZoomFactorMultiplier)
+        } else {
+            // iOS 17 lacks Apple's display multiplier. On the logical cameras
+            // that include ultra-wide, the first documented switch-over factor
+            // is the raw factor for the normal 1× constituent.
+            switch device.deviceType {
+            case .builtInTripleCamera, .builtInDualWideCamera:
+                if let wideSwitchFactor = device.virtualDeviceSwitchOverVideoZoomFactors.first?.doubleValue,
+                   wideSwitchFactor > .zero {
+                    displayMultiplier = CameraZoomPolicy.normalTarget / wideSwitchFactor
+                } else {
+                    displayMultiplier = CameraZoomPolicy.normalTarget
+                }
+            default:
+                displayMultiplier = CameraZoomPolicy.normalTarget
+            }
+        }
+        return CameraZoomMapping(
+            rawMinimum: Double(device.minAvailableVideoZoomFactor),
+            rawMaximum: Double(device.maxAvailableVideoZoomFactor),
+            displayMultiplier: displayMultiplier
+        )
+    }
+
+    private static func configureOutputConnection(_ connection: AVCaptureConnection?) {
+        guard let connection else { return }
+        connection.automaticallyAdjustsVideoMirroring = false
+        if connection.isVideoMirroringSupported {
+            connection.isVideoMirrored = false
+        }
+        if connection.isVideoRotationAngleSupported(unrotatedVideoAngle) {
+            connection.videoRotationAngle = unrotatedVideoAngle
+        }
+        if connection.isVideoStabilizationSupported {
+            connection.preferredVideoStabilizationMode = .auto
+        }
+    }
+
+    private static func disableOutputStabilization(_ connection: AVCaptureConnection?) {
+        guard let connection, connection.isVideoStabilizationSupported else { return }
+        connection.preferredVideoStabilizationMode = .off
+    }
+
+    private static func activeStabilization(for connection: AVCaptureConnection?) -> CameraStabilizationPreference {
+        guard let connection, connection.isVideoStabilizationSupported else { return .off }
+        return CameraStabilizationPreference(mode: connection.activeVideoStabilizationMode)
+    }
+
+    private static func configureExactWithoutStabilization(
+        session: AVCaptureSession,
+        output: AVCaptureVideoDataOutput,
+        device: AVCaptureDevice,
+        format: AVCaptureDevice.Format,
+        fps: Int
+    ) throws -> CameraZoomMapping {
+        var mapping: CameraZoomMapping?
+        var configurationError: Error?
+        session.beginConfiguration()
+        disableOutputStabilization(output.connection(with: .video))
+        do {
+            mapping = try configure(device: device, format: format, fps: fps)
+        } catch {
+            configurationError = error
+        }
+        session.commitConfiguration()
+        if let configurationError { throw configurationError }
+        guard let mapping else {
+            throw CaptureServiceError.configurationFailed("Camera zoom mapping was not configured")
+        }
+        guard matchesRequestedCameraConfiguration(device: device, format: format, fps: fps) else {
+            throw CaptureServiceError.configurationFailed(
+                "Camera changed the requested format or fixed frame duration"
+            )
+        }
+        return mapping
+    }
+
+    private static func matchesRequestedCameraConfiguration(
+        device: AVCaptureDevice,
+        format: AVCaptureDevice.Format,
+        fps: Int
+    ) -> Bool {
+        let duration = CMTime(value: singleFrameDurationNumerator, timescale: CMTimeScale(fps))
+        return device.activeFormat === format
+            && device.activeVideoMinFrameDuration == duration
+            && device.activeVideoMaxFrameDuration == duration
+    }
+
+    private static func restoreCameraInput(
+        _ input: AVCaptureDeviceInput,
+        device: AVCaptureDevice,
+        format: AVCaptureDevice.Format,
+        fps: Int,
+        session: AVCaptureSession,
+        output: AVCaptureVideoDataOutput
+    ) -> Bool {
+        guard session.canAddInput(input) else { return false }
+        session.addInput(input)
+        configureOutputConnection(output.connection(with: .video))
+        do {
+            _ = try configure(device: device, format: format, fps: fps)
+            return matchesRequestedCameraConfiguration(device: device, format: format, fps: fps)
+        } catch {
+            return false
+        }
+    }
+
+    private static func restoredCameraInputIsUsable(
+        _ restored: Bool,
+        session: AVCaptureSession,
+        output: AVCaptureVideoDataOutput,
+        device: AVCaptureDevice,
+        format: AVCaptureDevice.Format,
+        fps: Int
+    ) -> Bool {
+        guard restored else { return false }
+        if matchesRequestedCameraConfiguration(device: device, format: format, fps: fps) {
+            return true
+        }
+        return (try? configureExactWithoutStabilization(
+            session: session,
+            output: output,
+            device: device,
+            format: format,
+            fps: fps
+        )) != nil
+    }
+
+    private static func configurePreviewConnection(
+        _ connection: AVCaptureConnection?,
+        position: CameraPosition,
+        rotationAngle: CGFloat
+    ) {
+        guard let connection else { return }
+        connection.automaticallyAdjustsVideoMirroring = false
+        if connection.isVideoMirroringSupported {
+            connection.isVideoMirrored = position == .front
+        }
+        if connection.isVideoRotationAngleSupported(rotationAngle) {
+            connection.videoRotationAngle = rotationAngle
+        }
+    }
+
     private static let singleFrameDurationNumerator: Int64 = 1
+    private static let unrotatedVideoAngle: CGFloat = 0
+
+    private enum CameraSwitchResult {
+        case switched(CameraZoomMapping)
+        case rejected
+        case rollbackFailed
+    }
 }
 
 extension CaptureService: CameraSetupServicing {}

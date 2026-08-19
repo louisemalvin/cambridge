@@ -1,16 +1,19 @@
 # CamBridge
 
-Turn your Android phone into a low-latency camera source for OBS Studio.
+Turn your phone into a webcam through OBS Studio.
 
-CamBridge streams H.264 video directly from Android to a native OBS source,
-with hardware-accelerated decoding where supported.
+CamBridge sends H.264 video from a phone to a native OBS source over your
+local network. Use the source directly in OBS for recording and production,
+or share it with video-call applications through
+[OBS Virtual Camera](https://obsproject.com/kb/virtual-camera-guide).
 
 > Current support: Android sender → OBS Studio on Linux x86_64
 
 ## Features
 
-- Android phone as an OBS camera source
-- Low-latency H.264 streaming over a local network
+- Phone camera as a native OBS source
+- Webcam output for other applications through OBS Virtual Camera
+- H.264 streaming over a local network
 - Automatic receiver discovery, explicit receiver selection, and manual fallback
 - Portrait and landscape orientations
 - Phone-supported 1080p and 2K modes at 30 or 60 fps with bitrate control
@@ -33,8 +36,10 @@ with hardware-accelerated decoding where supported.
 4. Put the phone and computer on the same trusted network, open CamBridge,
    and allow camera access.
 5. Open Stream setup, choose the OBS computer when more than one is available,
-   choose resolution, frame rate, bitrate, and orientation, then press
+   choose resolution, frame rate, and bitrate, then press
    **Start stream**.
+6. To use the phone in a video-call application, start **Virtual Camera** in
+   OBS and select **OBS Virtual Camera** in that application.
 
 ## Current Platform Support
 
@@ -42,8 +47,9 @@ with hardware-accelerated decoding where supported.
 | --- | --- | --- |
 | Android | Linux x86_64/amd64 + OBS Studio | Supported |
 | Android | macOS 12+ + OBS Studio | Implementation present; physical acceptance pending |
+| iOS 17.4+ | Linux x86_64/amd64 + OBS Studio | Install candidate; physical acceptance pending |
 
-An iOS sender and Windows and ARM Linux receivers are not currently supported.
+Windows and ARM Linux receivers are not currently supported.
 The macOS receiver is not a supported downloadable product until its arm64 and
 x86_64 physical acceptance, clean-machine package installation, and release
 verification gates pass.
@@ -54,10 +60,13 @@ The phone captures and encodes video, sends it across the local network, and
 one shared OBS receiver decodes and presents it as an OBS texture:
 
 ```text
-Camera2 → MediaCodec H.264 → RTP/H.264 over UDP → shared OBS receiver
-                                                   ↳ Linux: FFmpeg → VAAPI/DRM PRIME → DMA-BUF → OBS
-                                                   ↳ macOS: FFmpeg → VideoToolbox → Metal → IOSurface → OBS
-                                                   ↳ software: FFmpeg → CPU NV12 → OBS
+Android: Camera2 → MediaCodec H.264 ─┐
+                                     ├→ RTP/H.264 → shared OBS receiver
+iOS: AVFoundation → VideoToolbox ────┘                   ├→ Linux native
+                                                        ├→ macOS native
+                                                        └→ software fallback
+
+OBS source → OBS Virtual Camera → video-call application
 ```
 
 The receiver locks one of the selected media paths before accepting RTP for a
@@ -96,4 +105,12 @@ should also read [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-CamBridge is distributed under the terms of the [Apache License 2.0](LICENSE).
+CamBridge uses a split license:
+
+- The senders, protocol, scripts, and documentation are distributed under the
+  [Apache License 2.0](LICENSE).
+- The native OBS plugin is distributed under
+  [GPL-2.0-or-later](receiver/obs/cambridge-obs-source/LICENSE) because it links
+  with OBS Studio.
+
+See [Third-party notices](THIRD_PARTY_NOTICES.md) for dependency licensing.
