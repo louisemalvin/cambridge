@@ -2,96 +2,81 @@
 
 Turn your phone into a webcam through OBS Studio.
 
-CamBridge sends H.264 video from a phone to a native OBS source over your
-local network. Use the source directly in OBS for recording and production,
-or share it with video-call applications through
+CamBridge streams H.264 video from a phone camera over your local network to a
+native source in OBS. Use the source in an OBS scene for recording or
+streaming, or share the scene with video-call applications through
 [OBS Virtual Camera](https://obsproject.com/kb/virtual-camera-guide).
-
-> Current support: Android sender → OBS Studio on Linux x86_64
 
 ## Features
 
-- Phone camera as a native OBS source
-- Webcam output for other applications through OBS Virtual Camera
-- H.264 streaming over a local network
-- Automatic receiver discovery, explicit receiver selection, and manual fallback
-- Portrait and landscape orientations
+### Phone sender
+
+- Direct camera streaming to OBS over the local network
+- Automatic receiver discovery with explicit selection and a manual address
+  fallback
 - Phone-supported 1080p and 2K modes at 30 or 60 fps with bitrate control
-- Explicit optical, electronic, and camera-managed stabilization controls
-- Automatic, native-required, and software-only receiver decoder modes
-- Hardware decoding with a software fallback selected once at session start
+- Portrait and landscape video with explicit stabilization controls
+
+### OBS receiver
+
+- Native CamBridge source for OBS Studio
+- Hardware-accelerated H.264 decoding where available with a software fallback
+- Phone camera output for recording, streaming, and OBS Virtual Camera
 
 ## Quick Start
 
-1. Download the Android APK and Linux OBS plugin archive from the [latest
-   GitHub release](https://github.com/louisemalvin/cambridge/releases/latest).
-   Release artifacts use the names `cambridge-v<version>.apk` and
-   `cambridge-obs-plugin-<version>-linux-x86_64.tar.gz`.
-2. Install the APK on the Android phone and install the plugin on the Linux
-   computer as described in [Installation](docs/installation.md).
-   Always install both artifacts from the same release because protocol
-   compatibility is versioned.
-3. Restart OBS, add a `CamBridge` source, and leave its default settings in
-   place.
-4. Put the phone and computer on the same trusted network, open CamBridge,
-   and allow camera access.
-5. Open Stream setup, choose the OBS computer when more than one is available,
-   choose resolution, frame rate, and bitrate, then press
+1. Install CamBridge on the phone and the CamBridge plugin for OBS by following
+   the [installation guide](docs/installation.md).
+2. Add a **CamBridge** source in OBS, select it from the phone, and press
    **Start stream**.
-6. To use the phone in a video-call application, start **Virtual Camera** in
-   OBS and select **OBS Virtual Camera** in that application.
+3. To use the scene in another application, start **Virtual Camera** in OBS and
+   select **OBS Virtual Camera** in that application.
 
-## Current Platform Support
+## Platform Support
 
-| Sender | Receiver | Status |
-| --- | --- | --- |
-| Android | Linux x86_64/amd64 + OBS Studio | Supported |
-| Android | macOS 12+ + OBS Studio | Implementation present; physical acceptance pending |
-| iOS 17.4+ | Linux x86_64/amd64 + OBS Studio | Install candidate; physical acceptance pending |
+### Senders
 
-Windows and ARM Linux receivers are not currently supported.
-The macOS receiver is not a supported downloadable product until its arm64 and
-x86_64 physical acceptance, clean-machine package installation, and release
-verification gates pass.
+| Platform | Availability |
+| --- | --- |
+| Android | Supported |
+| iOS 17.4+ | In development |
+
+### OBS receivers
+
+| Platform | Availability |
+| --- | --- |
+| Linux x86_64/amd64 | Supported |
+| macOS 12+ on arm64 and x86_64 | In development |
+| Windows | Not available |
+| Linux ARM | Not available |
+
+Senders and receivers use the same versioned CamBridge protocol and are not
+coupled to a particular platform pairing. Supported downloads are published on
+the [latest release](https://github.com/louisemalvin/cambridge/releases/latest).
+Install sender and receiver artifacts from the same CamBridge release.
+
+Platforms marked as in development are implemented and tested in CI, but still
+require physical-device or clean-package acceptance before release.
 
 ## How It Works
 
-The phone captures and encodes video, sends it across the local network, and
-one shared OBS receiver decodes and presents it as an OBS texture:
-
 ```text
-Android: Camera2 → MediaCodec H.264 ─┐
-                                     ├→ RTP/H.264 → shared OBS receiver
-iOS: AVFoundation → VideoToolbox ────┘                   ├→ Linux native
-                                                        ├→ macOS native
-                                                        └→ software fallback
-
-OBS source → OBS Virtual Camera → video-call application
+Phone camera
+    -> CamBridge sender
+    -> H.264/RTP over the local network
+    -> CamBridge source in OBS Studio
+    -> recording, streaming, or OBS Virtual Camera
 ```
 
-The receiver locks one of the selected media paths before accepting RTP for a
-session. A native decode, conversion, or import failure ends that session; it
-does not silently switch paths after decoding starts.
+The sender owns camera and video settings. The receiver owns decoding and OBS
+presentation. See [Architecture](docs/architecture.md) for the component
+boundaries and buffering model.
 
-See [Architecture](docs/architecture.md) for the component boundaries and
-latency/buffering model.
+## Security and Limitations
 
-## Installation
-
-Downloadable installation and first-use instructions are in
-[Installation](docs/installation.md). Users do not need to build the project
-from source.
-
-## Known Limitations
-
-Read [Known limitations](docs/known-limitations.md) before deploying CamBridge,
-especially the trusted-network and host-GPU requirements.
-
-## Building / Contributing
-
-Source builds, repository checks, emulator testing, diagnostics, and release
-packaging are covered in [Development](docs/development.md). Contributors
-should also read [CONTRIBUTING.md](CONTRIBUTING.md).
+CamBridge is designed for a trusted local network. Its control and media
+transport is not encrypted or authenticated. Read
+[Known limitations](docs/known-limitations.md) before deployment.
 
 ## Documentation
 
@@ -102,6 +87,12 @@ should also read [CONTRIBUTING.md](CONTRIBUTING.md).
 - [Android camera modes](docs/android-camera.md)
 - [Development](docs/development.md)
 - [Security policy](SECURITY.md)
+
+## Contributing
+
+Source builds, tests, diagnostics, and release packaging are covered in
+[Development](docs/development.md). Contributors should also read
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
