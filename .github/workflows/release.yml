@@ -74,7 +74,7 @@ jobs:
             libavcodec-dev libavformat-dev libavutil-dev libswresample-dev \
             libswscale-dev \
             libsimde-dev uthash-dev zlib1g-dev \
-            libuuid-dev libx11-dev libx11-xcb-dev libxcb1-dev libxcb-xinput-dev \
+            uuid-dev libx11-dev libx11-xcb-dev libxcb1-dev libxcb-xinput-dev \
             libva-dev libva-drm2 libdrm-dev libjansson-dev \
             libavahi-client-dev
       - name: Build Linux x86_64 plugin package
