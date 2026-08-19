@@ -17,6 +17,13 @@ Before distributing binaries, generate complete dependency notices for the
 Gradle and native build environments and review the selected FFmpeg and OBS
 license configurations.
 
+Linux plugin packages intentionally contain only the CamBridge module. They do
+not bundle OBS, FFmpeg, or their transitive libraries. The Linux build resolves
+the installed `libobs` and FFmpeg packages through `pkg-config`, requires OBS
+32.2.0 or newer, requires the FFmpeg ABI family used by FFmpeg 8 or newer, and
+rejects RPATH/RUNPATH entries so an old library stack cannot shadow the host
+runtime.
+
 ## Pinned macOS source baselines
 
 The macOS build helper downloads and verifies these source archives from the

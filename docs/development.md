@@ -14,6 +14,12 @@ The full repository checks require:
 - `libva` with the DRM backend, `libdrm`, and `jansson`
 - Swift 6.0.3 or Docker for the Linux `CamBridgeCore` and Swift fixture checks
 
+Linux plugin builds use the host OBS and FFmpeg development packages selected by
+`pkg-config`. The current Linux compatibility floor is OBS 32.2.0 with the
+FFmpeg 8 ABI family or newer. The plugin is intentionally not bundled with
+those libraries, so its build and installation target must provide compatible
+system or OBS-managed libraries.
+
 The Xcode project requires macOS with Xcode 16.4 (or a compatible newer Xcode)
 for Apple-target compilation. A physical iPhone is required for hardware
 camera, local-network permission, signing, and glass-to-glass validation.
@@ -101,6 +107,10 @@ Check its runtime dependencies with:
 ```bash
 ldd -r build/cambridge-obs-plugin/staging/obs-plugins/cambridge-obs-plugin/bin/64bit/cambridge-obs-plugin.so
 ```
+
+The build script also runs the dependency validator, which checks that the
+module uses the selected `libobs` and FFmpeg SONAMEs, contains no RPATH/RUNPATH,
+and has no unresolved transitive dependencies.
 
 ### macOS receiver build and fixture
 

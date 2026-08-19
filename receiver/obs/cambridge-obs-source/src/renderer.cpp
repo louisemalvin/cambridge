@@ -32,22 +32,23 @@ uniform texture2d image1;
 uniform bool full_range;
 uniform int rotation_quarter_turn;
 
-const int kQuarterTurnOne = 1;
-const int kQuarterTurnTwo = 2;
-const int kQuarterTurnThree = 3;
-const float kUnitCoordinate = 1.0;
-const float kFullRangeChromaCenter = 0.5;
-const float kVideoRangeChromaCenter = 128.0 / 255.0;
-const float kVideoRangeLumaOffset = 16.0 / 255.0;
-const float kVideoRangeLumaScale = 1.16438356;
-const float kBt709RedCoefficient = 1.5748;
-const float kBt709GreenBlueCoefficient = 0.1873;
-const float kBt709GreenRedCoefficient = 0.4681;
-const float kBt709BlueCoefficient = 1.8556;
-const float kBt709LimitedRedCoefficient = 1.79274107;
-const float kBt709LimitedGreenBlueCoefficient = 0.21324866;
-const float kBt709LimitedGreenRedCoefficient = 0.53290960;
-const float kBt709LimitedBlueCoefficient = 2.11240179;
+// OBS effect shaders accept simple named preprocessor constants, not global const declarations.
+#define kQuarterTurnOne 1
+#define kQuarterTurnTwo 2
+#define kQuarterTurnThree 3
+#define kUnitCoordinate 1.0
+#define kFullRangeChromaCenter 0.5
+#define kVideoRangeChromaCenter 0.5019607843
+#define kVideoRangeLumaOffset 0.0627450980
+#define kVideoRangeLumaScale 1.16438356
+#define kBt709RedCoefficient 1.5748
+#define kBt709GreenBlueCoefficient 0.1873
+#define kBt709GreenRedCoefficient 0.4681
+#define kBt709BlueCoefficient 1.8556
+#define kBt709LimitedRedCoefficient 1.79274107
+#define kBt709LimitedGreenBlueCoefficient 0.21324866
+#define kBt709LimitedGreenRedCoefficient 0.53290960
+#define kBt709LimitedBlueCoefficient 2.11240179
 
 
 sampler_state def_sampler {

@@ -22,6 +22,9 @@ ctest --test-dir "${build_dir}" --output-on-failure
 cmake --install "${build_dir}"
 
 artifact="${build_dir}/cambridge-obs-plugin.so"
+dependency_check_script="${script_dir}/check-cambridge-obs-plugin-dependencies.sh"
+"${dependency_check_script}" \
+    "${staging_dir}/obs-plugins/cambridge-obs-plugin/bin/64bit/cambridge-obs-plugin.so"
 printf 'module=%s\n' "${artifact}"
 printf 'commit=%s\n' "${git_commit}"
 printf 'sha256='; sha256sum "${artifact}" | awk '{print $1}'

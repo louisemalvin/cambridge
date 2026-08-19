@@ -34,8 +34,21 @@ file -b "${plugin_path}" | grep -Eq 'ELF 64-bit.*x86-64' || {
     printf 'error: native plugin is not an x86_64 ELF module\n' >&2
     exit 1
 }
+"${repo_root}/scripts/receiver/linux/check-cambridge-obs-plugin-dependencies.sh" \
+    "${plugin_path}"
 
 cp "${plugin_path}" "${package_root}/obs-plugins/cambridge-obs-plugin/bin/64bit/"
+
+if find "${package_root}" -type f \( \
+    -name 'libobs.so*' -o \
+    -name 'libavcodec.so*' -o \
+    -name 'libavutil.so*' -o \
+    -name 'libswscale.so*' \
+\) -print -quit | grep -q .; then
+    printf 'error: package contains bundled OBS or FFmpeg libraries\n' >&2
+    exit 1
+fi
+
 cp "${repo_root}/README.md" "${package_root}/README.md"
 cp "${repo_root}/LICENSE" "${package_root}/LICENSE"
 cp "${repo_root}/NOTICE" "${package_root}/NOTICE"
@@ -53,9 +66,15 @@ cp "${repo_root}/protocol/README.md" "${package_root}/protocol/README.md"
 cp "${repo_root}/protocol/examples/"*.json "${package_root}/protocol/examples/"
 
 obs_version=$(pkg-config --modversion libobs)
+ffmpeg_avcodec_version=$(pkg-config --modversion libavcodec)
+ffmpeg_avutil_version=$(pkg-config --modversion libavutil)
+ffmpeg_swscale_version=$(pkg-config --modversion libswscale)
 printf 'artifact=cambridge-obs-plugin\nversion=%s\nplatform=%s\nobs_libobs=%s\n' \
     "${version}" "${platform_id}" "${obs_version}" \
     >"${package_root}/release-metadata.txt"
+printf 'ffmpeg_libavcodec=%s\nffmpeg_libavutil=%s\nffmpeg_libswscale=%s\n' \
+    "${ffmpeg_avcodec_version}" "${ffmpeg_avutil_version}" \
+    "${ffmpeg_swscale_version}" >>"${package_root}/release-metadata.txt"
 
 archive_path="${artifact_dir}/${package_name}.tar.gz"
 rm -f "${archive_path}" "${archive_path}.sha256"

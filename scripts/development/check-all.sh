@@ -8,6 +8,7 @@ platform=$(uname -s)
 python3 "${repo_root}/scripts/development/check-cambridge-stream-contract.py"
 bash -n \
     "${repo_root}/scripts/receiver/linux/build-cambridge-obs-plugin.sh" \
+    "${repo_root}/scripts/receiver/linux/check-cambridge-obs-plugin-dependencies.sh" \
     "${repo_root}/scripts/receiver/linux/test-cambridge-fixture.sh" \
     "${repo_root}/scripts/receiver/macos/build-cambridge-obs-plugin.sh" \
     "${repo_root}/scripts/receiver/macos/test-cambridge-fixture.sh" \

@@ -86,6 +86,14 @@ if(CAMBRIDGE_BUILD_PLUGIN)
         PREFIX ""
         OUTPUT_NAME "cambridge-obs-plugin"
     )
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        set_target_properties(cambridge-obs-plugin PROPERTIES
+            SKIP_BUILD_RPATH TRUE
+            SKIP_INSTALL_RPATH TRUE
+            BUILD_WITH_INSTALL_RPATH FALSE
+            INSTALL_RPATH ""
+        )
+    endif()
     if(APPLE)
         set_source_files_properties(
             src/platform/macos/native_decoder_macos.mm

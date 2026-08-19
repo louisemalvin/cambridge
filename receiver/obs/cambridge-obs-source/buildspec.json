@@ -11,6 +11,14 @@
       "x86_64"
     ]
   },
+  "linuxCompatibility": {
+    "minimumObsStudio": "32.2.0",
+    "minimumFfmpegAbis": {
+      "libavcodec": "62",
+      "libavutil": "60",
+      "libswscale": "9"
+    }
+  },
   "dependencies": [
     {
       "name": "cmake",

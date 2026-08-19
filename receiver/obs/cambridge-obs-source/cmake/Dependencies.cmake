@@ -6,12 +6,28 @@ function(cambridge_read_buildspec)
     string(JSON obs_version GET "${buildspec_json}" baseline obsStudio)
     string(JSON ffmpeg_version GET "${buildspec_json}" baseline ffmpeg)
     string(JSON deployment_target GET "${buildspec_json}" baseline macosDeploymentTarget)
+    string(JSON linux_obs_version GET "${buildspec_json}"
+        linuxCompatibility minimumObsStudio)
+    string(JSON linux_avcodec_abi GET "${buildspec_json}"
+        linuxCompatibility minimumFfmpegAbis libavcodec)
+    string(JSON linux_avutil_abi GET "${buildspec_json}"
+        linuxCompatibility minimumFfmpegAbis libavutil)
+    string(JSON linux_swscale_abi GET "${buildspec_json}"
+        linuxCompatibility minimumFfmpegAbis libswscale)
     set(CAMBRIDGE_PINNED_OBS_VERSION "${obs_version}" CACHE INTERNAL
         "OBS baseline recorded in buildspec.json")
     set(CAMBRIDGE_PINNED_FFMPEG_VERSION "${ffmpeg_version}" CACHE INTERNAL
         "FFmpeg baseline recorded in buildspec.json")
     set(CAMBRIDGE_MACOS_DEPLOYMENT_TARGET "${deployment_target}" CACHE INTERNAL
         "macOS deployment target recorded in buildspec.json")
+    set(CAMBRIDGE_LINUX_MIN_OBS_VERSION "${linux_obs_version}" CACHE INTERNAL
+        "Minimum Linux OBS version recorded in buildspec.json")
+    set(CAMBRIDGE_LINUX_MIN_AVCODEC_ABI "${linux_avcodec_abi}" CACHE INTERNAL
+        "Minimum Linux libavcodec ABI recorded in buildspec.json")
+    set(CAMBRIDGE_LINUX_MIN_AVUTIL_ABI "${linux_avutil_abi}" CACHE INTERNAL
+        "Minimum Linux libavutil ABI recorded in buildspec.json")
+    set(CAMBRIDGE_LINUX_MIN_SWSCALE_ABI "${linux_swscale_abi}" CACHE INTERNAL
+        "Minimum Linux libswscale ABI recorded in buildspec.json")
 endfunction()
 
 function(cambridge_configure_dependencies)
@@ -46,9 +62,25 @@ function(cambridge_configure_dependencies)
        (APPLE AND CAMBRIDGE_BUILD_TESTS) OR
        (APPLE AND CAMBRIDGE_VALIDATE_MACOS_DEPENDENCIES))
         find_package(PkgConfig REQUIRED)
-        pkg_check_modules(CAMBRIDGE_OBS REQUIRED libobs)
-        pkg_check_modules(CAMBRIDGE_FFMPEG REQUIRED
-            libavcodec libavutil libswscale)
+        if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+            set(cambridge_obs_requirement
+                "libobs>=${CAMBRIDGE_LINUX_MIN_OBS_VERSION}")
+            set(cambridge_ffmpeg_requirements
+                "libavcodec>=${CAMBRIDGE_LINUX_MIN_AVCODEC_ABI}"
+                "libavutil>=${CAMBRIDGE_LINUX_MIN_AVUTIL_ABI}"
+                "libswscale>=${CAMBRIDGE_LINUX_MIN_SWSCALE_ABI}")
+            pkg_check_modules(CAMBRIDGE_OBS REQUIRED ${cambridge_obs_requirement})
+            pkg_check_modules(CAMBRIDGE_FFMPEG REQUIRED ${cambridge_ffmpeg_requirements})
+            message(STATUS
+                "Using Linux OBS ${CAMBRIDGE_OBS_VERSION} and FFmpeg ABIs "
+                "${CAMBRIDGE_FFMPEG_libavcodec_VERSION}/"
+                "${CAMBRIDGE_FFMPEG_libavutil_VERSION}/"
+                "${CAMBRIDGE_FFMPEG_libswscale_VERSION}")
+        else()
+            pkg_check_modules(CAMBRIDGE_OBS REQUIRED libobs)
+            pkg_check_modules(CAMBRIDGE_FFMPEG REQUIRED
+                libavcodec libavutil libswscale)
+        endif()
 
         if(APPLE AND DEFINED ENV{CAMBRIDGE_OBS_PREFIX})
             list(APPEND CAMBRIDGE_OBS_INCLUDE_DIRS
