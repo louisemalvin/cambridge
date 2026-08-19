@@ -267,8 +267,10 @@ queue/drop/thermal diagnostics, and OBS hardware plus CPU-fallback results.
 
 ## Release packaging
 
-Maintainers prepare a release by updating `VERSION` and `CHANGELOG.md`, running
-the complete repository checks, and validating the Linux package with
+Every user-facing update is a release. Bump `VERSION`, add a corresponding
+`CHANGELOG.md` entry, and publish the downloadable artifacts; do not send
+end users through a source build. Maintainers prepare the release by running
+the complete repository checks and validating the Linux package with
 `./scripts/release/package-linux-plugin.sh`. Push the release commit before
 pushing its matching `v<version>` tag. The tag starts the release workflow,
 which builds a signed Android APK named `cambridge-v<version>.apk` and a Linux

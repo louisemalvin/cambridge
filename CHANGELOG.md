@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.3.1 — OBS 32.2 compatibility and release hardening
+
+- Rebuilt the Linux OBS plugin against the current OBS 32.2 and FFmpeg 8
+  library ABIs instead of the obsolete `libobs.so.0` and FFmpeg 6 stack.
+- Removed plugin RPATH/RUNPATH requirements and reject bundled OBS or FFmpeg
+  libraries from the Linux release archive, so OBS loads the host-compatible
+  libraries.
+- Added Linux dependency validation, isolated OBS startup coverage, and a
+  versioned release package for direct download.
+
 - Consolidated the OBS receiver into one shared Linux/macOS source tree with
   explicit Automatic, NativeRequired, and Software media-path selection locked
   before RTP acceptance.
