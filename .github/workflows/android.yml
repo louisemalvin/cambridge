@@ -23,5 +23,5 @@ jobs:
       - name: Install Android SDK packages
         run: sdkmanager "platforms;android-37.0" "build-tools;36.0.0" "platform-tools"
       - uses: gradle/actions/setup-gradle@v4
-      - run: ./gradlew test lint assembleDebug
+      - run: ./gradlew test lint assembleDebug compileDebugAndroidTestKotlin
         working-directory: sender/android

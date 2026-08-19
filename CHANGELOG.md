@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.3.3 - Permission recovery and decision-oriented testing
+
+- Classify camera permission loss as a permission failure throughout stream
+  startup, including recovery from the webcam route through Android app
+  settings.
+- Keep a known-good receiver endpoint when a new manual receiver probe fails.
+- Keep unsupported 60 fps reasons attached to the frame-rate choice instead of
+  incorrectly marking a supported resolution as unavailable.
+- Add decision-trace documentation, release acceptance criteria, targeted
+  lifecycle tests, and CI compilation of Android instrumentation tests.
+
 ## 0.3.2 - Android permission recovery and capability diagnostics
 
 - Fixed stream setup getting stuck with a disabled Start stream control when

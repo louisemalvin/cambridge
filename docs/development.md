@@ -3,6 +3,10 @@
 This page is for contributors and maintainers. User installation is covered
 in [Installation](installation.md).
 
+The decision-oriented test policy is in [Testing strategy](testing-strategy.md).
+The dated review report is in
+[Quality review 2026-08-20](reports/quality-review-2026-08-20.md).
+
 ## Prerequisites
 
 The full repository checks require:
@@ -81,12 +85,19 @@ From the repository root:
 ```bash
 cd sender/android
 JAVA_HOME=/path/to/jdk-17 ./gradlew \
-  testDebugUnitTest lint assembleDebug --console=plain
+  testDebugUnitTest lint assembleDebug compileDebugAndroidTestKotlin --console=plain
 ```
 
 The debug APK is written to
 `sender/android/app/build/outputs/apk/debug/app-debug.apk` when referenced from the
 repository root.
+
+The instrumentation tests are compiled in this check even when no Android
+device or emulator is attached. Run them on a configured API 35 emulator with:
+
+```bash
+JAVA_HOME=/path/to/jdk-17 ./gradlew connectedDebugAndroidTest --console=plain
+```
 
 ## OBS plugin build
 

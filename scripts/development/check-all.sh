@@ -18,7 +18,7 @@ bash -n \
     "${repo_root}/scripts/release/package-macos-plugin.sh"
 JAVA_HOME="${JAVA_HOME:-/opt/android-studio/jbr}" \
     "${repo_root}/sender/android/gradlew" -p "${repo_root}/sender/android" \
-    testDebugUnitTest lint assembleDebug --console=plain
+    testDebugUnitTest lint assembleDebug compileDebugAndroidTestKotlin --console=plain
 case "${platform}" in
     Linux)
         "${repo_root}/scripts/receiver/linux/build-cambridge-obs-plugin.sh"
