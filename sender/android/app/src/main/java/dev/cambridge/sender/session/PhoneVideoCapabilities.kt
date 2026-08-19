@@ -38,6 +38,8 @@ object PhoneVideoCapabilities {
             reason = when {
                 mode.id !in cameraSupportedModeIds -> "The camera does not provide this size and frame rate"
                 encoder?.supported != true -> encoder?.reason ?: "The phone H.264 encoder does not provide this mode"
+                mode.steppedBitrates(encoderMinimum, encoderMaximum).isEmpty() ->
+                    "The phone encoder bitrate range does not overlap CamBridge's supported range"
                 else -> null
             },
         )

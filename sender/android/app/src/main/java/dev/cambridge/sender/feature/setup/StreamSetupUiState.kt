@@ -26,6 +26,12 @@ sealed interface ReceiverReadinessUiState {
 }
 
 @Immutable
+data class CameraPermissionUiState(
+    val isGranted: Boolean = true,
+    val isPermanentlyDenied: Boolean = false,
+)
+
+@Immutable
 data class StreamSetupUiState(
     val connection: ConnectionUiState = ConnectionUiState.Waiting,
     val receiverReadiness: ReceiverReadinessUiState = ReceiverReadinessUiState.Checking,
@@ -42,6 +48,7 @@ data class StreamSetupUiState(
     val selectedProfile: VideoProfile,
     val selectedOrientation: StreamOrientation,
     val selectedProfileSupported: Boolean = false,
+    val videoCapabilitiesReady: Boolean = false,
     val validationMessage: UiText? = null,
 ) {
     val canStart: Boolean

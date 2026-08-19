@@ -23,6 +23,7 @@ import dev.cambridge.sender.app.model.StabilizationUiState
 import dev.cambridge.sender.feature.settings.SettingsUiState
 import dev.cambridge.sender.feature.settings.SettingsScreen
 import dev.cambridge.sender.feature.setup.BitrateUiState
+import dev.cambridge.sender.feature.setup.CameraPermissionUiState
 import dev.cambridge.sender.feature.setup.ReceiverReadinessUiState
 import dev.cambridge.sender.feature.setup.StreamSetupScreen
 import dev.cambridge.sender.feature.setup.StreamSetupUiState
@@ -219,6 +220,82 @@ class SenderScreenTest {
         composeRule.onNodeWithText("Camera settings").performClick()
         composeRule.onNodeWithText("Stabilization").assertIsDisplayed()
         composeRule.onNodeWithText("Anti-flicker").assertIsDisplayed()
+    }
+
+    @Test
+    fun setupMakesMissingCameraPermissionActionable() {
+        var permissionRequested = false
+        composeRule.setContent {
+            MaterialTheme {
+                StreamSetupScreen(
+                    state = StreamSetupUiState(
+                        receiverReadiness = ReceiverReadinessUiState.Ready(
+                            receiverName = UiText.Plain("OBS Studio"),
+                            address = UiText.Plain("192.168.1.20"),
+                        ),
+                        selectedProfile = VideoProfiles.default,
+                        selectedOrientation = StreamOrientation.LANDSCAPE,
+                    ),
+                    cameraPermission = CameraPermissionUiState(isGranted = false),
+                    onAction = { action ->
+                        if (action == dev.cambridge.sender.app.model.SenderScreenAction.RequestCameraPermission) {
+                            permissionRequested = true
+                        }
+                    },
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Camera access required").assertIsDisplayed()
+        composeRule.onNodeWithText("Allow camera access").assertIsEnabled().performClick()
+        composeRule.runOnIdle { assertTrue(permissionRequested) }
+    }
+
+    @Test
+    fun setupExplainsWhyAnUnsupportedFrameRateIsDisabled() {
+        val encoderReason = "The phone H.264 encoder does not provide this mode"
+        composeRule.setContent {
+            MaterialTheme {
+                StreamSetupScreen(
+                    state = StreamSetupUiState(
+                        receiverReadiness = ReceiverReadinessUiState.Ready(
+                            receiverName = UiText.Plain("OBS Studio"),
+                            address = UiText.Plain("192.168.1.20"),
+                        ),
+                        frameRateOptions = listOf(
+                            SelectOptionUi(
+                                key = "30",
+                                label = UiText.Plain("30 fps"),
+                                isSelected = true,
+                            ),
+                            SelectOptionUi(
+                                key = "60",
+                                label = UiText.Plain("60 fps"),
+                                isSelected = false,
+                                isEnabled = false,
+                                disabledReason = UiText.Plain(encoderReason),
+                            ),
+                        ),
+                        bitrate = BitrateUiState(
+                            isAvailable = true,
+                            selectedBps = VideoProfiles.default.defaultBitrateBps,
+                            minimumBps = VideoProfiles.default.minimumBitrateBps,
+                            maximumBps = VideoProfiles.default.maximumBitrateBps,
+                            stepBps = VideoProfiles.default.bitrateStepBps,
+                        ),
+                        selectedProfile = VideoProfiles.default,
+                        selectedOrientation = StreamOrientation.LANDSCAPE,
+                        selectedProfileSupported = true,
+                        videoCapabilitiesReady = true,
+                    ),
+                    onAction = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("60 fps unavailable: $encoderReason").assertIsDisplayed()
+        composeRule.onNodeWithText("30 fps").performClick()
+        composeRule.onNodeWithText(encoderReason).assertIsDisplayed()
     }
 
     @Test

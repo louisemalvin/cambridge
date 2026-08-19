@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.3.2 - Android permission recovery and capability diagnostics
+
+- Fixed stream setup getting stuck with a disabled Start stream control when
+  camera permission was missing or denied.
+- Added explicit camera permission recovery, including an app-settings path
+  for permanently denied access and refresh when returning from Android
+  settings.
+- Explain why an unavailable resolution or frame rate is blocked, including
+  the camera, H.264 encoder, and bitrate-intersection causes.
+- Record the resolved phone video capability reasons in Android diagnostics.
+
 ## 0.3.1 — OBS 32.2 compatibility and release hardening
 
 - Rebuilt the Linux OBS plugin against the current OBS 32.2 and FFmpeg 8

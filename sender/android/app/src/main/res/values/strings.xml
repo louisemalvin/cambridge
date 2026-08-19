@@ -37,6 +37,7 @@
     <string name="frame_rate">Frame rate</string>
     <string name="frame_rate_option">%1$d fps</string>
     <string name="frame_rate_choose">Choose frame rate</string>
+    <string name="checking_video_capabilities">Checking camera and H.264 encoder capabilities on this phone…</string>
     <string name="bitrate">Bitrate</string>
     <string name="bitrate_slider">Video bitrate</string>
     <string name="bitrate_input">Video bitrate in megabits per second</string>
@@ -45,6 +46,8 @@
     <string name="bitrate_input_error">Enter %1$d–%2$d Mbps in %3$d Mbps steps</string>
     <string name="bitrate_summary">%1$d Mbps</string>
     <string name="video_mode_unavailable">This camera and encoder cannot provide the selected video mode.</string>
+    <string name="setup_option_unavailable">%1$s unavailable: %2$s</string>
+    <string name="camera_capabilities_unavailable">CamBridge could not inspect the camera and H.264 encoder on this phone. Check camera access and try again.</string>
     <string name="orientation_support">The selected orientation is locked while streaming. Stop before changing it.</string>
     <string name="stream_settings">Stream settings</string>
     <string name="camera_settings">Camera settings</string>
@@ -74,7 +77,10 @@
     <string name="diagnostics_clipboard_label">CamBridge error</string>
     <string name="camera_permission_title">Camera access required</string>
     <string name="camera_permission_message">Allow camera access so the phone can send video to a receiver.</string>
+    <string name="camera_permission_setup_message">Allow camera access before starting a stream. CamBridge cannot inspect the video modes or send video without it.</string>
+    <string name="camera_permission_blocked_message">Camera access is blocked. Open CamBridge app settings and allow Camera, then return here.</string>
     <string name="allow_camera_access">Allow camera access</string>
+    <string name="camera_permission_open_settings">Open app settings</string>
     <string name="cancel">Cancel</string>
     <string name="stop_stream">Stop stream</string>
     <string name="end_stream_title">Stop streaming?</string>

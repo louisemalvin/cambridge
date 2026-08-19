@@ -57,6 +57,7 @@ data class SelectOptionUi(
     val label: UiText,
     val isSelected: Boolean,
     val isEnabled: Boolean = true,
+    val disabledReason: UiText? = null,
 )
 
 @Immutable

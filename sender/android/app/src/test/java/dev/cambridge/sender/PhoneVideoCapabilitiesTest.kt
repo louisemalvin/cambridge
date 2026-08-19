@@ -66,6 +66,27 @@ class PhoneVideoCapabilitiesTest {
         assertEquals("test encoder rejection", encoderUnsupported.reason)
     }
 
+    @Test
+    fun bitrateIntersectionFailureExplainsWhyTheModeIsUnavailable() {
+        val mode = VideoProfiles.PROFILE_1080P60
+        val capability = PhoneVideoCapabilities.resolve(
+            modes = listOf(mode),
+            cameraSupportedModeIds = setOf(mode.id),
+            encoderCapabilities = listOf(
+                supportedEncoder(mode).copy(
+                    minimumBitrateBps = mode.maximumBitrateBps + mode.bitrateStepBps,
+                    maximumBitrateBps = mode.maximumBitrateBps + mode.bitrateStepBps,
+                ),
+            ),
+        ).single()
+
+        assertFalse(capability.isSupported)
+        assertEquals(
+            "The phone encoder bitrate range does not overlap CamBridge's supported range",
+            capability.reason,
+        )
+    }
+
     private fun supportedEncoder(mode: dev.cambridge.sender.model.VideoProfile) = EncoderCapability(
         codec = VideoCodec.H264,
         profileId = mode.id,

@@ -24,6 +24,7 @@ import dev.cambridge.sender.session.VideoProfiles
 import dev.cambridge.sender.media.camera.CameraInteractionState
 import dev.cambridge.sender.media.camera.CameraStabilizationMode
 import dev.cambridge.sender.media.capabilities.EncoderCapabilityProbe
+import dev.cambridge.sender.logging.AppLogger
 import dev.cambridge.sender.session.PhoneVideoCapabilities
 import dev.cambridge.sender.session.PhoneVideoModeCapability
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -45,12 +46,13 @@ class StreamSetupViewModel @Inject constructor(
     private val cameraController: CameraController,
     private val settings: SenderSettingsRepository,
     private val encoderCapabilityProbe: EncoderCapabilityProbe,
+    private val logger: AppLogger,
 ) : ViewModel() {
     private val validationMessage = MutableStateFlow<String?>(null)
     private val manualReceiver = MutableStateFlow(
         ManualReceiverInput(host = settings.state.value.receiverEndpoint?.host.orEmpty()),
     )
-    private val videoCapabilities = MutableStateFlow<List<PhoneVideoModeCapability>>(emptyList())
+    private val videoCapabilityState = MutableStateFlow(VideoCapabilityState())
     private val effectFlow = MutableSharedFlow<StreamSetupUiEffect>(extraBufferCapacity = EFFECT_BUFFER_CAPACITY)
 
     private val setupInputs = combine(
@@ -72,10 +74,14 @@ class StreamSetupViewModel @Inject constructor(
     val uiState: StateFlow<StreamSetupUiState> = combine(
         setupInputs,
         cameraController.state,
-        videoCapabilities,
+        videoCapabilityState,
         manualReceiver,
         coordinator.receiverCandidates,
-    ) { inputs, cameraInteraction, capabilities, configuredManualReceiver, receiverCandidates ->
+    ) { inputs, cameraInteraction, capabilityState, configuredManualReceiver, receiverCandidates ->
+        val capabilities = capabilityState.capabilities
+        val capabilityError = capabilityState.error?.let(UiText::Plain)
+            ?: capabilityState.takeIf { it.isReady && it.capabilities.isEmpty() }
+                ?.let { UiText.Resource(R.string.camera_capabilities_unavailable) }
         val streamState = inputs.streamState
         val receiverName = inputs.receiverName
         val configuredSettings = inputs.configuredSettings
@@ -115,10 +121,15 @@ class StreamSetupViewModel @Inject constructor(
             selectedProfile = configuredSettings.profile,
             selectedOrientation = configuredSettings.streamOrientation,
             selectedProfileSupported = selectedProfileSupported,
+            videoCapabilitiesReady = capabilityState.isReady,
             bitrate = bitrateUiState(configuredSettings.bitrateBps, selectedCapability),
             validationMessage = validation?.let(UiText::Plain)
+                ?: capabilityError
                 ?: selectedCapability?.takeIf { !it.isSupported || !selectedProfileSupported }
-                    ?.let { UiText.Resource(R.string.video_mode_unavailable) },
+                    ?.let { capability ->
+                        capability.reason?.let(UiText::Plain)
+                            ?: UiText.Resource(R.string.video_mode_unavailable)
+                    },
         )
     }.stateIn(
         scope = viewModelScope,
@@ -132,6 +143,7 @@ class StreamSetupViewModel @Inject constructor(
     val effects = effectFlow.asSharedFlow()
 
     fun prepareCamera() {
+        videoCapabilityState.value = VideoCapabilityState()
         viewModelScope.launch(Dispatchers.Default) {
             runCatching {
                 cameraController.prepareCamera()
@@ -139,15 +151,40 @@ class StreamSetupViewModel @Inject constructor(
                 val modes = VideoProfiles.all
                 val cameraSupported = cameraController.supportedVideoModes(modes)
                 val encoderCapabilities = encoderCapabilityProbe.getCapabilities(modes)
-                videoCapabilities.value = PhoneVideoCapabilities.resolve(
+                PhoneVideoCapabilities.resolve(
                     modes = modes,
                     cameraSupportedModeIds = cameraSupported,
                     encoderCapabilities = encoderCapabilities,
                 )
-            }.onFailure {
-                videoCapabilities.value = emptyList()
+            }.onSuccess { capabilities ->
+                logger.event(
+                    "video_capabilities_resolved",
+                    mapOf(
+                        "modes" to capabilities.joinToString(separator = ",") { capability ->
+                            listOf(
+                                capability.mode.id,
+                                capability.isSupported,
+                                capability.reason.orEmpty(),
+                            ).joinToString(separator = ":")
+                        },
+                    ),
+                )
+                videoCapabilityState.value = VideoCapabilityState(
+                    capabilities = capabilities,
+                    isReady = true,
+                )
+            }.onFailure { failure ->
+                logger.warn("video capability probe failed", failure)
+                videoCapabilityState.value = VideoCapabilityState(
+                    isReady = true,
+                    error = failure.message?.takeIf(String::isNotBlank),
+                )
             }
         }
+    }
+
+    fun clearCameraCapabilities() {
+        videoCapabilityState.value = VideoCapabilityState()
     }
 
     init {
@@ -221,7 +258,8 @@ class StreamSetupViewModel @Inject constructor(
 
     private fun selectBitrate(bitrateBps: Int) {
         val current = settings.state.value
-        val capability = videoCapabilities.value.firstOrNull { it.mode.id == current.profile.id }
+        val capability = videoCapabilityState.value.capabilities
+            .firstOrNull { it.mode.id == current.profile.id }
             ?: return
         current.profile.clampToStep(
             valueBps = bitrateBps,
@@ -330,11 +368,16 @@ class StreamSetupViewModel @Inject constructor(
             listOf(selectedProfile) + VideoProfiles.qualityProfiles
         }
         return profiles.map { profile ->
+            val profileCapabilities = capabilitiesForResolution(profile, capabilities)
             SelectOptionUi(
                 key = profile.id,
                 label = StreamPresentationMapper.videoProfileLabel(profile),
                 isSelected = sameResolution(profile, selectedProfile),
-                isEnabled = capabilitiesForResolution(profile, capabilities).any(PhoneVideoModeCapability::isSupported),
+                isEnabled = profileCapabilities.any(PhoneVideoModeCapability::isSupported),
+                disabledReason = profileCapabilities
+                    .firstOrNull { !it.isSupported }
+                    ?.reason
+                    ?.let(UiText::Plain),
             )
         }
     }
@@ -346,11 +389,16 @@ class StreamSetupViewModel @Inject constructor(
         .distinctBy { profile -> profile.fps }
         .sortedBy { profile -> profile.fps }
         .map { profile ->
+            val capability = capabilities.firstOrNull { it.mode.id == profile.id }
             SelectOptionUi(
                 key = profile.fps.toString(),
                 label = UiText.Resource(R.string.frame_rate_option, listOf(profile.fps)),
                 isSelected = profile.fps == selectedProfile.fps,
-                isEnabled = capabilities.firstOrNull { it.mode.id == profile.id }?.isSupported == true,
+                isEnabled = capability?.isSupported == true,
+                disabledReason = capability
+                    ?.takeIf { !it.isSupported }
+                    ?.reason
+                    ?.let(UiText::Plain),
             )
         }
 
@@ -403,6 +451,12 @@ class StreamSetupViewModel @Inject constructor(
         val host: String,
         val error: UiText? = null,
         val isVisible: Boolean = false,
+    )
+
+    private data class VideoCapabilityState(
+        val capabilities: List<PhoneVideoModeCapability> = emptyList(),
+        val isReady: Boolean = false,
+        val error: String? = null,
     )
 }
 
