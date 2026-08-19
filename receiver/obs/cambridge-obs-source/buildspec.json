@@ -12,7 +12,11 @@
     ]
   },
   "linuxCompatibility": {
-    "minimumObsStudio": "32.2.0",
+    "obsStudioSource": {
+      "version": "32.2.0",
+      "url": "https://github.com/obsproject/obs-studio/releases/download/32.2.0/OBS-Studio-32.2.0-Sources.tar.gz",
+      "sha256": "a26a5da53964a8c38741c613f14f93cc37d95354e5225a07b6618152cdfcec1c"
+    },
     "minimumFfmpegAbis": {
       "libavcodec": "62",
       "libavutil": "60",

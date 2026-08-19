@@ -7,7 +7,7 @@ function(cambridge_read_buildspec)
     string(JSON ffmpeg_version GET "${buildspec_json}" baseline ffmpeg)
     string(JSON deployment_target GET "${buildspec_json}" baseline macosDeploymentTarget)
     string(JSON linux_obs_version GET "${buildspec_json}"
-        linuxCompatibility minimumObsStudio)
+        linuxCompatibility obsStudioSource version)
     string(JSON linux_avcodec_abi GET "${buildspec_json}"
         linuxCompatibility minimumFfmpegAbis libavcodec)
     string(JSON linux_avutil_abi GET "${buildspec_json}"

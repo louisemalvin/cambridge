@@ -90,6 +90,11 @@ repository root.
 
 ## OBS plugin build
 
+The Linux CI and release jobs prepare the pinned OBS 32.2.0 development
+library from the official OBS source archive before building the plugin. A
+normal local build uses the host's compatible OBS development package through
+`pkg-config`.
+
 Build, test, and stage the native plugin with:
 
 ```bash

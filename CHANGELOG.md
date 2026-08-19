@@ -11,6 +11,8 @@
   libraries.
 - Added Linux dependency validation, isolated OBS startup coverage, and a
   versioned release package for direct download.
+- Release CI now builds against the pinned OBS 32.2.0 source and Ubuntu 26.04
+  FFmpeg 8 libraries used by the supported Linux target.
 
 - Consolidated the OBS receiver into one shared Linux/macOS source tree with
   explicit Automatic, NativeRequired, and Software media-path selection locked

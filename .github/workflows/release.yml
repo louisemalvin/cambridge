@@ -69,17 +69,20 @@ jobs:
       - name: Install native dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y software-properties-common
-          sudo add-apt-repository --yes ppa:obsproject/obs-studio
-          sudo apt-get update
           sudo apt-get install -y \
-            cmake g++ pkg-config file tar \
-            libobs-dev \
-            libavcodec-dev libavutil-dev libswscale-dev \
+            cmake extra-cmake-modules g++ ninja-build pkg-config python3 curl file tar \
+            libavcodec-dev libavformat-dev libavutil-dev libswresample-dev \
+            libswscale-dev \
+            libsimde-dev uthash-dev zlib1g-dev \
+            libuuid-dev libx11-dev libx11-xcb-dev libxcb1-dev libxcb-xinput-dev \
             libva-dev libva-drm2 libdrm-dev libjansson-dev \
             libavahi-client-dev
       - name: Build Linux x86_64 plugin package
-        run: ./scripts/release/package-linux-plugin.sh
+        run: |
+          ./scripts/receiver/linux/prepare-cambridge-obs-dependencies.sh
+          obs_prefix="${GITHUB_WORKSPACE}/build/cambridge-obs-dependencies/obs"
+          export PKG_CONFIG_PATH="${obs_prefix}/lib/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}"
+          ./scripts/release/package-linux-plugin.sh
       - uses: actions/upload-artifact@v4
         with:
           name: linux-x86_64-release
