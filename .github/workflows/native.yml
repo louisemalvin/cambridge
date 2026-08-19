@@ -34,7 +34,8 @@ jobs:
             libswscale-dev \
             libsimde-dev uthash-dev zlib1g-dev \
             uuid-dev libx11-dev libx11-xcb-dev libxcb1-dev libxcb-xinput-dev \
-            libva-dev libva-drm2 libdrm-dev libjansson-dev \
+            libva-dev libva-drm2 libdrm-dev libgl-dev libopengl-dev libglx-dev \
+            libjansson-dev \
             libavahi-client-dev
       - name: Build and test native source
         run: |
