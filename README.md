@@ -2,33 +2,33 @@
 
 Turn your phone into a webcam through OBS Studio.
 
-CamBridge streams H.264 video from a phone camera over your local network to a
-native source in OBS. Use the source in an OBS scene for recording or
-streaming, or share the scene with video-call applications through
+CamBridge sends live video from your phone camera to OBS over your local
+network. Add the camera to an OBS scene for recording or streaming, or share
+the scene with video-call applications through
 [OBS Virtual Camera](https://obsproject.com/kb/virtual-camera-guide).
 
 ## Features
 
-### Phone sender
+### On your phone
 
-- Direct camera streaming to OBS over the local network
-- Automatic receiver discovery with explicit selection and a manual address
-  fallback
-- Phone-supported 1080p and 2K modes at 30 or 60 fps with bitrate control
-- Portrait and landscape video with explicit stabilization controls
+- See a live preview while using the camera in OBS
+- Find your OBS computer automatically or enter its address yourself
+- Choose the resolution, frame rate, and video quality
+- Use portrait or landscape video and adjust zoom and stabilization
 
-### OBS receiver
+### In OBS
 
-- Native CamBridge source for OBS Studio
-- Hardware-accelerated H.264 decoding where available with a software fallback
-- Phone camera output for recording, streaming, and OBS Virtual Camera
+- Add the phone camera to a scene like any other source
+- Record it, include it in a livestream, or use it in video-call applications
+- Keep the phone-to-computer connection on your local network without an
+  account or cloud service
 
 ## Quick Start
 
 1. Install CamBridge on the phone and the CamBridge plugin for OBS by following
    the [installation guide](docs/installation.md).
-2. Add a **CamBridge** source in OBS, select it from the phone, and press
-   **Start stream**.
+2. Add a **CamBridge** source in OBS, select the computer from the phone, and
+   press **Start stream**.
 3. To use the scene in another application, start **Virtual Camera** in OBS and
    select **OBS Virtual Camera** in that application.
 
@@ -50,33 +50,31 @@ streaming, or share the scene with video-call applications through
 | Windows | Not available |
 | Linux ARM | Not available |
 
-Senders and receivers use the same versioned CamBridge protocol and are not
-coupled to a particular platform pairing. Supported downloads are published on
-the [latest release](https://github.com/louisemalvin/cambridge/releases/latest).
-Install sender and receiver artifacts from the same CamBridge release.
+Every CamBridge sender works with every CamBridge receiver from the same
+version. The phone and computer platforms are not fixed pairs. Supported
+downloads are published on the
+[latest release](https://github.com/louisemalvin/cambridge/releases/latest).
 
-Platforms marked as in development are implemented and tested in CI, but still
-require physical-device or clean-package acceptance before release.
+Platforms marked as in development are not included in public releases yet.
 
 ## How It Works
 
 ```text
 Phone camera
-    -> CamBridge sender
-    -> H.264/RTP over the local network
+    -> CamBridge app
+    -> local network
     -> CamBridge source in OBS Studio
     -> recording, streaming, or OBS Virtual Camera
 ```
 
-The sender owns camera and video settings. The receiver owns decoding and OBS
-presentation. See [Architecture](docs/architecture.md) for the component
-boundaries and buffering model.
+The phone controls the camera and picture settings. The OBS plugin receives the
+video and displays it in your scene. See [Architecture](docs/architecture.md)
+for technical design details.
 
 ## Security and Limitations
 
-CamBridge is designed for a trusted local network. Its control and media
-transport is not encrypted or authenticated. Read
-[Known limitations](docs/known-limitations.md) before deployment.
+CamBridge does not encrypt or verify connections, so use it only on a network
+you trust. Read [Known limitations](docs/known-limitations.md) before use.
 
 ## Documentation
 
