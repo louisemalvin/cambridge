@@ -22,7 +22,15 @@ fun CameraPermissionDialog(
         text = { Text(dialog.message.value()) },
         confirmButton = {
             Button(onClick = { onAction(SenderScreenAction.RequestCameraPermission) }) {
-                Text(stringResource(R.string.allow_camera_access))
+                Text(
+                    stringResource(
+                        if (dialog.isPermanentlyDenied) {
+                            R.string.camera_permission_open_settings
+                        } else {
+                            R.string.allow_camera_access
+                        },
+                    ),
+                )
             }
         },
         dismissButton = {

@@ -359,48 +359,12 @@ class StreamSetupViewModel @Inject constructor(
     private fun resolutionOptions(
         selectedProfile: VideoProfile,
         capabilities: List<PhoneVideoModeCapability>,
-    ): List<SelectOptionUi> {
-        val profiles = if (VideoProfiles.qualityProfiles.any { profile ->
-                sameResolution(profile, selectedProfile)
-            }) {
-            VideoProfiles.qualityProfiles
-        } else {
-            listOf(selectedProfile) + VideoProfiles.qualityProfiles
-        }
-        return profiles.map { profile ->
-            val profileCapabilities = capabilitiesForResolution(profile, capabilities)
-            SelectOptionUi(
-                key = profile.id,
-                label = StreamPresentationMapper.videoProfileLabel(profile),
-                isSelected = sameResolution(profile, selectedProfile),
-                isEnabled = profileCapabilities.any(PhoneVideoModeCapability::isSupported),
-                disabledReason = profileCapabilities
-                    .firstOrNull { !it.isSupported }
-                    ?.reason
-                    ?.let(UiText::Plain),
-            )
-        }
-    }
+    ): List<SelectOptionUi> = StreamSetupOptionResolver.resolutionOptions(selectedProfile, capabilities)
 
     private fun frameRateOptions(
         selectedProfile: VideoProfile,
         capabilities: List<PhoneVideoModeCapability>,
-    ): List<SelectOptionUi> = VideoProfiles.profilesForResolution(selectedProfile)
-        .distinctBy { profile -> profile.fps }
-        .sortedBy { profile -> profile.fps }
-        .map { profile ->
-            val capability = capabilities.firstOrNull { it.mode.id == profile.id }
-            SelectOptionUi(
-                key = profile.fps.toString(),
-                label = UiText.Resource(R.string.frame_rate_option, listOf(profile.fps)),
-                isSelected = profile.fps == selectedProfile.fps,
-                isEnabled = capability?.isSupported == true,
-                disabledReason = capability
-                    ?.takeIf { !it.isSupported }
-                    ?.reason
-                    ?.let(UiText::Plain),
-            )
-        }
+    ): List<SelectOptionUi> = StreamSetupOptionResolver.frameRateOptions(selectedProfile, capabilities)
 
     private fun bitrateUiState(
         selectedBitrateBps: Int,
@@ -421,18 +385,6 @@ class StreamSetupViewModel @Inject constructor(
             stepBps = capability.mode.bitrateStepBps,
         )
     }
-
-    private fun capabilitiesForResolution(
-        profile: VideoProfile,
-        capabilities: List<PhoneVideoModeCapability>,
-    ): List<PhoneVideoModeCapability> = capabilities.filter { capability ->
-        sameResolution(capability.mode, profile)
-    }
-
-    private fun sameResolution(
-        left: VideoProfile,
-        right: VideoProfile,
-    ): Boolean = left.width == right.width && left.height == right.height
 
     private companion object {
         const val EFFECT_BUFFER_CAPACITY = 1

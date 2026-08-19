@@ -27,6 +27,7 @@ import dev.cambridge.sender.logging.AndroidAppLogger
 import dev.cambridge.sender.logging.AppLogger
 import dev.cambridge.sender.media.camera.AntiFlickerMode
 import dev.cambridge.sender.media.camera.CameraInteractionState
+import dev.cambridge.sender.media.camera.CameraPermissionRequiredException
 import dev.cambridge.sender.media.camera.CameraPreviewSurface
 import dev.cambridge.sender.media.camera.CameraZoom
 import dev.cambridge.sender.media.camera.AppliedVideoStabilizationMode
@@ -84,10 +85,7 @@ internal class Camera2Capture(
     val cameraState = kotlinx.coroutines.flow.MutableStateFlow(CameraInteractionState())
 
     suspend fun prepare() {
-        check(ContextCompat.checkSelfPermission(applicationContext, Manifest.permission.CAMERA) ==
-            PackageManager.PERMISSION_GRANTED) {
-            "Camera permission is required before preparing the CamBridge sender"
-        }
+        requireCameraPermission("Camera permission is required before preparing the CamBridge sender")
         val cameraId = selectedCameraId ?: selectDefaultCameraId().also { selectedCameraId = it }
         cameraCharacteristics = cameraManager.getCameraCharacteristics(cameraId)
         updateCameraState()
@@ -103,10 +101,7 @@ internal class Camera2Capture(
         codedHeight: Int,
         orientation: StreamOrientation,
     ): SessionTransform {
-        check(ContextCompat.checkSelfPermission(applicationContext, Manifest.permission.CAMERA) ==
-            PackageManager.PERMISSION_GRANTED) {
-            "Camera permission is required before selecting video quality"
-        }
+        requireCameraPermission("Camera permission is required before selecting video quality")
         if (cameraCharacteristics == null) {
             startThread()
             val cameraId = selectDefaultCameraId()
@@ -165,6 +160,7 @@ internal class Camera2Capture(
         codedWidth: Int? = null,
         codedHeight: Int? = null,
     ) {
+        requireCameraPermission("Camera permission is required before starting the CamBridge sender")
         require(targetFps in CamBridgeStreamContract.MINIMUM_FPS..CamBridgeStreamContract.MAXIMUM_FPS) {
             "Requested frame rate is outside the CamBridge stream contract"
         }
@@ -329,30 +325,47 @@ internal class Camera2Capture(
             continuation.resumeWithException(IllegalStateException("Camera handler is not running"))
             return@suspendCancellableCoroutine
         }
-        manager.openCamera(
-            cameraId,
-            object : CameraDevice.StateCallback() {
-                override fun onOpened(camera: CameraDevice) {
-                    continuation.resume(camera)
-                }
-
-                override fun onDisconnected(camera: CameraDevice) {
-                    camera.close()
-                    if (continuation.isActive) {
-                        continuation.resumeWithException(IllegalStateException("Camera disconnected while opening"))
+        try {
+            manager.openCamera(
+                cameraId,
+                object : CameraDevice.StateCallback() {
+                    override fun onOpened(camera: CameraDevice) {
+                        continuation.resume(camera)
                     }
-                }
 
-                override fun onError(camera: CameraDevice, error: Int) {
-                    camera.close()
-                    if (continuation.isActive) {
-                        continuation.resumeWithException(IllegalStateException("Camera open failed: $error"))
+                    override fun onDisconnected(camera: CameraDevice) {
+                        camera.close()
+                        if (continuation.isActive) {
+                            continuation.resumeWithException(IllegalStateException("Camera disconnected while opening"))
+                        }
                     }
-                }
-            },
-            handler,
-        )
+
+                    override fun onError(camera: CameraDevice, error: Int) {
+                        camera.close()
+                        if (continuation.isActive) {
+                            continuation.resumeWithException(IllegalStateException("Camera open failed: $error"))
+                        }
+                    }
+                },
+                handler,
+            )
+        } catch (security: SecurityException) {
+            continuation.resumeWithException(
+                CameraPermissionRequiredException(
+                    "Camera permission is required before opening the camera",
+                    security,
+                ),
+            )
+        }
         continuation.invokeOnCancellation { cameraDevice?.close() }
+    }
+
+    private fun requireCameraPermission(message: String) {
+        if (ContextCompat.checkSelfPermission(applicationContext, Manifest.permission.CAMERA) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            throw CameraPermissionRequiredException(message)
+        }
     }
 
     private suspend fun configureCaptureSession(device: CameraDevice) = suspendCancellableCoroutine<Unit> { continuation ->

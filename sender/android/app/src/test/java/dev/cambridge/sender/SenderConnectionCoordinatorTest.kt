@@ -120,6 +120,24 @@ class SenderConnectionCoordinatorTest {
     }
 
     @Test
+    fun failedManualReceiverProbeDoesNotReplaceTheLastKnownGoodEndpoint() = runTest {
+        val knownEndpoint = endpoint.copy(host = "10.0.0.8")
+        val settings = FakeSettings(initialEndpoint = knownEndpoint)
+        val receiverProbe = FakeReceiverProbe(failure = IllegalStateException("receiver offline"))
+        val coordinator = coordinator(
+            controller = FakeController(),
+            scope = backgroundScope,
+            settings = settings,
+            receiverProbe = receiverProbe,
+        )
+
+        assertTrue(coordinator.configureReceiverHost("10.0.0.24").isFailure)
+
+        assertEquals(knownEndpoint, settings.state.value.receiverEndpoint)
+        assertTrue(coordinator.receiverProbeState.value is ReceiverProbeState.Unavailable)
+    }
+
+    @Test
     fun multipleDiscoveredReceiversRequireAnExplicitSelection() = runTest {
         val office = ReceiverEndpoint("10.0.0.8", endpoint.controlPort, "Office")
         val studio = ReceiverEndpoint("10.0.0.9", endpoint.controlPort, "Studio")
@@ -218,6 +236,7 @@ class SenderConnectionCoordinatorTest {
     )
 
     private class FakeReceiverProbe(
+        private val failure: Throwable? = null,
         private val response: (ReceiverEndpoint) -> ReceiverCapabilities = {
             capabilities("cambridge-obs-source", "OBS receiver")
         },
@@ -228,6 +247,7 @@ class SenderConnectionCoordinatorTest {
         override suspend fun probe(endpoint: ReceiverEndpoint): Result<ReceiverCapabilities> {
             probedEndpoint = endpoint
             probedEndpoints += endpoint
+            failure?.let { return Result.failure(it) }
             return Result.success(response(endpoint))
         }
     }
@@ -311,8 +331,15 @@ class SenderConnectionCoordinatorTest {
         override suspend fun updateBitrate(bitrateBps: Int): Result<Unit> = Result.success(Unit)
     }
 
-    private class FakeSettings : SenderSettingsRepository {
-        private val stateFlow = MutableStateFlow(SenderSettings(profile = VideoProfiles.default))
+    private class FakeSettings(
+        initialEndpoint: ReceiverEndpoint? = null,
+    ) : SenderSettingsRepository {
+        private val stateFlow = MutableStateFlow(
+            SenderSettings(
+                profile = VideoProfiles.default,
+                receiverEndpoint = initialEndpoint,
+            ),
+        )
         override val state: StateFlow<SenderSettings> = stateFlow.asStateFlow()
 
         override fun updateProfile(profile: VideoProfile) {

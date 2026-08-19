@@ -17,6 +17,7 @@ object WebcamUiStateMapper {
         isScreenDimmed: Boolean,
         isZoomTrayOpen: Boolean,
         isPermissionDialogOpen: Boolean,
+        cameraPermissionPermanentlyDenied: Boolean = false,
     ): WebcamUiState {
         val connection = StreamPresentationMapper.connection(snapshot)
         return WebcamUiState(
@@ -31,12 +32,20 @@ object WebcamUiStateMapper {
             dialog = if (isPermissionDialogOpen) {
                 SenderDialogUiState.CameraPermission(
                     title = UiText.Resource(R.string.camera_permission_title),
-                    message = UiText.Resource(R.string.camera_permission_message),
+                    message = UiText.Resource(
+                        if (cameraPermissionPermanentlyDenied) {
+                            R.string.camera_permission_blocked_message
+                        } else {
+                            R.string.camera_permission_message
+                        },
+                    ),
+                    isPermanentlyDenied = cameraPermissionPermanentlyDenied,
                 )
             } else {
                 null
             },
             cameraPermissionGranted = cameraPermissionGranted,
+            cameraPermissionPermanentlyDenied = cameraPermissionPermanentlyDenied,
             validationMessage = snapshot.validationMessage?.let(UiText::Plain),
             failureDiagnostics = (snapshot.streamState as? StreamState.Failed)?.let { failed ->
                 buildFailureDiagnostics(

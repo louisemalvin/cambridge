@@ -109,6 +109,7 @@ sealed interface SenderDialogUiState {
     data class CameraPermission(
         val title: UiText,
         val message: UiText,
+        val isPermanentlyDenied: Boolean = false,
     ) : SenderDialogUiState
 }
 

@@ -107,7 +107,6 @@ class SenderConnectionCoordinator(
                 false
             } else {
                 endpoint = candidate
-                settings.updateReceiverEndpoint(candidate)
                 activeReceiverNameFlow.value = null
                 true
             }

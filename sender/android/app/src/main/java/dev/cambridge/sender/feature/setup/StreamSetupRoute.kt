@@ -2,9 +2,7 @@ package dev.cambridge.sender.feature.setup
 
 import android.Manifest
 import android.app.Activity
-import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -23,11 +21,11 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.cambridge.sender.app.lockStreamingOrientation
 import dev.cambridge.sender.app.unlockStreamingOrientation
 import dev.cambridge.sender.app.model.SenderScreenAction
+import dev.cambridge.sender.app.permission.hasCameraPermission
 import dev.cambridge.sender.model.StreamOrientation
 
 @Composable
@@ -145,7 +143,3 @@ fun StreamSetupRoute(
         },
     )
 }
-
-private fun Context.hasCameraPermission(): Boolean =
-    ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
-        PackageManager.PERMISSION_GRANTED

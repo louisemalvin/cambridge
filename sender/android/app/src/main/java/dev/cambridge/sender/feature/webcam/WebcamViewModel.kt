@@ -53,6 +53,7 @@ class WebcamViewModel @Inject constructor(
             isScreenDimmed = local.isScreenDimmed,
             isZoomTrayOpen = local.isZoomTrayOpen,
             isPermissionDialogOpen = local.isPermissionDialogOpen,
+            cameraPermissionPermanentlyDenied = local.cameraPermissionPermanentlyDenied,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -90,9 +91,14 @@ class WebcamViewModel @Inject constructor(
     }
 
     fun setCameraPermissionGranted(granted: Boolean) {
+        setCameraPermissionState(granted, permanentlyDenied = false)
+    }
+
+    fun setCameraPermissionState(granted: Boolean, permanentlyDenied: Boolean) {
         localState.update {
             it.copy(
                 cameraPermissionGranted = granted,
+                cameraPermissionPermanentlyDenied = permanentlyDenied,
                 isPermissionDialogOpen = false,
             )
         }
@@ -144,6 +150,7 @@ class WebcamViewModel @Inject constructor(
 
     private data class LocalWebcamState(
         val cameraPermissionGranted: Boolean = false,
+        val cameraPermissionPermanentlyDenied: Boolean = false,
         val isScreenDimmed: Boolean = false,
         val isZoomTrayOpen: Boolean = false,
         val isPermissionDialogOpen: Boolean = false,

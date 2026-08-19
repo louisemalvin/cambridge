@@ -15,6 +15,7 @@ data class WebcamUiState(
     val camera: CameraControlsUiState = CameraControlsUiState(),
     val dialog: SenderDialogUiState? = null,
     val cameraPermissionGranted: Boolean = false,
+    val cameraPermissionPermanentlyDenied: Boolean = false,
     val validationMessage: UiText? = null,
     val failureDiagnostics: String? = null,
     val isScreenDimmed: Boolean = false,

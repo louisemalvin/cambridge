@@ -6,6 +6,7 @@ import dev.cambridge.sender.logging.AndroidAppLogger
 import dev.cambridge.sender.logging.AppLogger
 import dev.cambridge.sender.media.capabilities.EncoderCapabilityProbe
 import dev.cambridge.sender.media.camera.CameraController
+import dev.cambridge.sender.media.camera.CameraPermissionRequiredException
 import dev.cambridge.sender.media.camera.SessionTransform
 import dev.cambridge.sender.media.camera.toDisplayOrientation
 import dev.cambridge.sender.media.streaming.StreamEngine
@@ -85,7 +86,7 @@ class StreamSessionControllerImpl(
                     codedHeight = profile.height,
                 )
         }.getOrElse { cause ->
-            val failure = StreamFailure.VideoQualityUnsupported(profile)
+            val failure = cause.toStreamFailure(StreamFailure.VideoQualityUnsupported(profile))
             diagnosticEvent(
                 "stream_start_failed",
                 mapOf("failureType" to failure::class.simpleName, "reason" to cause.message),
@@ -164,7 +165,12 @@ class StreamSessionControllerImpl(
             StreamConfigurationValidator.validate(configuration)
                 .getOrElse { throw StreamFailureException(StreamFailure.VideoQualityUnsupported(profile), it) }
             foreground.start().getOrElse { cause -> throw StreamFailureException(StreamFailure.Unexpected(cause), cause) }
-            streamEngine.prepare(configuration).getOrThrow()
+            streamEngine.prepare(configuration).getOrElse { cause ->
+                throw StreamFailureException(
+                    cause.toStreamFailure(StreamFailure.StreamStartFailed(cause)),
+                    cause,
+                )
+            }
             diagnosticEvent(
                 "encoder_prepared",
                 mapOf(
@@ -185,7 +191,10 @@ class StreamSessionControllerImpl(
                     generation = session.streamGeneration,
                 ),
             ).getOrElse { cause ->
-                throw StreamFailureException(StreamFailure.StreamStartFailed(cause), cause)
+                throw StreamFailureException(
+                    cause.toStreamFailure(StreamFailure.StreamStartFailed(cause)),
+                    cause,
+                )
             }
             stateFlow.value = StreamState.Streaming(session, System.currentTimeMillis())
             diagnosticEvent(
@@ -297,6 +306,12 @@ class StreamSessionControllerImpl(
             "sessionId" to activeSession?.sessionId,
         )
         logger.event(name, (fields + context).filterValues { it != null })
+    }
+
+    private fun Throwable.toStreamFailure(fallback: StreamFailure): StreamFailure = when (this) {
+        is CameraPermissionRequiredException -> StreamFailure.CameraPermissionDenied
+        is StreamFailureException -> failure
+        else -> fallback
     }
 
     private fun failure(failure: StreamFailure): Result<Unit> =
