@@ -72,7 +72,7 @@ final class CamBridgeTests: XCTestCase {
             "exact-two-k"
         )
         XCTAssertEqual(
-            probe.compatibleFormatDescriptor(
+            selector.compatibleFormatDescriptor(
                 for: SenderVideoCatalog.resolution2k,
                 fps: 60,
                 in: formats

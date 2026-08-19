@@ -293,7 +293,7 @@ private func receiveData(from connection: NWConnection) async throws -> Data {
 }
 
 private func send(_ data: Data, on connection: NWConnection) async throws {
-    try await withCheckedThrowingContinuation { continuation in
+    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
         connection.send(content: data, completion: .contentProcessed { error in
             if let error {
                 continuation.resume(throwing: LoopbackControlServerError.connectionFailed(String(describing: error)))
@@ -305,7 +305,7 @@ private func send(_ data: Data, on connection: NWConnection) async throws {
 }
 
 private func finishWriting(on connection: NWConnection) async throws {
-    try await withCheckedThrowingContinuation { continuation in
+    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
         connection.send(
             content: nil,
             contentContext: .finalMessage,
