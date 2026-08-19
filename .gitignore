@@ -21,6 +21,7 @@
 **/__pycache__/
 protocol/cambridge-deployment.local.json
 /.tasks/
+/internal/
 /sender/android/skills/
 /desktop-screen*.png
 /screenshot.png
