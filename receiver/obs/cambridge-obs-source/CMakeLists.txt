@@ -126,7 +126,15 @@ if(CAMBRIDGE_BUILD_PLUGIN)
             GENERATED TRUE
             MACOSX_PACKAGE_LOCATION Resources
         )
-        target_sources(cambridge-obs-plugin PRIVATE "${CAMBRIDGE_METALLIB}")
+        set(CAMBRIDGE_PLUGIN_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
+        set_source_files_properties("${CAMBRIDGE_PLUGIN_LICENSE}" PROPERTIES
+            HEADER_FILE_ONLY TRUE
+            MACOSX_PACKAGE_LOCATION Resources
+        )
+        target_sources(cambridge-obs-plugin PRIVATE
+            "${CAMBRIDGE_METALLIB}"
+            "${CAMBRIDGE_PLUGIN_LICENSE}"
+        )
     endif()
 
     if(APPLE)

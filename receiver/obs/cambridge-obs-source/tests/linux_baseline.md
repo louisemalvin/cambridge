@@ -95,7 +95,7 @@ writing its log, and the fixture reported:
 
 ```text
 OBS did not load the CamBridge OBS plugin
-artifacts=/home/ltanaka/github/phone-webcam-project/build/cambridge-fixture.IEgmo6
+artifacts=<repository>/build/cambridge-fixture.IEgmo6
 ```
 
 This is recorded as unavailable on the headless baseline host, not as a

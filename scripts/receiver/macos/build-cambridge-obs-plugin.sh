@@ -52,10 +52,12 @@ cmake --install "${build_dir}"
 plugin_bundle="${staging_dir}/obs-plugins/cambridge-obs-plugin.plugin"
 plugin_path="${plugin_bundle}/Contents/MacOS/cambridge-obs-plugin"
 metallib_path="${plugin_bundle}/Contents/Resources/nv12_to_bgra.metallib"
+license_path="${plugin_bundle}/Contents/Resources/LICENSE"
 info_plist="${plugin_bundle}/Contents/Info.plist"
 [[ -d "${plugin_bundle}" ]] || { printf 'error: plugin bundle was not staged: %s\n' "${plugin_bundle}" >&2; exit 1; }
 [[ -f "${plugin_path}" ]] || { printf 'error: plugin binary was not staged: %s\n' "${plugin_path}" >&2; exit 1; }
 [[ -f "${metallib_path}" ]] || { printf 'error: Metal library was not staged: %s\n' "${metallib_path}" >&2; exit 1; }
+[[ -f "${license_path}" ]] || { printf 'error: plugin license was not staged: %s\n' "${license_path}" >&2; exit 1; }
 [[ -f "${info_plist}" ]] || { printf 'error: bundle Info.plist was not staged: %s\n' "${info_plist}" >&2; exit 1; }
 plutil -lint "${info_plist}" >/dev/null
 [[ "$(plutil -extract CFBundleExecutable raw "${info_plist}")" == "cambridge-obs-plugin" ]] || {

@@ -38,6 +38,7 @@ file -b "${plugin_path}" | grep -Eq 'ELF 64-bit.*x86-64' || {
 cp "${plugin_path}" "${package_root}/obs-plugins/cambridge-obs-plugin/bin/64bit/"
 cp "${repo_root}/README.md" "${package_root}/README.md"
 cp "${repo_root}/LICENSE" "${package_root}/LICENSE"
+cp "${repo_root}/NOTICE" "${package_root}/NOTICE"
 cp "${repo_root}/THIRD_PARTY_NOTICES.md" "${package_root}/THIRD_PARTY_NOTICES.md"
 cp "${repo_root}/SECURITY.md" "${package_root}/SECURITY.md"
 cp "${repo_root}/CONTRIBUTING.md" "${package_root}/CONTRIBUTING.md"

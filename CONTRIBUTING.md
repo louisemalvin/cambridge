@@ -1,7 +1,7 @@
 # Contributing
 
-Contributions are welcome for the Android sender, the Linux OBS receiver, the
-wire protocol, and the surrounding documentation.
+Contributions are welcome for the Android and iOS senders, the shared Linux and
+macOS OBS receiver, the wire protocol, and the surrounding documentation.
 
 Before opening a pull request:
 
@@ -10,8 +10,8 @@ Before opening a pull request:
 2. Follow [Protocol](docs/protocol.md) when changing anything on the wire.
 3. Run `./scripts/development/check-all.sh` when the required toolchains are
    available.
-4. Explain the platform, Android device or emulator, OBS version, and decoder
-   path used for testing.
+4. Explain the platform, phone or simulator, OBS version, and decoder path used
+   for testing.
 5. Do not commit credentials, signing keys, local deployment configuration,
    generated build output, or private workspace files.
 

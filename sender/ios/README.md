@@ -4,8 +4,9 @@ The iOS sender is a native Swift/SwiftUI application for iOS 17.4 and later. It
 uses the CamBridge v6 control contract and RFC 6184 H.264 RTP over UDP used by
 the unchanged Linux OBS receiver.
 
-Its current product behavior is defined by
-[`simple-phone-sender.md`](../../internal/implementation-contracts/simple-phone-sender.md).
+Its current product behavior and component boundaries are documented in the
+[architecture](../../docs/architecture.md), [protocol](../../docs/protocol.md),
+and [known limitations](../../docs/known-limitations.md).
 
 Open `CamBridge.xcodeproj` directly in Xcode. Signing is automatic and the
 committed project intentionally has no development team. Select a local team

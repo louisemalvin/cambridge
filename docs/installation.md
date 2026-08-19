@@ -77,6 +77,20 @@ IDs and manual-address fallback as Linux.
    replace or downgrade them.
 5. Press **Start stream**. Press **Stop stream** in the app when finished.
 
+## Use the phone as a webcam
+
+CamBridge makes the phone available as an OBS source. To use that source in a
+video-call application:
+
+1. Frame the CamBridge source in an OBS scene.
+2. Start **Virtual Camera** from the OBS Controls dock.
+3. Select **OBS Virtual Camera** as the camera in the other application.
+
+On Linux, OBS Virtual Camera uses `v4l2loopback`. Follow the official
+[OBS Virtual Camera guide](https://obsproject.com/kb/virtual-camera-guide) and
+[troubleshooting guide](https://obsproject.com/kb/virtual-camera-troubleshooting)
+for installation and platform-specific requirements.
+
 ## Network and firewall
 
 Receiver discovery uses the local network. If the phone cannot find OBS, check

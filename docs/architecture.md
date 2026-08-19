@@ -1,21 +1,23 @@
 # CamBridge Architecture
 
-CamBridge has an Android sender and one shared native OBS receiver. A session is
-started explicitly by the user and the receiver handles one active session at
-a time. The public supported path remains Linux; the macOS receiver
-implementation is subject to its physical acceptance and clean-install gates.
+CamBridge connects phone camera senders to one shared native OBS receiver. A
+session is started explicitly by the user and the receiver handles one active
+session at a time. OBS can use the result directly or publish it as a webcam
+through OBS Virtual Camera. The public supported path remains Android to Linux;
+the iOS sender and macOS receiver remain subject to their physical acceptance
+and clean-install gates.
 
 ## Data flow
 
 ```text
-Android camera
-    → Camera2 capture
-    → MediaCodec H.264 encoder
+phone camera
+    → Android Camera2 and MediaCodec, or iOS AVFoundation and VideoToolbox
     → RTP/H.264 over UDP
     → shared OBS source
     → FFmpeg H.264 decoder
     → one locked media path
     → OBS texture
+    → optional OBS Virtual Camera
 ```
 
 The receiver selects its path once, before RTP acceptance:
