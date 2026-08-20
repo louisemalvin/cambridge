@@ -47,6 +47,7 @@ class BundleError(RuntimeError):
 class LinuxVariant:
     identifier: str
     display_name: str
+    build_provenance: str
     libobs_soname: str
     ffmpeg_sonames: Mapping[str, str]
 
@@ -62,6 +63,7 @@ class LinuxVariant:
         return {
             "id": self.identifier,
             "displayName": self.display_name,
+            "buildProvenance": self.build_provenance,
             "libobsSoname": self.libobs_soname,
             "ffmpegSonames": dict(self.ffmpeg_sonames),
         }
@@ -121,15 +123,25 @@ def _load_json(path: Path) -> dict[str, object]:
 def _variant_from_dict(value: object, source: Path) -> LinuxVariant:
     if not isinstance(value, dict):
         raise BundleError(f"Linux variant metadata is not an object: {source}")
-    required_fields = ("id", "displayName", "libobsSoname", "ffmpegSonames")
+    required_fields = (
+        "id",
+        "displayName",
+        "buildProvenance",
+        "libobsSoname",
+        "ffmpegSonames",
+    )
     if any(field not in value for field in required_fields):
         missing = next(field for field in required_fields if field not in value)
         raise BundleError(f"Linux variant metadata is missing {missing}: {source}")
     identifier = value["id"]
     display_name = value["displayName"]
+    build_provenance = value["buildProvenance"]
     libobs_soname = value["libobsSoname"]
     raw_ffmpeg = value["ffmpegSonames"]
-    if not all(isinstance(field, str) and field for field in (identifier, display_name, libobs_soname)):
+    if not all(
+        isinstance(field, str) and field
+        for field in (identifier, display_name, build_provenance, libobs_soname)
+    ):
         raise BundleError(f"Linux variant metadata contains an empty field: {source}")
     if not isinstance(raw_ffmpeg, dict):
         raise BundleError(f"Linux variant FFmpeg metadata is not an object: {source}")
@@ -140,7 +152,7 @@ def _variant_from_dict(value: object, source: Path) -> LinuxVariant:
     if not all(isinstance(name, str) and isinstance(soname, str) and soname for name, soname in raw_ffmpeg.items()):
         raise BundleError(f"Linux variant {identifier} contains an invalid FFmpeg SONAME: {source}")
     ffmpeg_sonames = {name: raw_ffmpeg[name] for name in REQUIRED_FFMPEG_MODULES}
-    return LinuxVariant(identifier, display_name, libobs_soname, ffmpeg_sonames)
+    return LinuxVariant(identifier, display_name, build_provenance, libobs_soname, ffmpeg_sonames)
 
 
 def _validate_variant_identifiers(variants: Sequence[LinuxVariant], source: Path) -> tuple[LinuxVariant, ...]:
@@ -376,6 +388,13 @@ def _select_variants(variants: Sequence[LinuxVariant], identifiers: Sequence[str
     return tuple(selected)
 
 
+def variant_by_identifier(identifier: str, variants: Iterable[LinuxVariant]) -> LinuxVariant:
+    for variant in variants:
+        if variant.identifier == identifier:
+            return variant
+    raise BundleError(f"unknown Linux variant: {identifier}")
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--buildspec", type=Path, default=DEFAULT_BUILDSPEC_PATH)
@@ -384,6 +403,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--include-id", action="append", default=[])
     parser.add_argument("--validate-plugin", type=Path)
     parser.add_argument("--print-variant-id", type=Path)
+    parser.add_argument("--print-variant-provenance", action="store_true")
     parser.add_argument("--variant-id")
     parser.add_argument("--skip-runtime-validation", action="store_true")
     return parser.parse_args()
@@ -406,14 +426,17 @@ def main() -> int:
             variant = variant_for_needed(read_needed(arguments.print_variant_id), variants)
             print(variant.identifier)
             return SUCCESS_EXIT_CODE
+        if arguments.print_variant_provenance:
+            if not arguments.variant_id:
+                raise BundleError("--print-variant-provenance requires --variant-id")
+            print(variant_by_identifier(arguments.variant_id, variants).build_provenance)
+            return SUCCESS_EXIT_CODE
         if arguments.validate_plugin:
             variant = (
-                next((candidate for candidate in variants if candidate.identifier == arguments.variant_id), None)
+                variant_by_identifier(arguments.variant_id, variants)
                 if arguments.variant_id
                 else variant_for_needed(read_needed(arguments.validate_plugin), variants)
             )
-            if variant is None:
-                raise BundleError(f"unknown Linux variant: {arguments.variant_id}")
             validate_plugin(
                 arguments.validate_plugin,
                 variant,

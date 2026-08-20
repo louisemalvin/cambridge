@@ -15,6 +15,14 @@ build_dir=${CAMBRIDGE_BUILD_DIR:-"${repo_root}/build/cambridge-obs-plugin-${vari
 staging_dir=${CAMBRIDGE_STAGING_DIR:-"${build_dir}/staging"}
 plugin_path="${staging_dir}/obs-plugins/cambridge-obs-plugin/bin/64bit/cambridge-obs-plugin.so"
 variant_dir="${variant_output_dir}/${variant_id}"
+variant_provenance=$(python3 "${repo_root}/scripts/release/cambridge_linux_bundle.py" \
+    --print-variant-provenance \
+    --variant-id "${variant_id}")
+if [[ -n "${CAMBRIDGE_LINUX_VARIANT_PROVENANCE:-}" ]] &&
+   [[ "${CAMBRIDGE_LINUX_VARIANT_PROVENANCE}" != "${variant_provenance}" ]]; then
+    printf 'error: variant provenance does not match buildspec: %s\n' "${variant_id}" >&2
+    exit 1
+fi
 
 CAMBRIDGE_LINUX_VARIANT_ID="${variant_id}" \
 CAMBRIDGE_BUILD_DIR="${build_dir}" \
@@ -31,7 +39,8 @@ cp "${plugin_path}" "${variant_dir}/cambridge-obs-plugin.so"
 python3 "${repo_root}/scripts/release/cambridge_linux_bundle.py" \
     --validate-plugin "${variant_dir}/cambridge-obs-plugin.so" \
     --variant-id "${variant_id}"
-python3 - "${variant_dir}/cambridge-validation.json" "${variant_id}" "${variant_dir}/cambridge-obs-plugin.so" <<'PY'
+python3 - "${variant_dir}/cambridge-validation.json" "${variant_id}" \
+    "${variant_dir}/cambridge-obs-plugin.so" "${variant_provenance}" <<'PY'
 import hashlib
 import json
 import pathlib
@@ -40,8 +49,10 @@ import sys
 record_path = pathlib.Path(sys.argv[1])
 variant_id = sys.argv[2]
 plugin_path = pathlib.Path(sys.argv[3])
+build_provenance = sys.argv[4]
 record = {
     "variantId": variant_id,
+    "buildProvenance": build_provenance,
     "pluginSha256": hashlib.sha256(plugin_path.read_bytes()).hexdigest(),
     "runtimeValidation": "ldd -r",
 }

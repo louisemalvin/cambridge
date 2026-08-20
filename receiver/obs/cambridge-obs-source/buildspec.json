@@ -19,8 +19,9 @@
     },
     "variants": [
       {
-        "id": "ubuntu-26.04",
-        "displayName": "Ubuntu 26.04 release environment",
+        "id": "x86_64-obs30-ffmpeg62",
+        "displayName": "x86_64 OBS 30 with FFmpeg 62",
+        "buildProvenance": "Ubuntu 26.04 release environment",
         "libobsSoname": "libobs.so.30",
         "ffmpegSonames": {
           "libavcodec": "libavcodec.so.62",
@@ -29,8 +30,9 @@
         }
       },
       {
-        "id": "cachyos-obs-32.2.2",
-        "displayName": "CachyOS with OBS 32.2.2",
+        "id": "x86_64-obs30-ffmpeg63",
+        "displayName": "x86_64 OBS 30 with FFmpeg 63",
+        "buildProvenance": "CachyOS with OBS 32.2.2",
         "libobsSoname": "libobs.so.30",
         "ffmpegSonames": {
           "libavcodec": "libavcodec.so.63",

@@ -36,13 +36,14 @@ class LinuxBundleTests(unittest.TestCase):
     def test_declared_variants_have_exact_contract_sonames(self) -> None:
         self.assertEqual(
             [variant.identifier for variant in self.variants],
-            ["ubuntu-26.04", "cachyos-obs-32.2.2"],
+            ["x86_64-obs30-ffmpeg62", "x86_64-obs30-ffmpeg63"],
         )
         self.assertEqual(
             self.ubuntu_variant.as_dict(),
             {
-                "id": "ubuntu-26.04",
-                "displayName": "Ubuntu 26.04 release environment",
+                "id": "x86_64-obs30-ffmpeg62",
+                "displayName": "x86_64 OBS 30 with FFmpeg 62",
+                "buildProvenance": "Ubuntu 26.04 release environment",
                 "libobsSoname": "libobs.so.30",
                 "ffmpegSonames": {
                     "libavcodec": "libavcodec.so.62",
@@ -54,8 +55,9 @@ class LinuxBundleTests(unittest.TestCase):
         self.assertEqual(
             self.cachyos_variant.as_dict(),
             {
-                "id": "cachyos-obs-32.2.2",
-                "displayName": "CachyOS with OBS 32.2.2",
+                "id": "x86_64-obs30-ffmpeg63",
+                "displayName": "x86_64 OBS 30 with FFmpeg 63",
+                "buildProvenance": "CachyOS with OBS 32.2.2",
                 "libobsSoname": "libobs.so.30",
                 "ffmpegSonames": {
                     "libavcodec": "libavcodec.so.63",
@@ -86,7 +88,7 @@ class LinuxBundleTests(unittest.TestCase):
     def test_private_runtime_libraries_are_detected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
-            private_library = root / "variants/ubuntu-26.04/libavcodec.so.62"
+            private_library = root / "variants/x86_64-obs30-ffmpeg62/libavcodec.so.62"
             private_library.parent.mkdir(parents=True)
             private_library.write_bytes(b"private")
             self.assertEqual(

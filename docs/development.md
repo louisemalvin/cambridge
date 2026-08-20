@@ -117,13 +117,16 @@ Build a named release variant and stage it under the multi-variant input tree
 with:
 
 ```bash
-CAMBRIDGE_LINUX_VARIANT_ID=cachyos-obs-32.2.2 \
+CAMBRIDGE_LINUX_VARIANT_ID=x86_64-obs30-ffmpeg63 \
+CAMBRIDGE_LINUX_VARIANT_PROVENANCE="CachyOS with OBS 32.2.2" \
   ./scripts/receiver/linux/build-cambridge-obs-plugin-variant.sh
 ```
 
-The variant build validates direct NEEDED entries, `ldd -r`, and the absence of
-RPATH/RUNPATH, then records a hash-backed validation record for release bundle
-assembly. A release package job builds every declared variant in its matching
+The variant ID is an ABI profile, not a distro name. The build provenance is
+recorded separately in the validation record and bundle metadata. The variant
+build validates direct NEEDED entries, `ldd -r`, and the absence of RPATH/RUNPATH,
+then records a hash-backed validation record for release bundle assembly. A
+release package job builds every declared ABI profile in its matching
 environment and assembles one archive:
 
 ```bash

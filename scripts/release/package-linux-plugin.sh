@@ -95,7 +95,11 @@ for variant_id in "${present_variant_ids[@]}"; do
         validation_record="${source_variant_dir}/cambridge-validation.json"
         [[ -f "${validation_record}" ]] ||
             fail "prevalidated variant is missing its validation record: ${variant_id}"
-        python3 - "${validation_record}" "${variant_id}" "${source_plugin_path}" <<'PY'
+        expected_provenance=$(python3 "${helper}" \
+            --print-variant-provenance \
+            --variant-id "${variant_id}")
+        python3 - "${validation_record}" "${variant_id}" \
+            "${source_plugin_path}" "${expected_provenance}" <<'PY'
 import hashlib
 import json
 import pathlib
@@ -104,9 +108,12 @@ import sys
 record_path = pathlib.Path(sys.argv[1])
 variant_id = sys.argv[2]
 plugin_path = pathlib.Path(sys.argv[3])
+expected_provenance = sys.argv[4]
 record = json.loads(record_path.read_text(encoding="utf-8"))
 if record.get("variantId") != variant_id:
     raise SystemExit(f"validation record variant mismatch: {record_path}")
+if record.get("buildProvenance") != expected_provenance:
+    raise SystemExit(f"validation record provenance mismatch: {record_path}")
 if record.get("runtimeValidation") != "ldd -r":
     raise SystemExit(f"validation record is missing the ldd -r check: {record_path}")
 expected_hash = record.get("pluginSha256")

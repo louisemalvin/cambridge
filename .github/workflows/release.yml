@@ -83,7 +83,8 @@ jobs:
             libavahi-client-dev
       - name: Build Ubuntu 26.04 Linux plugin variant
         env:
-          CAMBRIDGE_LINUX_VARIANT_ID: ubuntu-26.04
+          CAMBRIDGE_LINUX_VARIANT_ID: x86_64-obs30-ffmpeg62
+          CAMBRIDGE_LINUX_VARIANT_PROVENANCE: Ubuntu 26.04 release environment
           CAMBRIDGE_REQUIRE_AVAHI: ON
         run: |
           ./scripts/receiver/linux/prepare-cambridge-obs-dependencies.sh
@@ -92,7 +93,7 @@ jobs:
         env:
           CAMBRIDGE_BUILD_DIR: build/cambridge-obs-plugin
           CAMBRIDGE_STAGING_DIR: build/cambridge-obs-plugin/staging
-          CAMBRIDGE_LINUX_VARIANT_ID: ubuntu-26.04
+          CAMBRIDGE_LINUX_VARIANT_ID: x86_64-obs30-ffmpeg62
           CAMBRIDGE_REQUIRE_AVAHI: ON
           CAMBRIDGE_DECODER_MODE: cpu
           CAMBRIDGE_PROFILE_ID: fixture-720p30
@@ -110,8 +111,8 @@ jobs:
           fi
       - uses: actions/upload-artifact@v4
         with:
-          name: linux-variant-ubuntu-26.04
-          path: build/linux-variants/ubuntu-26.04/
+          name: linux-variant-x86_64-obs30-ffmpeg62
+          path: build/linux-variants/x86_64-obs30-ffmpeg62/
 
   linux-cachyos-variant:
     needs: verify-version
@@ -120,14 +121,15 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build CachyOS OBS 32.2.2 Linux plugin variant
         env:
-          CAMBRIDGE_LINUX_VARIANT_ID: cachyos-obs-32.2.2
+          CAMBRIDGE_LINUX_VARIANT_ID: x86_64-obs30-ffmpeg63
+          CAMBRIDGE_LINUX_VARIANT_PROVENANCE: CachyOS with OBS 32.2.2
           CAMBRIDGE_REQUIRE_AVAHI: ON
         run: ./scripts/receiver/linux/build-cambridge-obs-plugin-variant.sh
       - name: Run CachyOS native OBS smoke when OBS is available
         env:
           CAMBRIDGE_BUILD_DIR: build/cambridge-obs-plugin
           CAMBRIDGE_STAGING_DIR: build/cambridge-obs-plugin/staging
-          CAMBRIDGE_LINUX_VARIANT_ID: cachyos-obs-32.2.2
+          CAMBRIDGE_LINUX_VARIANT_ID: x86_64-obs30-ffmpeg63
           CAMBRIDGE_REQUIRE_AVAHI: ON
           CAMBRIDGE_DECODER_MODE: cpu
           CAMBRIDGE_PROFILE_ID: fixture-720p30
@@ -145,8 +147,8 @@ jobs:
           fi
       - uses: actions/upload-artifact@v4
         with:
-          name: linux-variant-cachyos-obs-32.2.2
-          path: build/linux-variants/cachyos-obs-32.2.2/
+          name: linux-variant-x86_64-obs30-ffmpeg63
+          path: build/linux-variants/x86_64-obs30-ffmpeg63/
 
   linux-package:
     needs:
@@ -157,12 +159,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: linux-variant-ubuntu-26.04
-          path: build/linux-variants/ubuntu-26.04
+          name: linux-variant-x86_64-obs30-ffmpeg62
+          path: build/linux-variants/x86_64-obs30-ffmpeg62
       - uses: actions/download-artifact@v4
         with:
-          name: linux-variant-cachyos-obs-32.2.2
-          path: build/linux-variants/cachyos-obs-32.2.2
+          name: linux-variant-x86_64-obs30-ffmpeg63
+          path: build/linux-variants/x86_64-obs30-ffmpeg63
       - name: Assemble one Linux multi-variant installer bundle
         run: |
           sudo apt-get update
