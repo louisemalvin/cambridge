@@ -55,15 +55,11 @@ class MediaCodecCapabilityProbe : EncoderCapabilityProbe {
         val surfaceInputSupported = capabilities?.colorFormats?.contains(
             MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface,
         ) == true
-        val cbrSupported = capabilities?.encoderCapabilities?.isBitrateModeSupported(
-            MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR,
-        ) == true
         return EncoderCapability(
             codec = VideoCodec.H264,
             implementationName = info.name,
             acceleration = acceleration(info),
             surfaceInputSupported = surfaceInputSupported,
-            cbrSupported = cbrSupported,
             modes = profiles.map { profile ->
                 val sizeAndRateSupported = video?.let {
                     runCatching {

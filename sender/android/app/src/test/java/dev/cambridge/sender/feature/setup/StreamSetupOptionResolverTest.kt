@@ -38,13 +38,33 @@ class StreamSetupOptionResolverTest {
         assertFalse(options.any { it.key == VideoProfiles.PROFILE_2K30.id })
     }
 
+    @Test
+    fun twoKShowsOnlyTheSupportedFrameRate() {
+        val capabilities = listOf(
+            supportedCapability(VideoProfiles.PROFILE_1080P30),
+            supportedCapability(VideoProfiles.PROFILE_2K30),
+            unsupportedCapability(VideoProfiles.PROFILE_2K60),
+        )
+
+        val resolutions = StreamSetupOptionResolver.resolutionOptions(
+            selectedProfile = VideoProfiles.PROFILE_1080P30,
+            capabilities = capabilities,
+        )
+        val frameRates = StreamSetupOptionResolver.frameRateOptions(
+            selectedProfile = VideoProfiles.PROFILE_2K30,
+            capabilities = capabilities,
+        )
+
+        assertTrue(resolutions.any { it.key == VideoProfiles.PROFILE_2K30.id })
+        assertEquals(listOf("30"), frameRates.map { it.key })
+    }
+
     private fun supportedCapability(profile: VideoProfile) = PhoneVideoModeCapability(
         mode = profile,
         cameraSupported = true,
         encoderImplementationName = "test-h264",
         encoderSizeAndRateSupported = true,
         encoderSurfaceInputSupported = true,
-        encoderCbrSupported = true,
         encoderMinimumBitrateBps = profile.minimumBitrateBps,
         encoderMaximumBitrateBps = profile.maximumBitrateBps,
     )
@@ -55,7 +75,6 @@ class StreamSetupOptionResolverTest {
         encoderImplementationName = "test-h264",
         encoderSizeAndRateSupported = false,
         encoderSurfaceInputSupported = true,
-        encoderCbrSupported = true,
         encoderMinimumBitrateBps = profile.minimumBitrateBps,
         encoderMaximumBitrateBps = profile.maximumBitrateBps,
     )

@@ -256,7 +256,6 @@ class StreamSessionControllerTest {
                 implementationName = "fake-h264",
                 acceleration = EncoderAcceleration.HARDWARE,
                 surfaceInputSupported = true,
-                cbrSupported = true,
                 modes = profiles.map { profile ->
                     EncoderModeCapability(
                         modeId = profile.id,

@@ -21,7 +21,6 @@ data class EncoderCapability(
     val implementationName: String,
     val acceleration: EncoderAcceleration,
     val surfaceInputSupported: Boolean,
-    val cbrSupported: Boolean,
     val modes: List<EncoderModeCapability>,
 ) {
     init {

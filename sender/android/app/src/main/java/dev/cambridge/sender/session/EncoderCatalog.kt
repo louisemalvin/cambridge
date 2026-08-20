@@ -13,7 +13,6 @@ object EncoderCatalog {
         encoder.codec == VideoCodec.H264 &&
             encoder.acceleration != EncoderAcceleration.UNKNOWN &&
             encoder.surfaceInputSupported &&
-            encoder.cbrSupported &&
             modes.any { mode -> hasCompleteMode(encoder, mode) }
     }
 
@@ -25,7 +24,7 @@ object EncoderCatalog {
         encoder: EncoderCapability,
         mode: VideoProfile,
     ): Boolean {
-        if (!encoder.surfaceInputSupported || !encoder.cbrSupported) return false
+        if (!encoder.surfaceInputSupported) return false
         val modeCapability = encoder.modeFor(mode.id) ?: return false
         val minimumBitrate = modeCapability.minimumBitrateBps ?: return false
         val maximumBitrate = modeCapability.maximumBitrateBps ?: return false

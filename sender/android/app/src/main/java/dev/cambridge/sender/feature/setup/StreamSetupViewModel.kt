@@ -194,7 +194,6 @@ class StreamSetupViewModel @Inject constructor(
                                 encoder.implementationName,
                                 encoder.acceleration,
                                 encoder.surfaceInputSupported,
-                                encoder.cbrSupported,
                                 encoder.modes.joinToString(separator = ";") { mode ->
                                     listOf(
                                         mode.modeId,

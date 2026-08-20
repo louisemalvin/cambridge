@@ -11,7 +11,6 @@ data class PhoneVideoModeCapability(
     val encoderImplementationName: String?,
     val encoderSizeAndRateSupported: Boolean,
     val encoderSurfaceInputSupported: Boolean,
-    val encoderCbrSupported: Boolean,
     val encoderMinimumBitrateBps: Int?,
     val encoderMaximumBitrateBps: Int?,
     val reason: String? = null,
@@ -28,7 +27,6 @@ data class PhoneVideoModeCapability(
         get() = cameraSupported &&
             encoderSizeAndRateSupported &&
             encoderSurfaceInputSupported &&
-            encoderCbrSupported &&
             !bitrateRange.isEmpty()
 }
 
@@ -42,7 +40,6 @@ object PhoneVideoCapabilities {
         val cameraSupported = mode.id in cameraSupportedModeIds
         val sizeAndRateSupported = encoderMode?.sizeAndRateSupported == true
         val surfaceInputSupported = selectedEncoder?.surfaceInputSupported == true
-        val cbrSupported = selectedEncoder?.cbrSupported == true
         val minimumBitrate = encoderMode?.minimumBitrateBps
         val maximumBitrate = encoderMode?.maximumBitrateBps
         val bitrateRange = if (minimumBitrate != null && maximumBitrate != null) {
@@ -56,14 +53,12 @@ object PhoneVideoCapabilities {
             encoderImplementationName = selectedEncoder?.implementationName,
             encoderSizeAndRateSupported = sizeAndRateSupported,
             encoderSurfaceInputSupported = surfaceInputSupported,
-            encoderCbrSupported = cbrSupported,
             encoderMinimumBitrateBps = minimumBitrate,
             encoderMaximumBitrateBps = maximumBitrate,
             reason = reason(
                 cameraSupported = cameraSupported,
                 encoderMode = encoderMode,
                 surfaceInputSupported = surfaceInputSupported,
-                cbrSupported = cbrSupported,
                 bitrateRange = bitrateRange,
             ),
         )
@@ -73,7 +68,6 @@ object PhoneVideoCapabilities {
         cameraSupported: Boolean,
         encoderMode: EncoderModeCapability?,
         surfaceInputSupported: Boolean,
-        cbrSupported: Boolean,
         bitrateRange: IntRange,
     ): String? = when {
         !cameraSupported -> "Camera2 does not provide this size and frame rate"
@@ -81,7 +75,6 @@ object PhoneVideoCapabilities {
         !encoderMode.sizeAndRateSupported -> encoderMode.reason
             ?: "The selected encoder does not support this exact size and frame rate"
         !surfaceInputSupported -> "The selected encoder does not accept surface input"
-        !cbrSupported -> "The selected encoder does not support CBR"
         bitrateRange.isEmpty() -> "The selected encoder bitrate range has no valid product bitrate"
         else -> null
     }

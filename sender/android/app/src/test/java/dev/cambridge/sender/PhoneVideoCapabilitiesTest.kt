@@ -61,21 +61,15 @@ class PhoneVideoCapabilitiesTest {
     }
 
     @Test
-    fun surfaceAndCbrAreRequiredForACompleteMode() {
+    fun surfaceInputIsRequiredForACompleteMode() {
         val mode = VideoProfiles.PROFILE_1080P60
         val noSurface = PhoneVideoCapabilities.resolve(
             modes = listOf(mode),
             cameraSupportedModeIds = setOf(mode.id),
             selectedEncoder = supportedEncoder(mode, surfaceInputSupported = false),
         ).single()
-        val noCbr = PhoneVideoCapabilities.resolve(
-            modes = listOf(mode),
-            cameraSupportedModeIds = setOf(mode.id),
-            selectedEncoder = supportedEncoder(mode, cbrSupported = false),
-        ).single()
 
         assertFalse(noSurface.isSupported)
-        assertFalse(noCbr.isSupported)
     }
 
     @Test
@@ -102,7 +96,6 @@ class PhoneVideoCapabilitiesTest {
         mode: VideoProfile,
         sizeAndRateSupported: Boolean = true,
         surfaceInputSupported: Boolean = true,
-        cbrSupported: Boolean = true,
         minimumBitrateBps: Int = mode.minimumBitrateBps,
         maximumBitrateBps: Int = mode.maximumBitrateBps,
     ) = EncoderCapability(
@@ -110,7 +103,6 @@ class PhoneVideoCapabilitiesTest {
         implementationName = "test-h264",
         acceleration = EncoderAcceleration.HARDWARE,
         surfaceInputSupported = surfaceInputSupported,
-        cbrSupported = cbrSupported,
         modes = listOf(
             EncoderModeCapability(
                 modeId = mode.id,

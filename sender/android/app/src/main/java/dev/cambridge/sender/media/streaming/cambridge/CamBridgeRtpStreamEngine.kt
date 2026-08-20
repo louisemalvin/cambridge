@@ -352,7 +352,6 @@ class CamBridgeRtpStreamEngine(
             setInteger(MediaFormat.KEY_BIT_RATE, configuration.bitrateBps)
             setInteger(MediaFormat.KEY_FRAME_RATE, configuration.profile.fps)
             setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, configuration.keyframeIntervalSeconds)
-            setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR)
             setInteger(MediaFormat.KEY_PRIORITY, LOWEST_PRIORITY)
             setInteger(MediaFormat.KEY_OPERATING_RATE, configuration.profile.fps)
             setInteger(KEY_MAX_B_FRAMES, NO_B_FRAMES)
@@ -372,7 +371,6 @@ class CamBridgeRtpStreamEngine(
                 "height" to configuration.profile.height,
                 "fps" to configuration.profile.fps,
                 "bitrateBps" to configuration.bitrateBps,
-                "bitrateMode" to MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR,
                 "priority" to LOWEST_PRIORITY,
                 "operatingRate" to configuration.profile.fps,
                 "iFrameIntervalSeconds" to configuration.keyframeIntervalSeconds,

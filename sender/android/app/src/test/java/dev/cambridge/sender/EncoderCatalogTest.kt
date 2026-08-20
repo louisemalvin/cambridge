@@ -30,16 +30,16 @@ class EncoderCatalogTest {
     }
 
     @Test
-    fun softwareIsUsedWhenNoEligibleHardwareExists() {
+    fun otherwiseValidEncoderIsEligibleWithoutOptionalBitrateMetadata() {
         val encoders = listOf(
-            encoder("hardware-incomplete", EncoderAcceleration.HARDWARE, cbrSupported = false),
+            encoder("hardware", EncoderAcceleration.HARDWARE),
             encoder("software", EncoderAcceleration.SOFTWARE),
         )
 
         val eligible = EncoderCatalog.eligible(encoders, listOf(VideoProfiles.default))
 
-        assertEquals(listOf("software"), eligible.map { it.implementationName })
-        assertEquals("software", EncoderCatalog.default(eligible)?.implementationName)
+        assertEquals(listOf("hardware", "software"), eligible.map { it.implementationName })
+        assertEquals("hardware", EncoderCatalog.default(eligible)?.implementationName)
     }
 
     @Test
@@ -126,7 +126,6 @@ class EncoderCatalogTest {
         name: String,
         acceleration: EncoderAcceleration,
         surfaceInputSupported: Boolean = true,
-        cbrSupported: Boolean = true,
         minimumBitrateBps: Int = VideoProfiles.default.minimumBitrateBps,
         maximumBitrateBps: Int = VideoProfiles.default.maximumBitrateBps,
         modes: List<VideoProfile> = listOf(VideoProfiles.default),
@@ -135,7 +134,6 @@ class EncoderCatalogTest {
         implementationName = name,
         acceleration = acceleration,
         surfaceInputSupported = surfaceInputSupported,
-        cbrSupported = cbrSupported,
         modes = modes.map { mode ->
             EncoderModeCapability(
                 modeId = mode.id,
