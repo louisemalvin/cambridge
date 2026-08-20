@@ -172,6 +172,7 @@ def main() -> int:
     geometry = contract["geometry"]
     video = contract["video"]
     bitrate = contract["bitrate"]
+    control = contract["control"]
     computer = deployment.get("computer", {})
     expected_computer_keys = {"id", "displayName", "address", "interface", "sourceCidr"}
     if set(computer) != expected_computer_keys:
@@ -195,6 +196,10 @@ def main() -> int:
         raise AssertionError("schema bitrate bounds are out of sync")
 
     check_scalar(kotlin_contract, r"const val PROTOCOL_VERSION = (\d+)", protocol_version, "Kotlin protocol version")
+    check_scalar(kotlin_contract, r"const val CONNECT_TIMEOUT_MILLIS = ([0-9_]+)",
+                 control["connectTimeoutMs"], "Kotlin control connect timeout", integer_literal)
+    check_scalar(kotlin_contract, r"const val REQUEST_TIMEOUT_MILLIS = ([0-9_]+)",
+                 control["requestTimeoutMs"], "Kotlin control request timeout", integer_literal)
     check_scalar(kotlin_contract, r"const val DEFAULT_CONTROL_PORT = ([0-9_]+)", defaults["controlPort"],
                  "Kotlin control port", integer_literal)
     check_scalar(kotlin_contract, r"const val DEFAULT_MEDIA_PORT_OFFSET = ([0-9_]+)", defaults["mediaPortOffset"],
@@ -224,6 +229,10 @@ def main() -> int:
                  discovery["maximumAddressCount"], "Kotlin maximum discovery address count", integer_literal)
 
     check_scalar(cpp_contract, r"kProtocolVersion = (\d+)", protocol_version, "C++ protocol version")
+    check_scalar(cpp_contract, r"kControlConnectTimeoutMs = ([0-9']+)",
+                 control["connectTimeoutMs"], "C++ control connect timeout", integer_literal)
+    check_scalar(cpp_contract, r"kControlRequestTimeoutMs = ([0-9']+)",
+                 control["requestTimeoutMs"], "C++ control request timeout", integer_literal)
     check_scalar(cpp_contract, r"kDefaultControlPort = ([0-9']+)", defaults["controlPort"],
                  "C++ control port", integer_literal)
     check_scalar(cpp_contract, r"kDefaultMediaPortOffset = ([0-9']+)", defaults["mediaPortOffset"],

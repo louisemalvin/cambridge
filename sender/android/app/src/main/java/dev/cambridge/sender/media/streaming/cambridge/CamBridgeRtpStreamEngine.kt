@@ -73,6 +73,7 @@ class CamBridgeRtpStreamEngine(
     private var codecThread: HandlerThread? = null
     private var codecHandler: Handler? = null
     private var encoderSurface: Surface? = null
+    @Volatile
     private var configuration: StreamConfiguration? = null
     private var controlConnection: CamBridgeControlConnection? = null
     private var udpSocket: DatagramSocket? = null
@@ -81,10 +82,12 @@ class CamBridgeRtpStreamEngine(
     private var previewSurface: CameraPreviewSurface? = null
     @Volatile
     private var codecConfigAnnexB = ByteArray(EMPTY_BYTE_COUNT)
+    @Volatile
     private var streamEndpoint: CamBridgeStreamEndpoint? = null
     private var nextSequence = AtomicInteger(EMPTY_BYTE_COUNT)
     private var ssrc = EMPTY_BYTE_COUNT
     private var prepared = false
+    @Volatile
     private var running = false
     private val encodedQueueDrops = AtomicLong(EMPTY_LONG_VALUE)
     private val maximumEncodedQueueOccupancy = AtomicInteger(EMPTY_BYTE_COUNT)
@@ -174,31 +177,55 @@ class CamBridgeRtpStreamEngine(
                 sessionTransform.codedHeight == streamConfiguration.profile.height) {
                 "Session geometry does not match the selected video quality"
             }
-            val connection = CamBridgeControlConnection.connect(endpoint.host, endpoint.controlPort)
+            val connection = try {
+                CamBridgeControlConnection.connect(
+                    host = endpoint.host,
+                    port = endpoint.controlPort,
+                    readTimeoutMillis = CamBridgeStreamContract.REQUEST_TIMEOUT_MILLIS,
+                )
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (cause: Throwable) {
+                throw receiverUnavailable("The receiver did not respond", cause)
+            }
             controlConnection = connection
             emit("control_connection_started", mapOf("host" to endpoint.host, "port" to endpoint.controlPort))
-            connection.send(
-                CamBridgeStreamContract.hello(
-                    sessionId = endpoint.sessionId,
-                    generation = endpoint.generation,
-                    profileId = streamConfiguration.profile.id,
-                    codedWidth = sessionTransform.codedWidth,
-                    codedHeight = sessionTransform.codedHeight,
-                    rotationDegrees = sessionTransform.rotationDegrees,
-                    fps = streamConfiguration.profile.fps,
-                    bitrateBps = streamConfiguration.bitrateBps,
-                ),
-            )
-            val accepted = connection.receive()
-                ?: error("Receiver closed the control connection before accepting the stream")
-            check(accepted.requireProtocolVersion() == CamBridgeStreamContract.PROTOCOL_VERSION) {
-                "Receiver returned an unsupported CamBridge protocol version"
+            val accepted = try {
+                connection.send(
+                    CamBridgeStreamContract.hello(
+                        sessionId = endpoint.sessionId,
+                        generation = endpoint.generation,
+                        profileId = streamConfiguration.profile.id,
+                        codedWidth = sessionTransform.codedWidth,
+                        codedHeight = sessionTransform.codedHeight,
+                        rotationDegrees = sessionTransform.rotationDegrees,
+                        fps = streamConfiguration.profile.fps,
+                        bitrateBps = streamConfiguration.bitrateBps,
+                    ),
+                )
+                val response = connection.receive()
+                    ?: error("The receiver did not respond before the control response deadline")
+                check(response.requireProtocolVersion() == CamBridgeStreamContract.PROTOCOL_VERSION) {
+                    "Receiver returned an unsupported CamBridge protocol version"
+                }
+                check(response.stringField("type") == CamBridgeStreamContract.MESSAGE_ACCEPTED) {
+                    response.stringFieldOrNull("error") ?: "Receiver rejected stream"
+                }
+                check(response.stringField("sessionId") == endpoint.sessionId) {
+                    "Receiver returned a different session"
+                }
+                check(response.longField("generation") == endpoint.generation) {
+                    "Receiver returned a different generation"
+                }
+                response
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: StreamFailureException) {
+                throw failure
+            } catch (cause: Throwable) {
+                throw receiverUnavailable(cause.message ?: "The receiver rejected the stream", cause)
             }
-            check(accepted.stringField("type") == CamBridgeStreamContract.MESSAGE_ACCEPTED) {
-                accepted.stringFieldOrNull("error") ?: "Receiver rejected stream"
-            }
-            check(accepted.stringField("sessionId") == endpoint.sessionId) { "Receiver returned a different session" }
-            check(accepted.longField("generation") == endpoint.generation) { "Receiver returned a different generation" }
+            connection.clearReadTimeout()
             val mediaPort = accepted.intField("mediaPort")
             require(mediaPort in CamBridgeStreamContract.MINIMUM_PORT..CamBridgeStreamContract.MAXIMUM_PORT) {
                 "Receiver returned an invalid media port"
@@ -224,8 +251,8 @@ class CamBridgeRtpStreamEngine(
                 throw StreamFailureException(StreamFailure.CameraUnavailable, cause)
             }
             running = true
-            startSenderLoop(socket)
-            startControlReader(connection)
+            startSenderLoop(socket, endpoint.generation)
+            startControlReader(connection, endpoint.generation)
             emit("stream_started", mapOf("mediaPort" to mediaPort, "generation" to endpoint.generation))
         }.recoverCatching { cause ->
             stopLocked(sendStop = false)
@@ -303,6 +330,9 @@ class CamBridgeRtpStreamEngine(
         lastSenderSummaryNs.set(EMPTY_LONG_VALUE)
     }
 
+    private fun receiverUnavailable(reason: String, cause: Throwable): StreamFailureException =
+        StreamFailureException(StreamFailure.ReceiverUnavailable(reason), cause)
+
     private fun prepareCodec(configuration: StreamConfiguration) {
         val thread = HandlerThread(CODEC_THREAD_NAME)
         thread.start()
@@ -327,7 +357,7 @@ class CamBridgeRtpStreamEngine(
             setInteger(MediaFormat.KEY_OPERATING_RATE, configuration.profile.fps)
             setInteger(KEY_MAX_B_FRAMES, NO_B_FRAMES)
         }
-        encoder.setCallback(codecCallback, codecHandler)
+        encoder.setCallback(codecCallback(configuration.streamGeneration), codecHandler)
         encoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
         encoderSurface = encoder.createInputSurface()
         emit(
@@ -351,69 +381,118 @@ class CamBridgeRtpStreamEngine(
         )
     }
 
-    private val codecCallback = object : MediaCodec.Callback() {
+    private fun codecCallback(generation: Long) = object : MediaCodec.Callback() {
         override fun onInputBufferAvailable(codec: MediaCodec, index: Int) = Unit
 
         override fun onOutputBufferAvailable(codec: MediaCodec, index: Int, info: MediaCodec.BufferInfo) {
-            runCatching {
-                val buffer = codec.getOutputBuffer(index)
-                if (buffer != null && info.size > EMPTY_BYTE_COUNT) {
-                    buffer.position(info.offset)
-                    buffer.limit(info.offset + info.size)
-                    val bytes = ByteArray(info.size)
-                    buffer.get(bytes)
-                    if ((info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != EMPTY_BYTE_COUNT) {
-                        codecConfigAnnexB = bytes.toAnnexB()
-                        emit("encoder_codec_config", mapOf("bytes" to codecConfigAnnexB.size))
-                    } else {
-                        val normalized = bytes.toAnnexB()
-                        val accessUnit = if ((info.flags and MediaCodec.BUFFER_FLAG_KEY_FRAME) != EMPTY_BYTE_COUNT &&
-                            codecConfigAnnexB.isNotEmpty()
-                        ) {
-                            codecConfigAnnexB + normalized
+            if (configuration?.streamGeneration == generation) {
+                runCatching {
+                    val buffer = codec.getOutputBuffer(index)
+                    if (buffer != null && info.size > EMPTY_BYTE_COUNT) {
+                        buffer.position(info.offset)
+                        buffer.limit(info.offset + info.size)
+                        val bytes = ByteArray(info.size)
+                        buffer.get(bytes)
+                        if ((info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != EMPTY_BYTE_COUNT) {
+                            codecConfigAnnexB = H264AccessUnitNormalizer.normalizeCodecConfiguration(bytes)
+                            emit("encoder_codec_config", mapOf("bytes" to codecConfigAnnexB.size))
                         } else {
-                            normalized
+                            val normalized = H264AccessUnitNormalizer.normalize(bytes)
+                            val isKeyFrame = (info.flags and MediaCodec.BUFFER_FLAG_KEY_FRAME) != EMPTY_BYTE_COUNT
+                            if (codecConfigAnnexB.isEmpty() &&
+                                H264AccessUnitNormalizer.containsRequiredParameterSets(normalized)
+                            ) {
+                                codecConfigAnnexB = H264AccessUnitNormalizer.parameterSetsFromAnnexB(normalized)
+                            }
+                            require(
+                                codecConfigAnnexB.isNotEmpty() ||
+                                    H264AccessUnitNormalizer.containsRequiredParameterSets(normalized),
+                            ) {
+                                "H.264 media arrived before SPS and PPS"
+                            }
+                            val accessUnit = if (isKeyFrame &&
+                                codecConfigAnnexB.isNotEmpty() &&
+                                !H264AccessUnitNormalizer.containsRequiredParameterSets(normalized)
+                            ) {
+                                codecConfigAnnexB + normalized
+                            } else {
+                                normalized
+                            }
+                            require(accessUnit.size <= CamBridgeStreamContract.MAXIMUM_ACCESS_UNIT_BYTES) {
+                                "H.264 access unit exceeds the configured maximum"
+                            }
+                            encodedAccessUnits.incrementAndGet()
+                            encodedBytes.addAndGet(accessUnit.size.toLong())
+                            if (isKeyFrame) {
+                                encodedKeyFrames.incrementAndGet()
+                            }
+                            enqueueAccessUnit(
+                                EncodedAccessUnit(
+                                    data = accessUnit,
+                                    presentationTimeUs = info.presentationTimeUs,
+                                    isKeyFrame = isKeyFrame,
+                                ),
+                            )
                         }
-                        encodedAccessUnits.incrementAndGet()
-                        encodedBytes.addAndGet(accessUnit.size.toLong())
-                        if ((info.flags and MediaCodec.BUFFER_FLAG_KEY_FRAME) != EMPTY_BYTE_COUNT) {
-                            encodedKeyFrames.incrementAndGet()
-                        }
-                        enqueueAccessUnit(
-                            EncodedAccessUnit(
-                                data = accessUnit,
-                                presentationTimeUs = info.presentationTimeUs,
-                                isKeyFrame = (info.flags and MediaCodec.BUFFER_FLAG_KEY_FRAME) != EMPTY_BYTE_COUNT,
-                            ),
-                        )
                     }
+                }.onFailure { error ->
+                    emit("encoder_output_failed", mapOf("reason" to error.message))
+                    eventFlow.tryEmit(
+                        StreamEngineEvent.FatalFailure(
+                            StreamFailure.EncoderPreparationFailed(
+                                codec = VideoCodec.H264,
+                                cause = error,
+                            ),
+                            generation = generation,
+                        ),
+                    )
                 }
-            }.onFailure { error -> emit("encoder_output_failed", mapOf("reason" to error.message)) }
+            }
             runCatching {
                 codec.releaseOutputBuffer(index, false)
             }.onFailure { error ->
-                emit("encoder_output_release_failed", mapOf("reason" to error.message))
+                if (configuration?.streamGeneration == generation) {
+                    emit("encoder_output_release_failed", mapOf("reason" to error.message))
+                }
             }
         }
 
         override fun onOutputFormatChanged(codec: MediaCodec, format: MediaFormat) {
-            codecConfigAnnexB = format.extractCodecConfig()
-            emit(
-                "encoder_output_format",
-                mapOf("format" to format.toString(), "codecConfigBytes" to codecConfigAnnexB.size),
-            )
+            if (configuration?.streamGeneration == generation) {
+                runCatching {
+                    codecConfigAnnexB = format.extractCodecConfig()
+                    emit(
+                        "encoder_output_format",
+                        mapOf("format" to format.toString(), "codecConfigBytes" to codecConfigAnnexB.size),
+                    )
+                }.onFailure { error ->
+                    emit("encoder_output_format_failed", mapOf("reason" to error.message))
+                    eventFlow.tryEmit(
+                        StreamEngineEvent.FatalFailure(
+                            StreamFailure.EncoderPreparationFailed(
+                                codec = VideoCodec.H264,
+                                cause = error,
+                            ),
+                            generation = generation,
+                        ),
+                    )
+                }
+            }
         }
 
         override fun onError(codec: MediaCodec, e: MediaCodec.CodecException) {
-            emit("encoder_error", mapOf("reason" to e.diagnosticInfo, "recoverable" to e.isRecoverable))
-            eventFlow.tryEmit(
-                StreamEngineEvent.FatalFailure(
-                    StreamFailure.EncoderPreparationFailed(
-                        codec = VideoCodec.H264,
-                        cause = e,
+            if (configuration?.streamGeneration == generation) {
+                emit("encoder_error", mapOf("reason" to e.diagnosticInfo, "recoverable" to e.isRecoverable))
+                eventFlow.tryEmit(
+                    StreamEngineEvent.FatalFailure(
+                        StreamFailure.EncoderPreparationFailed(
+                            codec = VideoCodec.H264,
+                            cause = e,
+                        ),
+                        generation = generation,
                     ),
-                ),
-            )
+                )
+            }
         }
     }
 
@@ -435,7 +514,7 @@ class CamBridgeRtpStreamEngine(
         }
     }
 
-    private fun startSenderLoop(socket: DatagramSocket) {
+    private fun startSenderLoop(socket: DatagramSocket, generation: Long) {
         nextSequence.set((System.nanoTime() and SEQUENCE_MASK.toLong()).toInt())
         ssrc = (System.nanoTime() and Int.MAX_VALUE.toLong()).toInt()
         senderJob = workerScope.launch {
@@ -454,7 +533,7 @@ class CamBridgeRtpStreamEngine(
                     maximumUdpSendDurationNs.updateAndGet { maximum -> maxOf(maximum, duration) }
                 }
             }
-            while (isActive) {
+            while (isActive && isCurrentRunningGeneration(generation)) {
                 val accessUnit = encodedQueue.poll(ENCODED_QUEUE_POLL_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
                     ?: continue
                 val next = packetizer.sendAccessUnit(
@@ -466,6 +545,7 @@ class CamBridgeRtpStreamEngine(
                     eventFlow.tryEmit(
                         StreamEngineEvent.FatalFailure(
                             StreamFailure.RtpTransportFailed(error),
+                            generation = generation,
                         ),
                     )
                     return@launch
@@ -507,14 +587,15 @@ class CamBridgeRtpStreamEngine(
         )
     }
 
-    private fun startControlReader(connection: CamBridgeControlConnection) {
+    private fun startControlReader(connection: CamBridgeControlConnection, generation: Long) {
         controlReaderJob = workerScope.launch {
             try {
-                while (true) {
+                while (isCurrentRunningGeneration(generation)) {
                     val message = connection.receive() ?: break
                     if (message.requireProtocolVersion() != CamBridgeStreamContract.PROTOCOL_VERSION) continue
                     when (message.stringFieldOrNull("type")) {
                         "error" -> {
+                            if (!isCurrentRunningGeneration(generation)) break
                             val reason = message.stringFieldOrNull("error")
                             emit("receiver_control_error", mapOf("reason" to reason))
                             eventFlow.tryEmit(
@@ -522,6 +603,7 @@ class CamBridgeRtpStreamEngine(
                                     StreamFailure.ReceiverUnavailable(
                                         reason ?: "The receiver rejected the stream",
                                     ),
+                                    generation = generation,
                                 ),
                             )
                             break
@@ -532,13 +614,18 @@ class CamBridgeRtpStreamEngine(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Throwable) {
-                emit("control_reader_failed", mapOf("reason" to error.message))
+                if (isCurrentRunningGeneration(generation)) {
+                    emit("control_reader_failed", mapOf("reason" to error.message))
+                }
             }
-            if (running) {
-                eventFlow.tryEmit(StreamEngineEvent.Disconnected)
+            if (isCurrentRunningGeneration(generation)) {
+                eventFlow.tryEmit(StreamEngineEvent.Disconnected(generation))
             }
         }
     }
+
+    private fun isCurrentRunningGeneration(generation: Long): Boolean =
+        running && streamEndpoint?.generation == generation
 
     private suspend fun stopLocked(sendStop: Boolean) {
         val endpoint = streamEndpoint
@@ -599,71 +686,19 @@ class CamBridgeRtpStreamEngine(
         val isKeyFrame: Boolean,
     )
 
-    private fun ByteArray.toAnnexB(): ByteArray {
-        if (startsWithStartCode()) return this
-        if (firstOrNull()?.toInt()?.and(BYTE_MASK) == AVC_CONFIGURATION_VERSION) return avcConfigurationToAnnexB()
-        val output = ArrayList<Byte>(size + H264_START_CODE_BYTES)
-        var offset = EMPTY_BYTE_COUNT
-        while (offset + LENGTH_PREFIX_BYTES <= size) {
-            val nalSize = ((this[offset].toInt() and BYTE_MASK) shl 24) or
-                ((this[offset + ONE_BYTE_OFFSET].toInt() and BYTE_MASK) shl 16) or
-                ((this[offset + TWO_BYTE_OFFSET].toInt() and BYTE_MASK) shl 8) or
-                (this[offset + THREE_BYTE_OFFSET].toInt() and BYTE_MASK)
-            offset += LENGTH_PREFIX_BYTES
-            require(nalSize > EMPTY_BYTE_COUNT && offset + nalSize <= size) { "Malformed AVC length-prefixed output" }
-            repeat(H264_START_CODE_BYTES - ONE_BYTE_OFFSET) { output.add(ZERO_BYTE) }
-            output.add(ONE_BYTE)
-            repeat(nalSize) { index -> output.add(this[offset + index]) }
-            offset += nalSize
-        }
-        require(offset == size) { "Malformed AVC output buffer" }
-        return output.toByteArray()
-    }
-
-    private fun ByteArray.avcConfigurationToAnnexB(): ByteArray {
-        require(size >= AVC_CONFIGURATION_HEADER_BYTES) { "AVC configuration is truncated" }
-        val lengthBytes = (this[AVC_LENGTH_SIZE_OFFSET].toInt() and AVC_LENGTH_SIZE_MASK) + ONE_BYTE_OFFSET
-        require(lengthBytes == LENGTH_PREFIX_BYTES) { "Unsupported AVC NAL length size" }
-        var offset = AVC_CONFIGURATION_HEADER_BYTES
-        val spsCount = this[offset].toInt() and AVC_SPS_COUNT_MASK
-        offset += ONE_BYTE_OFFSET
-        val output = ArrayList<Byte>()
-        repeat(spsCount) {
-            val nal = readConfigurationNal(offset).also { offset = it.second }.first.toAnnexBNal()
-            output.addAll(nal.toList())
-        }
-        require(offset < size) { "AVC configuration has no PPS count" }
-        val ppsCount = this[offset].toInt() and AVC_PPS_COUNT_MASK
-        offset += ONE_BYTE_OFFSET
-        repeat(ppsCount) {
-            val nal = readConfigurationNal(offset).also { offset = it.second }.first.toAnnexBNal()
-            output.addAll(nal.toList())
-        }
-        return output.toByteArray()
-    }
-
-    private fun ByteArray.readConfigurationNal(offset: Int): Pair<ByteArray, Int> {
-        require(offset + AVC_CONFIGURATION_NAL_LENGTH_BYTES <= size) { "AVC configuration NAL length is truncated" }
-        val nalSize = ((this[offset].toInt() and BYTE_MASK) shl 8) or (this[offset + ONE_BYTE_OFFSET].toInt() and BYTE_MASK)
-        val start = offset + AVC_CONFIGURATION_NAL_LENGTH_BYTES
-        require(nalSize > EMPTY_BYTE_COUNT && start + nalSize <= size) { "AVC configuration NAL is truncated" }
-        return copyOfRange(start, start + nalSize) to (start + nalSize)
-    }
-
-    private fun ByteArray.toAnnexBNal(): ByteArray = H264_START_CODE + this
-
     private fun MediaFormat.extractCodecConfig(): ByteArray {
-        val sps = getByteBuffer("csd-0")?.let { buffer -> ByteArray(buffer.remaining()).also(buffer::get) }
-            ?: return ByteArray(EMPTY_BYTE_COUNT)
-        val pps = getByteBuffer("csd-1")?.let { buffer -> ByteArray(buffer.remaining()).also(buffer::get) }
-            ?: return sps.toAnnexB()
-        return sps.toAnnexB() + pps.toAnnexB()
+        val spsBuffer = getByteBuffer("csd-0")
+        val ppsBuffer = getByteBuffer("csd-1")
+        if (spsBuffer == null || ppsBuffer == null) {
+            require(spsBuffer == null && ppsBuffer == null) {
+                "H.264 output format contains only one parameter set"
+            }
+            return ByteArray(EMPTY_BYTE_COUNT)
+        }
+        val sps = ByteArray(spsBuffer.remaining()).also(spsBuffer::get)
+        val pps = ByteArray(ppsBuffer.remaining()).also(ppsBuffer::get)
+        return H264AccessUnitNormalizer.normalizeParameterSets(sps, pps)
     }
-
-    private fun ByteArray.startsWithStartCode(): Boolean =
-        size >= THREE_BYTE_START_CODE_BYTES && this[EMPTY_BYTE_COUNT] == ZERO_BYTE && this[ONE_BYTE_OFFSET] == ZERO_BYTE &&
-            (this[TWO_BYTE_OFFSET] == ONE_BYTE ||
-                (size >= FOUR_BYTE_START_CODE_BYTES && this[TWO_BYTE_OFFSET] == ZERO_BYTE && this[THREE_BYTE_OFFSET] == ONE_BYTE))
 
     private companion object {
         const val EVENT_BUFFER_CAPACITY = 32
@@ -680,25 +715,7 @@ class CamBridgeRtpStreamEngine(
         const val NO_B_FRAMES = 0
         const val EMPTY_BYTE_COUNT = 0
         const val EMPTY_LONG_VALUE = 0L
-        const val ONE_BYTE_OFFSET = 1
-        const val TWO_BYTE_OFFSET = 2
-        const val THREE_BYTE_OFFSET = 3
-        const val BYTE_MASK = 0xff
-        val ZERO_BYTE = 0.toByte()
-        val ONE_BYTE = 1.toByte()
-        val H264_START_CODE = byteArrayOf(ZERO_BYTE, ZERO_BYTE, ZERO_BYTE, ONE_BYTE)
         const val KEY_MAX_B_FRAMES = "max-bframes"
         const val SEQUENCE_MASK = 0xffff
-        const val THREE_BYTE_START_CODE_BYTES = 3
-        const val FOUR_BYTE_START_CODE_BYTES = 4
-        const val H264_START_CODE_BYTES = 4
-        const val LENGTH_PREFIX_BYTES = 4
-        const val AVC_CONFIGURATION_VERSION = 1
-        const val AVC_CONFIGURATION_HEADER_BYTES = 6
-        const val AVC_CONFIGURATION_NAL_LENGTH_BYTES = 2
-        const val AVC_LENGTH_SIZE_OFFSET = 4
-        const val AVC_LENGTH_SIZE_MASK = 3
-        const val AVC_SPS_COUNT_MASK = 0x1f
-        const val AVC_PPS_COUNT_MASK = 0xff
     }
 }

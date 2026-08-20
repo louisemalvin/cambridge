@@ -35,7 +35,7 @@ private:
     void run();
     void close_active_connection();
     bool take_pending_connection(int descriptor);
-    bool read_frame(int fd, std::string &json);
+    bool read_frame(int fd, std::string &json, std::uint32_t timeout_ms);
     bool write_frame(int fd, const std::string &json);
 
     std::uint16_t port_;

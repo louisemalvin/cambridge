@@ -47,6 +47,7 @@ class StreamSessionControllerImpl(
     private val stateFlow = MutableStateFlow<StreamState>(StreamState.Idle)
     private var activeSession: StreamSession? = null
     private var activeRunId: String? = null
+    private var activeGeneration: Long? = null
     private var cleanupPending = false
     private var nextStreamGeneration = CamBridgeStreamContract.FIRST_STREAM_GENERATION
     private var lastLoggedBitrateAtMillis: Long = NO_SAMPLE_TIMESTAMP_MILLIS
@@ -177,6 +178,7 @@ class StreamSessionControllerImpl(
                 sessionTransform = sessionTransform,
             )
             activeSession = session
+            activeGeneration = session.streamGeneration
             diagnosticEvent(
                 "session_created",
                 mapOf(
@@ -195,6 +197,7 @@ class StreamSessionControllerImpl(
                 keyframeIntervalSeconds = session.profile.keyframeIntervalSeconds,
                 runId = runId,
                 sessionId = session.sessionId,
+                streamGeneration = session.streamGeneration,
                 sessionTransform = sessionTransform,
             )
             StreamConfigurationValidator.validate(configuration)
@@ -301,10 +304,14 @@ class StreamSessionControllerImpl(
 
     private suspend fun handleEngineEvent(event: StreamEngineEvent) {
         lifecycleMutex.withLock {
-            if (activeSession == null || stateFlow.value !is StreamState.Streaming) return@withLock
+            val state = stateFlow.value
+            if (activeSession == null || (state !is StreamState.Connecting && state !is StreamState.Streaming)) {
+                return@withLock
+            }
+            if (event.generation != activeGeneration) return@withLock
             logEngineEvent(event)
             when (event) {
-                StreamEngineEvent.Disconnected -> failActiveSessionLocked(StreamFailure.NetworkDisconnected)
+                is StreamEngineEvent.Disconnected -> failActiveSessionLocked(StreamFailure.NetworkDisconnected)
                 is StreamEngineEvent.FatalFailure -> failActiveSessionLocked(event.failure)
                 is StreamEngineEvent.ConnectionFailed -> failActiveSessionLocked(
                     StreamFailure.EncoderPreparationFailed(
@@ -328,6 +335,7 @@ class StreamSessionControllerImpl(
         cleanupPending = false
         activeSession = null
         activeRunId = null
+        activeGeneration = null
         runCatching { streamEngine.stop() }
         runCatching { streamEngine.release() }
         foreground.stop()
@@ -339,7 +347,7 @@ class StreamSessionControllerImpl(
                 "encoder_connection_started",
                 mapOf("endpoint" to event.endpoint),
             )
-            StreamEngineEvent.Connected -> diagnosticEvent("encoder_connected")
+            is StreamEngineEvent.Connected -> diagnosticEvent("encoder_connected")
             is StreamEngineEvent.ConnectionFailed -> {
                 val now = System.currentTimeMillis()
                 if (now - lastLoggedTransportErrorAtMillis >= TRANSPORT_ERROR_LOG_INTERVAL_MILLIS) {
@@ -351,9 +359,9 @@ class StreamSessionControllerImpl(
                 "stream_fatal_failure",
                 mapOf("failureType" to event.failure::class.simpleName),
             )
-            StreamEngineEvent.Disconnected -> diagnosticEvent("encoder_disconnected")
-            StreamEngineEvent.AuthenticationError -> diagnosticEvent("encoder_authentication_error")
-            StreamEngineEvent.AuthenticationSucceeded -> diagnosticEvent("encoder_authentication_succeeded")
+            is StreamEngineEvent.Disconnected -> diagnosticEvent("encoder_disconnected")
+            is StreamEngineEvent.AuthenticationError -> diagnosticEvent("encoder_authentication_error")
+            is StreamEngineEvent.AuthenticationSucceeded -> diagnosticEvent("encoder_authentication_succeeded")
             is StreamEngineEvent.BitrateChanged -> {
                 val now = System.currentTimeMillis()
                 if (now - lastLoggedBitrateAtMillis >= BITRATE_SAMPLE_INTERVAL_MILLIS) {

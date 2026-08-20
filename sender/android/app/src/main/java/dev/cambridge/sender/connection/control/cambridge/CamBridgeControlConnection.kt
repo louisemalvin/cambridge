@@ -50,6 +50,10 @@ internal class CamBridgeControlConnection private constructor(
         runCatching { socket.close() }
     }
 
+    fun clearReadTimeout() {
+        socket.soTimeout = NO_READ_TIMEOUT_MILLIS
+    }
+
     companion object {
         private const val EMPTY_MESSAGE_BYTES = 0
         private const val NO_READ_TIMEOUT_MILLIS = 0

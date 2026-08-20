@@ -29,5 +29,6 @@ data class StreamConfiguration(
     val keyframeIntervalSeconds: Int,
     val runId: String? = null,
     val sessionId: String? = null,
+    val streamGeneration: Long = CamBridgeStreamContract.FIRST_STREAM_GENERATION,
     val sessionTransform: SessionTransform? = null,
 )

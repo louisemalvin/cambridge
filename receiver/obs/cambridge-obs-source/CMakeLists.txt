@@ -188,6 +188,24 @@ if(CAMBRIDGE_BUILD_TESTS AND BUILD_TESTING)
         ${CAMBRIDGE_JSON_LINK_LIBRARIES}
     )
 
+    find_package(Threads REQUIRED)
+    cambridge_add_test(cambridge-obs-plugin-control-server-tests
+        tests/control_server_tests.cpp
+        src/control_protocol.cpp
+        src/control_server.cpp
+        src/platform/posix/posix_compat.cpp
+    )
+    target_include_directories(cambridge-obs-plugin-control-server-tests SYSTEM PRIVATE
+        ${CAMBRIDGE_JSON_INCLUDE_DIRS}
+    )
+    target_link_directories(cambridge-obs-plugin-control-server-tests PRIVATE
+        ${CAMBRIDGE_JSON_LIBRARY_DIRS}
+    )
+    target_link_libraries(cambridge-obs-plugin-control-server-tests PRIVATE
+        ${CAMBRIDGE_JSON_LINK_LIBRARIES}
+        Threads::Threads
+    )
+
     cambridge_add_test(cambridge-obs-plugin-address-tests
         tests/network_address_candidates_tests.cpp
         src/network_address_candidates.cpp
@@ -206,7 +224,6 @@ if(CAMBRIDGE_BUILD_TESTS AND BUILD_TESTING)
         tests/decoder_policy_tests.cpp
         src/media_path.cpp
     )
-    find_package(Threads REQUIRED)
     target_link_libraries(cambridge-obs-plugin-decoder-policy-tests PRIVATE Threads::Threads)
 
     cambridge_add_test(cambridge-obs-plugin-renderer-policy-tests

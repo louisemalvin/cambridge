@@ -184,7 +184,7 @@ class StreamSessionControllerTest {
 
         assertTrue(controller.start(endpoint, configuration()).isSuccess)
         testScheduler.runCurrent()
-        engine.emit(StreamEngineEvent.Disconnected)
+        engine.emit(StreamEngineEvent.Disconnected(engine.lastStartEndpoint!!.generation))
         testScheduler.runCurrent()
 
         assertEquals(StreamState.Failed(StreamFailure.NetworkDisconnected), controller.state.value)
@@ -203,6 +203,7 @@ class StreamSessionControllerTest {
         engine.emit(
             StreamEngineEvent.FatalFailure(
                 StreamFailure.RtpTransportFailed(IllegalStateException("socket failed")),
+                generation = engine.lastStartEndpoint!!.generation,
             ),
         )
         testScheduler.runCurrent()
@@ -210,6 +211,25 @@ class StreamSessionControllerTest {
         assertTrue(controller.state.value is StreamState.Failed)
         assertEquals(1, engine.stopCount)
         assertEquals(1, foreground.stopCount)
+    }
+
+    @Test
+    fun staleEventFromAnEarlierGenerationCannotStopTheReplacementSession() = runTest {
+        val engine = FakeEngineWithEvents()
+        val controller = controller(engine, FakeForeground(), backgroundScope)
+
+        assertTrue(controller.start(endpoint, configuration()).isSuccess)
+        val firstGeneration = engine.lastStartEndpoint!!.generation
+        assertTrue(controller.stop().isSuccess)
+        assertTrue(controller.start(endpoint, configuration()).isSuccess)
+        val secondGeneration = engine.lastStartEndpoint!!.generation
+        assertTrue(firstGeneration != secondGeneration)
+
+        engine.emit(StreamEngineEvent.Disconnected(firstGeneration))
+        testScheduler.runCurrent()
+
+        assertTrue(controller.state.value is StreamState.Streaming)
+        assertEquals(1, engine.stopCount)
     }
 
     private fun controller(
@@ -286,6 +306,7 @@ class StreamSessionControllerTest {
 
     private class FakeEngineWithEvents : StreamEngine {
         var stopCount = 0
+        var lastStartEndpoint: dev.cambridge.sender.model.CamBridgeStreamEndpoint? = null
         private val eventFlow = MutableSharedFlow<StreamEngineEvent>()
         override val events: Flow<StreamEngineEvent> = eventFlow
 
@@ -295,8 +316,10 @@ class StreamSessionControllerTest {
 
         override suspend fun prepare(configuration: StreamConfiguration): Result<Unit> = Result.success(Unit)
 
-        override suspend fun start(endpoint: dev.cambridge.sender.model.CamBridgeStreamEndpoint): Result<Unit> =
-            Result.success(Unit)
+        override suspend fun start(endpoint: dev.cambridge.sender.model.CamBridgeStreamEndpoint): Result<Unit> {
+            lastStartEndpoint = endpoint
+            return Result.success(Unit)
+        }
 
         override suspend fun updateBitrate(bitrateBps: Int): Result<Unit> = Result.success(Unit)
 

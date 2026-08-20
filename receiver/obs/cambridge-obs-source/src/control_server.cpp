@@ -14,6 +14,8 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
+#include <optional>
 #include <vector>
 
 namespace cambridge {
@@ -22,6 +24,7 @@ namespace {
 constexpr int kListenBacklog = 1;
 constexpr int kInvalidSocket = -1;
 constexpr std::size_t kLengthPrefixBytes = contract::kControlHeaderBytes;
+constexpr std::uint32_t kNoReadTimeoutMs = 0;
 
 bool wait_for_socket(int fd, short events)
 {
@@ -30,12 +33,25 @@ bool wait_for_socket(int fd, short events)
     return result > 0 && (descriptor.revents & events) != 0;
 }
 
-bool receive_exact(int fd, std::uint8_t *data, std::size_t size)
+using ReadDeadline = std::optional<std::chrono::steady_clock::time_point>;
+
+bool receive_exact(int fd, std::uint8_t *data, std::size_t size, const ReadDeadline &deadline)
 {
     std::size_t offset = 0;
     while (offset < size) {
+        int poll_timeout_ms = static_cast<int>(receiver::kWorkerPollIntervalMs);
+        if (deadline.has_value()) {
+            const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
+                deadline.value() - std::chrono::steady_clock::now());
+            if (remaining.count() <= 0) {
+                return false;
+            }
+            poll_timeout_ms = std::min(
+                poll_timeout_ms,
+                static_cast<int>(remaining.count()));
+        }
         pollfd descriptor{fd, POLLIN, 0};
-        const int poll_result = poll(&descriptor, 1, static_cast<int>(receiver::kWorkerPollIntervalMs));
+        const int poll_result = poll(&descriptor, 1, poll_timeout_ms);
         if (poll_result < 0 && errno == EINTR) {
             continue;
         }
@@ -200,10 +216,15 @@ bool ControlServer::take_pending_connection(int descriptor)
     return true;
 }
 
-bool ControlServer::read_frame(int fd, std::string &json)
+bool ControlServer::read_frame(int fd, std::string &json, std::uint32_t timeout_ms)
 {
     std::array<std::uint8_t, kLengthPrefixBytes> header{};
-    if (!receive_exact(fd, header.data(), header.size())) {
+    const ReadDeadline deadline = timeout_ms == kNoReadTimeoutMs
+                                      ? std::nullopt
+                                      : std::optional<std::chrono::steady_clock::time_point>(
+                                            std::chrono::steady_clock::now() +
+                                            std::chrono::milliseconds(timeout_ms));
+    if (!receive_exact(fd, header.data(), header.size(), deadline)) {
         return false;
     }
     const std::uint32_t message_size = (static_cast<std::uint32_t>(header[0]) << 24U) |
@@ -214,7 +235,7 @@ bool ControlServer::read_frame(int fd, std::string &json)
         return false;
     }
     std::vector<std::uint8_t> payload(message_size);
-    if (!receive_exact(fd, payload.data(), payload.size())) {
+    if (!receive_exact(fd, payload.data(), payload.size(), deadline)) {
         return false;
     }
     json.assign(reinterpret_cast<const char *>(payload.data()), payload.size());
@@ -261,7 +282,7 @@ void ControlServer::run()
         }
 
         std::string first_json;
-        const bool received_first_frame = read_frame(client, first_json);
+        const bool received_first_frame = read_frame(client, first_json, contract::kControlRequestTimeoutMs);
         const bool owns_pending_connection = take_pending_connection(client);
         if (!received_first_frame || !owns_pending_connection) {
             if (owns_pending_connection) {
@@ -314,7 +335,7 @@ void ControlServer::run()
                 first_message_pending = false;
             } else {
                 std::string json;
-                if (!read_frame(client, json)) {
+                if (!read_frame(client, json, kNoReadTimeoutMs)) {
                     break;
                 }
                 if (!decode_control_message(json, message, error)) {
