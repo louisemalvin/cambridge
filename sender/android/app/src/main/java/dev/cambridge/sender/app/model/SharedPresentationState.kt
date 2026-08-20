@@ -119,6 +119,7 @@ sealed interface SenderScreenAction {
     data class AntiFlickerChanged(val mode: AntiFlickerMode) : SenderScreenAction
     data class ProfileSelected(val profileId: String) : SenderScreenAction
     data class FrameRateSelected(val fps: Int) : SenderScreenAction
+    data class EncoderSelected(val implementationName: String) : SenderScreenAction
     data class BitrateSelected(val bitrateBps: Int) : SenderScreenAction
     data class StreamOrientationSelected(val orientation: StreamOrientation) : SenderScreenAction
     data class ReceiverNameChanged(val name: String) : SenderScreenAction

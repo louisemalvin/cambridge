@@ -17,11 +17,10 @@ import dev.cambridge.sender.model.ReceiverEndpoint
 import dev.cambridge.sender.model.StreamConfiguration
 import dev.cambridge.sender.model.StreamFailure
 import dev.cambridge.sender.model.StreamFailureException
-import dev.cambridge.sender.model.StreamOrientation
 import dev.cambridge.sender.model.StreamSession
 import dev.cambridge.sender.model.StreamState
+import dev.cambridge.sender.model.StreamVideoConfiguration
 import dev.cambridge.sender.model.VideoCodec
-import dev.cambridge.sender.model.VideoProfile
 import dev.cambridge.sender.platform.service.ForegroundStreamingController
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -63,16 +62,10 @@ class StreamSessionControllerImpl(
 
     override suspend fun start(
         endpoint: ReceiverEndpoint,
-        profile: VideoProfile,
-        orientation: StreamOrientation,
-    ): Result<Unit> = start(endpoint, profile, orientation, profile.defaultBitrateBps)
-
-    override suspend fun start(
-        endpoint: ReceiverEndpoint,
-        profile: VideoProfile,
-        orientation: StreamOrientation,
-        bitrateBps: Int,
+        configuration: StreamVideoConfiguration,
     ): Result<Unit> = lifecycleMutex.withLock {
+        val profile = configuration.profile
+        val orientation = configuration.streamOrientation
         if (activeSession != null) {
             return@withLock failure(StreamFailure.StreamStartFailed(IllegalStateException("A stream is already active")))
         }
@@ -117,17 +110,53 @@ class StreamSessionControllerImpl(
             ),
         )
         try {
+            val encoderName = configuration.encoderName?.takeIf(String::isNotBlank)
+                ?: throw StreamFailureException(
+                    StreamFailure.EncoderPreparationFailed(
+                        codec = VideoCodec.H264,
+                        cause = IllegalArgumentException("No exact H.264 encoder is selected"),
+                    ),
+                )
             val encoderCapability = capabilityProbe.getCapabilities(listOf(profile))
-                .firstOrNull { it.codec == VideoCodec.H264 && it.profileId == profile.id }
-            if (encoderCapability?.supported != true) {
-                throw StreamFailureException(StreamFailure.VideoQualityUnsupported(profile))
-            }
-            val encoderMinimumBitrate = encoderCapability.minimumBitrateBps ?: profile.minimumBitrateBps
-            val encoderMaximumBitrate = encoderCapability.maximumBitrateBps ?: profile.maximumBitrateBps
-            if (profile.clampToStep(bitrateBps, encoderMinimumBitrate, encoderMaximumBitrate) != bitrateBps) {
+                .firstOrNull { it.codec == VideoCodec.H264 && it.implementationName == encoderName }
+            if (encoderCapability == null || !EncoderCatalog.hasCompleteMode(encoderCapability, profile)) {
                 throw StreamFailureException(
-                    StreamFailure.VideoQualityUnsupported(profile),
-                    IllegalArgumentException("Selected bitrate is outside the phone encoder capability range"),
+                    StreamFailure.EncoderPreparationFailed(
+                        codec = VideoCodec.H264,
+                        cause = IllegalArgumentException(
+                            "Selected encoder does not support the exact requested video mode",
+                        ),
+                    ),
+                )
+            }
+            val cameraSupported = cameraController?.supportedVideoModes(listOf(profile))
+                ?.contains(profile.id)
+                ?: true
+            if (!cameraSupported) {
+                throw StreamFailureException(
+                    StreamFailure.CameraUnavailable,
+                    IllegalArgumentException("Camera2 no longer supports the selected video mode"),
+                )
+            }
+            val encoderMode = encoderCapability.modeFor(profile.id)
+                ?: error("Selected encoder mode disappeared during validation")
+            val encoderMinimumBitrate = encoderMode.minimumBitrateBps
+                ?: error("Selected encoder did not report a bitrate range")
+            val encoderMaximumBitrate = encoderMode.maximumBitrateBps
+                ?: error("Selected encoder did not report a bitrate range")
+            if (profile.clampToStep(
+                    configuration.bitrateBps,
+                    encoderMinimumBitrate,
+                    encoderMaximumBitrate,
+                ) != configuration.bitrateBps
+            ) {
+                throw StreamFailureException(
+                    StreamFailure.EncoderPreparationFailed(
+                        codec = VideoCodec.H264,
+                        cause = IllegalArgumentException(
+                            "Selected bitrate is outside the exact encoder capability range",
+                        ),
+                    ),
                 )
             }
             val mediaPort = endpoint.controlPort + CamBridgeStreamContract.DEFAULT_MEDIA_PORT_OFFSET
@@ -138,8 +167,9 @@ class StreamSessionControllerImpl(
                 sessionId = "$SESSION_ID_PREFIX${UUID.randomUUID()}",
                 endpoint = endpoint,
                 selectedCodec = VideoCodec.H264,
+                encoderName = encoderName,
                 profile = profile,
-                bitrateBps = bitrateBps,
+                bitrateBps = configuration.bitrateBps,
                 mediaPort = mediaPort,
                 outputPixelFormat = OutputPixelFormat.NV12,
                 warnings = emptyList(),
@@ -152,12 +182,14 @@ class StreamSessionControllerImpl(
                 mapOf(
                     "mediaPort" to session.mediaPort,
                     "codec" to session.selectedCodec.protocolId,
+                    "encoder" to session.encoderName,
                     "bitrateBps" to session.bitrateBps,
                     "outputPixelFormat" to session.outputPixelFormat,
                 ),
             )
             val configuration = StreamConfiguration(
                 codec = VideoCodec.H264,
+                encoderName = session.encoderName,
                 profile = session.profile,
                 bitrateBps = session.bitrateBps,
                 keyframeIntervalSeconds = session.profile.keyframeIntervalSeconds,
@@ -166,7 +198,11 @@ class StreamSessionControllerImpl(
                 sessionTransform = sessionTransform,
             )
             StreamConfigurationValidator.validate(configuration)
-                .getOrElse { throw StreamFailureException(StreamFailure.VideoQualityUnsupported(profile), it) }
+                .getOrElse {
+                    throw StreamFailureException(
+                        StreamFailure.EncoderPreparationFailed(VideoCodec.H264, it),
+                    )
+                }
             foreground.start().getOrElse { cause -> throw StreamFailureException(StreamFailure.Unexpected(cause), cause) }
             streamEngine.prepare(configuration).getOrElse { cause ->
                 throw StreamFailureException(
@@ -180,6 +216,7 @@ class StreamSessionControllerImpl(
                 "encoder_prepared",
                 mapOf(
                     "codec" to configuration.codec.protocolId,
+                    "encoder" to configuration.encoderName,
                     "width" to configuration.profile.width,
                     "height" to configuration.profile.height,
                     "fps" to configuration.profile.fps,
@@ -206,6 +243,7 @@ class StreamSessionControllerImpl(
                 "stream_started",
                 mapOf(
                     "codec" to session.selectedCodec.protocolId,
+                    "encoder" to session.encoderName,
                     "bitrateBps" to session.bitrateBps,
                 ),
             )

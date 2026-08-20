@@ -20,19 +20,13 @@ internal object StreamSetupOptionResolver {
         } else {
             listOf(selectedProfile) + VideoProfiles.qualityProfiles
         }
-        return profiles.map { profile ->
-            val profileCapabilities = capabilitiesForResolution(profile, capabilities)
-            val isSupported = profileCapabilities.any(PhoneVideoModeCapability::isSupported)
+        return profiles.filter { profile ->
+            capabilitiesForResolution(profile, capabilities).any(PhoneVideoModeCapability::isSupported)
+        }.map { profile ->
             SelectOptionUi(
                 key = profile.id,
                 label = StreamPresentationMapper.videoProfileLabel(profile),
                 isSelected = sameResolution(profile, selectedProfile),
-                isEnabled = isSupported,
-                disabledReason = profileCapabilities
-                    .takeUnless { isSupported }
-                    ?.firstOrNull { capability -> capability.reason != null }
-                    ?.reason
-                    ?.let(UiText::Plain),
             )
         }
     }
@@ -43,17 +37,13 @@ internal object StreamSetupOptionResolver {
     ): List<SelectOptionUi> = VideoProfiles.profilesForResolution(selectedProfile)
         .distinctBy { profile -> profile.fps }
         .sortedBy { profile -> profile.fps }
-        .map { profile ->
+        .mapNotNull { profile ->
             val capability = capabilities.firstOrNull { it.mode.id == profile.id }
+            if (capability?.isSupported != true) return@mapNotNull null
             SelectOptionUi(
                 key = profile.fps.toString(),
                 label = UiText.Resource(R.string.frame_rate_option, listOf(profile.fps)),
                 isSelected = profile.fps == selectedProfile.fps,
-                isEnabled = capability?.isSupported == true,
-                disabledReason = capability
-                    ?.takeIf { !it.isSupported }
-                    ?.reason
-                    ?.let(UiText::Plain),
             )
         }
 

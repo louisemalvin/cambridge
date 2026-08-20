@@ -348,9 +348,7 @@ class SenderConnectionCoordinator(
             val configured = settings.state.value
             controller.start(
                 endpoint = receiverEndpoint,
-                profile = configured.profile,
-                orientation = configured.streamOrientation,
-                bitrateBps = configured.bitrateBps,
+                configuration = configured.videoConfiguration,
             )
         }
         mutex.withLock { stateFlow.value = controller.state.value }

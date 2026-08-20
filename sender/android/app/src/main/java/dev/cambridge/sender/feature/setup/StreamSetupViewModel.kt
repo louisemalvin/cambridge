@@ -18,18 +18,21 @@ import dev.cambridge.sender.model.StreamOrientation
 import dev.cambridge.sender.model.StreamFailure
 import dev.cambridge.sender.model.StreamFailureException
 import dev.cambridge.sender.model.StreamState
+import dev.cambridge.sender.model.StreamVideoConfiguration
 import dev.cambridge.sender.model.SenderSettingsRepository
 import dev.cambridge.sender.model.SenderSettings
 import dev.cambridge.sender.model.ReceiverProbeState
 import dev.cambridge.sender.model.ReceiverCandidate
 import dev.cambridge.sender.model.VideoProfile
+import dev.cambridge.sender.model.EncoderCapability
 import dev.cambridge.sender.session.VideoProfiles
 import dev.cambridge.sender.media.camera.CameraInteractionState
 import dev.cambridge.sender.media.camera.CameraStabilizationMode
 import dev.cambridge.sender.media.capabilities.EncoderCapabilityProbe
 import dev.cambridge.sender.logging.AppLogger
-import dev.cambridge.sender.session.PhoneVideoCapabilities
 import dev.cambridge.sender.session.PhoneVideoModeCapability
+import dev.cambridge.sender.session.EncoderCatalog
+import dev.cambridge.sender.session.VideoConfigurationResolver
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -88,11 +91,22 @@ class StreamSetupViewModel @Inject constructor(
         val streamState = inputs.streamState
         val receiverName = inputs.receiverName
         val configuredSettings = inputs.configuredSettings
+        val selectedEncoderName = configuredSettings.videoConfiguration.encoderName
         val validation = inputs.validation
         val receiverProbeState = inputs.receiverProbeState
         val selectedCapability = capabilities.firstOrNull { it.mode.id == configuredSettings.profile.id }
-        val selectedProfileSupported = selectedCapability?.isSupported == true &&
-            configuredSettings.bitrateBps in selectedCapability.bitrateRange
+        val selectedProfileSupported = selectedCapability?.let { capability ->
+            val minimum = capability.encoderMinimumBitrateBps
+            val maximum = capability.encoderMaximumBitrateBps
+            capability.isSupported &&
+                minimum != null &&
+                maximum != null &&
+                configuredSettings.profile.clampToStep(
+                    configuredSettings.bitrateBps,
+                    minimum,
+                    maximum,
+                ) == configuredSettings.bitrateBps
+        } == true
         val cameraControls = CameraControlsUiStateMapper.map(cameraInteraction)
         StreamSetupUiState(
             connection = StreamPresentationMapper.connection(
@@ -110,6 +124,10 @@ class StreamSetupViewModel @Inject constructor(
             receiverOptions = receiverOptions(receiverCandidates, receiverProbeState),
             isManualReceiverInputVisible = configuredManualReceiver.isVisible ||
                 receiverProbeState is ReceiverProbeState.Unavailable,
+            encoderOptions = encoderOptions(
+                capabilityState.eligibleEncoders,
+                selectedEncoderName,
+            ),
             resolutionOptions = resolutionOptions(configuredSettings.profile, capabilities),
             frameRateOptions = frameRateOptions(configuredSettings.profile, capabilities),
             orientationOptions = StreamOrientation.entries.map { orientation ->
@@ -123,16 +141,14 @@ class StreamSetupViewModel @Inject constructor(
             antiFlicker = cameraControls.antiFlicker,
             selectedProfile = configuredSettings.profile,
             selectedOrientation = configuredSettings.streamOrientation,
+            selectedEncoderName = selectedEncoderName,
             selectedProfileSupported = selectedProfileSupported,
             videoCapabilitiesReady = capabilityState.isReady,
             bitrate = bitrateUiState(configuredSettings.bitrateBps, selectedCapability),
             validationMessage = validation?.let(UiText::Plain)
                 ?: capabilityError
                 ?: selectedCapability?.takeIf { !it.isSupported || !selectedProfileSupported }
-                    ?.let { capability ->
-                        capability.reason?.let(UiText::Plain)
-                            ?: UiText.Resource(R.string.video_mode_unavailable)
-                    },
+                    ?.let { UiText.Resource(R.string.video_mode_unavailable) },
         )
     }.stateIn(
         scope = viewModelScope,
@@ -154,26 +170,51 @@ class StreamSetupViewModel @Inject constructor(
                 val modes = VideoProfiles.all
                 val cameraSupported = cameraController.supportedVideoModes(modes)
                 val encoderCapabilities = encoderCapabilityProbe.getCapabilities(modes)
-                PhoneVideoCapabilities.resolve(
+                VideoConfigurationResolver.resolve(
+                    current = settings.state.value.videoConfiguration,
                     modes = modes,
                     cameraSupportedModeIds = cameraSupported,
-                    encoderCapabilities = encoderCapabilities,
-                )
-            }.onSuccess { capabilities ->
+                    encoders = encoderCapabilities,
+                ) ?: throw IllegalStateException("No complete H.264 encoder mode is available")
+            }.onSuccess { resolved ->
+                if (settings.state.value.videoConfiguration != resolved.configuration) {
+                    settings.updateVideoConfiguration(resolved.configuration)
+                }
                 logger.event(
                     "video_capabilities_resolved",
                     mapOf(
-                        "modes" to capabilities.joinToString(separator = ",") { capability ->
+                        "selectedEncoder" to resolved.selectedEncoder.implementationName,
+                        "eligibleEncoders" to resolved.eligibleEncoders.joinToString { it.implementationName },
+                        "modes" to resolved.capabilities.joinToString(separator = ",") { capability ->
+                            listOf(capability.mode.id, capability.isSupported, capability.reason.orEmpty())
+                                .joinToString(separator = ":")
+                        },
+                        "encoderEvidence" to resolved.eligibleEncoders.joinToString(separator = ",") { encoder ->
                             listOf(
-                                capability.mode.id,
-                                capability.isSupported,
-                                capability.reason.orEmpty(),
+                                encoder.implementationName,
+                                encoder.acceleration,
+                                encoder.surfaceInputSupported,
+                                encoder.cbrSupported,
+                                encoder.modes.joinToString(separator = ";") { mode ->
+                                    listOf(
+                                        mode.modeId,
+                                        mode.sizeAndRateSupported,
+                                        mode.minimumBitrateBps,
+                                        mode.maximumBitrateBps,
+                                    ).joinToString(separator = ":")
+                                },
                             ).joinToString(separator = ":")
                         },
                     ),
                 )
                 videoCapabilityState.value = VideoCapabilityState(
-                    capabilities = capabilities,
+                    capabilities = resolved.capabilities,
+                    eligibleEncoders = resolved.eligibleEncoders,
+                    selectedEncoder = resolved.selectedEncoder,
+                    cameraSupportedModeIds = resolved.capabilities
+                        .filter(PhoneVideoModeCapability::cameraSupported)
+                        .mapTo(mutableSetOf()) { it.mode.id },
+                    probedEncoders = resolved.eligibleEncoders,
                     isReady = true,
                 )
             }.onFailure { failure ->
@@ -220,6 +261,7 @@ class StreamSetupViewModel @Inject constructor(
         when (action) {
             is SenderScreenAction.ProfileSelected -> selectProfile(action.profileId)
             is SenderScreenAction.FrameRateSelected -> selectFrameRate(action.fps)
+            is SenderScreenAction.EncoderSelected -> selectEncoder(action.implementationName)
             is SenderScreenAction.BitrateSelected -> selectBitrate(action.bitrateBps)
             is SenderScreenAction.StabilizationModeChanged -> setStabilizationMode(action.mode)
             is SenderScreenAction.AntiFlickerChanged -> setAntiFlickerMode(action.mode)
@@ -243,37 +285,75 @@ class StreamSetupViewModel @Inject constructor(
     }
 
     private fun selectProfile(profileId: String) {
-        val currentProfile = settings.state.value.profile
         val selectedQuality = VideoProfiles.all.firstOrNull { profile -> profile.id == profileId }
             ?: return
-        val selectedProfile = VideoProfiles.profileForResolution(
-            width = selectedQuality.width,
-            height = selectedQuality.height,
-            fps = currentProfile.fps,
-        ) ?: selectedQuality
-        settings.updateProfile(selectedProfile)
+        val current = settings.state.value.videoConfiguration
+        val selectedProfile = VideoProfiles.profilesForResolution(selectedQuality)
+            .firstOrNull { profile ->
+                profile.fps == current.profile.fps && isSupported(profile.id)
+            }
+            ?: VideoProfiles.profilesForResolution(selectedQuality)
+                .firstOrNull { profile -> isSupported(profile.id) }
+            ?: return
+        applyVideoConfiguration(current.copy(profile = selectedProfile))
     }
 
     private fun selectFrameRate(fps: Int) {
-        val currentProfile = settings.state.value.profile
-        VideoProfiles.profileForResolution(
-            width = currentProfile.width,
-            height = currentProfile.height,
+        val current = settings.state.value.videoConfiguration
+        val selectedProfile = VideoProfiles.profileForResolution(
+            width = current.profile.width,
+            height = current.profile.height,
             fps = fps,
-        )?.let(settings::updateProfile)
+        )?.takeIf { isSupported(it.id) } ?: return
+        applyVideoConfiguration(current.copy(profile = selectedProfile))
+    }
+
+    private fun selectEncoder(implementationName: String) {
+        if (videoCapabilityState.value.eligibleEncoders.none {
+                it.implementationName == implementationName
+            }
+        ) return
+        applyVideoConfiguration(
+            settings.state.value.videoConfiguration.copy(encoderName = implementationName),
+        )
     }
 
     private fun selectBitrate(bitrateBps: Int) {
-        val current = settings.state.value
+        val current = settings.state.value.videoConfiguration
         val capability = videoCapabilityState.value.capabilities
             .firstOrNull { it.mode.id == current.profile.id }
             ?: return
-        current.profile.clampToStep(
-            valueBps = bitrateBps,
-            encoderMinimumBps = capability.encoderMinimumBitrateBps,
-            encoderMaximumBps = capability.encoderMaximumBitrateBps,
-        )?.let(settings::updateBitrate)
+        val normalized = capability.encoderMinimumBitrateBps?.let { minimum ->
+            capability.encoderMaximumBitrateBps?.let { maximum ->
+                current.profile.clampToStep(
+                    valueBps = bitrateBps,
+                    encoderMinimumBps = minimum,
+                    encoderMaximumBps = maximum,
+                )
+            }
+        } ?: return
+        applyVideoConfiguration(current.copy(bitrateBps = normalized))
     }
+
+    private fun applyVideoConfiguration(configuration: StreamVideoConfiguration) {
+        val capabilityState = videoCapabilityState.value
+        val resolved = VideoConfigurationResolver.resolve(
+            current = configuration,
+            modes = VideoProfiles.all,
+            cameraSupportedModeIds = capabilityState.cameraSupportedModeIds,
+            encoders = capabilityState.probedEncoders,
+        ) ?: return
+        settings.updateVideoConfiguration(resolved.configuration)
+        videoCapabilityState.value = capabilityState.copy(
+            capabilities = resolved.capabilities,
+            eligibleEncoders = resolved.eligibleEncoders,
+            selectedEncoder = resolved.selectedEncoder,
+        )
+    }
+
+    private fun isSupported(modeId: String): Boolean = videoCapabilityState.value.capabilities
+        .firstOrNull { it.mode.id == modeId }
+        ?.isSupported == true
 
     private fun setStabilizationMode(mode: CameraStabilizationMode) {
         viewModelScope.launch(Dispatchers.Default) {
@@ -367,6 +447,39 @@ class StreamSetupViewModel @Inject constructor(
         }
     }
 
+    private fun encoderOptions(
+        encoders: List<EncoderCapability>,
+        selectedEncoderName: String?,
+    ): List<SelectOptionUi> {
+        val defaultEncoderName = EncoderCatalog.default(encoders)?.implementationName
+        return encoders.map { encoder ->
+            val sameAcceleration = encoders.filter { it.acceleration == encoder.acceleration }
+            val ordinal = sameAcceleration.indexOf(encoder) + 1
+            val isDefault = encoder.implementationName == defaultEncoderName
+            val labelResource = when (encoder.acceleration) {
+                dev.cambridge.sender.model.EncoderAcceleration.HARDWARE -> when {
+                    ordinal == FIRST_ENCODER_ORDINAL && isDefault -> R.string.encoder_hardware_default
+                    ordinal == FIRST_ENCODER_ORDINAL -> R.string.encoder_hardware
+                    isDefault -> R.string.encoder_hardware_number_default
+                    else -> R.string.encoder_hardware_number
+                }
+                dev.cambridge.sender.model.EncoderAcceleration.SOFTWARE -> when {
+                    ordinal == FIRST_ENCODER_ORDINAL && isDefault -> R.string.encoder_software_default
+                    ordinal == FIRST_ENCODER_ORDINAL -> R.string.encoder_software
+                    isDefault -> R.string.encoder_software_number_default
+                    else -> R.string.encoder_software_number
+                }
+                dev.cambridge.sender.model.EncoderAcceleration.UNKNOWN -> R.string.encoder_unknown
+            }
+            val arguments = if (ordinal == FIRST_ENCODER_ORDINAL) emptyList() else listOf(ordinal)
+            SelectOptionUi(
+                key = encoder.implementationName,
+                label = UiText.Resource(labelResource, arguments),
+                isSelected = encoder.implementationName == selectedEncoderName,
+            )
+        }
+    }
+
     private fun resolutionOptions(
         selectedProfile: VideoProfile,
         capabilities: List<PhoneVideoModeCapability>,
@@ -382,11 +495,19 @@ class StreamSetupViewModel @Inject constructor(
         capability: PhoneVideoModeCapability?,
     ): BitrateUiState {
         val range = capability?.bitrateRange ?: IntRange.EMPTY
-        if (capability == null || !capability.isSupported || range.isEmpty()) return BitrateUiState()
+        val minimumBitrate = capability?.encoderMinimumBitrateBps
+        val maximumBitrate = capability?.encoderMaximumBitrateBps
+        if (
+            capability == null ||
+            !capability.isSupported ||
+            range.isEmpty() ||
+            minimumBitrate == null ||
+            maximumBitrate == null
+        ) return BitrateUiState()
         val selected = capability.mode.clampToStep(
             valueBps = selectedBitrateBps,
-            encoderMinimumBps = capability.encoderMinimumBitrateBps,
-            encoderMaximumBps = capability.encoderMaximumBitrateBps,
+            encoderMinimumBps = minimumBitrate,
+            encoderMaximumBps = maximumBitrate,
         ) ?: range.first
         return BitrateUiState(
             isAvailable = true,
@@ -418,6 +539,10 @@ class StreamSetupViewModel @Inject constructor(
 
     private data class VideoCapabilityState(
         val capabilities: List<PhoneVideoModeCapability> = emptyList(),
+        val eligibleEncoders: List<EncoderCapability> = emptyList(),
+        val selectedEncoder: EncoderCapability? = null,
+        val cameraSupportedModeIds: Set<String> = emptySet(),
+        val probedEncoders: List<EncoderCapability> = emptyList(),
         val isReady: Boolean = false,
         val error: String? = null,
     )
@@ -437,3 +562,5 @@ private fun Throwable.hasCameraPermissionCause(): Boolean {
     }
     return false
 }
+
+private const val FIRST_ENCODER_ORDINAL = 1

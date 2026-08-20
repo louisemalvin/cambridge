@@ -172,6 +172,16 @@ fun StreamSetupScreen(
             }
             if (streamSettingsExpanded) {
                 item {
+                    SetupDropdown(
+                        title = stringResource(R.string.encoder),
+                        options = state.encoderOptions,
+                        placeholder = stringResource(R.string.encoder),
+                        onSelected = { implementationName ->
+                            onAction(SenderScreenAction.EncoderSelected(implementationName))
+                        },
+                    )
+                }
+                item {
                     SegmentedChoiceRow(
                         title = stringResource(R.string.resolution),
                         options = state.resolutionOptions,

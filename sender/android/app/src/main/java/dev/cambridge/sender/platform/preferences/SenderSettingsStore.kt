@@ -5,6 +5,7 @@ import dev.cambridge.sender.model.ReceiverEndpoint
 import dev.cambridge.sender.media.camera.CameraStabilizationMode
 import dev.cambridge.sender.model.SenderSettings
 import dev.cambridge.sender.model.SenderSettingsRepository
+import dev.cambridge.sender.model.StreamVideoConfiguration
 import dev.cambridge.sender.model.StreamOrientation
 import dev.cambridge.sender.model.VideoProfile
 import dev.cambridge.sender.session.VideoProfiles
@@ -26,10 +27,9 @@ class SenderSettingsStore(
     @Synchronized
     override fun updateProfile(profile: VideoProfile) {
         persist(
-            settingsFlow.value.copy(
-                profile = profile,
-                bitrateBps = profile.defaultBitrateBps,
-            ),
+            settingsFlow.value.withVideoConfiguration {
+                copy(profile = profile, bitrateBps = profile.defaultBitrateBps)
+            },
         )
     }
 
@@ -41,12 +41,22 @@ class SenderSettingsStore(
             encoderMinimumBps = current.profile.minimumBitrateBps,
             encoderMaximumBps = current.profile.maximumBitrateBps,
         ) ?: return
-        persist(current.copy(bitrateBps = validBitrate))
+        persist(current.withVideoConfiguration { copy(bitrateBps = validBitrate) })
+    }
+
+    @Synchronized
+    override fun updateEncoderName(encoderName: String) {
+        persist(settingsFlow.value.withVideoConfiguration { copy(encoderName = encoderName) })
+    }
+
+    @Synchronized
+    override fun updateVideoConfiguration(configuration: StreamVideoConfiguration) {
+        persist(settingsFlow.value.copy(videoConfiguration = configuration))
     }
 
     @Synchronized
     override fun updateStreamOrientation(orientation: StreamOrientation) {
-        persist(settingsFlow.value.copy(streamOrientation = orientation))
+        persist(settingsFlow.value.withVideoConfiguration { copy(streamOrientation = orientation) })
     }
 
     @Synchronized
@@ -71,11 +81,14 @@ class SenderSettingsStore(
             ) ?: profile.defaultBitrateBps
         }
         return SenderSettings(
-            profile = profile,
-            bitrateBps = bitrate,
-            streamOrientation = preferences.getString(ORIENTATION_KEY, null)
-                ?.let { stored -> runCatching { StreamOrientation.valueOf(stored) }.getOrNull() }
-                ?: StreamOrientation.LANDSCAPE,
+            videoConfiguration = StreamVideoConfiguration(
+                encoderName = preferences.getString(ENCODER_NAME_KEY, null),
+                profile = profile,
+                bitrateBps = bitrate,
+                streamOrientation = preferences.getString(ORIENTATION_KEY, null)
+                    ?.let { stored -> runCatching { StreamOrientation.valueOf(stored) }.getOrNull() }
+                    ?: StreamOrientation.LANDSCAPE,
+            ),
             stabilizationMode = preferences.getString(STABILIZATION_MODE_KEY, null)
                 ?.let { stored -> runCatching { CameraStabilizationMode.valueOf(stored) }.getOrNull() }
                 ?: CameraStabilizationMode.OFF,
@@ -89,6 +102,9 @@ class SenderSettingsStore(
             .putInt(BITRATE_KEY, settings.bitrateBps)
             .putString(ORIENTATION_KEY, settings.streamOrientation.name)
             .putString(STABILIZATION_MODE_KEY, settings.stabilizationMode.name)
+        settings.selectedEncoderName?.let { encoderName ->
+            editor.putString(ENCODER_NAME_KEY, encoderName)
+        } ?: editor.remove(ENCODER_NAME_KEY)
         val endpoint = settings.receiverEndpoint
         if (endpoint == null) {
             editor.remove(RECEIVER_HOST_KEY)
@@ -120,10 +136,15 @@ class SenderSettingsStore(
         ).takeIf(ReceiverEndpoint::isValid)
     }
 
+    private inline fun SenderSettings.withVideoConfiguration(
+        transform: StreamVideoConfiguration.() -> StreamVideoConfiguration,
+    ): SenderSettings = copy(videoConfiguration = videoConfiguration.transform())
+
     private companion object {
         const val PREFERENCES_NAME = "sender-settings"
         const val PROFILE_KEY = "profile"
         const val BITRATE_KEY = "bitrate-bps"
+        const val ENCODER_NAME_KEY = "encoder-name"
         const val ORIENTATION_KEY = "stream-orientation"
         const val STABILIZATION_MODE_KEY = "stabilization-mode"
         const val RECEIVER_HOST_KEY = "receiver-host"

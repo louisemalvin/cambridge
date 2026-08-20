@@ -33,6 +33,7 @@ data class StreamSetupUiState(
     val manualReceiverHostError: UiText? = null,
     val receiverOptions: List<SelectOptionUi> = emptyList(),
     val isManualReceiverInputVisible: Boolean = false,
+    val encoderOptions: List<SelectOptionUi> = emptyList(),
     val resolutionOptions: List<SelectOptionUi> = emptyList(),
     val frameRateOptions: List<SelectOptionUi> = emptyList(),
     val orientationOptions: List<SelectOptionUi> = emptyList(),
@@ -41,6 +42,7 @@ data class StreamSetupUiState(
     val antiFlicker: AntiFlickerUiState = AntiFlickerUiState(),
     val selectedProfile: VideoProfile,
     val selectedOrientation: StreamOrientation,
+    val selectedEncoderName: String? = null,
     val selectedProfileSupported: Boolean = false,
     val videoCapabilitiesReady: Boolean = false,
     val validationMessage: UiText? = null,
@@ -48,6 +50,7 @@ data class StreamSetupUiState(
     val canStart: Boolean
         get() = (connection is ConnectionUiState.Waiting || connection is ConnectionUiState.Failed) &&
             receiverReadiness is ReceiverReadinessUiState.Ready &&
+            selectedEncoderName != null &&
             selectedProfileSupported &&
             bitrate.isAvailable
 }

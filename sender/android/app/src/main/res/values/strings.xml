@@ -37,6 +37,16 @@
     <string name="frame_rate">Frame rate</string>
     <string name="frame_rate_option">%1$d fps</string>
     <string name="frame_rate_choose">Choose frame rate</string>
+    <string name="encoder">Encoder</string>
+    <string name="encoder_hardware">Hardware encoder</string>
+    <string name="encoder_hardware_default">Hardware encoder (Default)</string>
+    <string name="encoder_hardware_number">Hardware encoder %1$d</string>
+    <string name="encoder_hardware_number_default">Hardware encoder %1$d (Default)</string>
+    <string name="encoder_software">Software encoder</string>
+    <string name="encoder_software_default">Software encoder (Default)</string>
+    <string name="encoder_software_number">Software encoder %1$d</string>
+    <string name="encoder_software_number_default">Software encoder %1$d (Default)</string>
+    <string name="encoder_unknown">Codec encoder</string>
     <string name="checking_video_capabilities">Checking camera and H.264 encoder capabilities on this phone…</string>
     <string name="bitrate">Bitrate</string>
     <string name="bitrate_slider">Video bitrate</string>

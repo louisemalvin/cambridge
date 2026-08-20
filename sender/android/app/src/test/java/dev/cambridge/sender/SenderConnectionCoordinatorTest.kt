@@ -20,6 +20,7 @@ import dev.cambridge.sender.model.StreamFailureException
 import dev.cambridge.sender.model.StreamOrientation
 import dev.cambridge.sender.model.StreamSession
 import dev.cambridge.sender.model.StreamState
+import dev.cambridge.sender.model.StreamVideoConfiguration
 import dev.cambridge.sender.model.VideoCodec
 import dev.cambridge.sender.model.VideoProfile
 import dev.cambridge.sender.session.StreamSessionController
@@ -295,8 +296,7 @@ class SenderConnectionCoordinatorTest {
 
         override suspend fun start(
             endpoint: ReceiverEndpoint,
-            profile: VideoProfile,
-            orientation: StreamOrientation,
+            configuration: StreamVideoConfiguration,
         ): Result<Unit> {
             attemptedEndpoints += endpoint
             startCount += 1
@@ -310,8 +310,9 @@ class SenderConnectionCoordinatorTest {
                     sessionId = "test-session",
                     endpoint = endpoint,
                     selectedCodec = VideoCodec.H264,
-                    profile = profile,
-                    bitrateBps = profile.defaultBitrateBps,
+                    encoderName = configuration.encoderName ?: "test-h264",
+                    profile = configuration.profile,
+                    bitrateBps = configuration.bitrateBps,
                     mediaPort = CamBridgeStreamContract.DEFAULT_MEDIA_PORT,
                     outputPixelFormat = OutputPixelFormat.NV12,
                     warnings = emptyList(),
@@ -343,11 +344,24 @@ class SenderConnectionCoordinatorTest {
         override val state: StateFlow<SenderSettings> = stateFlow.asStateFlow()
 
         override fun updateProfile(profile: VideoProfile) {
-            stateFlow.value = stateFlow.value.copy(profile = profile)
+            stateFlow.value = stateFlow.value.copy(
+                videoConfiguration = stateFlow.value.videoConfiguration.copy(
+                    profile = profile,
+                    bitrateBps = profile.defaultBitrateBps,
+                ),
+            )
         }
 
         override fun updateStreamOrientation(orientation: StreamOrientation) {
-            stateFlow.value = stateFlow.value.copy(streamOrientation = orientation)
+            stateFlow.value = stateFlow.value.copy(
+                videoConfiguration = stateFlow.value.videoConfiguration.copy(
+                    streamOrientation = orientation,
+                ),
+            )
+        }
+
+        override fun updateVideoConfiguration(configuration: StreamVideoConfiguration) {
+            stateFlow.value = stateFlow.value.copy(videoConfiguration = configuration)
         }
 
         override fun updateReceiverEndpoint(endpoint: ReceiverEndpoint?) {

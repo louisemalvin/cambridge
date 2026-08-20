@@ -15,11 +15,13 @@ import dev.cambridge.sender.media.streaming.StreamEngine
 import dev.cambridge.sender.media.streaming.StreamEngineEvent
 import dev.cambridge.sender.model.EncoderAcceleration
 import dev.cambridge.sender.model.EncoderCapability
+import dev.cambridge.sender.model.EncoderModeCapability
 import dev.cambridge.sender.model.ReceiverEndpoint
 import dev.cambridge.sender.model.StreamConfiguration
 import dev.cambridge.sender.model.StreamFailure
 import dev.cambridge.sender.model.StreamOrientation
 import dev.cambridge.sender.model.StreamState
+import dev.cambridge.sender.model.StreamVideoConfiguration
 import dev.cambridge.sender.model.VideoCodec
 import dev.cambridge.sender.model.VideoProfile
 import dev.cambridge.sender.platform.service.ForegroundStreamingController
@@ -44,8 +46,8 @@ class StreamSessionControllerTest {
         val foreground = FakeForeground()
         val controller = controller(engine, foreground, backgroundScope)
 
-        assertTrue(controller.start(endpoint, profile, StreamOrientation.LANDSCAPE).isSuccess)
-        assertTrue(controller.start(endpoint, profile, StreamOrientation.LANDSCAPE).isFailure)
+        assertTrue(controller.start(endpoint, configuration()).isSuccess)
+        assertTrue(controller.start(endpoint, configuration()).isFailure)
         assertEquals(1, engine.prepareCount)
         assertTrue(controller.state.value is StreamState.Streaming)
 
@@ -61,14 +63,14 @@ class StreamSessionControllerTest {
         val foreground = FakeForeground()
         val controller = controller(engine, foreground, backgroundScope)
 
-        assertTrue(controller.start(endpoint, profile, StreamOrientation.LANDSCAPE).isFailure)
+        assertTrue(controller.start(endpoint, configuration()).isFailure)
         assertEquals(1, engine.stopCount)
         assertEquals(1, foreground.stopCount)
         assertTrue(controller.state.value is StreamState.Failed)
     }
 
     @Test
-    fun selectedBitrateIsPassedToTheEncoderConfiguration() = runTest {
+    fun selectedEncoderAndBitrateReachTheEncoderConfiguration() = runTest {
         val engine = FakeEngine()
         val controller = controller(engine, FakeForeground(), backgroundScope)
         val selectedBitrate = VideoProfiles.PROFILE_2K30.minimumBitrateBps
@@ -76,12 +78,11 @@ class StreamSessionControllerTest {
         assertTrue(
             controller.start(
                 endpoint = endpoint,
-                profile = VideoProfiles.PROFILE_2K30,
-                orientation = StreamOrientation.LANDSCAPE,
-                bitrateBps = selectedBitrate,
+                configuration = configuration(VideoProfiles.PROFILE_2K30, selectedBitrate),
             ).isSuccess,
         )
 
+        assertEquals("fake-h264", engine.lastConfiguration?.encoderName)
         assertEquals(selectedBitrate, engine.lastConfiguration?.bitrateBps)
     }
 
@@ -95,12 +96,11 @@ class StreamSessionControllerTest {
             probe = FakeProbe(supported = false),
         )
 
-        assertTrue(controller.start(endpoint, profile, StreamOrientation.LANDSCAPE).isFailure)
+        assertTrue(controller.start(endpoint, configuration()).isFailure)
 
         assertEquals(0, engine.prepareCount)
-        assertEquals(
-            StreamState.Failed(StreamFailure.VideoQualityUnsupported(profile)),
-            controller.state.value,
+        assertTrue(
+            (controller.state.value as StreamState.Failed).failure is StreamFailure.EncoderPreparationFailed,
         )
     }
 
@@ -115,7 +115,7 @@ class StreamSessionControllerTest {
             ),
         )
 
-        assertTrue(controller.start(endpoint, profile, StreamOrientation.LANDSCAPE).isFailure)
+        assertTrue(controller.start(endpoint, configuration()).isFailure)
 
         assertEquals(
             StreamState.Failed(StreamFailure.CameraPermissionDenied),
@@ -136,7 +136,7 @@ class StreamSessionControllerTest {
             ),
         )
 
-        assertTrue(controller.start(endpoint, profile, StreamOrientation.LANDSCAPE).isFailure)
+        assertTrue(controller.start(endpoint, configuration()).isFailure)
         assertEquals(1, engine.stopCount)
         assertEquals(1, engine.releaseCount)
         assertEquals(1, foreground.stopCount)
@@ -154,7 +154,7 @@ class StreamSessionControllerTest {
         val foreground = FakeForeground()
         val controller = controller(engine, foreground, backgroundScope)
 
-        assertTrue(controller.start(endpoint, profile, StreamOrientation.LANDSCAPE).isFailure)
+        assertTrue(controller.start(endpoint, configuration()).isFailure)
 
         assertTrue(controller.state.value is StreamState.Failed)
         assertTrue((controller.state.value as StreamState.Failed).failure is StreamFailure.StreamStartFailed)
@@ -170,7 +170,7 @@ class StreamSessionControllerTest {
         val updatedBitrate = profile.defaultBitrateBps + profile.bitrateStepBps
 
         assertTrue(controller.updateBitrate(profile.defaultBitrateBps).isFailure)
-        assertTrue(controller.start(endpoint, profile, StreamOrientation.LANDSCAPE).isSuccess)
+        assertTrue(controller.start(endpoint, configuration()).isSuccess)
         assertTrue(controller.updateBitrate(updatedBitrate).isSuccess)
 
         assertEquals(updatedBitrate, engine.lastBitrate)
@@ -182,7 +182,7 @@ class StreamSessionControllerTest {
         val foreground = FakeForeground()
         val controller = controller(engine, foreground, backgroundScope)
 
-        assertTrue(controller.start(endpoint, profile, StreamOrientation.LANDSCAPE).isSuccess)
+        assertTrue(controller.start(endpoint, configuration()).isSuccess)
         testScheduler.runCurrent()
         engine.emit(StreamEngineEvent.Disconnected)
         testScheduler.runCurrent()
@@ -198,7 +198,7 @@ class StreamSessionControllerTest {
         val foreground = FakeForeground()
         val controller = controller(engine, foreground, backgroundScope)
 
-        assertTrue(controller.start(endpoint, profile, StreamOrientation.LANDSCAPE).isSuccess)
+        assertTrue(controller.start(endpoint, configuration()).isSuccess)
         testScheduler.runCurrent()
         engine.emit(
             StreamEngineEvent.FatalFailure(
@@ -230,16 +230,23 @@ class StreamSessionControllerTest {
     private class FakeProbe(
         private val supported: Boolean = true,
     ) : EncoderCapabilityProbe {
-        override suspend fun getCapabilities(profiles: List<VideoProfile>): List<EncoderCapability> =
-            profiles.map { profile ->
-                EncoderCapability(
-                    codec = VideoCodec.H264,
-                    profileId = profile.id,
-                    supported = supported,
-                    acceleration = EncoderAcceleration.HARDWARE,
-                    encoderName = "fake-h264",
-                )
-            }
+        override suspend fun getCapabilities(profiles: List<VideoProfile>): List<EncoderCapability> = listOf(
+            EncoderCapability(
+                codec = VideoCodec.H264,
+                implementationName = "fake-h264",
+                acceleration = EncoderAcceleration.HARDWARE,
+                surfaceInputSupported = true,
+                cbrSupported = true,
+                modes = profiles.map { profile ->
+                    EncoderModeCapability(
+                        modeId = profile.id,
+                        sizeAndRateSupported = supported,
+                        minimumBitrateBps = profile.minimumBitrateBps,
+                        maximumBitrateBps = profile.maximumBitrateBps,
+                    )
+                },
+            ),
+        )
     }
 
     private class FakeEngine(
@@ -354,6 +361,16 @@ class StreamSessionControllerTest {
             "127.0.0.1",
             CamBridgeStreamContract.DEFAULT_CONTROL_PORT,
             "Test receiver",
+        )
+
+        fun configuration(
+            selectedProfile: VideoProfile = profile,
+            bitrateBps: Int = selectedProfile.defaultBitrateBps,
+        ) = StreamVideoConfiguration(
+            encoderName = "fake-h264",
+            profile = selectedProfile,
+            bitrateBps = bitrateBps,
+            streamOrientation = StreamOrientation.LANDSCAPE,
         )
     }
 }

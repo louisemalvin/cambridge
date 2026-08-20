@@ -308,7 +308,7 @@ class CamBridgeRtpStreamEngine(
         thread.start()
         codecThread = thread
         codecHandler = Handler(thread.looper)
-        val encoder = MediaCodec.createEncoderByType(H264_MIME_TYPE)
+        val encoder = MediaCodec.createByCodecName(configuration.encoderName)
         codec = encoder
         val format = MediaFormat.createVideoFormat(
             H264_MIME_TYPE,
@@ -334,6 +334,7 @@ class CamBridgeRtpStreamEngine(
             "encoder_configuration_requested",
             mapOf(
                 "mime" to H264_MIME_TYPE,
+                "encoder" to configuration.encoderName,
                 "colorStandard" to MediaFormat.COLOR_STANDARD_BT709,
                 "colorRange" to MediaFormat.COLOR_RANGE_LIMITED,
                 "colorTransfer" to MediaFormat.COLOR_TRANSFER_SDR_VIDEO,

@@ -2,8 +2,7 @@ package dev.cambridge.sender.session
 
 import dev.cambridge.sender.model.ReceiverEndpoint
 import dev.cambridge.sender.model.StreamState
-import dev.cambridge.sender.model.StreamOrientation
-import dev.cambridge.sender.model.VideoProfile
+import dev.cambridge.sender.model.StreamVideoConfiguration
 import kotlinx.coroutines.flow.StateFlow
 
 interface StreamSessionController {
@@ -11,16 +10,8 @@ interface StreamSessionController {
 
     suspend fun start(
         endpoint: ReceiverEndpoint,
-        profile: VideoProfile,
-        orientation: StreamOrientation,
+        configuration: StreamVideoConfiguration,
     ): Result<Unit>
-
-    suspend fun start(
-        endpoint: ReceiverEndpoint,
-        profile: VideoProfile,
-        orientation: StreamOrientation,
-        bitrateBps: Int,
-    ): Result<Unit> = start(endpoint, profile, orientation)
 
     suspend fun stop(): Result<Unit>
 

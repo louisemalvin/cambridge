@@ -36,6 +36,7 @@ class StreamConfigurationValidatorTest {
         bitrateBps: Int,
     ) = StreamConfiguration(
         codec = VideoCodec.H264,
+        encoderName = "test-h264",
         profile = profile,
         bitrateBps = bitrateBps,
         keyframeIntervalSeconds = profile.keyframeIntervalSeconds,

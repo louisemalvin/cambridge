@@ -2,7 +2,9 @@ package dev.cambridge.sender
 
 import dev.cambridge.sender.model.EncoderAcceleration
 import dev.cambridge.sender.model.EncoderCapability
+import dev.cambridge.sender.model.EncoderModeCapability
 import dev.cambridge.sender.model.VideoCodec
+import dev.cambridge.sender.model.VideoProfile
 import dev.cambridge.sender.session.PhoneVideoCapabilities
 import dev.cambridge.sender.session.VideoProfiles
 import org.junit.Assert.assertEquals
@@ -28,16 +30,10 @@ class PhoneVideoCapabilitiesTest {
         val capability = PhoneVideoCapabilities.resolve(
             modes = listOf(mode),
             cameraSupportedModeIds = setOf(mode.id),
-            encoderCapabilities = listOf(
-                EncoderCapability(
-                    codec = VideoCodec.H264,
-                    profileId = mode.id,
-                    supported = true,
-                    acceleration = EncoderAcceleration.HARDWARE,
-                    encoderName = "test-h264",
-                    minimumBitrateBps = 6_500_000,
-                    maximumBitrateBps = 12_500_000,
-                ),
+            selectedEncoder = supportedEncoder(
+                mode,
+                minimumBitrateBps = 6_500_000,
+                maximumBitrateBps = 12_500_000,
             ),
         ).single()
 
@@ -51,19 +47,35 @@ class PhoneVideoCapabilitiesTest {
         val cameraUnsupported = PhoneVideoCapabilities.resolve(
             modes = listOf(mode),
             cameraSupportedModeIds = emptySet(),
-            encoderCapabilities = listOf(supportedEncoder(mode)),
+            selectedEncoder = supportedEncoder(mode),
         ).single()
         val encoderUnsupported = PhoneVideoCapabilities.resolve(
             modes = listOf(mode),
             cameraSupportedModeIds = setOf(mode.id),
-            encoderCapabilities = listOf(
-                supportedEncoder(mode).copy(supported = false, reason = "test encoder rejection"),
-            ),
+            selectedEncoder = supportedEncoder(mode, sizeAndRateSupported = false),
         ).single()
 
         assertFalse(cameraUnsupported.isSupported)
         assertFalse(encoderUnsupported.isSupported)
-        assertEquals("test encoder rejection", encoderUnsupported.reason)
+        assertTrue(encoderUnsupported.reason?.contains("exact size") == true)
+    }
+
+    @Test
+    fun surfaceAndCbrAreRequiredForACompleteMode() {
+        val mode = VideoProfiles.PROFILE_1080P60
+        val noSurface = PhoneVideoCapabilities.resolve(
+            modes = listOf(mode),
+            cameraSupportedModeIds = setOf(mode.id),
+            selectedEncoder = supportedEncoder(mode, surfaceInputSupported = false),
+        ).single()
+        val noCbr = PhoneVideoCapabilities.resolve(
+            modes = listOf(mode),
+            cameraSupportedModeIds = setOf(mode.id),
+            selectedEncoder = supportedEncoder(mode, cbrSupported = false),
+        ).single()
+
+        assertFalse(noSurface.isSupported)
+        assertFalse(noCbr.isSupported)
     }
 
     @Test
@@ -72,28 +84,40 @@ class PhoneVideoCapabilitiesTest {
         val capability = PhoneVideoCapabilities.resolve(
             modes = listOf(mode),
             cameraSupportedModeIds = setOf(mode.id),
-            encoderCapabilities = listOf(
-                supportedEncoder(mode).copy(
-                    minimumBitrateBps = mode.maximumBitrateBps + mode.bitrateStepBps,
-                    maximumBitrateBps = mode.maximumBitrateBps + mode.bitrateStepBps,
-                ),
+            selectedEncoder = supportedEncoder(
+                mode,
+                minimumBitrateBps = mode.maximumBitrateBps + mode.bitrateStepBps,
+                maximumBitrateBps = mode.maximumBitrateBps + mode.bitrateStepBps,
             ),
         ).single()
 
         assertFalse(capability.isSupported)
         assertEquals(
-            "The phone encoder bitrate range does not overlap CamBridge's supported range",
+            "The selected encoder bitrate range has no valid product bitrate",
             capability.reason,
         )
     }
 
-    private fun supportedEncoder(mode: dev.cambridge.sender.model.VideoProfile) = EncoderCapability(
+    private fun supportedEncoder(
+        mode: VideoProfile,
+        sizeAndRateSupported: Boolean = true,
+        surfaceInputSupported: Boolean = true,
+        cbrSupported: Boolean = true,
+        minimumBitrateBps: Int = mode.minimumBitrateBps,
+        maximumBitrateBps: Int = mode.maximumBitrateBps,
+    ) = EncoderCapability(
         codec = VideoCodec.H264,
-        profileId = mode.id,
-        supported = true,
+        implementationName = "test-h264",
         acceleration = EncoderAcceleration.HARDWARE,
-        encoderName = "test-h264",
-        minimumBitrateBps = mode.minimumBitrateBps,
-        maximumBitrateBps = mode.maximumBitrateBps,
+        surfaceInputSupported = surfaceInputSupported,
+        cbrSupported = cbrSupported,
+        modes = listOf(
+            EncoderModeCapability(
+                modeId = mode.id,
+                sizeAndRateSupported = sizeAndRateSupported,
+                minimumBitrateBps = minimumBitrateBps,
+                maximumBitrateBps = maximumBitrateBps,
+            ),
+        ),
     )
 }

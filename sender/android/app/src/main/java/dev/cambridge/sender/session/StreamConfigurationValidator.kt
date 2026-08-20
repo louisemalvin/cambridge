@@ -5,6 +5,9 @@ import dev.cambridge.sender.model.StreamConfiguration
 
 object StreamConfigurationValidator {
     fun validate(configuration: StreamConfiguration): Result<Unit> {
+        if (configuration.encoderName.isBlank()) {
+            return Result.failure(IllegalArgumentException("Encoder implementation name must not be blank"))
+        }
         val profile = configuration.profile
         if (profile.width <= ZERO_VALUE || profile.height <= ZERO_VALUE || profile.fps <= ZERO_VALUE) {
             return Result.failure(IllegalArgumentException("Video dimensions and FPS must be positive"))

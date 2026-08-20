@@ -7,6 +7,7 @@ data class StreamSession(
     val sessionId: String,
     val endpoint: ReceiverEndpoint,
     val selectedCodec: VideoCodec,
+    val encoderName: String,
     val profile: VideoProfile,
     val bitrateBps: Int,
     val mediaPort: Int,
@@ -22,6 +23,7 @@ enum class OutputPixelFormat {
 
 data class StreamConfiguration(
     val codec: VideoCodec,
+    val encoderName: String,
     val profile: VideoProfile,
     val bitrateBps: Int,
     val keyframeIntervalSeconds: Int,
