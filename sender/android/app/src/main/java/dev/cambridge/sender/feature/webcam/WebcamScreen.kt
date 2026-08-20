@@ -8,10 +8,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import dev.cambridge.sender.app.model.PreviewOrientation
-import dev.cambridge.sender.app.model.SenderDialogUiState
 import dev.cambridge.sender.app.model.SenderScreenAction
 import dev.cambridge.sender.feature.webcam.components.PreviewStage
-import dev.cambridge.sender.feature.webcam.overlays.CameraPermissionDialog
 import dev.cambridge.sender.media.camera.CameraPreviewSurface
 
 @Composable
@@ -31,13 +29,6 @@ fun WebcamScreen(
         onAction = onAction,
         onSurfaceChanged = onSurfaceChanged,
     )
-
-    state.dialog?.let { dialog ->
-        SenderDialog(
-            dialog = dialog,
-            onAction = onAction,
-        )
-    }
 }
 
 @Composable
@@ -56,17 +47,4 @@ private fun PreviewScreen(
             .fillMaxSize()
             .background(Color.Black),
     )
-}
-
-@Composable
-private fun SenderDialog(
-    dialog: SenderDialogUiState,
-    onAction: (SenderScreenAction) -> Unit,
-) {
-    when (dialog) {
-        is SenderDialogUiState.CameraPermission -> CameraPermissionDialog(
-            dialog = dialog,
-            onAction = onAction,
-        )
-    }
 }

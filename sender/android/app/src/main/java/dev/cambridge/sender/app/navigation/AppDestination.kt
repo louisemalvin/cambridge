@@ -4,6 +4,9 @@ import kotlinx.serialization.Serializable
 
 sealed interface AppDestination {
     @Serializable
+    data object CameraPermission : AppDestination
+
+    @Serializable
     data object StreamSetup : AppDestination
 
     @Serializable

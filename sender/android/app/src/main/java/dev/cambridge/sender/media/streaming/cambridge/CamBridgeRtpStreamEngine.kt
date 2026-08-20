@@ -20,6 +20,7 @@ import dev.cambridge.sender.logging.AppLogger
 import dev.cambridge.sender.media.camera.AntiFlickerMode
 import dev.cambridge.sender.media.camera.CameraController
 import dev.cambridge.sender.media.camera.CameraInteractionState
+import dev.cambridge.sender.media.camera.CameraPermissionRequiredException
 import dev.cambridge.sender.media.camera.CameraPreviewSurface
 import dev.cambridge.sender.media.camera.PhysicalLensOption
 import dev.cambridge.sender.media.camera.SessionTransform
@@ -27,7 +28,10 @@ import dev.cambridge.sender.media.streaming.StreamEngine
 import dev.cambridge.sender.media.streaming.StreamEngineEvent
 import dev.cambridge.sender.model.CamBridgeStreamEndpoint
 import dev.cambridge.sender.model.StreamConfiguration
+import dev.cambridge.sender.model.StreamFailure
+import dev.cambridge.sender.model.StreamFailureException
 import dev.cambridge.sender.model.StreamOrientation
+import dev.cambridge.sender.model.VideoCodec
 import dev.cambridge.sender.model.VideoProfile
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -122,8 +126,13 @@ class CamBridgeRtpStreamEngine(
             resetTelemetry()
             this.configuration = configuration
             camera.setDiagnosticsContext(configuration.runId, configuration.sessionId)
+            try {
+                camera.prepare()
+            } catch (cause: Throwable) {
+                if (cause is CameraPermissionRequiredException) throw cause
+                throw StreamFailureException(StreamFailure.CameraUnavailable, cause)
+            }
             prepareCodec(configuration)
-            camera.prepare()
             prepared = true
             emit(
                 "encoder_prepared",
@@ -203,12 +212,17 @@ class CamBridgeRtpStreamEngine(
             udpSocket = socket
             streamEndpoint = endpoint.copy(mediaPort = mediaPort)
             codec?.start()
-            camera.start(
-                encoderSurface ?: error("Encoder surface is unavailable"),
-                targetFps = streamConfiguration.profile.fps,
-                codedWidth = streamConfiguration.profile.width,
-                codedHeight = streamConfiguration.profile.height,
-            )
+            try {
+                camera.start(
+                    encoderSurface ?: error("Encoder surface is unavailable"),
+                    targetFps = streamConfiguration.profile.fps,
+                    codedWidth = streamConfiguration.profile.width,
+                    codedHeight = streamConfiguration.profile.height,
+                )
+            } catch (cause: Throwable) {
+                if (cause is CameraPermissionRequiredException) throw cause
+                throw StreamFailureException(StreamFailure.CameraUnavailable, cause)
+            }
             running = true
             startSenderLoop(socket)
             startControlReader(connection)
@@ -391,7 +405,14 @@ class CamBridgeRtpStreamEngine(
 
         override fun onError(codec: MediaCodec, e: MediaCodec.CodecException) {
             emit("encoder_error", mapOf("reason" to e.diagnosticInfo, "recoverable" to e.isRecoverable))
-            eventFlow.tryEmit(StreamEngineEvent.ConnectionFailed(e.diagnosticInfo))
+            eventFlow.tryEmit(
+                StreamEngineEvent.FatalFailure(
+                    StreamFailure.EncoderPreparationFailed(
+                        codec = VideoCodec.H264,
+                        cause = e,
+                    ),
+                ),
+            )
         }
     }
 
@@ -440,7 +461,14 @@ class CamBridgeRtpStreamEngine(
                     timestampUs = accessUnit.presentationTimeUs,
                     initialSequence = nextSequence.get(),
                     ssrc = ssrc,
-                ).getOrThrow()
+                ).getOrElse { error ->
+                    eventFlow.tryEmit(
+                        StreamEngineEvent.FatalFailure(
+                            StreamFailure.RtpTransportFailed(error),
+                        ),
+                    )
+                    return@launch
+                }
                 nextSequence.set(next)
                 maybeEmitSenderSummary()
                 emit(
@@ -485,7 +513,18 @@ class CamBridgeRtpStreamEngine(
                     val message = connection.receive() ?: break
                     if (message.requireProtocolVersion() != CamBridgeStreamContract.PROTOCOL_VERSION) continue
                     when (message.stringFieldOrNull("type")) {
-                        "error" -> emit("receiver_control_error", mapOf("reason" to message.stringFieldOrNull("error")))
+                        "error" -> {
+                            val reason = message.stringFieldOrNull("error")
+                            emit("receiver_control_error", mapOf("reason" to reason))
+                            eventFlow.tryEmit(
+                                StreamEngineEvent.FatalFailure(
+                                    StreamFailure.ReceiverUnavailable(
+                                        reason ?: "The receiver rejected the stream",
+                                    ),
+                                ),
+                            )
+                            break
+                        }
                         else -> Unit
                     }
                 }

@@ -6,6 +6,15 @@ import org.junit.Test
 
 class StartupStateResolverTest {
     @Test
+    fun missingPermissionAlwaysStartsOnThePermissionRoute() {
+        assertEquals(
+            AppDestination.CameraPermission,
+            StartupStateResolver(hasCameraPermission = false, hasActiveStream = true)
+                .resolveInitialDestination(),
+        )
+    }
+
+    @Test
     fun noActiveStreamRestoresStreamSetupDestination() {
         assertEquals(
             AppDestination.StreamSetup,

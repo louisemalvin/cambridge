@@ -23,14 +23,15 @@ import dev.cambridge.sender.app.model.StabilizationUiState
 import dev.cambridge.sender.feature.settings.SettingsUiState
 import dev.cambridge.sender.feature.settings.SettingsScreen
 import dev.cambridge.sender.feature.setup.BitrateUiState
-import dev.cambridge.sender.feature.setup.CameraPermissionUiState
 import dev.cambridge.sender.feature.setup.ReceiverReadinessUiState
 import dev.cambridge.sender.feature.setup.StreamSetupScreen
 import dev.cambridge.sender.feature.setup.StreamSetupUiState
+import dev.cambridge.sender.feature.permission.CameraPermissionScreen
 import dev.cambridge.sender.feature.webcam.WebcamScreen
 import dev.cambridge.sender.feature.webcam.WebcamUiState
 import dev.cambridge.sender.feature.webcam.overlays.EndStreamConfirmationDialog
 import dev.cambridge.sender.app.model.UiText
+import dev.cambridge.sender.app.permission.CameraPermissionSnapshot
 import dev.cambridge.sender.media.camera.CameraStabilizationMode
 import dev.cambridge.sender.model.StreamOrientation
 import dev.cambridge.sender.session.VideoProfiles
@@ -56,7 +57,6 @@ class SenderScreenTest {
         }
 
         composeRule.onAllNodesWithText("Waiting for webcam use").get(0).assertIsDisplayed()
-        composeRule.onNodeWithText("Allow camera access").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Dim screen").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Settings").assertIsDisplayed()
     }
@@ -223,32 +223,60 @@ class SenderScreenTest {
     }
 
     @Test
-    fun setupMakesMissingCameraPermissionActionable() {
-        var permissionRequested = false
+    fun permissionScreenOffersAnInitialRequest() {
+        var requestClicked = false
         composeRule.setContent {
             MaterialTheme {
-                StreamSetupScreen(
-                    state = StreamSetupUiState(
-                        receiverReadiness = ReceiverReadinessUiState.Ready(
-                            receiverName = UiText.Plain("OBS Studio"),
-                            address = UiText.Plain("192.168.1.20"),
-                        ),
-                        selectedProfile = VideoProfiles.default,
-                        selectedOrientation = StreamOrientation.LANDSCAPE,
+                CameraPermissionScreen(
+                    permission = CameraPermissionSnapshot(
+                        isGranted = false,
+                        hasBeenDenied = false,
+                        isPermanentlyDenied = false,
                     ),
-                    cameraPermission = CameraPermissionUiState(isGranted = false),
-                    onAction = { action ->
-                        if (action == dev.cambridge.sender.app.model.SenderScreenAction.RequestCameraPermission) {
-                            permissionRequested = true
-                        }
-                    },
+                    onPrimaryAction = { requestClicked = true },
                 )
             }
         }
 
         composeRule.onNodeWithText("Camera access required").assertIsDisplayed()
-        composeRule.onNodeWithText("Allow camera access").assertIsEnabled().performClick()
-        composeRule.runOnIdle { assertTrue(permissionRequested) }
+        composeRule.onNodeWithText("Request camera permission").assertIsEnabled().performClick()
+        composeRule.runOnIdle { assertTrue(requestClicked) }
+    }
+
+    @Test
+    fun permissionScreenOffersTryAgainAfterTemporaryDenial() {
+        composeRule.setContent {
+            MaterialTheme {
+                CameraPermissionScreen(
+                    permission = CameraPermissionSnapshot(
+                        isGranted = false,
+                        hasBeenDenied = true,
+                        isPermanentlyDenied = false,
+                    ),
+                    onPrimaryAction = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Try again").assertIsDisplayed()
+    }
+
+    @Test
+    fun permissionScreenOffersSettingsAfterPermanentDenial() {
+        composeRule.setContent {
+            MaterialTheme {
+                CameraPermissionScreen(
+                    permission = CameraPermissionSnapshot(
+                        isGranted = false,
+                        hasBeenDenied = true,
+                        isPermanentlyDenied = true,
+                    ),
+                    onPrimaryAction = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Open app settings").assertIsDisplayed()
     }
 
     @Test

@@ -44,7 +44,7 @@ fun PreviewStatusOverlay(
                 )
             }
         }
-        val showCenterCard = !state.preview.isLive || !state.cameraPermissionGranted
+        val showCenterCard = !state.preview.isLive
 
         if (showCenterCard) {
             when (val connection = state.connection) {
@@ -97,11 +97,6 @@ private fun WaitingCard(
                 text = stringResource(R.string.waiting_for_connection_support),
                 style = MaterialTheme.typography.bodyMedium,
             )
-            if (!state.cameraPermissionGranted) {
-                OutlinedButton(onClick = { onAction(SenderScreenAction.OpenPermissionDialog) }) {
-                    Text(stringResource(R.string.allow_camera_access))
-                }
-            }
         }
     }
 }

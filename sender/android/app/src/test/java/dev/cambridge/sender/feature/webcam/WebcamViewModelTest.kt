@@ -1,7 +1,6 @@
 package dev.cambridge.sender.feature.webcam
 
 import dev.cambridge.sender.app.model.ConnectionUiState
-import dev.cambridge.sender.app.model.SenderDialogUiState
 import dev.cambridge.sender.app.model.StreamPresentationSnapshot
 import dev.cambridge.sender.media.camera.CameraInteractionState
 import dev.cambridge.sender.model.StreamFailure
@@ -17,10 +16,8 @@ class WebcamViewModelTest {
     fun waitingStateIsNotLive() {
         val state = WebcamUiStateMapper.map(
             snapshot = snapshot(),
-            cameraPermissionGranted = true,
             isScreenDimmed = false,
             isZoomTrayOpen = false,
-            isPermissionDialogOpen = false,
         )
 
         assertEquals(ConnectionUiState.Waiting, state.connection)
@@ -33,10 +30,8 @@ class WebcamViewModelTest {
     fun temporaryDisconnectionRemainsOnWebcamAsFailureState() {
         val state = WebcamUiStateMapper.map(
             snapshot = snapshot(streamState = StreamState.Failed(StreamFailure.NetworkDisconnected)),
-            cameraPermissionGranted = true,
             isScreenDimmed = false,
             isZoomTrayOpen = false,
-            isPermissionDialogOpen = false,
         )
 
         assertTrue(state.connection is ConnectionUiState.Failed)
@@ -50,31 +45,13 @@ class WebcamViewModelTest {
                 cameraInteraction = CameraInteractionState()
                     .withCameraBounds(minimum = 1.0f, maximum = 4.0f, current = 2.0f),
             ),
-            cameraPermissionGranted = true,
             isScreenDimmed = false,
             isZoomTrayOpen = false,
-            isPermissionDialogOpen = false,
         )
 
         assertEquals(2.0f, state.camera.zoom.ratio, FLOAT_TOLERANCE)
         assertEquals(4.0f, state.camera.zoom.maximumRatio, FLOAT_TOLERANCE)
         assertTrue(state.camera.zoom.isCameraActive)
-    }
-
-    @Test
-    fun permanentlyDeniedPermissionKeepsSettingsRecoveryStateInTheDialog() {
-        val state = WebcamUiStateMapper.map(
-            snapshot = snapshot(),
-            cameraPermissionGranted = false,
-            isScreenDimmed = false,
-            isZoomTrayOpen = false,
-            isPermissionDialogOpen = true,
-            cameraPermissionPermanentlyDenied = true,
-        )
-
-        assertTrue(state.cameraPermissionPermanentlyDenied)
-        assertTrue(state.dialog is SenderDialogUiState.CameraPermission)
-        assertTrue((state.dialog as SenderDialogUiState.CameraPermission).isPermanentlyDenied)
     }
 
     private fun snapshot(

@@ -104,15 +104,6 @@ data class AntiFlickerUiState(
     val options: List<SelectOptionUi> = emptyList(),
 )
 
-@Immutable
-sealed interface SenderDialogUiState {
-    data class CameraPermission(
-        val title: UiText,
-        val message: UiText,
-        val isPermanentlyDenied: Boolean = false,
-    ) : SenderDialogUiState
-}
-
 sealed interface SenderScreenAction {
     data object ToggleScreenDimmed : SenderScreenAction
     data object OpenSettings : SenderScreenAction
@@ -130,9 +121,6 @@ sealed interface SenderScreenAction {
     data class FrameRateSelected(val fps: Int) : SenderScreenAction
     data class BitrateSelected(val bitrateBps: Int) : SenderScreenAction
     data class StreamOrientationSelected(val orientation: StreamOrientation) : SenderScreenAction
-    data object OpenPermissionDialog : SenderScreenAction
-    data object DismissPermissionDialog : SenderScreenAction
-    data object RequestCameraPermission : SenderScreenAction
     data class ReceiverNameChanged(val name: String) : SenderScreenAction
     data class ReceiverHostChanged(val host: String) : SenderScreenAction
     data class ReceiverSelected(val receiverId: String) : SenderScreenAction
@@ -148,8 +136,6 @@ sealed interface SenderScreenAction {
 }
 
 sealed interface SenderUiEffect {
-    data object RequestCameraPermission : SenderUiEffect
-
     data class CopyDiagnostics(val details: String) : SenderUiEffect
 
 }

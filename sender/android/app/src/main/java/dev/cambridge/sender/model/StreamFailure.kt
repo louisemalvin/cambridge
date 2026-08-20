@@ -13,6 +13,7 @@ sealed interface StreamFailure {
     data class EncoderPreparationFailed(val codec: VideoCodec, val cause: Throwable?) : StreamFailure
     data class StreamStartFailed(val cause: Throwable?) : StreamFailure
     data object NetworkDisconnected : StreamFailure
+    data class RtpTransportFailed(val cause: Throwable?) : StreamFailure
     data class Unexpected(val cause: Throwable) : StreamFailure
 }
 

@@ -10,7 +10,7 @@ class AppBackStack(
     val elements: SnapshotStateList<AppDestination> = mutableStateListOf(initialDestination),
 ) {
     val current: AppDestination
-        get() = elements.lastOrNull() ?: AppDestination.StreamSetup
+        get() = elements.lastOrNull() ?: AppDestination.CameraPermission
 
     fun navigateTo(destination: AppDestination) {
         if (current != destination) {
@@ -29,6 +29,11 @@ class AppBackStack(
     fun replaceWithWebcam() {
         elements.clear()
         elements.add(AppDestination.Webcam)
+    }
+
+    fun replaceWithCameraPermission() {
+        elements.clear()
+        elements.add(AppDestination.CameraPermission)
     }
 
     fun replaceWithStreamSetup() {

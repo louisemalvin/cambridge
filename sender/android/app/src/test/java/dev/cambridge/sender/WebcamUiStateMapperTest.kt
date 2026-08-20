@@ -2,7 +2,6 @@ package dev.cambridge.sender
 
 import dev.cambridge.sender.R
 import dev.cambridge.sender.app.model.ConnectionUiState
-import dev.cambridge.sender.app.model.SenderDialogUiState
 import dev.cambridge.sender.app.model.StreamPresentationSnapshot
 import dev.cambridge.sender.app.model.UiText
 import dev.cambridge.sender.feature.webcam.WebcamUiStateMapper
@@ -29,13 +28,6 @@ class WebcamUiStateMapperTest {
         assertEquals(ConnectionUiState.Waiting, state.connection)
         assertFalse(state.preview.isLive)
         assertEquals(16.0f / 9.0f, state.preview.landscapeAspectRatio, ASPECT_RATIO_TOLERANCE)
-    }
-
-    @Test
-    fun cameraPermissionMapsToUiDialogWithoutExposingPermissionState() {
-        val state = mapSnapshot(isPermissionDialogOpen = true)
-
-        assertTrue(state.dialog is SenderDialogUiState.CameraPermission)
     }
 
     @Test
@@ -72,8 +64,32 @@ class WebcamUiStateMapperTest {
         )
 
         assertTrue(state.connection is ConnectionUiState.Failed)
-        assertEquals(UiText.Plain("OBS is not available"), (state.connection as ConnectionUiState.Failed).message)
+        assertEquals(UiText.Plain("OBS did not respond"), (state.connection as ConnectionUiState.Failed).message)
         assertTrue(state.failureDiagnostics?.contains("Test desktop") == true)
+    }
+
+    @Test
+    fun cameraFailureDoesNotUseReceiverMessage() {
+        val state = mapSnapshot(StreamState.Failed(StreamFailure.CameraUnavailable))
+
+        assertEquals(
+            UiText.Plain("The camera could not be opened or configured"),
+            (state.connection as ConnectionUiState.Failed).message,
+        )
+    }
+
+    @Test
+    fun encoderFailureDoesNotUseReceiverMessage() {
+        val state = mapSnapshot(
+            StreamState.Failed(
+                StreamFailure.EncoderPreparationFailed(VideoCodec.H264, IllegalStateException("codec")),
+            ),
+        )
+
+        assertEquals(
+            UiText.Plain("The selected encoder could not start"),
+            (state.connection as ConnectionUiState.Failed).message,
+        )
     }
 
     @Test
@@ -92,7 +108,6 @@ class WebcamUiStateMapperTest {
     private fun mapSnapshot(
         streamState: StreamState = StreamState.Idle,
         activeReceiverName: String? = null,
-        isPermissionDialogOpen: Boolean = false,
     ) = WebcamUiStateMapper.map(
         snapshot = StreamPresentationSnapshot(
             profile = VideoProfiles.default,
@@ -101,10 +116,8 @@ class WebcamUiStateMapperTest {
             activeReceiverName = activeReceiverName,
             validationMessage = null,
         ),
-        cameraPermissionGranted = true,
         isScreenDimmed = false,
         isZoomTrayOpen = false,
-        isPermissionDialogOpen = isPermissionDialogOpen,
     )
 
     private companion object {

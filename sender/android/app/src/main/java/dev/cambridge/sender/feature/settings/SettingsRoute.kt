@@ -21,7 +21,6 @@ fun SettingsRoute(
         viewModel.effects.collect { effect ->
             when (effect) {
                 is SenderUiEffect.CopyDiagnostics -> onCopyDiagnostics(effect.details)
-                SenderUiEffect.RequestCameraPermission -> Unit
             }
         }
     }

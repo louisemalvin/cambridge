@@ -12,8 +12,11 @@ import dev.cambridge.sender.app.model.UiText
 import dev.cambridge.sender.app.model.SenderScreenAction
 import dev.cambridge.sender.connection.SenderConnectionCoordinator
 import dev.cambridge.sender.media.camera.CameraController
+import dev.cambridge.sender.media.camera.CameraPermissionRequiredException
 import dev.cambridge.sender.media.camera.AntiFlickerMode
 import dev.cambridge.sender.model.StreamOrientation
+import dev.cambridge.sender.model.StreamFailure
+import dev.cambridge.sender.model.StreamFailureException
 import dev.cambridge.sender.model.StreamState
 import dev.cambridge.sender.model.SenderSettingsRepository
 import dev.cambridge.sender.model.SenderSettings
@@ -175,10 +178,14 @@ class StreamSetupViewModel @Inject constructor(
                 )
             }.onFailure { failure ->
                 logger.warn("video capability probe failed", failure)
-                videoCapabilityState.value = VideoCapabilityState(
-                    isReady = true,
-                    error = failure.message?.takeIf(String::isNotBlank),
-                )
+                if (failure.hasCameraPermissionCause()) {
+                    effectFlow.tryEmit(StreamSetupUiEffect.CameraPermissionRequired)
+                } else {
+                    videoCapabilityState.value = VideoCapabilityState(
+                        isReady = true,
+                        error = failure.message?.takeIf(String::isNotBlank),
+                    )
+                }
             }
         }
     }
@@ -285,7 +292,11 @@ class StreamSetupViewModel @Inject constructor(
         validationMessage.value = null
         viewModelScope.launch {
             coordinator.startStream().onFailure { failure ->
-                validationMessage.value = failure.message
+                if ((failure as? StreamFailureException)?.failure == StreamFailure.CameraPermissionDenied) {
+                    effectFlow.tryEmit(StreamSetupUiEffect.CameraPermissionRequired)
+                } else {
+                    validationMessage.value = failure.message
+                }
             }
         }
     }
@@ -414,4 +425,15 @@ class StreamSetupViewModel @Inject constructor(
 
 sealed interface StreamSetupUiEffect {
     data class NavigateToWebcam(val orientation: StreamOrientation) : StreamSetupUiEffect
+
+    data object CameraPermissionRequired : StreamSetupUiEffect
+}
+
+private fun Throwable.hasCameraPermissionCause(): Boolean {
+    var current: Throwable? = this
+    while (current != null) {
+        if (current is CameraPermissionRequiredException) return true
+        current = current.cause
+    }
+    return false
 }

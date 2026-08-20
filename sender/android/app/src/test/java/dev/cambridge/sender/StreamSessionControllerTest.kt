@@ -124,6 +124,30 @@ class StreamSessionControllerTest {
     }
 
     @Test
+    fun transformFailureReleasesResourcesExactlyOnce() = runTest {
+        val engine = FakeEngine()
+        val foreground = FakeForeground()
+        val controller = controller(
+            engine = engine,
+            foreground = foreground,
+            scope = backgroundScope,
+            cameraController = FakeCameraController(
+                snapshotFailure = IllegalStateException("camera transform failed"),
+            ),
+        )
+
+        assertTrue(controller.start(endpoint, profile, StreamOrientation.LANDSCAPE).isFailure)
+        assertEquals(1, engine.stopCount)
+        assertEquals(1, engine.releaseCount)
+        assertEquals(1, foreground.stopCount)
+
+        assertTrue(controller.stop().isSuccess)
+        assertEquals(1, engine.stopCount)
+        assertEquals(1, engine.releaseCount)
+        assertEquals(1, foreground.stopCount)
+    }
+
+    @Test
     fun engineStartFailureCleansUpThePreparedSession() = runTest {
         val engineFailure = IllegalStateException("receiver rejected stream")
         val engine = FakeEngine(startFailure = engineFailure)
@@ -164,6 +188,26 @@ class StreamSessionControllerTest {
         testScheduler.runCurrent()
 
         assertEquals(StreamState.Failed(StreamFailure.NetworkDisconnected), controller.state.value)
+        assertEquals(1, engine.stopCount)
+        assertEquals(1, foreground.stopCount)
+    }
+
+    @Test
+    fun fatalRtpFailureEndsTheWholeSession() = runTest {
+        val engine = FakeEngineWithEvents()
+        val foreground = FakeForeground()
+        val controller = controller(engine, foreground, backgroundScope)
+
+        assertTrue(controller.start(endpoint, profile, StreamOrientation.LANDSCAPE).isSuccess)
+        testScheduler.runCurrent()
+        engine.emit(
+            StreamEngineEvent.FatalFailure(
+                StreamFailure.RtpTransportFailed(IllegalStateException("socket failed")),
+            ),
+        )
+        testScheduler.runCurrent()
+
+        assertTrue(controller.state.value is StreamState.Failed)
         assertEquals(1, engine.stopCount)
         assertEquals(1, foreground.stopCount)
     }

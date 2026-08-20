@@ -48,6 +48,7 @@ class StreamSessionControllerImpl(
     private val stateFlow = MutableStateFlow<StreamState>(StreamState.Idle)
     private var activeSession: StreamSession? = null
     private var activeRunId: String? = null
+    private var cleanupPending = false
     private var nextStreamGeneration = CamBridgeStreamContract.FIRST_STREAM_GENERATION
     private var lastLoggedBitrateAtMillis: Long = NO_SAMPLE_TIMESTAMP_MILLIS
     private var lastLoggedTransportErrorAtMillis: Long = NO_SAMPLE_TIMESTAMP_MILLIS
@@ -77,6 +78,7 @@ class StreamSessionControllerImpl(
         }
         val runId = "$RUN_ID_PREFIX${UUID.randomUUID()}"
         activeRunId = runId
+        cleanupPending = true
         stateFlow.value = StreamState.Connecting
         val sessionTransform = runCatching {
             cameraController?.snapshotSessionTransform(profile.width, profile.height, orientation)
@@ -91,6 +93,7 @@ class StreamSessionControllerImpl(
                 "stream_start_failed",
                 mapOf("failureType" to failure::class.simpleName, "reason" to cause.message),
             )
+            cleanupLocked()
             stateFlow.value = StreamState.Failed(failure)
             return@withLock Result.failure(StreamFailureException(failure, cause))
         }
@@ -167,7 +170,9 @@ class StreamSessionControllerImpl(
             foreground.start().getOrElse { cause -> throw StreamFailureException(StreamFailure.Unexpected(cause), cause) }
             streamEngine.prepare(configuration).getOrElse { cause ->
                 throw StreamFailureException(
-                    cause.toStreamFailure(StreamFailure.StreamStartFailed(cause)),
+                    cause.toStreamFailure(
+                        StreamFailure.EncoderPreparationFailed(VideoCodec.H264, cause),
+                    ),
                     cause,
                 )
             }
@@ -232,7 +237,10 @@ class StreamSessionControllerImpl(
     }
 
     override suspend fun stop(): Result<Unit> = lifecycleMutex.withLock {
-        if (activeSession == null && stateFlow.value == StreamState.Idle) return@withLock Result.success(Unit)
+        if (!cleanupPending && activeSession == null) {
+            stateFlow.value = StreamState.Idle
+            return@withLock Result.success(Unit)
+        }
         stateFlow.value = StreamState.Stopping
         diagnosticEvent("stream_stopping")
         cleanupLocked()
@@ -257,20 +265,34 @@ class StreamSessionControllerImpl(
         lifecycleMutex.withLock {
             if (activeSession == null || stateFlow.value !is StreamState.Streaming) return@withLock
             logEngineEvent(event)
-            if (event == StreamEngineEvent.Disconnected) {
-                diagnosticEvent("stream_failed", mapOf("failureType" to "NetworkDisconnected"))
-                cleanupLocked()
-                stateFlow.value = StreamState.Failed(StreamFailure.NetworkDisconnected)
+            when (event) {
+                StreamEngineEvent.Disconnected -> failActiveSessionLocked(StreamFailure.NetworkDisconnected)
+                is StreamEngineEvent.FatalFailure -> failActiveSessionLocked(event.failure)
+                is StreamEngineEvent.ConnectionFailed -> failActiveSessionLocked(
+                    StreamFailure.EncoderPreparationFailed(
+                        codec = VideoCodec.H264,
+                        cause = IllegalStateException(event.reason),
+                    ),
+                )
+                else -> Unit
             }
         }
     }
 
+    private suspend fun failActiveSessionLocked(failure: StreamFailure) {
+        diagnosticEvent("stream_failed", mapOf("failureType" to failure::class.simpleName))
+        cleanupLocked()
+        stateFlow.value = StreamState.Failed(failure)
+    }
+
     private suspend fun cleanupLocked() {
+        if (!cleanupPending) return
+        cleanupPending = false
+        activeSession = null
+        activeRunId = null
         runCatching { streamEngine.stop() }
         runCatching { streamEngine.release() }
         foreground.stop()
-        activeSession = null
-        activeRunId = null
     }
 
     private fun logEngineEvent(event: StreamEngineEvent) {
@@ -287,6 +309,10 @@ class StreamSessionControllerImpl(
                     diagnosticEvent("encoder_connection_failed", mapOf("reason" to event.reason))
                 }
             }
+            is StreamEngineEvent.FatalFailure -> diagnosticEvent(
+                "stream_fatal_failure",
+                mapOf("failureType" to event.failure::class.simpleName),
+            )
             StreamEngineEvent.Disconnected -> diagnosticEvent("encoder_disconnected")
             StreamEngineEvent.AuthenticationError -> diagnosticEvent("encoder_authentication_error")
             StreamEngineEvent.AuthenticationSucceeded -> diagnosticEvent("encoder_authentication_succeeded")

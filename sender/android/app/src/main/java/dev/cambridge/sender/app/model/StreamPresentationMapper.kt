@@ -58,21 +58,23 @@ object StreamPresentationMapper {
     }
 
     fun failureMessage(failure: StreamFailure): String = when (failure) {
-        StreamFailure.CameraPermissionDenied -> "Camera permission was denied"
-        StreamFailure.CameraUnavailable -> "The camera is unavailable"
+        StreamFailure.CameraPermissionDenied -> "Camera permission is required"
+        StreamFailure.CameraUnavailable -> "The camera could not be opened or configured"
         is StreamFailure.VideoQualityUnsupported -> qualityFailureMessage(failure.requestedProfile)
-        is StreamFailure.ReceiverUnavailable -> "OBS is not available"
+        is StreamFailure.ReceiverUnavailable -> "OBS did not respond"
         is StreamFailure.NoCompatibleCodec -> qualityFailureMessage(failure.requestedProfile)
         is StreamFailure.ForcedCodecUnsupported -> qualityFailureMessage(failure.requestedProfile)
-        is StreamFailure.EncoderPreparationFailed -> "This phone cannot use the selected video quality"
-        is StreamFailure.StreamStartFailed -> "OBS is not available"
+        is StreamFailure.EncoderPreparationFailed -> "The selected encoder could not start"
+        is StreamFailure.StreamStartFailed -> "The stream could not start"
         StreamFailure.NetworkDisconnected -> "Connection lost. Open stream setup to try again"
-        is StreamFailure.Unexpected -> "The camera could not start"
+        is StreamFailure.RtpTransportFailed -> "Video transport failed. Open stream setup to try again"
+        is StreamFailure.Unexpected -> "The stream could not start"
     }
 
     fun causeOrNull(failure: StreamFailure): Throwable? = when (failure) {
         is StreamFailure.EncoderPreparationFailed -> failure.cause
         is StreamFailure.StreamStartFailed -> failure.cause
+        is StreamFailure.RtpTransportFailed -> failure.cause
         is StreamFailure.Unexpected -> failure.cause
         else -> null
     }

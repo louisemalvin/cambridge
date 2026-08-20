@@ -19,7 +19,6 @@ import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
@@ -78,14 +77,8 @@ fun StreamSetupScreen(
     state: StreamSetupUiState,
     onAction: (SenderScreenAction) -> Unit,
     modifier: Modifier = Modifier,
-    cameraPermission: CameraPermissionUiState = CameraPermissionUiState(),
 ) {
-    val primaryActionResource = when {
-        cameraPermission.isGranted -> R.string.setup_start_stream
-        cameraPermission.isPermanentlyDenied -> R.string.camera_permission_open_settings
-        else -> R.string.allow_camera_access
-    }
-    val primaryActionDescription = stringResource(primaryActionResource)
+    val primaryActionDescription = stringResource(R.string.setup_start_stream)
     val hasCameraSettings = state.stabilization.supportedModes.any { mode ->
         mode != CameraStabilizationMode.OFF
     } || state.stabilization.applyStatus == CameraStabilizationApplyStatus.UNAVAILABLE_FOR_STREAM ||
@@ -159,11 +152,7 @@ fun StreamSetupScreen(
                     },
                 )
             }
-            if (!cameraPermission.isGranted) {
-                item {
-                    CameraPermissionNotice(cameraPermission)
-                }
-            } else if (!state.videoCapabilitiesReady) {
+            if (!state.videoCapabilitiesReady) {
                 item {
                     Text(
                         text = stringResource(R.string.checking_video_capabilities),
@@ -273,21 +262,15 @@ fun StreamSetupScreen(
             }
             item {
                 Button(
-                    onClick = {
-                        onAction(
-                            if (cameraPermission.isGranted) {
-                                SenderScreenAction.StartStream
-                            } else {
-                                SenderScreenAction.RequestCameraPermission
-                            },
-                        )
-                    },
-                    enabled = cameraPermission.isGranted.not() || state.canStart,
+                    onClick = { onAction(SenderScreenAction.StartStream) },
+                    enabled = state.canStart,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .semantics { contentDescription = primaryActionDescription },
+                        .semantics {
+                            contentDescription = primaryActionDescription
+                        },
                 ) {
-                    Text(primaryActionDescription)
+                    Text(stringResource(R.string.setup_start_stream))
                 }
             }
         }
@@ -373,36 +356,6 @@ private fun stabilizationSummary(mode: CameraStabilizationMode): String = when (
     CameraStabilizationMode.OPTICAL -> stringResource(R.string.stabilization_optical)
     CameraStabilizationMode.ELECTRONIC -> stringResource(R.string.stabilization_electronic)
     CameraStabilizationMode.PREVIEW -> stringResource(R.string.stabilization_preview)
-}
-
-@Composable
-private fun CameraPermissionNotice(
-    state: CameraPermissionUiState,
-    modifier: Modifier = Modifier,
-) {
-    Card(modifier = modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(PERMISSION_NOTICE_PADDING.dp),
-            verticalArrangement = Arrangement.spacedBy(CHOICE_LABEL_SPACING.dp),
-        ) {
-            Text(
-                text = stringResource(R.string.camera_permission_title),
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Text(
-                text = stringResource(
-                    if (state.isPermanentlyDenied) {
-                        R.string.camera_permission_blocked_message
-                    } else {
-                        R.string.camera_permission_setup_message
-                    },
-                ),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
 }
 
 @Composable
@@ -791,7 +744,6 @@ private const val HEADER_TEXT_WEIGHT = 1.0f
 private const val FIRST_SLIDER_INDEX = 0
 private const val MINIMUM_SLIDER_RANGE_INDEX = 1
 private const val BITRATE_INPUT_WIDTH = 144
-private const val PERMISSION_NOTICE_PADDING = 16
 private const val DROPDOWN_REASON_SPACING = 2
 private const val PREVIEW_RECEIVER_ADDRESS = "192.168.1.20"
 private const val SUMMARY_SEPARATOR = " · "

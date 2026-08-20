@@ -79,6 +79,8 @@
     <string name="camera_permission_message">Allow camera access so the phone can send video to a receiver.</string>
     <string name="camera_permission_setup_message">Allow camera access before starting a stream. CamBridge cannot inspect the video modes or send video without it.</string>
     <string name="camera_permission_blocked_message">Camera access is blocked. Open CamBridge app settings and allow Camera, then return here.</string>
+    <string name="camera_permission_request">Request camera permission</string>
+    <string name="camera_permission_try_again">Try again</string>
     <string name="allow_camera_access">Allow camera access</string>
     <string name="camera_permission_open_settings">Open app settings</string>
     <string name="cancel">Cancel</string>

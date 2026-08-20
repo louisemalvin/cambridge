@@ -49,11 +49,8 @@ class WebcamViewModel @Inject constructor(
                 activeReceiverName = receiverName,
                 validationMessage = null,
             ),
-            cameraPermissionGranted = local.cameraPermissionGranted,
             isScreenDimmed = local.isScreenDimmed,
             isZoomTrayOpen = local.isZoomTrayOpen,
-            isPermissionDialogOpen = local.isPermissionDialogOpen,
-            cameraPermissionPermanentlyDenied = local.cameraPermissionPermanentlyDenied,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -78,29 +75,8 @@ class WebcamViewModel @Inject constructor(
             SenderScreenAction.ResetZoom -> resetZoom()
             is SenderScreenAction.LensSelected -> selectPhysicalLens(action.key)
             is SenderScreenAction.StabilizationModeChanged -> setStabilizationMode(action.mode)
-            SenderScreenAction.OpenPermissionDialog -> localState.update {
-                it.copy(isPermissionDialogOpen = true)
-            }
-            SenderScreenAction.DismissPermissionDialog -> localState.update {
-                it.copy(isPermissionDialogOpen = false)
-            }
-            SenderScreenAction.RequestCameraPermission -> requestCameraPermission()
             SenderScreenAction.CopyDiagnostics -> copyDiagnostics()
             else -> Unit
-        }
-    }
-
-    fun setCameraPermissionGranted(granted: Boolean) {
-        setCameraPermissionState(granted, permanentlyDenied = false)
-    }
-
-    fun setCameraPermissionState(granted: Boolean, permanentlyDenied: Boolean) {
-        localState.update {
-            it.copy(
-                cameraPermissionGranted = granted,
-                cameraPermissionPermanentlyDenied = permanentlyDenied,
-                isPermissionDialogOpen = false,
-            )
         }
     }
 
@@ -138,22 +114,14 @@ class WebcamViewModel @Inject constructor(
         }
     }
 
-    private fun requestCameraPermission() {
-        localState.update { it.copy(isPermissionDialogOpen = false) }
-        effectFlow.tryEmit(SenderUiEffect.RequestCameraPermission)
-    }
-
     private fun copyDiagnostics() {
         val details = uiState.value.failureDiagnostics ?: return
         effectFlow.tryEmit(SenderUiEffect.CopyDiagnostics(details))
     }
 
     private data class LocalWebcamState(
-        val cameraPermissionGranted: Boolean = false,
-        val cameraPermissionPermanentlyDenied: Boolean = false,
         val isScreenDimmed: Boolean = false,
         val isZoomTrayOpen: Boolean = false,
-        val isPermissionDialogOpen: Boolean = false,
     )
 
     private companion object {
