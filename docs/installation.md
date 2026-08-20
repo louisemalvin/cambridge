@@ -14,15 +14,18 @@ released or supported platform yet: Apple-target compilation, signing, a real
 iPhone camera/encoder, and glass-to-glass behavior must be validated on macOS
 before the public support statement changes.
 
-Install the Android APK and OBS plugin from the same CamBridge release. The
-wire protocol is versioned and incompatible releases do not connect; in
-particular, the protocol v6 artifacts in CamBridge 0.3.0 are not compatible
-with the protocol v5 artifacts in the 0.2.x releases.
+Install the Android APK from an `android-v<version>` release and the OBS
+plugin from an `obs-v<version>` release. These component versions are
+independent, but both artifacts must use protocol v6. Incompatible protocol
+releases do not connect; protocol v6 is not compatible with protocol v5 from
+the 0.2.x releases.
 
 ## Android
 
-1. Open the [latest GitHub release](https://github.com/louisemalvin/cambridge/releases/latest)
-   and download `cambridge-v<version>.apk`.
+1. Open the
+   [Android releases](https://github.com/louisemalvin/cambridge/releases) and
+   download `cambridge-android-<version>.apk` from an
+   `android-v<version>` release.
 2. Install the APK. Android may ask you to allow installs from the browser or
    file manager used to open it.
 3. Open CamBridge and allow camera access when prompted. The app also needs
@@ -33,8 +36,9 @@ includes the Stop control; removing the app task also stops the active stream.
 
 ## Linux / OBS
 
-1. Download `cambridge-obs-plugin-<version>-linux-x86_64.tar.gz` from the
-   [latest GitHub release](https://github.com/louisemalvin/cambridge/releases/latest).
+1. Download `cambridge-obs-plugin-<version>-linux-x86_64.tar.gz` from an
+   `obs-v<version>` release in the
+   [GitHub releases](https://github.com/louisemalvin/cambridge/releases).
 2. Extract the archive and run the included installer:
 
    ```bash

@@ -1,8 +1,25 @@
 cmake_minimum_required(VERSION 3.24)
 
 set(release_version_file "${CMAKE_CURRENT_SOURCE_DIR}/../../../VERSION")
-file(READ "${release_version_file}" cambridge_release_version)
-string(STRIP "${cambridge_release_version}" cambridge_release_version)
+file(READ "${release_version_file}" cambridge_version_manifest)
+set(cambridge_version_manifest_schema 1)
+string(
+    JSON cambridge_version_schema
+    ERROR_VARIABLE cambridge_version_schema_error
+    GET "${cambridge_version_manifest}" schemaVersion
+)
+if(cambridge_version_schema_error OR
+   NOT cambridge_version_schema STREQUAL "${cambridge_version_manifest_schema}")
+    message(FATAL_ERROR "VERSION has an unsupported manifest schema")
+endif()
+string(
+    JSON cambridge_release_version
+    ERROR_VARIABLE cambridge_release_version_error
+    GET "${cambridge_version_manifest}" components obsPlugin
+)
+if(cambridge_release_version_error OR NOT cambridge_release_version)
+    message(FATAL_ERROR "VERSION does not define an OBS plugin version")
+endif()
 project(cambridge-obs-plugin VERSION "${cambridge_release_version}" LANGUAGES CXX)
 
 set(protocol_contract_file "${CMAKE_CURRENT_SOURCE_DIR}/../../../protocol/cambridge-stream-contract.json")

@@ -52,6 +52,9 @@ Homebrew, and the pinned CMake, OBS Studio, and FFmpeg dependencies prepared by
 Run the complete local check from the repository root:
 
 ```bash
+python3 scripts/development/cambridge_component_versions.py --check
+python3 scripts/development/test-component-versions.py
+python3 scripts/development/generate-ios-version.py --check
 JAVA_HOME=/path/to/jdk-17 ./scripts/development/check-all.sh
 ```
 
@@ -319,22 +322,32 @@ queue/drop/thermal diagnostics, and OBS hardware plus CPU-fallback results.
 
 ## Release packaging
 
-Every user-facing update is a release. Bump `VERSION`, add a corresponding
-`CHANGELOG.md` entry, and publish the downloadable artifacts; do not send
-end users through a source build. Maintainers prepare the release by running
-the complete repository checks and validating the Linux package with
-`./scripts/release/package-linux-plugin.sh`. Push the release commit before
-pushing its matching `v<version>` tag. The tag starts the release workflow,
-which builds a signed Android APK named `cambridge-v<version>.apk` and a Linux
-archive named `cambridge-obs-plugin-<version>-linux-x86_64.tar.gz`, plus a
-macOS universal package named
-`cambridge-obs-plugin-<version>-macos-universal.pkg`.
+Every user-facing update is a component release. Set the active component
+versions in the JSON `VERSION` manifest, add a matching component heading to
+`CHANGELOG.md`, and publish the downloadable artifact; do not send end users
+through a source build. Validate the manifest and generated iOS placeholder
+with:
+
+```bash
+python3 scripts/development/cambridge_component_versions.py --check
+python3 scripts/development/test-component-versions.py
+python3 scripts/development/generate-ios-version.py --check
+```
+
+Android releases use an `android-v<version>` tag and publish
+`cambridge-android-<version>.apk`. OBS plugin releases use an `obs-v<version>`
+tag and publish the Linux archive
+`cambridge-obs-plugin-<version>-linux-x86_64.tar.gz` plus the macOS universal
+package `cambridge-obs-plugin-<version>-macos-universal.pkg` when the macOS
+release gate is enabled. Publish the release commit before its matching tag.
+The iOS sender remains deferred and has no release tag.
 
 The Linux archive is one user-facing x86-64 bundle. Its release workflow builds
-the Ubuntu 26.04 and CachyOS OBS 32.2.2 variants in their matching environments,
-then assembles both behind `install-linux-plugin.sh` and publishes one archive
-checksum. Release publication remains subject to the repository's owner
-authorization policy.
+the `x86_64-obs30-ffmpeg62` and `x86_64-obs30-ffmpeg63` ABI profiles on their
+concrete Ubuntu and CachyOS runners. The bundle records those environments as
+build provenance, then selects the plugin by actual OBS ELF dependencies
+behind `install-linux-plugin.sh` and publishes one archive checksum. Release
+publication remains subject to the repository's owner authorization policy.
 
 The macOS package script requires Developer ID application and installer
 identities plus a configured `notarytool` keychain profile. It signs the whole

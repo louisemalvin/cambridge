@@ -38,6 +38,7 @@ run_swift() {
 
 python3 "${repo_root}/scripts/development/generate-cambridge-swift-contract.py" --check
 python3 "${repo_root}/scripts/development/generate-cambridge-sender-modes.py" --check
+python3 "${repo_root}/scripts/development/test-component-versions.py"
 python3 "${repo_root}/scripts/development/generate-ios-version.py" --check
 run_swift package dump-package >/dev/null
 run_swift test --parallel 2>&1 | tee "${log_dir}/swift-test.log"

@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+## Android 0.4.0 - Permission, encoder, and stream lifecycle hardening
+
+- Gate stream start on the current camera permission and recover cleanly when
+  permission is revoked or restored.
+- Select the exact requested H.264 MediaCodec encoder and resolve the active
+  video configuration before opening the session.
+- Make control startup, callback ownership, and stop cleanup terminal and
+  generation-safe.
+
+## OBS plugin 0.4.0 - Multi-ABI packaging and receiver hardening
+
+- Package one Linux installer bundle containing exact OBS and FFmpeg ABI
+  profiles without bundling host libraries.
+- Select the compatible plugin from the OBS executable's actual ELF
+  dependencies and preserve existing installations when validation fails.
+- Harden native control startup, media callbacks, and release validation.
+
 ## 0.3.3 - Permission recovery and decision-oriented testing
 
 - Classify camera permission loss as a permission failure throughout stream

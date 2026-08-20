@@ -5,6 +5,9 @@ script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_root=$(cd -- "${script_dir}/../.." && pwd)
 platform=$(uname -s)
 
+python3 "${repo_root}/scripts/development/cambridge_component_versions.py" --check
+python3 "${repo_root}/scripts/development/test-component-versions.py"
+python3 "${repo_root}/scripts/development/generate-ios-version.py" --check
 python3 "${repo_root}/scripts/development/check-cambridge-stream-contract.py"
 python3 "${repo_root}/scripts/release/test-cambridge-linux-bundle.py"
 bash -n \

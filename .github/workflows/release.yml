@@ -3,22 +3,57 @@ name: Release artifacts
 on:
   push:
     tags:
-      - "v*.*.*"
+      - "*-v*.*.*"
   workflow_dispatch:
+    inputs:
+      component:
+        description: "Component to release"
+        required: true
+        type: choice
+        options:
+          - android
+          - obs
+      version:
+        description: "Semantic version from VERSION"
+        required: true
+        type: string
 
 permissions:
   contents: write
 
 jobs:
   verify-version:
+    outputs:
+      component: ${{ steps.version.outputs.component }}
+      version: ${{ steps.version.outputs.version }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Verify tag version
-        if: github.ref_type == 'tag'
-        run: test "v$(tr -d '[:space:]' < VERSION)" = "${GITHUB_REF_NAME}"
+      - name: Verify component version
+        id: version
+        env:
+          COMPONENT_INPUT: ${{ inputs.component }}
+          VERSION_INPUT: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            version_output="$(python3 scripts/development/cambridge_component_versions.py \
+              --tag "${GITHUB_REF_NAME}")"
+          else
+            test -n "${COMPONENT_INPUT}"
+            test -n "${VERSION_INPUT}"
+            version_output="$(python3 scripts/development/cambridge_component_versions.py \
+              --component "${COMPONENT_INPUT}" --version "${VERSION_INPUT}")"
+          fi
+          component="$(printf '%s\n' "${version_output}" | awk -F= '$1 == "component" { print $2 }')"
+          version="$(printf '%s\n' "${version_output}" | awk -F= '$1 == "version" { print $2 }')"
+          test -n "${component}"
+          test -n "${version}"
+          printf 'component=%s\n' "${component}" >>"${GITHUB_OUTPUT}"
+          printf 'version=%s\n' "${version}" >>"${GITHUB_OUTPUT}"
 
   android:
+    if: needs.verify-version.outputs.component == 'android'
     needs: verify-version
     runs-on: ubuntu-latest
     steps:
@@ -33,6 +68,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Build signed release APK
         env:
+          CAMBRIDGE_ANDROID_VERSION: ${{ needs.verify-version.outputs.version }}
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_SIGNING_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_SIGNING_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
@@ -49,19 +85,20 @@ jobs:
           apk="sender/android/app/build/outputs/apk/release/app-release.apk"
           test -f "${apk}"
           mkdir -p dist
-          cp "${apk}" "dist/cambridge-${GITHUB_REF_NAME}.apk"
+          cp "${apk}" "dist/cambridge-android-${CAMBRIDGE_ANDROID_VERSION}.apk"
           (
             cd dist
-            sha256sum "cambridge-${GITHUB_REF_NAME}.apk" \
-              >"cambridge-${GITHUB_REF_NAME}.apk.sha256"
-            sha256sum --check "cambridge-${GITHUB_REF_NAME}.apk.sha256"
+            sha256sum "cambridge-android-${CAMBRIDGE_ANDROID_VERSION}.apk" \
+              >"cambridge-android-${CAMBRIDGE_ANDROID_VERSION}.apk.sha256"
+            sha256sum --check "cambridge-android-${CAMBRIDGE_ANDROID_VERSION}.apk.sha256"
           )
       - uses: actions/upload-artifact@v4
         with:
           name: android-release
           path: dist/
 
-  linux-ubuntu-variant:
+  linux-ubuntu-build:
+    if: needs.verify-version.outputs.component == 'obs'
     needs: verify-version
     runs-on: ubuntu-26.04
     env:
@@ -81,7 +118,7 @@ jobs:
             libva-dev libva-drm2 libdrm-dev libgl-dev libopengl-dev libglx-dev \
             libjansson-dev \
             libavahi-client-dev
-      - name: Build Ubuntu 26.04 Linux plugin variant
+      - name: Build x86_64-obs30-ffmpeg62 profile on Ubuntu 26.04
         env:
           CAMBRIDGE_LINUX_VARIANT_ID: x86_64-obs30-ffmpeg62
           CAMBRIDGE_LINUX_VARIANT_PROVENANCE: Ubuntu 26.04 release environment
@@ -114,12 +151,13 @@ jobs:
           name: linux-variant-x86_64-obs30-ffmpeg62
           path: build/linux-variants/x86_64-obs30-ffmpeg62/
 
-  linux-cachyos-variant:
+  linux-cachyos-build:
+    if: needs.verify-version.outputs.component == 'obs'
     needs: verify-version
     runs-on: [self-hosted, linux, x64, cachyos]
     steps:
       - uses: actions/checkout@v4
-      - name: Build CachyOS OBS 32.2.2 Linux plugin variant
+      - name: Build x86_64-obs30-ffmpeg63 profile on CachyOS OBS 32.2.2
         env:
           CAMBRIDGE_LINUX_VARIANT_ID: x86_64-obs30-ffmpeg63
           CAMBRIDGE_LINUX_VARIANT_PROVENANCE: CachyOS with OBS 32.2.2
@@ -151,9 +189,11 @@ jobs:
           path: build/linux-variants/x86_64-obs30-ffmpeg63/
 
   linux-package:
+    if: needs.verify-version.outputs.component == 'obs'
     needs:
-      - linux-ubuntu-variant
-      - linux-cachyos-variant
+      - verify-version
+      - linux-ubuntu-build
+      - linux-cachyos-build
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v4
@@ -182,7 +222,7 @@ jobs:
             build/release/*.tar.gz.sha256
 
   macos-build:
-    if: vars.CAMBRIDGE_RELEASE_MACOS == 'true'
+    if: needs.verify-version.outputs.component == 'obs' && vars.CAMBRIDGE_RELEASE_MACOS == 'true'
     needs: verify-version
     strategy:
       fail-fast: false
@@ -224,8 +264,10 @@ jobs:
           path: dist/${{ matrix.architecture }}/
 
   macos-package:
-    if: vars.CAMBRIDGE_RELEASE_MACOS == 'true'
-    needs: macos-build
+    if: needs.verify-version.outputs.component == 'obs' && vars.CAMBRIDGE_RELEASE_MACOS == 'true'
+    needs:
+      - verify-version
+      - macos-build
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -326,15 +368,48 @@ jobs:
             build/release/*.pkg
             build/release/*.pkg.sha256
 
-  publish:
+  publish-android:
     if: >-
       always() && github.ref_type == 'tag' &&
-      needs.android.result == 'success' &&
+      needs.verify-version.outputs.component == 'android' &&
+      needs.android.result == 'success'
+    needs:
+      - verify-version
+      - android
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish Android GitHub release
+        env:
+          CAMBRIDGE_RELEASE_VERSION: ${{ needs.verify-version.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          release_notes="${RUNNER_TEMP}/cambridge-android-release-notes.md"
+          awk -v heading="## Android ${CAMBRIDGE_RELEASE_VERSION} " '
+            index($0, heading) == 1 { include = 1; next }
+            include && /^## / { exit }
+            include { print }
+          ' CHANGELOG.md >"${release_notes}"
+          test -s "${release_notes}"
+          mapfile -d '' release_assets < <(find dist -type f -print0)
+          test "${#release_assets[@]}" -gt 0
+          gh release create "${GITHUB_REF_NAME}" "${release_assets[@]}" \
+            --title "CamBridge Android ${CAMBRIDGE_RELEASE_VERSION}" \
+            --notes-file "${release_notes}"
+
+  publish-obs:
+    if: >-
+      always() && github.ref_type == 'tag' &&
+      needs.verify-version.outputs.component == 'obs' &&
       needs.linux-package.result == 'success' &&
       ((needs.macos-build.result == 'skipped' && needs.macos-package.result == 'skipped') ||
        (needs.macos-build.result == 'success' && needs.macos-package.result == 'success'))
     needs:
-      - android
+      - verify-version
       - linux-package
       - macos-build
       - macos-package
@@ -345,13 +420,13 @@ jobs:
         with:
           path: dist
           merge-multiple: true
-      - name: Publish GitHub release
+      - name: Publish OBS plugin GitHub release
         env:
+          CAMBRIDGE_RELEASE_VERSION: ${{ needs.verify-version.outputs.version }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          version="${GITHUB_REF_NAME#v}"
-          release_notes="${RUNNER_TEMP}/cambridge-release-notes.md"
-          awk -v heading="## ${version} " '
+          release_notes="${RUNNER_TEMP}/cambridge-obs-release-notes.md"
+          awk -v heading="## OBS plugin ${CAMBRIDGE_RELEASE_VERSION} " '
             index($0, heading) == 1 { include = 1; next }
             include && /^## / { exit }
             include { print }
@@ -360,4 +435,5 @@ jobs:
           mapfile -d '' release_assets < <(find dist -type f -print0)
           test "${#release_assets[@]}" -gt 0
           gh release create "${GITHUB_REF_NAME}" "${release_assets[@]}" \
-            --title "CamBridge ${GITHUB_REF_NAME}" --notes-file "${release_notes}"
+            --title "CamBridge OBS plugin ${CAMBRIDGE_RELEASE_VERSION}" \
+            --notes-file "${release_notes}"

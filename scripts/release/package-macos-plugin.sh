@@ -3,7 +3,7 @@ set -euo pipefail
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_root=$(cd -- "${script_dir}/../.." && pwd)
-version=$(tr -d '[:space:]' <"${repo_root}/VERSION")
+version=$(python3 "${repo_root}/scripts/development/cambridge_component_versions.py" --component obs)
 artifact_dir=${CAMBRIDGE_RELEASE_ARTIFACT_DIR:-"${repo_root}/build/release"}
 build_dir=${CAMBRIDGE_BUILD_DIR:-"${repo_root}/build/cambridge-obs-plugin-macos-release"}
 staging_dir=${CAMBRIDGE_STAGING_DIR:-"${build_dir}/staging"}

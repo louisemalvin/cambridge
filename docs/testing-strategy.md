@@ -194,6 +194,23 @@ configuration. Native unit tests do not prove OBS plugin discovery, and an
 isolated OBS process smoke test remains separate evidence when the target
 platform environment is available.
 
+## Component release metadata
+
+The root `VERSION` file is a JSON manifest with independent Android sender and
+OBS plugin versions. The iOS sender is explicitly deferred until its physical
+validation gates pass. Validate the manifest, release tag mapping, and
+generated iOS placeholder with:
+
+```bash
+python3 scripts/development/cambridge_component_versions.py --check
+python3 scripts/development/test-component-versions.py
+python3 scripts/development/generate-ios-version.py --check
+```
+
+Android and OBS release tags are `android-v<version>` and `obs-v<version>`.
+Protocol compatibility remains controlled only by the v6 stream contract, not
+by requiring the component marketing versions to be equal.
+
 ## Release acceptance criteria
 
 A supported release is accepted only when the following evidence is retained:
