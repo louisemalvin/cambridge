@@ -26,8 +26,8 @@ fun StreamSetupRoute(
         viewModel.effects.collect { effect ->
             when (effect) {
                 is StreamSetupUiEffect.NavigateToWebcam -> {
-                    onNavigateToWebcam()
                     activity?.lockStreamingOrientation(effect.orientation)
+                    onNavigateToWebcam()
                 }
                 StreamSetupUiEffect.CameraPermissionRequired -> onCameraPermissionLost()
             }

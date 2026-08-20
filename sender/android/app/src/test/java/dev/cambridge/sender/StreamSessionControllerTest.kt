@@ -214,6 +214,27 @@ class StreamSessionControllerTest {
     }
 
     @Test
+    fun fatalCameraFailureEndsTheWholeSession() = runTest {
+        val engine = FakeEngineWithEvents()
+        val foreground = FakeForeground()
+        val controller = controller(engine, foreground, backgroundScope)
+
+        assertTrue(controller.start(endpoint, configuration()).isSuccess)
+        testScheduler.runCurrent()
+        engine.emit(
+            StreamEngineEvent.FatalFailure(
+                StreamFailure.CameraUnavailable,
+                generation = engine.lastStartEndpoint!!.generation,
+            ),
+        )
+        testScheduler.runCurrent()
+
+        assertEquals(StreamState.Failed(StreamFailure.CameraUnavailable), controller.state.value)
+        assertEquals(1, engine.stopCount)
+        assertEquals(1, foreground.stopCount)
+    }
+
+    @Test
     fun staleEventFromAnEarlierGenerationCannotStopTheReplacementSession() = runTest {
         val engine = FakeEngineWithEvents()
         val controller = controller(engine, FakeForeground(), backgroundScope)

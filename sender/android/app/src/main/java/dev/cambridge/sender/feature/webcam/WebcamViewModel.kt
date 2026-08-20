@@ -17,7 +17,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -33,6 +35,7 @@ class WebcamViewModel @Inject constructor(
     private val effectFlow = MutableSharedFlow<SenderUiEffect>(
         extraBufferCapacity = EFFECT_BUFFER_CAPACITY,
     )
+    private val previewSurfaceFlow = MutableStateFlow<CameraPreviewSurface?>(null)
 
     val uiState: StateFlow<WebcamUiState> = combine(
         coordinator.streamState,
@@ -60,6 +63,18 @@ class WebcamViewModel @Inject constructor(
 
     val effects = effectFlow.asSharedFlow()
 
+    init {
+        viewModelScope.launch(Dispatchers.Default) {
+            previewSurfaceFlow
+                .distinctUntilChanged { previous, current ->
+                    previous?.surface === current?.surface
+                }
+                .collectLatest { surface ->
+                    cameraController.setPreviewSurface(surface)
+                }
+        }
+    }
+
     fun onAction(action: SenderScreenAction) {
         when (action) {
             SenderScreenAction.ToggleScreenDimmed -> localState.update {
@@ -81,9 +96,7 @@ class WebcamViewModel @Inject constructor(
     }
 
     fun setPreviewSurface(surface: CameraPreviewSurface?) {
-        viewModelScope.launch(Dispatchers.Default) {
-            cameraController.setPreviewSurface(surface)
-        }
+        previewSurfaceFlow.value = surface
     }
 
     private fun setZoomRatio(zoomRatio: Float) {

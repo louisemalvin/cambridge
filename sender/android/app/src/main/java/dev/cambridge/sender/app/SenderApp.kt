@@ -36,6 +36,7 @@ import dev.cambridge.sender.app.startup.StartupStateResolver
 import dev.cambridge.sender.connection.SenderConnectionCoordinator
 import dev.cambridge.sender.feature.webcam.overlays.EndStreamConfirmationDialog
 import dev.cambridge.sender.model.StreamFailure
+import dev.cambridge.sender.model.StreamOrientation
 import dev.cambridge.sender.model.StreamState
 import dev.cambridge.sender.model.isSessionActive
 import dev.cambridge.sender.model.requiresStopConfirmation
@@ -102,11 +103,18 @@ fun SenderApp(
         val permissionFailure = (streamState as? StreamState.Failed)?.failure ==
             StreamFailure.CameraPermissionDenied
         if (permissionFailure) refreshCameraPermission()
+        val streamingState = streamState as? StreamState.Streaming
 
         when {
             !cameraPermission.isGranted -> backStack.replaceWithCameraPermission()
-            streamState.isSessionActive && backStack.current == AppDestination.StreamSetup ->
+            streamingState != null && backStack.current == AppDestination.StreamSetup -> {
+                val orientation = streamingState.session.sessionTransform
+                    ?.displayOrientation
+                    ?.rotationDegrees
+                    ?.let(StreamOrientation::fromDisplayRotation)
+                orientation?.let { activity?.lockStreamingOrientation(it) }
                 backStack.navigateTo(AppDestination.Webcam)
+            }
             !streamState.isSessionActive && backStack.current == AppDestination.Webcam ->
                 backStack.replaceWithStreamSetup()
             !streamState.isSessionActive && backStack.current == AppDestination.Settings ->

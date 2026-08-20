@@ -79,7 +79,6 @@ class CamBridgeRtpStreamEngine(
     private var udpSocket: DatagramSocket? = null
     private var senderJob: Job? = null
     private var controlReaderJob: Job? = null
-    private var previewSurface: CameraPreviewSurface? = null
     @Volatile
     private var codecConfigAnnexB = ByteArray(EMPTY_BYTE_COUNT)
     @Volatile
@@ -287,9 +286,27 @@ class CamBridgeRtpStreamEngine(
         emit("stream_resources_released")
     }
 
-    override suspend fun setPreviewSurface(surface: CameraPreviewSurface?) = lifecycleMutex.withLock {
-        previewSurface = surface
-        camera.setPreviewSurface(surface)
+    override suspend fun setPreviewSurface(surface: CameraPreviewSurface?) {
+        lifecycleMutex.withLock {
+            try {
+                camera.setPreviewSurface(surface)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (cause: Throwable) {
+                val generation = streamEndpoint?.generation
+                if (!running || generation == null) throw cause
+                emit(
+                    "camera_preview_reconfiguration_failed",
+                    mapOf("reason" to cause.message),
+                )
+                eventFlow.tryEmit(
+                    StreamEngineEvent.FatalFailure(
+                        failure = StreamFailure.CameraUnavailable,
+                        generation = generation,
+                    ),
+                )
+            }
+        }
     }
 
     override suspend fun prepareCamera() = lifecycleMutex.withLock {

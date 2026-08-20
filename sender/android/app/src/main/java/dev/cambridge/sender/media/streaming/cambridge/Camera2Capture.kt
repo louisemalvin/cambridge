@@ -182,6 +182,7 @@ internal class Camera2Capture(
         requestedFps = null
         requestedWidth = null
         requestedHeight = null
+        previewSurface = null
         diagnosticsRunId = null
         diagnosticsSessionId = null
         loggedFirstCapture = false
@@ -194,7 +195,9 @@ internal class Camera2Capture(
     }
 
     suspend fun setPreviewSurface(surface: CameraPreviewSurface?) {
-        previewSurface = surface
+        val nextSurface = surface?.takeIf { it.surface.isValid }
+        if (previewSurface?.surface === nextSurface?.surface) return
+        previewSurface = nextSurface
         if (cameraDevice != null && encoderSurface != null) {
             captureSession?.close()
             captureSession = null
@@ -381,16 +384,40 @@ internal class Camera2Capture(
             continuation.resumeWithException(IllegalStateException("Camera handler is not running"))
             return@suspendCancellableCoroutine
         }
+        var configuredSession: CameraCaptureSession? = null
         val callback = object : CameraCaptureSession.StateCallback() {
             override fun onConfigured(session: CameraCaptureSession) {
+                if (!continuation.isActive) {
+                    session.close()
+                    return
+                }
+                configuredSession = session
                 captureSession = session
                 runCatching { submitRepeatingRequest() }
-                    .onSuccess { continuation.resume(Unit) }
-                    .onFailure(continuation::resumeWithException)
+                    .onSuccess {
+                        if (continuation.isActive) {
+                            continuation.resume(Unit)
+                        } else {
+                            if (captureSession === session) captureSession = null
+                            session.close()
+                        }
+                    }
+                    .onFailure { cause ->
+                        if (continuation.isActive) {
+                            continuation.resumeWithException(cause)
+                        } else {
+                            if (captureSession === session) captureSession = null
+                            session.close()
+                        }
+                    }
             }
 
             override fun onConfigureFailed(session: CameraCaptureSession) {
-                continuation.resumeWithException(IllegalStateException("Camera capture session configuration failed"))
+                if (continuation.isActive) {
+                    continuation.resumeWithException(
+                        IllegalStateException("Camera capture session configuration failed"),
+                    )
+                }
             }
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
@@ -410,7 +437,7 @@ internal class Camera2Capture(
             @Suppress("DEPRECATION")
             device.createCaptureSession(outputs, callback, handler)
         }
-        continuation.invokeOnCancellation { captureSession?.close() }
+        continuation.invokeOnCancellation { configuredSession?.close() }
     }
 
     private fun submitRepeatingRequest() {
