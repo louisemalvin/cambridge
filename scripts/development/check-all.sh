@@ -6,8 +6,10 @@ repo_root=$(cd -- "${script_dir}/../.." && pwd)
 platform=$(uname -s)
 
 python3 "${repo_root}/scripts/development/check-cambridge-stream-contract.py"
+python3 "${repo_root}/scripts/release/test-cambridge-linux-bundle.py"
 bash -n \
     "${repo_root}/scripts/receiver/linux/build-cambridge-obs-plugin.sh" \
+    "${repo_root}/scripts/receiver/linux/build-cambridge-obs-plugin-variant.sh" \
     "${repo_root}/scripts/receiver/linux/check-cambridge-obs-plugin-dependencies.sh" \
     "${repo_root}/scripts/receiver/linux/prepare-cambridge-obs-dependencies.sh" \
     "${repo_root}/scripts/receiver/linux/test-cambridge-fixture.sh" \
@@ -15,6 +17,7 @@ bash -n \
     "${repo_root}/scripts/receiver/macos/test-cambridge-fixture.sh" \
     "${repo_root}/scripts/receiver/macos/prepare-cambridge-build-dependencies.sh" \
     "${repo_root}/scripts/release/package-linux-plugin.sh" \
+    "${repo_root}/scripts/release/install-linux-plugin.sh" \
     "${repo_root}/scripts/release/package-macos-plugin.sh"
 JAVA_HOME="${JAVA_HOME:-/opt/android-studio/jbr}" \
     "${repo_root}/sender/android/gradlew" -p "${repo_root}/sender/android" \

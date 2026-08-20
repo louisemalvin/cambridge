@@ -19,10 +19,11 @@ The full repository checks require:
 - Swift 6.0.3 or Docker for the Linux `CamBridgeCore` and Swift fixture checks
 
 Linux plugin builds use the host OBS and FFmpeg development packages selected by
-`pkg-config`. The current Linux compatibility floor is OBS 32.2.0 with the
-FFmpeg 8 ABI family or newer. The plugin is intentionally not bundled with
-those libraries, so its build and installation target must provide compatible
-system or OBS-managed libraries.
+`pkg-config`. The declared Linux variants in
+`receiver/obs/cambridge-obs-source/buildspec.json` are the source of truth for
+the supported OBS and FFmpeg SONAME combinations. The plugin is intentionally
+not bundled with those libraries, so its build and installation target must
+provide one exact compatible combination.
 
 The Xcode project requires macOS with Xcode 16.4 (or a compatible newer Xcode)
 for Apple-target compilation. A physical iPhone is required for hardware
@@ -110,6 +111,38 @@ Build, test, and stage the native plugin with:
 
 ```bash
 ./scripts/receiver/linux/build-cambridge-obs-plugin.sh
+```
+
+Build a named release variant and stage it under the multi-variant input tree
+with:
+
+```bash
+CAMBRIDGE_LINUX_VARIANT_ID=cachyos-obs-32.2.2 \
+  ./scripts/receiver/linux/build-cambridge-obs-plugin-variant.sh
+```
+
+The variant build validates direct NEEDED entries, `ldd -r`, and the absence of
+RPATH/RUNPATH, then records a hash-backed validation record for release bundle
+assembly. A release package job builds every declared variant in its matching
+environment and assembles one archive:
+
+```bash
+CAMBRIDGE_SKIP_BUILD=ON \
+CAMBRIDGE_SKIP_RUNTIME_VALIDATION=ON \
+CAMBRIDGE_REQUIRE_ALL_LINUX_VARIANTS=ON \
+  ./scripts/release/package-linux-plugin.sh
+```
+
+The package contains the validated variants and the installer, but no OBS or
+FFmpeg shared libraries. The installer inspects the selected OBS executable's
+actual dependency closure and installs only an exact match. Its Linux ABI and
+atomic replacement behavior can be exercised without modifying the user OBS
+configuration:
+
+```bash
+python3 scripts/release/test-cambridge-linux-bundle.py
+./build/release/cambridge-obs-plugin-<version>-linux-x86_64/install-linux-plugin.sh \
+  --obs-path /usr/bin/obs --dry-run
 ```
 
 The staged module is written to:
@@ -293,6 +326,12 @@ which builds a signed Android APK named `cambridge-v<version>.apk` and a Linux
 archive named `cambridge-obs-plugin-<version>-linux-x86_64.tar.gz`, plus a
 macOS universal package named
 `cambridge-obs-plugin-<version>-macos-universal.pkg`.
+
+The Linux archive is one user-facing x86-64 bundle. Its release workflow builds
+the Ubuntu 26.04 and CachyOS OBS 32.2.2 variants in their matching environments,
+then assembles both behind `install-linux-plugin.sh` and publishes one archive
+checksum. Release publication remains subject to the repository's owner
+authorization policy.
 
 The macOS package script requires Developer ID application and installer
 identities plus a configured `notarytool` keychain profile. It signs the whole

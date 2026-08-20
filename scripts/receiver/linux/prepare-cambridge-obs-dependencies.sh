@@ -11,8 +11,6 @@ obs_build_dir="${dependency_dir}/obs-build"
 obs_install_dir=${CAMBRIDGE_OBS_PREFIX:-"${dependency_dir}/obs"}
 # Keep the temporary development prefix layout stable across Linux runners.
 obs_library_dir=lib
-# OBS 32.2 exposes the public libobs ABI through SONAME 30.
-obs_library_soname="libobs.so.30"
 
 command -v cmake >/dev/null 2>&1 || { printf 'error: cmake is required\n' >&2; exit 1; }
 command -v curl >/dev/null 2>&1 || { printf 'error: curl is required\n' >&2; exit 1; }
@@ -31,11 +29,13 @@ source = buildspec["linuxCompatibility"]["obsStudioSource"]
 print(source["version"])
 print(source["url"])
 print(source["sha256"])
+print(buildspec["linuxCompatibility"]["variants"][0]["libobsSoname"])
 PY
 )
 obs_version=${obs_source_spec[0]}
 obs_source_url=${obs_source_spec[1]}
 obs_source_sha256=${obs_source_spec[2]}
+obs_library_soname=${obs_source_spec[3]}
 source_archive="${source_archive_dir}/obs-studio-${obs_version}-sources.tar.gz"
 obs_source_dir="${source_root}/obs-studio-${obs_version}-sources"
 

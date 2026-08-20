@@ -35,21 +35,28 @@ includes the Stop control; removing the app task also stops the active stream.
 
 1. Download `cambridge-obs-plugin-<version>-linux-x86_64.tar.gz` from the
    [latest GitHub release](https://github.com/louisemalvin/cambridge/releases/latest).
-2. Extract the archive. It contains the OBS plugin at:
-
-   ```text
-   obs-plugins/cambridge-obs-plugin/bin/64bit/cambridge-obs-plugin.so
-   ```
-
-3. Install the plugin directory into the per-user OBS plugin directory:
+2. Extract the archive and run the included installer:
 
    ```bash
-   mkdir -p ~/.config/obs-studio/plugins
-   cp -a cambridge-obs-plugin-VERSION-linux-x86_64/obs-plugins/cambridge-obs-plugin \
-     ~/.config/obs-studio/plugins/
+   cd cambridge-obs-plugin-<version>-linux-x86_64
+   ./install-linux-plugin.sh
    ```
 
-   Replace `VERSION` with the version you downloaded.
+   The installer inspects the OBS executable's actual dependencies and chooses
+   the compatible plugin build from the bundle. You do not need to choose a
+   Linux distribution or ABI build. If more than one supported OBS installation
+   is present, it asks which recognizable OBS path to use.
+
+3. If OBS is not discoverable, provide its executable or installation path:
+
+   ```bash
+   ./install-linux-plugin.sh --obs-path /path/to/obs
+   ```
+
+   Flatpak OBS layouts are not supported by this installer. If no bundled build
+   exactly matches the selected OBS installation, the installer leaves any
+   existing plugin unchanged and reports the supported installation paths.
+
 4. Restart OBS, add a source named **CamBridge**, and keep the default source
    settings for normal use.
 

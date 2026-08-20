@@ -178,6 +178,22 @@ plugin hash, and any recording hashes. Review the log for startup completion,
 session acceptance, decoder readiness, first frame, session invalidation, and
 absence of decoder or RTP failures.
 
+Linux bundle and installer tests are separate from the native fixture. The
+variant declarations in `receiver/obs/cambridge-obs-source/buildspec.json`
+drive exact SONAME validation for each matching build environment. Run the
+metadata, exact selection, multiple-installation choice, and no-mutation
+installer tests with:
+
+```bash
+python3 scripts/release/test-cambridge-linux-bundle.py
+```
+
+When a package is available, use its installer with `--dry-run` and an
+explicit OBS path to inspect selection without changing the user's OBS
+configuration. Native unit tests do not prove OBS plugin discovery, and an
+isolated OBS process smoke test remains separate evidence when the target
+platform environment is available.
+
 ## Release acceptance criteria
 
 A supported release is accepted only when the following evidence is retained:

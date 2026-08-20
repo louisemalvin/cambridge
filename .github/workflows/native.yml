@@ -6,8 +6,15 @@ on:
       - "receiver/obs/cambridge-obs-source/**"
       - "protocol/**"
       - "scripts/receiver/linux/build-cambridge-obs-plugin.sh"
+      - "scripts/receiver/linux/build-cambridge-obs-plugin-variant.sh"
       - "scripts/receiver/linux/check-cambridge-obs-plugin-dependencies.sh"
       - "scripts/receiver/linux/prepare-cambridge-obs-dependencies.sh"
+      - "scripts/receiver/linux/test-cambridge-fixture.sh"
+      - "scripts/release/cambridge_linux_bundle.py"
+      - "scripts/release/install-linux-plugin.py"
+      - "scripts/release/install-linux-plugin.sh"
+      - "scripts/release/package-linux-plugin.sh"
+      - "scripts/release/test-cambridge-linux-bundle.py"
       - "scripts/receiver/macos/**"
       - ".github/workflows/native.yml"
   pull_request:
@@ -15,8 +22,15 @@ on:
       - "receiver/obs/cambridge-obs-source/**"
       - "protocol/**"
       - "scripts/receiver/linux/build-cambridge-obs-plugin.sh"
+      - "scripts/receiver/linux/build-cambridge-obs-plugin-variant.sh"
       - "scripts/receiver/linux/check-cambridge-obs-plugin-dependencies.sh"
       - "scripts/receiver/linux/prepare-cambridge-obs-dependencies.sh"
+      - "scripts/receiver/linux/test-cambridge-fixture.sh"
+      - "scripts/release/cambridge_linux_bundle.py"
+      - "scripts/release/install-linux-plugin.py"
+      - "scripts/release/install-linux-plugin.sh"
+      - "scripts/release/package-linux-plugin.sh"
+      - "scripts/release/test-cambridge-linux-bundle.py"
       - "scripts/receiver/macos/**"
       - ".github/workflows/native.yml"
 
@@ -41,6 +55,7 @@ jobs:
             libavahi-client-dev
       - name: Build and test native source
         run: |
+          python3 scripts/release/test-cambridge-linux-bundle.py
           ./scripts/receiver/linux/prepare-cambridge-obs-dependencies.sh
           obs_prefix="${GITHUB_WORKSPACE}/build/cambridge-obs-dependencies/obs"
           export PKG_CONFIG_PATH="${obs_prefix}/lib/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}"

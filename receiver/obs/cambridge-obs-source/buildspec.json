@@ -17,6 +17,28 @@
       "url": "https://github.com/obsproject/obs-studio/releases/download/32.2.0/OBS-Studio-32.2.0-Sources.tar.gz",
       "sha256": "a26a5da53964a8c38741c613f14f93cc37d95354e5225a07b6618152cdfcec1c"
     },
+    "variants": [
+      {
+        "id": "ubuntu-26.04",
+        "displayName": "Ubuntu 26.04 release environment",
+        "libobsSoname": "libobs.so.30",
+        "ffmpegSonames": {
+          "libavcodec": "libavcodec.so.62",
+          "libavutil": "libavutil.so.60",
+          "libswscale": "libswscale.so.9"
+        }
+      },
+      {
+        "id": "cachyos-obs-32.2.2",
+        "displayName": "CachyOS with OBS 32.2.2",
+        "libobsSoname": "libobs.so.30",
+        "ffmpegSonames": {
+          "libavcodec": "libavcodec.so.63",
+          "libavutil": "libavutil.so.61",
+          "libswscale": "libswscale.so.10"
+        }
+      }
+    ],
     "minimumFfmpegAbis": {
       "libavcodec": "62",
       "libavutil": "60",

@@ -61,11 +61,12 @@ jobs:
           name: android-release
           path: dist/
 
-  native:
+  linux-ubuntu-variant:
     needs: verify-version
     runs-on: ubuntu-26.04
     env:
       LD_LIBRARY_PATH: ${{ github.workspace }}/build/cambridge-obs-dependencies/obs/lib
+      PKG_CONFIG_PATH: ${{ github.workspace }}/build/cambridge-obs-dependencies/obs/lib/pkgconfig
     steps:
       - uses: actions/checkout@v4
       - name: Install native dependencies
@@ -80,12 +81,97 @@ jobs:
             libva-dev libva-drm2 libdrm-dev libgl-dev libopengl-dev libglx-dev \
             libjansson-dev \
             libavahi-client-dev
-      - name: Build Linux x86_64 plugin package
+      - name: Build Ubuntu 26.04 Linux plugin variant
+        env:
+          CAMBRIDGE_LINUX_VARIANT_ID: ubuntu-26.04
+          CAMBRIDGE_REQUIRE_AVAHI: ON
         run: |
           ./scripts/receiver/linux/prepare-cambridge-obs-dependencies.sh
-          obs_prefix="${GITHUB_WORKSPACE}/build/cambridge-obs-dependencies/obs"
-          export PKG_CONFIG_PATH="${obs_prefix}/lib/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}"
-          ./scripts/release/package-linux-plugin.sh
+          ./scripts/receiver/linux/build-cambridge-obs-plugin-variant.sh
+      - name: Run Ubuntu native OBS smoke when OBS is available
+        env:
+          CAMBRIDGE_BUILD_DIR: build/cambridge-obs-plugin
+          CAMBRIDGE_STAGING_DIR: build/cambridge-obs-plugin/staging
+          CAMBRIDGE_LINUX_VARIANT_ID: ubuntu-26.04
+          CAMBRIDGE_REQUIRE_AVAHI: ON
+          CAMBRIDGE_DECODER_MODE: cpu
+          CAMBRIDGE_PROFILE_ID: fixture-720p30
+          CAMBRIDGE_WIDTH: 1280
+          CAMBRIDGE_HEIGHT: 720
+          CAMBRIDGE_FPS: 30
+          CAMBRIDGE_BITRATE_BPS: 4000000
+          CAMBRIDGE_DURATION_SECONDS: 5
+          CAMBRIDGE_EXPECT_DISCOVERY: required
+        run: |
+          if command -v obs >/dev/null 2>&1; then
+            ./scripts/receiver/linux/test-cambridge-fixture.sh
+          else
+            echo "OBS executable unavailable; isolated smoke test is pending for this runner"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-variant-ubuntu-26.04
+          path: build/linux-variants/ubuntu-26.04/
+
+  linux-cachyos-variant:
+    needs: verify-version
+    runs-on: [self-hosted, linux, x64, cachyos]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build CachyOS OBS 32.2.2 Linux plugin variant
+        env:
+          CAMBRIDGE_LINUX_VARIANT_ID: cachyos-obs-32.2.2
+          CAMBRIDGE_REQUIRE_AVAHI: ON
+        run: ./scripts/receiver/linux/build-cambridge-obs-plugin-variant.sh
+      - name: Run CachyOS native OBS smoke when OBS is available
+        env:
+          CAMBRIDGE_BUILD_DIR: build/cambridge-obs-plugin
+          CAMBRIDGE_STAGING_DIR: build/cambridge-obs-plugin/staging
+          CAMBRIDGE_LINUX_VARIANT_ID: cachyos-obs-32.2.2
+          CAMBRIDGE_REQUIRE_AVAHI: ON
+          CAMBRIDGE_DECODER_MODE: cpu
+          CAMBRIDGE_PROFILE_ID: fixture-720p30
+          CAMBRIDGE_WIDTH: 1280
+          CAMBRIDGE_HEIGHT: 720
+          CAMBRIDGE_FPS: 30
+          CAMBRIDGE_BITRATE_BPS: 4000000
+          CAMBRIDGE_DURATION_SECONDS: 5
+          CAMBRIDGE_EXPECT_DISCOVERY: required
+        run: |
+          if command -v obs >/dev/null 2>&1; then
+            ./scripts/receiver/linux/test-cambridge-fixture.sh
+          else
+            echo "OBS executable unavailable; isolated smoke test is pending for this runner"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-variant-cachyos-obs-32.2.2
+          path: build/linux-variants/cachyos-obs-32.2.2/
+
+  linux-package:
+    needs:
+      - linux-ubuntu-variant
+      - linux-cachyos-variant
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-variant-ubuntu-26.04
+          path: build/linux-variants/ubuntu-26.04
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-variant-cachyos-obs-32.2.2
+          path: build/linux-variants/cachyos-obs-32.2.2
+      - name: Assemble one Linux multi-variant installer bundle
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y file python3 tar
+          CAMBRIDGE_SKIP_BUILD=ON \
+          CAMBRIDGE_SKIP_RUNTIME_VALIDATION=ON \
+          CAMBRIDGE_REQUIRE_ALL_LINUX_VARIANTS=ON \
+          CAMBRIDGE_LINUX_VARIANT_INPUT_DIR=build/linux-variants \
+            ./scripts/release/package-linux-plugin.sh
       - uses: actions/upload-artifact@v4
         with:
           name: linux-x86_64-release
@@ -242,12 +328,12 @@ jobs:
     if: >-
       always() && github.ref_type == 'tag' &&
       needs.android.result == 'success' &&
-      needs.native.result == 'success' &&
+      needs.linux-package.result == 'success' &&
       ((needs.macos-build.result == 'skipped' && needs.macos-package.result == 'skipped') ||
        (needs.macos-build.result == 'success' && needs.macos-package.result == 'success'))
     needs:
       - android
-      - native
+      - linux-package
       - macos-build
       - macos-package
     runs-on: ubuntu-latest
