@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## Android 0.5.1 and OBS plugin 0.5.1 - transient recovery presentation
+
+- Keep the last decoded frame visible during one bounded live-age recovery
+  window so short RTP/RTX recovery gaps do not flash a black placeholder.
+- Preserve the black placeholder after the bounded recovery window and when
+  the session has no valid frame.
+
 ## Android 0.5.0 - GStreamer RTP transport
 
 - Replace application RTP packetization and pacing with the pinned GStreamer

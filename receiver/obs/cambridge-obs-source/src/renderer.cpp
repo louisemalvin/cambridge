@@ -491,7 +491,8 @@ void Renderer::draw_bgra(const TextureSlot &slot, std::uint32_t output_width,
     }
 }
 
-bool Renderer::render(const VideoFramePtr &frame, std::uint32_t output_width, std::uint32_t output_height)
+bool Renderer::render(const VideoFramePtr &frame, std::uint32_t output_width, std::uint32_t output_height,
+                      bool allow_stale_frame)
 {
     ensure_graphics_resources();
     const SessionMediaPath active_media_path = active_media_path_.load();
@@ -501,7 +502,8 @@ bool Renderer::render(const VideoFramePtr &frame, std::uint32_t output_width, st
         return false;
     }
     const std::uint64_t now = monotonic_time_ns();
-    if (frame->publish_time_ns == 0 || frame->stale_deadline_ns == 0 || now > frame->stale_deadline_ns) {
+    if (frame->publish_time_ns == 0 || frame->stale_deadline_ns == 0 ||
+        (!allow_stale_frame && now > frame->stale_deadline_ns)) {
         draw_placeholder(output_width, output_height);
         return false;
     }

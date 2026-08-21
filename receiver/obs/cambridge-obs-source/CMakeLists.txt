@@ -271,6 +271,10 @@ if(CAMBRIDGE_BUILD_TESTS AND BUILD_TESTING)
         src/media_path.cpp
     )
 
+    cambridge_add_test(cambridge-obs-plugin-live-frame-policy-tests
+        tests/live_frame_policy_tests.cpp
+    )
+
     cambridge_add_test(cambridge-obs-plugin-posix-compat-tests
         tests/posix_compat_tests.cpp
         src/platform/posix/posix_compat.cpp

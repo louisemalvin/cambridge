@@ -39,7 +39,8 @@ public:
     Renderer(const Renderer &) = delete;
     Renderer &operator=(const Renderer &) = delete;
 
-    bool render(const VideoFramePtr &frame, std::uint32_t output_width, std::uint32_t output_height);
+    bool render(const VideoFramePtr &frame, std::uint32_t output_width, std::uint32_t output_height,
+                bool allow_stale_frame);
     NativeSetupResult prepare_native_session(std::uint32_t maximum_width, std::uint32_t maximum_height);
     void discard_prepared_native_session();
     void activate_session_media_path(SessionMediaPath path);

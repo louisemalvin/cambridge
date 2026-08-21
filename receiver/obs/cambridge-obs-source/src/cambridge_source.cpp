@@ -4,6 +4,7 @@
 #include "diagnostics.hpp"
 #include "discovery_metadata.hpp"
 #include "gstreamer_runtime.hpp"
+#include "live_frame_policy.hpp"
 #include "platform/interfaces/source_properties.hpp"
 #include "protocol_contract.generated.hpp"
 
@@ -267,6 +268,7 @@ void CamBridgeSource::update(obs_data_t *settings)
 
 void CamBridgeSource::render(gs_effect_t *)
 {
+    const SourceConfig config = configuration();
     const VideoFramePtr frame = mailbox_.acquire();
     const std::uint32_t output_width = width();
     const std::uint32_t output_height = height();
@@ -276,7 +278,11 @@ void CamBridgeSource::render(gs_effect_t *)
         active_generation = stream_generation_;
     }
     const std::uint64_t now = monotonic_time_ns();
-    const bool stale = !frame || frame->stream_generation != active_generation || frame->stale_deadline_ns < now;
+    const std::uint64_t recovery_grace_ns =
+        live_frame_recovery_grace_ns(config.maximum_live_frame_age_ms);
+    const LiveFramePresentation presentation =
+        classify_live_frame(frame, active_generation, now, recovery_grace_ns);
+    const bool stale = presentation == LiveFramePresentation::Placeholder;
     bool stale_changed = false;
     {
         std::lock_guard<std::mutex> lock(session_mutex_);
@@ -290,10 +296,11 @@ void CamBridgeSource::render(gs_effect_t *)
         }
     }
     if (stale) {
-        renderer_.render(nullptr, output_width, output_height);
+        renderer_.render(nullptr, output_width, output_height, false);
         return;
     }
-    const bool presented = renderer_.render(frame, output_width, output_height);
+    const bool presented = renderer_.render(
+        frame, output_width, output_height, presentation == LiveFramePresentation::RecoveryFrame);
     if (presented && frame->frame_generation != last_rendered_frame_generation_.load()) {
         last_rendered_frame_generation_.store(frame->frame_generation);
         frames_rendered_.fetch_add(1);
