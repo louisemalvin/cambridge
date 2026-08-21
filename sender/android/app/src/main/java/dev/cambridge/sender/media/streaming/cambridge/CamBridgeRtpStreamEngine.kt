@@ -250,7 +250,7 @@ class CamBridgeRtpStreamEngine(
                 throw StreamFailureException(StreamFailure.CameraUnavailable, cause)
             }
             running = true
-            startSenderLoop(socket, endpoint.generation)
+            startSenderLoop(socket, endpoint.generation, streamConfiguration.bitrateBps)
             startControlReader(connection, endpoint.generation)
             emit("stream_started", mapOf("mediaPort" to mediaPort, "generation" to endpoint.generation))
         }.recoverCatching { cause ->
@@ -529,13 +529,15 @@ class CamBridgeRtpStreamEngine(
         }
     }
 
-    private fun startSenderLoop(socket: DatagramSocket, generation: Long) {
+    private fun startSenderLoop(socket: DatagramSocket, generation: Long, bitrateBps: Int) {
         nextSequence.set((System.nanoTime() and SEQUENCE_MASK.toLong()).toInt())
         ssrc = (System.nanoTime() and Int.MAX_VALUE.toLong()).toInt()
         senderJob = workerScope.launch {
+            val pacer = RtpPacer(bitrateBps.toLong())
             val packetizer = RtpPacketizer { packet ->
                 val startedAt = System.nanoTime()
                 runCatching {
+                    pacer.await(packet.size)
                     socket.send(DatagramPacket(packet, packet.size))
                     rtpPacketsSent.incrementAndGet()
                     rtpBytesSent.addAndGet(packet.size.toLong())
