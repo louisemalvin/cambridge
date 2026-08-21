@@ -694,6 +694,9 @@ void CamBridgeSource::end_session_locked()
     if (media_receiver_) {
         media_receiver_->stop_session();
     }
+    if (decoder_) {
+        decoder_->end_session();
+    }
     transport_failure_pending_.store(false);
     {
         std::lock_guard<std::mutex> lock(session_mutex_);
@@ -713,9 +716,6 @@ void CamBridgeSource::end_session_locked()
         stale_state_ = false;
         first_frame_reported_.store(false);
         last_rendered_frame_generation_.store(0);
-    }
-    if (decoder_) {
-        decoder_->end_session();
     }
     mailbox_.clear();
     renderer_.end_session();

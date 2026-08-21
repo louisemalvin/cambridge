@@ -45,6 +45,7 @@ constexpr std::uint32_t kTestDeliveryTimeoutMs = 3'000;
 constexpr std::uint32_t kTestRecoveryTimeoutMs = 4'000;
 constexpr std::uint32_t kTestThrottleDelayUs = 8'000;
 constexpr std::uint32_t kInitialRtcpSettleMs = 1'250;
+constexpr std::uint32_t kBandwidthObservationMs = 1'000;
 constexpr std::uint32_t kUnrecoverableFrameCount = 8;
 constexpr std::size_t kSingleLostDatagramCount = 1;
 constexpr std::size_t kBurstLostDatagramCount = 10;
@@ -405,8 +406,7 @@ void test_invalid_session_is_rejected()
 void test_no_loss(const std::vector<GeneratedAccessUnit> &access_units)
 {
     GStreamerHarness harness;
-    const std::size_t expected_access_units = std::min<std::size_t>(
-        access_units.size(), kMinimumExpectedAccessUnits);
+    const std::size_t expected_access_units = access_units.size();
     for (std::uint32_t index = 0; index < expected_access_units; ++index) {
         harness.push(access_units[index], index);
         std::this_thread::sleep_for(std::chrono::milliseconds(kTestFrameIntervalUs / 1'000));
@@ -487,19 +487,27 @@ void test_bandwidth_drop_and_recovery(const std::vector<GeneratedAccessUnit> &ac
 {
     GStreamerHarness harness;
     push_motion_sequence(harness, access_units, 0);
-    const std::vector<std::uint32_t> initial_estimates = harness.estimated_bitrates();
+    std::this_thread::sleep_for(std::chrono::milliseconds(kBandwidthObservationMs));
     harness.proxy().set_delay(std::chrono::microseconds(kTestThrottleDelayUs));
     push_motion_sequence(harness, access_units, kTestFrameCount);
+    std::this_thread::sleep_for(std::chrono::milliseconds(kBandwidthObservationMs));
     const std::vector<std::uint32_t> throttled_estimates = harness.estimated_bitrates();
+    require(!throttled_estimates.empty(), "GCC did not publish an estimate during the bandwidth drop");
     harness.proxy().set_delay(std::chrono::microseconds(0));
     push_motion_sequence(harness, access_units, kTestFrameCount * 2);
+    std::this_thread::sleep_for(std::chrono::milliseconds(kBandwidthObservationMs));
     const std::vector<std::uint32_t> recovered_estimates = harness.estimated_bitrates();
     require(harness.collector().count() >= kMinimumExpectedAccessUnits,
             "bandwidth test lost all access-unit delivery");
-    require(throttled_estimates.size() >= initial_estimates.size(),
-            "GCC did not publish estimates during the bandwidth drop");
     require(recovered_estimates.size() >= kExpectedBandwidthSamples,
-            "GCC did not publish estimates during bandwidth recovery");
+            "GCC did not publish enough estimates during bandwidth recovery");
+    const auto throttled_minimum = *std::min_element(throttled_estimates.begin(), throttled_estimates.end());
+    const auto throttled_maximum = *std::max_element(throttled_estimates.begin(), throttled_estimates.end());
+    const auto recovered_maximum = *std::max_element(recovered_estimates.begin(), recovered_estimates.end());
+    require(throttled_minimum < kTestTargetBitrateBps,
+            "GCC estimate did not decrease during the bandwidth drop");
+    require(recovered_maximum > throttled_maximum,
+            "GCC estimate did not recover after bandwidth was restored");
 }
 
 } // namespace

@@ -81,7 +81,6 @@ private:
     std::thread thread_;
     bool startup_complete_ = false;
     bool startup_success_ = false;
-    bool stopping_ = false;
     bool session_active_ = false;
     std::uint64_t generation_ = 0;
     std::string startup_error_;

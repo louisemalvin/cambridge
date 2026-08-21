@@ -54,6 +54,46 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
+internal enum class TransportQueueAction {
+    ENQUEUE,
+    DROP_WAITING_FOR_KEYFRAME,
+    DROP_AND_REQUEST_KEYFRAME,
+    ENQUEUE_RECOVERY_KEYFRAME,
+}
+
+internal fun transportQueueAction(
+    waitingForRecoveryKeyframe: Boolean,
+    keyFrame: Boolean,
+    offerSucceeded: Boolean,
+): TransportQueueAction = when {
+    waitingForRecoveryKeyframe && keyFrame -> TransportQueueAction.ENQUEUE_RECOVERY_KEYFRAME
+    waitingForRecoveryKeyframe -> TransportQueueAction.DROP_WAITING_FOR_KEYFRAME
+    offerSucceeded -> TransportQueueAction.ENQUEUE
+    else -> TransportQueueAction.DROP_AND_REQUEST_KEYFRAME
+}
+
+private const val BITRATE_UPDATE_INTERVAL_NS = 250_000_000L
+private const val BITRATE_CHANGE_DIVISOR = 20L
+private const val BITRATE_CHANGE_MINIMUM_BPS = 250_000L
+private const val MINIMUM_RELATIVE_CHANGE_BPS = 1L
+
+internal fun shouldApplyAdaptiveBitrate(
+    previousBitrateBps: Int,
+    requestedBitrateBps: Int,
+    elapsedNs: Long,
+): Boolean {
+    if (elapsedNs < BITRATE_UPDATE_INTERVAL_NS) return false
+    val absoluteChange = kotlin.math.abs(
+        requestedBitrateBps.toLong() - previousBitrateBps.toLong(),
+    )
+    val relativeChangeThreshold = if (previousBitrateBps > 0) {
+        maxOf(MINIMUM_RELATIVE_CHANGE_BPS, previousBitrateBps.toLong() / BITRATE_CHANGE_DIVISOR)
+    } else {
+        Long.MAX_VALUE
+    }
+    return absoluteChange >= BITRATE_CHANGE_MINIMUM_BPS || absoluteChange >= relativeChangeThreshold
+}
+
 class CamBridgeStreamEngine(
     context: Context,
     private val logger: AppLogger = AndroidAppLogger,
@@ -96,7 +136,7 @@ class CamBridgeStreamEngine(
     private var lastKeyframeRequestNs = EMPTY_LONG_VALUE
     private val keyframeRequestLock = Any()
     private val adaptiveBitrateLock = Any()
-    private val lastSenderSummaryNs = AtomicLong(EMPTY_LONG_VALUE)
+    private val lastTransportSummaryNs = AtomicLong(EMPTY_LONG_VALUE)
 
     override val events: Flow<StreamEngineEvent> = eventFlow
     override val state: StateFlow<CameraInteractionState> = stateFlow.asStateFlow()
@@ -392,7 +432,7 @@ class CamBridgeStreamEngine(
         encodedAccessUnits.set(EMPTY_LONG_VALUE)
         encodedBytes.set(EMPTY_LONG_VALUE)
         encodedKeyFrames.set(EMPTY_LONG_VALUE)
-        lastSenderSummaryNs.set(EMPTY_LONG_VALUE)
+        lastTransportSummaryNs.set(EMPTY_LONG_VALUE)
         currentAdaptiveBitrateBps = EMPTY_BITRATE_BPS
         lastBitrateUpdateNs = EMPTY_LONG_VALUE
         lastKeyframeRequestNs = EMPTY_LONG_VALUE
@@ -564,27 +604,39 @@ class CamBridgeStreamEngine(
     }
 
     private fun enqueueAccessUnit(accessUnit: EncodedAccessUnit) {
-        if (waitingForLocalRecoveryKeyframe.get()) {
-            if (!accessUnit.isKeyFrame) {
+        val waitingForRecoveryKeyframe = waitingForLocalRecoveryKeyframe.get()
+        val offered = if (waitingForRecoveryKeyframe) {
+            false
+        } else {
+            transportQueue.offer(accessUnit)
+        }
+        when (transportQueueAction(waitingForRecoveryKeyframe, accessUnit.isKeyFrame, offered)) {
+            TransportQueueAction.ENQUEUE -> {
+                observeQueueOccupancy()
+            }
+
+            TransportQueueAction.DROP_WAITING_FOR_KEYFRAME -> {
                 encodedQueueDrops.incrementAndGet()
                 emit("encoded_queue_drop_waiting_for_keyframe")
-                return
             }
-            transportQueue.clear()
-            transportQueue.offer(accessUnit)
-            waitingForLocalRecoveryKeyframe.set(false)
-            observeQueueOccupancy()
-            return
+
+            TransportQueueAction.DROP_AND_REQUEST_KEYFRAME -> {
+                transportQueue.clear()
+                waitingForLocalRecoveryKeyframe.set(true)
+                encodedQueueDrops.incrementAndGet()
+                requestEncoderKeyframe()
+                emit("encoded_queue_drop_waiting_for_keyframe")
+            }
+
+            TransportQueueAction.ENQUEUE_RECOVERY_KEYFRAME -> {
+                transportQueue.clear()
+                check(transportQueue.offer(accessUnit)) {
+                    "The transport queue could not accept the recovery keyframe"
+                }
+                waitingForLocalRecoveryKeyframe.set(false)
+                observeQueueOccupancy()
+            }
         }
-        if (transportQueue.offer(accessUnit)) {
-            observeQueueOccupancy()
-            return
-        }
-        transportQueue.clear()
-        waitingForLocalRecoveryKeyframe.set(true)
-        encodedQueueDrops.incrementAndGet()
-        requestEncoderKeyframe()
-        emit("encoded_queue_drop_waiting_for_keyframe")
     }
 
     private fun observeQueueOccupancy() {
@@ -659,14 +711,11 @@ class CamBridgeStreamEngine(
         val previousBitrateBps: Int
         synchronized(adaptiveBitrateLock) {
             previousBitrateBps = currentAdaptiveBitrateBps
-            if (now - lastBitrateUpdateNs < BITRATE_UPDATE_INTERVAL_NS) {
-                return
-            }
-            val absoluteChange = kotlin.math.abs(
-                requestedBitrateBps.toLong() - previousBitrateBps.toLong(),
-            )
-            val relativeChange = previousBitrateBps.toLong() / BITRATE_CHANGE_DIVISOR
-            if (absoluteChange < BITRATE_CHANGE_MINIMUM_BPS && absoluteChange < relativeChange) {
+            if (!shouldApplyAdaptiveBitrate(
+                    previousBitrateBps,
+                    requestedBitrateBps,
+                    now - lastBitrateUpdateNs,
+                )) {
                 return
             }
             currentAdaptiveBitrateBps = requestedBitrateBps
@@ -696,9 +745,9 @@ class CamBridgeStreamEngine(
 
     private fun maybeEmitSenderSummary() {
         val now = System.nanoTime()
-        val previous = lastSenderSummaryNs.get()
+        val previous = lastTransportSummaryNs.get()
         if (previous != EMPTY_LONG_VALUE && now - previous < TELEMETRY_INTERVAL_NS) return
-        if (!lastSenderSummaryNs.compareAndSet(previous, now)) return
+        if (!lastTransportSummaryNs.compareAndSet(previous, now)) return
         emit(
             "gstreamer_sender_summary",
             mapOf(
@@ -842,10 +891,6 @@ class CamBridgeStreamEngine(
         const val KEYFRAME_REQUEST_DEBOUNCE_MILLIS = 100L
         const val KEYFRAME_REQUEST_DEBOUNCE_NS =
             KEYFRAME_REQUEST_DEBOUNCE_MILLIS * NANOSECONDS_PER_MILLISECOND
-        const val BITRATE_UPDATE_INTERVAL_MILLIS = 250L
-        const val BITRATE_UPDATE_INTERVAL_NS = BITRATE_UPDATE_INTERVAL_MILLIS * NANOSECONDS_PER_MILLISECOND
-        const val BITRATE_CHANGE_DIVISOR = 20L
-        const val BITRATE_CHANGE_MINIMUM_BPS = 250_000L
         const val MINIMUM_BITRATE_DIVISOR = 4
         const val SYNC_FRAME_REQUEST_VALUE = 0
         const val EMPTY_BITRATE_BPS = 0

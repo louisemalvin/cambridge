@@ -223,7 +223,6 @@ bool GStreamerMediaReceiver::start_session(
         startup_complete_ = false;
         startup_success_ = false;
         startup_error_.clear();
-        stopping_ = false;
         session_active_ = true;
         generation_ = session.generation;
         sender_address_ = session.sender_address;
@@ -251,7 +250,6 @@ void GStreamerMediaReceiver::stop_session()
     {
         std::lock_guard<std::mutex> lock(mutex_);
         session_active_ = false;
-        stopping_ = true;
         loop = loop_;
     }
     if (loop) {
