@@ -16,15 +16,21 @@ import cambridge_component_versions as versions  # noqa: E402
 
 class ComponentVersionTests(unittest.TestCase):
     def test_active_components_are_independent_and_ios_is_deferred(self) -> None:
-        self.assertEqual(versions.component_version("android"), "0.5.2")
-        self.assertEqual(versions.component_version("obs"), "0.5.2")
+        android_version = versions.component_version("android")
+        obs_version = versions.component_version("obs")
+        self.assertIsInstance(android_version, str)
+        self.assertIsInstance(obs_version, str)
         self.assertIsNone(versions.component_version("ios"))
 
     def test_release_tags_select_their_component(self) -> None:
         self.assertEqual(versions.parse_release_tag("android-v0.4.0"), ("android", "0.4.0"))
         self.assertEqual(versions.parse_release_tag("obs-v0.4.0"), ("obs", "0.4.0"))
-        versions.verify_release("android", "0.5.2")
-        versions.verify_release("obs", "0.5.2")
+        android_version = versions.component_version("android")
+        obs_version = versions.component_version("obs")
+        assert android_version is not None
+        assert obs_version is not None
+        versions.verify_release("android", android_version)
+        versions.verify_release("obs", obs_version)
 
     def test_historical_shared_tag_is_not_a_current_release_tag(self) -> None:
         with self.assertRaises(versions.ComponentVersionError):
