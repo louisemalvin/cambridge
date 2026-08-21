@@ -206,38 +206,32 @@ plugin hash, and any recording hashes. Review the log for startup completion,
 session acceptance, decoder readiness, first frame, session invalidation, and
 absence of decoder or RTP failures.
 
-Linux bundle and installer tests are separate from the native fixture. The
-variant declarations in `receiver/obs/cambridge-obs-source/buildspec.json`
-drive exact SONAME validation for each matching build environment. Run the
-metadata, exact selection, multiple-installation choice, and no-mutation
-installer tests with:
+Linux release packaging is intentionally not tested here because CamBridge
+does not publish a precompiled distribution bundle. Native source validation
+uses the host's OBS and FFmpeg packages:
 
 ```bash
-python3 scripts/release/test-cambridge-linux-bundle.py
+./scripts/receiver/linux/build-cambridge-obs-plugin.sh
+ldd -r build/cambridge-obs-plugin/staging/obs-plugins/cambridge-obs-plugin/bin/64bit/cambridge-obs-plugin.so
 ```
 
-When a package is available, use its installer with `--dry-run` and an
-explicit OBS path to inspect selection without changing the user's OBS
-configuration. Native unit tests do not prove OBS plugin discovery, and an
-isolated OBS process smoke test remains separate evidence when the target
-platform environment is available.
+Native unit tests do not prove OBS plugin discovery, and an isolated OBS
+process smoke test remains separate evidence when the target platform
+environment is available.
 
-## Component release metadata
+## CamBridge release metadata
 
-The root `VERSION` file is a JSON manifest with independent Android sender and
-OBS plugin versions. The iOS sender is explicitly deferred until its physical
-validation gates pass. Validate the manifest, release tag mapping, and
-generated iOS placeholder with:
+The root `VERSION` file contains one CamBridge semantic version. Validate it and
+the generated iOS version output with:
 
 ```bash
-python3 scripts/development/cambridge_component_versions.py --check
-python3 scripts/development/test-component-versions.py
+python3 scripts/development/cambridge_version.py --check
 python3 scripts/development/generate-ios-version.py --check
 ```
 
-Android and OBS release tags are `android-v<version>` and `obs-v<version>`.
-Protocol compatibility remains controlled only by the v7 stream contract, not
-by requiring the component marketing versions to be equal.
+Release tags are `v<version>` and the release title is `CamBridge <version>`.
+Android, OBS, and iOS builds derive their marketing version from the same root
+value. Protocol compatibility remains controlled by the v7 stream contract.
 
 ## Release acceptance criteria
 

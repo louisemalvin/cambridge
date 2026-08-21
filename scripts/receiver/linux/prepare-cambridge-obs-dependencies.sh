@@ -29,7 +29,7 @@ source = buildspec["linuxCompatibility"]["obsStudioSource"]
 print(source["version"])
 print(source["url"])
 print(source["sha256"])
-print(buildspec["linuxCompatibility"]["variants"][0]["libobsSoname"])
+print(buildspec["linuxCompatibility"]["obsLibrarySoname"])
 PY
 )
 obs_version=${obs_source_spec[0]}

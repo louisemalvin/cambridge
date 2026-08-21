@@ -23,11 +23,10 @@ The full repository checks require:
 - Swift 6.0.3 or Docker for the Linux `CamBridgeCore` and Swift fixture checks
 
 Linux plugin builds use the host OBS and FFmpeg development packages selected by
-`pkg-config`. The declared Linux variants in
-`receiver/obs/cambridge-obs-source/buildspec.json` are the source of truth for
-the supported OBS and FFmpeg SONAME combinations. The plugin is intentionally
-not bundled with those libraries, so its build and installation target must
-provide one exact compatible combination.
+`pkg-config`. `receiver/obs/cambridge-obs-source/buildspec.json` records the
+minimum compatible dependency versions for source builds. The plugin is not
+bundled with those libraries, so the build host must provide a compatible
+combination.
 
 The Xcode project requires macOS with Xcode 16.4 (or a compatible newer Xcode)
 for Apple-target compilation. A physical iPhone is required for hardware
@@ -35,8 +34,7 @@ camera, local-network permission, signing, and glass-to-glass validation.
 
 The emulator smoke test additionally uses an Android emulator, `adb`, `ffmpeg`,
 `jq`, and an installed OBS binary. Avahi development files are optional for
-local builds, but required for the packaged Linux receiver because they enable
-receiver discovery advertisement.
+local builds and can be required explicitly when testing receiver discovery.
 
 macOS receiver builds require macOS 12 or later, Xcode command-line tools,
 Homebrew, and the pinned CMake, OBS Studio, and FFmpeg dependencies prepared by
@@ -56,8 +54,7 @@ Homebrew, and the pinned CMake, OBS Studio, and FFmpeg dependencies prepared by
 Run the complete local check from the repository root:
 
 ```bash
-python3 scripts/development/cambridge_component_versions.py --check
-python3 scripts/development/test-component-versions.py
+python3 scripts/development/cambridge_version.py --check
 python3 scripts/development/generate-ios-version.py --check
 JAVA_HOME=/path/to/jdk-17 ./scripts/development/check-all.sh
 ```
@@ -111,10 +108,9 @@ JAVA_HOME=/path/to/jdk-17 ./gradlew connectedDebugAndroidTest --console=plain
 
 ## OBS plugin build
 
-The Linux CI and release jobs prepare the pinned OBS 32.2.0 development
-library from the official OBS source archive before building the plugin. A
-normal local build uses the host's compatible OBS development package through
-`pkg-config`.
+The Linux CI job prepares the pinned OBS 32.2.0 development library from the
+official OBS source archive before building the plugin. A normal local build
+uses the host's compatible OBS development package through `pkg-config`.
 
 Build, test, and stage the native plugin with:
 
@@ -122,40 +118,10 @@ Build, test, and stage the native plugin with:
 ./scripts/receiver/linux/build-cambridge-obs-plugin.sh
 ```
 
-Build a named release variant and stage it under the multi-variant input tree
-with:
-
-```bash
-CAMBRIDGE_LINUX_VARIANT_ID=x86_64-obs30-ffmpeg63 \
-CAMBRIDGE_LINUX_VARIANT_PROVENANCE="CachyOS with OBS 32.2.2" \
-  ./scripts/receiver/linux/build-cambridge-obs-plugin-variant.sh
-```
-
-The variant ID is an ABI profile, not a distro name. The build provenance is
-recorded separately in the validation record and bundle metadata. The variant
-build validates direct NEEDED entries, `ldd -r`, and the absence of RPATH/RUNPATH,
-then records a hash-backed validation record for release bundle assembly. A
-release package job builds every declared ABI profile in its matching
-environment and assembles one archive:
-
-```bash
-CAMBRIDGE_SKIP_BUILD=ON \
-CAMBRIDGE_SKIP_RUNTIME_VALIDATION=ON \
-CAMBRIDGE_REQUIRE_ALL_LINUX_VARIANTS=ON \
-  ./scripts/release/package-linux-plugin.sh
-```
-
-The package contains the validated variants and the installer, but no OBS or
-FFmpeg shared libraries. The installer inspects the selected OBS executable's
-actual dependency closure and installs only an exact match. Its Linux ABI and
-atomic replacement behavior can be exercised without modifying the user OBS
-configuration:
-
-```bash
-python3 scripts/release/test-cambridge-linux-bundle.py
-./build/release/cambridge-obs-plugin-<version>-linux-x86_64/install-linux-plugin.sh \
-  --obs-path /usr/bin/obs --dry-run
-```
+CamBridge does not publish a precompiled Linux archive while distribution
+packaging is undecided. Build and install the source checkout against the
+system's OBS and FFmpeg development packages instead. The build never bundles
+those host libraries or asks users to choose an ABI variant.
 
 The staged module is written to:
 
@@ -169,9 +135,8 @@ Check its runtime dependencies with:
 ldd -r build/cambridge-obs-plugin/staging/obs-plugins/cambridge-obs-plugin/bin/64bit/cambridge-obs-plugin.so
 ```
 
-The build script also runs the dependency validator, which checks that the
-module uses the selected `libobs` and FFmpeg SONAMEs, contains no RPATH/RUNPATH,
-and has no unresolved transitive dependencies.
+The build script also runs the dependency validator, which checks for no
+RPATH/RUNPATH and no unresolved runtime dependencies.
 
 ### macOS receiver build and fixture
 
@@ -187,11 +152,10 @@ CAMBRIDGE_REQUIRE_UNIVERSAL=OFF \
   ./scripts/receiver/macos/build-cambridge-obs-plugin.sh
 ```
 
-The release workflow repeats this for arm64 and x86_64 and combines the
-verified slices into one universal package. The build checks `lipo` architecture
-membership, validates the bundle metadata and ad hoc development signature, and
-rejects unintended Homebrew load paths with `otool -L`. The staged artifact is
-one self-contained bundle:
+The OBS workflow repeats this for arm64 and x86_64 as development coverage. The
+build checks `lipo` architecture membership, validates the bundle metadata and
+ad hoc development signature, and rejects unintended Homebrew load paths with
+`otool -L`. The staged artifact is one self-contained bundle:
 
 ```text
 build/cambridge-obs-plugin-macos/staging/obs-plugins/cambridge-obs-plugin.plugin
@@ -315,32 +279,28 @@ queue/drop/thermal diagnostics, and OBS hardware plus CPU-fallback results.
 
 ## Release packaging
 
-Every user-facing update is a component release. Set the active component
-versions in the JSON `VERSION` manifest, add a matching component heading to
-`CHANGELOG.md`, and publish the downloadable artifact; do not send end users
-through a source build. Validate the manifest and generated iOS placeholder
-with:
+CamBridge has one public version. Update the plain root `VERSION` file, add the
+technical changes under one `CHANGELOG.md` release area, and publish only when
+the product is release-ready. Validate the shared version and generated iOS
+metadata with:
 
 ```bash
-python3 scripts/development/cambridge_component_versions.py --check
-python3 scripts/development/test-component-versions.py
+python3 scripts/development/cambridge_version.py --check
 python3 scripts/development/generate-ios-version.py --check
 ```
 
-Android releases use an `android-v<version>` tag and publish
-`cambridge-android-<version>.apk`. OBS plugin releases use an `obs-v<version>`
-tag and publish the Linux archive
-`cambridge-obs-plugin-<version>-linux-x86_64.tar.gz` plus the macOS universal
-package `cambridge-obs-plugin-<version>-macos-universal.pkg` when the macOS
-release gate is enabled. Publish the release commit before its matching tag.
-The iOS sender remains deferred and has no release tag.
+The release process is deliberately short:
 
-The Linux archive is one user-facing x86-64 bundle. Its release workflow builds
-the `x86_64-obs30-ffmpeg62` and `x86_64-obs30-ffmpeg63` ABI profiles on their
-concrete Ubuntu and CachyOS runners. The bundle records those environments as
-build provenance, then selects the plugin by actual OBS ELF dependencies
-behind `install-linux-plugin.sh` and publishes one archive checksum. Release
-publication remains subject to the repository's owner authorization policy.
+1. Update `VERSION` and the shared changelog area.
+2. Merge the release-ready commit to `main`.
+3. Create and push the annotated tag `vX.Y.Z`.
+4. The tag-only Release workflow validates the tag, builds the signed Android
+   APK, and publishes one GitHub release titled `CamBridge X.Y.Z`.
+
+GitHub supplies source archives for the tag. The release workflow does not
+publish a Linux binary archive, macOS package, or iOS artifact while those
+platforms remain in development. Linux installation is build-from-source using
+the host's OBS and FFmpeg packages.
 
 The macOS package script requires Developer ID application and installer
 identities plus a configured `notarytool` keychain profile. It signs the whole
@@ -348,8 +308,9 @@ plugin bundle and installer, submits the package, requires an `Accepted`
 notarization result, staples and validates the ticket, verifies Gatekeeper and
 package signatures, and writes a SHA-256 checksum.
 
-The release workflow imports credentials into a temporary keychain on a fresh
-runner. Configure these Actions secrets:
+If a future macOS packaging workflow is enabled, it must import credentials
+into a temporary keychain on a fresh runner. Configure these Actions secrets
+only for that future development path:
 
 - `CAMBRIDGE_DEVELOPER_ID_APPLICATION` and
   `CAMBRIDGE_DEVELOPER_ID_INSTALLER`: exact signing identity names
@@ -361,12 +322,9 @@ runner. Configure these Actions secrets:
 - `CAMBRIDGE_NOTARY_PROFILE`, `CAMBRIDGE_NOTARY_APPLE_ID`,
   `CAMBRIDGE_NOTARY_TEAM_ID`, and `CAMBRIDGE_NOTARY_APP_PASSWORD`
 
-The temporary keychain and decoded PKCS#12 files are deleted after packaging.
-The tag workflow builds and publishes macOS only when the repository Actions
-variable `CAMBRIDGE_RELEASE_MACOS` is exactly `true`. Leave it unset until both
-physical architecture gates and a clean-machine install, uninstall, and
-reinstall have been retained. Android and Linux releases remain independent of
-that support gate.
+The temporary keychain and decoded PKCS#12 files are deleted after local or
+development packaging. The macOS package script is not called by the public
+Release workflow until the platform's physical and clean-machine gates pass.
 
 Signing keys and passwords belong in the release environment or GitHub Actions
 secrets, never in the repository. The packaging script writes release files

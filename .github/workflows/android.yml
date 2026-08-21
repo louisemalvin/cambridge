@@ -2,14 +2,15 @@ name: Android
 
 on:
   push:
+    branches:
+      - "**"
     paths:
       - "sender/android/**"
       - "protocol/**"
       - "VERSION"
       - "receiver/obs/cambridge-obs-source/buildspec.json"
       - "scripts/sender/android/prepare-gstreamer-android.sh"
-      - "scripts/development/cambridge_component_versions.py"
-      - "scripts/development/test-component-versions.py"
+      - "scripts/development/cambridge_version.py"
       - ".github/workflows/android.yml"
   pull_request:
     paths:
@@ -18,8 +19,7 @@ on:
       - "VERSION"
       - "receiver/obs/cambridge-obs-source/buildspec.json"
       - "scripts/sender/android/prepare-gstreamer-android.sh"
-      - "scripts/development/cambridge_component_versions.py"
-      - "scripts/development/test-component-versions.py"
+      - "scripts/development/cambridge_version.py"
       - ".github/workflows/android.yml"
 
 jobs:
@@ -37,7 +37,7 @@ jobs:
       - name: Install pinned GStreamer Android SDK
         run: ./scripts/sender/android/prepare-gstreamer-android.sh
       - uses: gradle/actions/setup-gradle@v4
-      - name: Check component release metadata
-        run: python3 scripts/development/test-component-versions.py
+      - name: Check CamBridge version
+        run: python3 scripts/development/cambridge_version.py --check
       - run: ./gradlew test lint assembleDebug compileDebugAndroidTestKotlin
         working-directory: sender/android

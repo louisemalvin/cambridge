@@ -1,7 +1,9 @@
-name: iOS app
+name: iOS
 
 on:
   push:
+    branches:
+      - "**"
     paths:
       - "sender/ios/**"
       - "VERSION"
@@ -9,8 +11,7 @@ on:
       - "protocol/**"
       - "scripts/development/generate-cambridge-*.py"
       - "scripts/development/generate-ios-version.py"
-      - "scripts/development/cambridge_component_versions.py"
-      - "scripts/development/test-component-versions.py"
+      - "scripts/development/cambridge_version.py"
       - "scripts/sender/ios/**"
       - "scripts/receiver/linux/test-cambridge-fixture.sh"
       - ".github/workflows/ios.yml"
@@ -22,13 +23,22 @@ on:
       - "protocol/**"
       - "scripts/development/generate-cambridge-*.py"
       - "scripts/development/generate-ios-version.py"
-      - "scripts/development/cambridge_component_versions.py"
-      - "scripts/development/test-component-versions.py"
+      - "scripts/development/cambridge_version.py"
       - "scripts/sender/ios/**"
       - "scripts/receiver/linux/test-cambridge-fixture.sh"
       - ".github/workflows/ios.yml"
 
 jobs:
+  core:
+    runs-on: ubuntu-24.04
+    container: swift:6.0.3-jammy
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run CamBridgeCore and parity checks
+        run: ./scripts/sender/ios/check-core.sh
+      - name: Build the Linux Swift interoperability fixture
+        run: ./scripts/sender/ios/check-fixture.sh
+
   xcode:
     runs-on: macos-15
     steps:

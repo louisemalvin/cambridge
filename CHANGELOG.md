@@ -2,22 +2,32 @@
 
 ## Unreleased
 
-## Android 0.5.5 - persistent rear lens controls
+### Android
 
 - Keep the main rear camera's complete lens pill list visible after selecting
   an individual rear lens.
-
-## Android 0.5.4 - camera selection controls
-
 - Replace mixed front, back, and physical-camera choices with one front/back
   flip action and ordered rear-lens zoom pills.
-
-## Android 0.5.3 - transport worker startup
-
 - Activate the stream generation before starting MediaCodec and its transport
   worker so the worker cannot exit before delivering the first access unit.
 
-## OBS plugin 0.5.2 - GStreamer transport simplification
+- Gate stream start on the current camera permission and recover cleanly when
+  permission is revoked or restored.
+- Select the exact requested H.264 MediaCodec encoder and resolve the active
+  video configuration before opening the session.
+- Make control startup, callback ownership, and stop cleanup terminal and
+  generation-safe.
+- Replace application RTP packetization and pacing with the pinned GStreamer
+  RTP/RTCP sender, RTX, TWCC, and GCC pipeline.
+- Add bounded access-unit recovery, MediaCodec keyframe requests, and adaptive
+  bitrate updates from GStreamer estimates.
+- Require the official GStreamer Android SDK and protocol v7 control fields.
+- Pace H.264 RTP datagrams at the configured media rate so large 2K frames do
+  not arrive as one burst on the local or Tailscale network path.
+- Surface receiver media failures as terminal stream errors so the sender
+  releases its session cleanly.
+
+### OBS receiver
 
 - Restore GStreamer's adaptive RTX, RTCP scheduling, jitter, and congestion
   control defaults while retaining one 40 ms receiver latency policy.
@@ -28,59 +38,25 @@
   stream cannot remain blocked on an empty access-unit queue.
 - Add direct clean-path, loss recovery, 2K30 at 16 Mbps, and temporary decoder
   slowdown transport coverage with GStreamer jitterbuffer diagnostics.
-
-## Android 0.5.1 and OBS plugin 0.5.1 - transient recovery presentation
-
 - Keep the last decoded frame visible during one bounded live-age recovery
   window so short RTP/RTX recovery gaps do not flash a black placeholder.
 - Preserve the black placeholder after the bounded recovery window and when
   the session has no valid frame.
-
-## Android 0.5.0 - GStreamer RTP transport
-
-- Replace application RTP packetization and pacing with the pinned GStreamer
-  RTP/RTCP sender, RTX, TWCC, and GCC pipeline.
-- Add bounded access-unit recovery, MediaCodec keyframe requests, and adaptive
-  bitrate updates from GStreamer estimates.
-- Require the official GStreamer Android SDK and protocol v7 control fields.
-
-## OBS plugin 0.5.0 - GStreamer receiver
-
 - Replace the raw UDP RTP receiver with GStreamer `rtpbin`, jitter buffering,
   RTCP feedback, RTX receive, H.264 depayloading, and appsink delivery.
 - Add integration coverage for retransmission, keyframe recovery, burst loss,
   and bandwidth adaptation.
 - Require GStreamer 1.24.13 or newer and the Rust RTP plugin at runtime.
-
-## Android 0.4.1 - RTP delivery recovery
-
-- Pace H.264 RTP datagrams at the configured media rate so large 2K frames do
-  not arrive as one burst on the local or Tailscale network path.
-- Surface receiver media failures as terminal stream errors so the sender
-  releases its session cleanly.
-
-## OBS plugin 0.4.1 - Media failure recovery
-
 - Notify the Android sender before closing a failed control session.
 - Release the control connection after decoder failure so the next Start can
   connect without restarting OBS.
+- Harden native control startup, media callbacks, and receiver release
+  validation.
 
-## Android 0.4.0 - Permission, encoder, and stream lifecycle hardening
+### iOS
 
-- Gate stream start on the current camera permission and recover cleanly when
-  permission is revoked or restored.
-- Select the exact requested H.264 MediaCodec encoder and resolve the active
-  video configuration before opening the session.
-- Make control startup, callback ownership, and stop cleanup terminal and
-  generation-safe.
-
-## OBS plugin 0.4.0 - Multi-ABI packaging and receiver hardening
-
-- Package one Linux installer bundle containing exact OBS and FFmpeg ABI
-  profiles without bundling host libraries.
-- Select the compatible plugin from the OBS executable's actual ELF
-  dependencies and preserve existing installations when validation fails.
-- Harden native control startup, media callbacks, and release validation.
+- Derive the sender's marketing and build versions from the shared CamBridge
+  release version while iOS support remains in development.
 
 ## 0.3.3 - Permission recovery and decision-oriented testing
 

@@ -27,7 +27,7 @@ LEGACY_CPP_CONTRACT_PATH = REPOSITORY_ROOT / "receiver/obs/cambridge-obs-source/
 CPP_PROTOCOL_PATH = REPOSITORY_ROOT / "receiver/obs/cambridge-obs-source/src/control_protocol.cpp"
 CPP_SOURCE_PATH = REPOSITORY_ROOT / "receiver/obs/cambridge-obs-source/src/cambridge_source.cpp"
 FIXTURE_PATH = REPOSITORY_ROOT / "scripts/receiver/common/cambridge-fixture.py"
-COMPONENT_VERSION_CHECK_PATH = REPOSITORY_ROOT / "scripts/development/cambridge_component_versions.py"
+VERSION_CHECK_PATH = REPOSITORY_ROOT / "scripts/development/cambridge_version.py"
 ANDROID_SMOKE_PATH = REPOSITORY_ROOT / "scripts/sender/android/test-emulator-cambridge.sh"
 NATIVE_FIXTURE_PATH = REPOSITORY_ROOT / "scripts/receiver/linux/test-cambridge-fixture.sh"
 IOS_STREAM_SETTINGS_VIEW_PATH = (
@@ -154,20 +154,20 @@ def check_generated_cpp_contract() -> None:
         raise AssertionError(f"legacy C++ contract header still exists: {LEGACY_CPP_CONTRACT_PATH}")
 
 
-def check_component_versions() -> None:
+def check_version() -> None:
     result = subprocess.run(
-        [sys.executable, str(COMPONENT_VERSION_CHECK_PATH), "--check"],
+        [sys.executable, str(VERSION_CHECK_PATH), "--check"],
         capture_output=True,
         text=True,
         check=False,
     )
     if result.returncode != 0:
         detail = result.stderr.strip() or result.stdout.strip()
-        raise AssertionError(f"component version manifest is invalid: {detail}")
+        raise AssertionError(f"CamBridge VERSION is invalid: {detail}")
 
 
 def main() -> int:
-    check_component_versions()
+    check_version()
     check_generated_cpp_contract()
     contract = json.loads(read(CONTRACT_PATH))
     deployment = json.loads(read(DEPLOYMENT_PATH))
