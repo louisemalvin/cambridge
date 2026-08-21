@@ -17,22 +17,10 @@ val deploymentFile = rootProject.file("../../protocol/cambridge-deployment.local
     ?: rootProject.file("../../protocol/cambridge-deployment.json")
 val deploymentJson = JsonSlurper().parse(deploymentFile) as Map<*, *>
 val deploymentComputer = deploymentJson["computer"] as Map<*, *>
-val versionManifestFile = rootProject.file("../../VERSION")
-val versionManifest = JsonSlurper().parse(versionManifestFile) as Map<*, *>
-val versionManifestSchema = 1
-require(versionManifest["schemaVersion"] == versionManifestSchema) {
-    "VERSION has an unsupported manifest schema"
-}
-val versionComponents = versionManifest["components"] as? Map<*, *>
-    ?: error("VERSION must define component versions")
-val releaseVersion = versionComponents["androidSender"] as? String
-    ?: error("VERSION must define an Android sender version")
-val configuredReleaseVersion = System.getenv("CAMBRIDGE_ANDROID_VERSION")
-    ?.takeIf { it.isNotBlank() }
-configuredReleaseVersion?.let { configuredVersion ->
-    require(configuredVersion == releaseVersion) {
-        "CAMBRIDGE_ANDROID_VERSION must match VERSION androidSender"
-    }
+val releaseVersion = rootProject.file("../../VERSION").readText().trim()
+val semanticVersionPattern = Regex("""^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$""")
+require(semanticVersionPattern.matches(releaseVersion)) {
+    "VERSION must be MAJOR.MINOR.PATCH"
 }
 val versionCodeComponentBase = 1_000
 val semanticVersionComponentCount = 3
