@@ -46,7 +46,9 @@ The control exchange uses these message types:
 - `hello` carries one immutable phone-authored stream session.
 - `accepted` returns the negotiated media port and receiver limits.
 - `stop` ends the active session.
-- `error` reports a rejected or invalid request.
+- `error` reports a rejected or invalid request, or a terminal receiver media
+  failure. After a terminal media failure, the receiver sends the error and
+  closes the control session so the sender can release its resources.
 
 Each session includes a session ID and monotonic generation. Resolution, frame
 rate, codec, bitrate, and rotation are fixed for the session; changing them
@@ -69,9 +71,11 @@ present landscape geometry.
 
 ## Media behavior
 
-Media is best-effort and one-way. The receiver uses a bounded reorder window
-and drops late or incomplete access units instead of requesting retransmission,
-media feedback, or an IDR frame. There is no automatic reconnect.
+Media is best-effort and one-way. The sender paces RTP datagrams at the
+configured media rate. The receiver uses a bounded reorder window and drops
+late or incomplete access units instead of requesting retransmission, media
+feedback, or an IDR frame. Terminal receiver media failures end the control
+session; there is no automatic reconnect.
 
 The receiver output is an OBS source texture. The wire protocol does not
 require OBS or a virtual camera device, but the current supported receiver is

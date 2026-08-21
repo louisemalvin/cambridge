@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## Android 0.4.1 - RTP delivery recovery
+
+- Pace H.264 RTP datagrams at the configured media rate so large 2K frames do
+  not arrive as one burst on the local or Tailscale network path.
+- Surface receiver media failures as terminal stream errors so the sender
+  releases its session cleanly.
+
+## OBS plugin 0.4.1 - Media failure recovery
+
+- Notify the Android sender before closing a failed control session.
+- Release the control connection after decoder failure so the next Start can
+  connect without restarting OBS.
+
 ## Android 0.4.0 - Permission, encoder, and stream lifecycle hardening
 
 - Gate stream start on the current camera permission and recover cleanly when
