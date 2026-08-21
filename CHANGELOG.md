@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## Android 0.5.2 and OBS plugin 0.5.2 - GStreamer transport simplification
+
+- Restore GStreamer's adaptive RTX, RTCP scheduling, jitter, and congestion
+  control defaults while retaining one 40 ms receiver latency policy.
+- Replace timed bitrate, keyframe, decoder-age, and stale-render controls with
+  state-based encoder requests, one-access-unit backpressure, and latest-frame
+  presentation.
+- Make the Android transport handoff cancellation-aware so stopping an active
+  stream cannot remain blocked on an empty access-unit queue.
+- Add direct clean-path, loss recovery, 2K30 at 16 Mbps, and temporary decoder
+  slowdown transport coverage with GStreamer jitterbuffer diagnostics.
+
 ## Android 0.5.1 and OBS plugin 0.5.1 - transient recovery presentation
 
 - Keep the last decoded frame visible during one bounded live-age recovery
