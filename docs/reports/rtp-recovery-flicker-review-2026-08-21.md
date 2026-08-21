@@ -5,7 +5,7 @@ branch. This is not a claim that the flicker is fixed.
 
 ## Test configuration
 
-- Android sender and OBS plugin version: `0.5.1`
+- CamBridge version: `0.5.1`
 - Protocol version: `7`
 - Video profile: `2560x1440`, approximately 30 fps, 16 Mbps target
 - Receiver decoder path: native VAAPI
@@ -63,7 +63,7 @@ problem rather than Wi-Fi signal quality or a simple black-placeholder timeout.
 
 ## Verification completed
 
-- Component-version and transport-contract checks passed.
+- CamBridge version and transport-contract checks passed.
 - Focused live-frame policy test passed.
 - Android unit tests, lint, and debug APK build passed.
 - Remote native plugin build passed and `ldd -r` reported no unresolved

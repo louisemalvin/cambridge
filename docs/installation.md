@@ -14,18 +14,18 @@ released or supported platform yet: Apple-target compilation, signing, a real
 iPhone camera/encoder, and glass-to-glass behavior must be validated on macOS
 before the public support statement changes.
 
-Install the Android APK from an `android-v<version>` release and the OBS
-plugin from an `obs-v<version>` release. These component versions are
-independent, but both artifacts must use protocol v7. Incompatible protocol
-releases do not connect; protocol v7 is not compatible with protocol v6 from
-the 0.2.x releases.
+Install CamBridge components from the same `CamBridge X.Y.Z` release. The
+Android APK is a public release asset. Linux installation is currently a
+source build against the computer's installed OBS and FFmpeg packages. Both
+ends must use the same CamBridge release generation; protocol v7 is not
+compatible with protocol v6 from the 0.2.x releases.
 
 ## Android
 
 1. Open the
-   [Android releases](https://github.com/louisemalvin/cambridge/releases) and
-   download `cambridge-android-<version>.apk` from an
-   `android-v<version>` release.
+   [CamBridge releases](https://github.com/louisemalvin/cambridge/releases) and
+   download `cambridge-android-<version>.apk` from the matching `CamBridge
+   <version>` release.
 2. Install the APK. Android may ask you to allow installs from the browser or
    file manager used to open it.
 3. Open CamBridge and allow camera access when prompted. The app also needs
@@ -36,34 +36,26 @@ includes the Stop control; removing the app task also stops the active stream.
 
 ## Linux / OBS
 
-1. Download `cambridge-obs-plugin-<version>-linux-x86_64.tar.gz` from an
-   `obs-v<version>` release in the
-   [GitHub releases](https://github.com/louisemalvin/cambridge/releases).
-2. Extract the archive and run the included installer:
+1. Install the OBS development package, FFmpeg development libraries, CMake,
+   a C++17 compiler, GStreamer 1.24.13 or newer with the Rust RTP plugins
+   `rtpgccbwe` and `rtprtxreceive`, and the native libraries listed in the
+   [development prerequisites](development.md#prerequisites).
+2. Download the source archive for the same `CamBridge X.Y.Z` release, or clone
+   the repository and check out its `vX.Y.Z` tag.
+3. Build and stage the plugin:
 
    ```bash
-   cd cambridge-obs-plugin-<version>-linux-x86_64
-   ./install-linux-plugin.sh
+   ./scripts/receiver/linux/build-cambridge-obs-plugin.sh
    ```
 
-   The installer inspects the OBS executable's actual dependencies and chooses
-   the compatible plugin build from the bundle. You do not need to choose a
-   Linux distribution or ABI build. If more than one supported OBS installation
-   is present, it asks which recognizable OBS path to use.
-
-3. Install GStreamer 1.24.13 or newer and the GStreamer Rust RTP plugin
-   containing `rtpgccbwe` and `rtprtxreceive`. These are runtime dependencies
-   of the OBS source; the release does not replace them with a custom transport.
-
-4. If OBS is not discoverable, provide its executable or installation path:
+4. Install the staged module into the current user's OBS plugin directory:
 
    ```bash
-   ./install-linux-plugin.sh --obs-path /path/to/obs
+   plugin_dir="${XDG_CONFIG_HOME:-$HOME/.config}/obs-studio/plugins/cambridge-obs-plugin/bin/64bit"
+   mkdir -p "${plugin_dir}"
+   cp build/cambridge-obs-plugin/staging/obs-plugins/cambridge-obs-plugin/bin/64bit/cambridge-obs-plugin.so \
+      "${plugin_dir}/"
    ```
-
-   Flatpak OBS layouts are not supported by this installer. If no bundled build
-   exactly matches the selected OBS installation, the installer leaves any
-   existing plugin unchanged and reports the supported installation paths.
 
 5. Restart OBS, add a source named **CamBridge**, and keep the default source
    settings for normal use.

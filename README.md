@@ -52,8 +52,10 @@ the scene with video-call applications through
 
 Every CamBridge sender works with every CamBridge receiver from the same
 version. The phone and computer platforms are not fixed pairs. Supported
-downloads are published on the
-[latest release](https://github.com/louisemalvin/cambridge/releases/latest).
+Android downloads are published on the
+[latest CamBridge release](https://github.com/louisemalvin/cambridge/releases/latest).
+The Linux OBS receiver is currently installed from source against the host's
+OBS and FFmpeg packages.
 
 Platforms marked as in development are not included in public releases yet.
 
