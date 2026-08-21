@@ -15,6 +15,8 @@
     <string name="camera_zoom_level">Camera zoom level</string>
     <string name="reset">Reset</string>
     <string name="camera">Camera</string>
+    <string name="switch_to_front_camera">Switch to front camera</string>
+    <string name="switch_to_back_camera">Switch to back camera</string>
     <string name="physical_lens">Physical lens</string>
     <string name="stabilization">Stabilization</string>
     <string name="stabilization_optical">Optical</string>

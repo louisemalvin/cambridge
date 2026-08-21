@@ -3,6 +3,7 @@ package dev.cambridge.sender.app.model
 import dev.cambridge.sender.R
 import dev.cambridge.sender.media.camera.AntiFlickerMode
 import dev.cambridge.sender.media.camera.CameraInteractionState
+import dev.cambridge.sender.media.camera.CameraLensFacing
 
 object CameraControlsUiStateMapper {
     fun map(cameraInteraction: CameraInteractionState): CameraControlsUiState =
@@ -13,9 +14,12 @@ object CameraControlsUiStateMapper {
                 maximumRatio = cameraInteraction.maxZoomRatio,
                 isCameraActive = cameraInteraction.isCameraActive,
             ),
+            isFrontCamera = cameraInteraction.lensFacing == CameraLensFacing.FRONT,
+            canFlipCamera = CameraLensFacing.BACK in cameraInteraction.availableLensFacings &&
+                CameraLensFacing.FRONT in cameraInteraction.availableLensFacings,
             lensOptions = cameraInteraction.physicalLensOptions.map { lens ->
                 LensOptionUi(
-                    key = lens.label,
+                    key = lens.cameraId ?: lens.label,
                     label = UiText.Plain(lens.label),
                     isSelected = lens == cameraInteraction.selectedPhysicalLens,
                 )

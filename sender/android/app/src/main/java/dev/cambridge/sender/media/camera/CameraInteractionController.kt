@@ -14,6 +14,10 @@ interface CameraInteractionController {
 
     suspend fun resetZoom()
 
+    suspend fun toggleCameraFacing() {
+        Unit
+    }
+
     suspend fun setStabilizationMode(mode: CameraStabilizationMode) {
         Unit
     }

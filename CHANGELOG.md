@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## Android 0.5.4 - camera selection controls
+
+- Replace mixed front, back, and physical-camera choices with one front/back
+  flip action and ordered rear-lens zoom pills.
+
 ## Android 0.5.3 - transport worker startup
 
 - Activate the stream generation before starting MediaCodec and its transport

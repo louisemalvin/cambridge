@@ -88,6 +88,7 @@ class WebcamViewModel @Inject constructor(
             }
             is SenderScreenAction.ZoomChanged -> setZoomRatio(action.ratio)
             SenderScreenAction.ResetZoom -> resetZoom()
+            SenderScreenAction.ToggleCameraFacing -> toggleCameraFacing()
             is SenderScreenAction.LensSelected -> selectPhysicalLens(action.key)
             is SenderScreenAction.StabilizationModeChanged -> setStabilizationMode(action.mode)
             SenderScreenAction.CopyDiagnostics -> copyDiagnostics()
@@ -111,6 +112,12 @@ class WebcamViewModel @Inject constructor(
         }
     }
 
+    private fun toggleCameraFacing() {
+        viewModelScope.launch(Dispatchers.Default) {
+            cameraController.toggleCameraFacing()
+        }
+    }
+
     private fun setStabilizationMode(mode: CameraStabilizationMode) {
         viewModelScope.launch(Dispatchers.Default) {
             settings.updateStabilizationMode(mode)
@@ -120,7 +127,7 @@ class WebcamViewModel @Inject constructor(
 
     private fun selectPhysicalLens(key: String) {
         val lens = cameraController.state.value.physicalLensOptions
-            .firstOrNull { it.label == key }
+            .firstOrNull { it.cameraId == key || it.label == key }
             ?: return
         viewModelScope.launch(Dispatchers.Default) {
             cameraController.selectPhysicalLens(lens)

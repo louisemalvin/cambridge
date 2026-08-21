@@ -2,6 +2,7 @@ package dev.cambridge.sender
 
 import dev.cambridge.sender.media.camera.AppliedVideoStabilizationMode
 import dev.cambridge.sender.media.camera.CameraInteractionState
+import dev.cambridge.sender.media.camera.CameraLensFacing
 import dev.cambridge.sender.media.camera.CameraStabilizationApplyStatus
 import dev.cambridge.sender.media.camera.CameraStabilizationMode
 import dev.cambridge.sender.media.camera.CameraStabilizationObservation
@@ -53,6 +54,36 @@ class CameraInteractionStateTest {
 
         assertEquals(options.first(), state.selectedPhysicalLens)
         assertEquals(options[2], state.withSelectedPhysicalLens(options[2]).selectedPhysicalLens)
+    }
+
+    @Test
+    fun cameraSelectionSeparatesFacingFromRearLensOptions() {
+        val rearLenses = listOf(
+            PhysicalLensOption("0.5x", "2"),
+            PhysicalLensOption("1x", "0"),
+            PhysicalLensOption("3x", "3"),
+        )
+        val rear = CameraInteractionState().withCameraSelection(
+            facing = CameraLensFacing.BACK,
+            availableFacings = listOf(CameraLensFacing.BACK, CameraLensFacing.FRONT),
+            lensOptions = rearLenses,
+            selectedLens = rearLenses[1],
+        )
+
+        assertEquals(CameraLensFacing.BACK, rear.lensFacing)
+        assertEquals(rearLenses, rear.physicalLensOptions)
+        assertEquals(rearLenses[1], rear.selectedPhysicalLens)
+
+        val front = rear.withCameraSelection(
+            facing = CameraLensFacing.FRONT,
+            availableFacings = rear.availableLensFacings,
+            lensOptions = emptyList(),
+            selectedLens = null,
+        )
+
+        assertEquals(CameraLensFacing.FRONT, front.lensFacing)
+        assertTrue(front.physicalLensOptions.isEmpty())
+        assertEquals(null, front.selectedPhysicalLens)
     }
 
     @Test

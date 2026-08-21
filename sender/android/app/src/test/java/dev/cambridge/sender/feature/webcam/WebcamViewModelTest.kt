@@ -3,6 +3,7 @@ package dev.cambridge.sender.feature.webcam
 import dev.cambridge.sender.app.model.ConnectionUiState
 import dev.cambridge.sender.app.model.StreamPresentationSnapshot
 import dev.cambridge.sender.media.camera.CameraInteractionState
+import dev.cambridge.sender.media.camera.CameraLensFacing
 import dev.cambridge.sender.model.StreamFailure
 import dev.cambridge.sender.model.StreamState
 import dev.cambridge.sender.session.VideoProfiles
@@ -52,6 +53,26 @@ class WebcamViewModelTest {
         assertEquals(2.0f, state.camera.zoom.ratio, FLOAT_TOLERANCE)
         assertEquals(4.0f, state.camera.zoom.maximumRatio, FLOAT_TOLERANCE)
         assertTrue(state.camera.zoom.isCameraActive)
+    }
+
+    @Test
+    fun cameraFacingMapsToOneFlipControl() {
+        val state = WebcamUiStateMapper.map(
+            snapshot = snapshot(
+                cameraInteraction = CameraInteractionState().withCameraSelection(
+                    facing = CameraLensFacing.FRONT,
+                    availableFacings = listOf(CameraLensFacing.BACK, CameraLensFacing.FRONT),
+                    lensOptions = emptyList(),
+                    selectedLens = null,
+                ),
+            ),
+            isScreenDimmed = false,
+            isZoomTrayOpen = false,
+        )
+
+        assertTrue(state.camera.isFrontCamera)
+        assertTrue(state.camera.canFlipCamera)
+        assertTrue(state.camera.lensOptions.isEmpty())
     }
 
     private fun snapshot(

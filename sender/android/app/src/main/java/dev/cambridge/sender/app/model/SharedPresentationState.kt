@@ -46,6 +46,8 @@ sealed interface ConnectionUiState {
 @Immutable
 data class CameraControlsUiState(
     val zoom: ZoomUiState = ZoomUiState(),
+    val isFrontCamera: Boolean = false,
+    val canFlipCamera: Boolean = false,
     val lensOptions: List<LensOptionUi> = emptyList(),
     val stabilization: StabilizationUiState = StabilizationUiState(),
     val antiFlicker: AntiFlickerUiState = AntiFlickerUiState(),
@@ -112,6 +114,7 @@ sealed interface SenderScreenAction {
     data object CloseZoomTray : SenderScreenAction
     data class ZoomChanged(val ratio: Float) : SenderScreenAction
     data object ResetZoom : SenderScreenAction
+    data object ToggleCameraFacing : SenderScreenAction
     data class LensSelected(val key: String) : SenderScreenAction
     data class StabilizationModeChanged(
         val mode: dev.cambridge.sender.media.camera.CameraStabilizationMode,

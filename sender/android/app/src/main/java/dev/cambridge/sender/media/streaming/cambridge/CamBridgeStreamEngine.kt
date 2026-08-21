@@ -379,6 +379,10 @@ class CamBridgeStreamEngine(
         camera.resetZoom()
     }
 
+    override suspend fun toggleCameraFacing() = lifecycleMutex.withLock {
+        camera.toggleCameraFacing()
+    }
+
     override suspend fun setStabilizationMode(mode: dev.cambridge.sender.media.camera.CameraStabilizationMode) =
         lifecycleMutex.withLock {
             camera.setStabilizationMode(mode)

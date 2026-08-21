@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Brightness6
 import androidx.compose.material.icons.outlined.Brightness7
+import androidx.compose.material.icons.outlined.Cameraswitch
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.StopCircle
@@ -30,6 +31,8 @@ import dev.cambridge.sender.app.theme.CamBridgeTheme
 @Composable
 fun PreviewActions(
     isScreenDimmed: Boolean,
+    isFrontCamera: Boolean,
+    canFlipCamera: Boolean,
     connection: ConnectionUiState,
     isLandscape: Boolean,
     onAction: (SenderScreenAction) -> Unit,
@@ -42,6 +45,9 @@ fun PreviewActions(
     }
     val settingsContentDescription = stringResource(R.string.settings)
     val zoomContentDescription = stringResource(R.string.zoom)
+    val flipCameraContentDescription = stringResource(
+        if (isFrontCamera) R.string.switch_to_back_camera else R.string.switch_to_front_camera,
+    )
     val stopContentDescription = stringResource(R.string.stop_stream)
     val startContentDescription = stringResource(R.string.open_stream_setup)
 
@@ -63,6 +69,8 @@ fun PreviewActions(
                     connection = connection,
                     dimContentDescription = dimContentDescription,
                     zoomContentDescription = zoomContentDescription,
+                    flipCameraContentDescription = flipCameraContentDescription,
+                    canFlipCamera = canFlipCamera,
                     settingsContentDescription = settingsContentDescription,
                     stopContentDescription = stopContentDescription,
                     startContentDescription = startContentDescription,
@@ -80,6 +88,8 @@ fun PreviewActions(
                     connection = connection,
                     dimContentDescription = dimContentDescription,
                     zoomContentDescription = zoomContentDescription,
+                    flipCameraContentDescription = flipCameraContentDescription,
+                    canFlipCamera = canFlipCamera,
                     settingsContentDescription = settingsContentDescription,
                     stopContentDescription = stopContentDescription,
                     startContentDescription = startContentDescription,
@@ -96,6 +106,8 @@ private fun PreviewActionButtons(
     connection: ConnectionUiState,
     dimContentDescription: String,
     zoomContentDescription: String,
+    flipCameraContentDescription: String,
+    canFlipCamera: Boolean,
     settingsContentDescription: String,
     stopContentDescription: String,
     startContentDescription: String,
@@ -110,6 +122,13 @@ private fun PreviewActionButtons(
         contentDescription = dimContentDescription,
         onClick = { onAction(SenderScreenAction.ToggleScreenDimmed) },
     )
+    if (canFlipCamera) {
+        PreviewActionButton(
+            icon = Icons.Outlined.Cameraswitch,
+            contentDescription = flipCameraContentDescription,
+            onClick = { onAction(SenderScreenAction.ToggleCameraFacing) },
+        )
+    }
     PreviewActionButton(
         icon = Icons.Outlined.ZoomIn,
         contentDescription = zoomContentDescription,
@@ -162,6 +181,8 @@ private fun PreviewActionsPortraitPreview() {
     CamBridgeTheme {
         PreviewActions(
             isScreenDimmed = false,
+            isFrontCamera = false,
+            canFlipCamera = true,
             connection = ConnectionUiState.Waiting,
             isLandscape = false,
             onAction = {},

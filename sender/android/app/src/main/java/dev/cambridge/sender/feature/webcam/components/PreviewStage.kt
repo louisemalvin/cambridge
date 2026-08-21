@@ -123,6 +123,8 @@ fun PreviewStage(
 
             PreviewActions(
                 isScreenDimmed = state.isScreenDimmed,
+                isFrontCamera = state.camera.isFrontCamera,
+                canFlipCamera = state.camera.canFlipCamera,
                 connection = state.connection,
                 isLandscape = isLandscape,
                 onAction = onAction,

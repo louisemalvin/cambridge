@@ -98,7 +98,7 @@ class SettingsViewModel @Inject constructor(
 
     private fun selectPhysicalLens(key: String) {
         val lens = cameraController.state.value.physicalLensOptions
-            .firstOrNull { it.label == key }
+            .firstOrNull { it.cameraId == key || it.label == key }
             ?: return
         viewModelScope.launch(Dispatchers.Default) {
             cameraController.selectPhysicalLens(lens)

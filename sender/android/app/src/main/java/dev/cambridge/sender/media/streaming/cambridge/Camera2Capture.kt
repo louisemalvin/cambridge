@@ -48,6 +48,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import java.util.concurrent.Executor
+import kotlin.math.abs
 
 private data class StabilizationRequest(
     val videoMode: Int,
@@ -70,6 +71,7 @@ internal class Camera2Capture(
     private var requestedHeight: Int? = null
     private var previewSurface: CameraPreviewSurface? = null
     private var selectedCameraId: String? = null
+    private var selectedBackCameraId: String? = null
     private var cameraCharacteristics: CameraCharacteristics? = null
     private var zoomRatio = CameraZoom.DEFAULT_ZOOM_RATIO
     private var requestedStabilizationPreference = CameraStabilizationMode.OFF
@@ -87,6 +89,7 @@ internal class Camera2Capture(
     suspend fun prepare() {
         requireCameraPermission("Camera permission is required before preparing the CamBridge sender")
         val cameraId = selectedCameraId ?: selectDefaultCameraId().also { selectedCameraId = it }
+        rememberBackCamera(cameraId)
         cameraCharacteristics = cameraManager.getCameraCharacteristics(cameraId)
         updateCameraState()
     }
@@ -106,6 +109,7 @@ internal class Camera2Capture(
             startThread()
             val cameraId = selectDefaultCameraId()
             selectedCameraId = cameraId
+            rememberBackCamera(cameraId)
             cameraCharacteristics = cameraManager.getCameraCharacteristics(cameraId)
             updateCameraState()
         }
@@ -170,6 +174,7 @@ internal class Camera2Capture(
         encoderSurface = surface
         startThread()
         val cameraId = selectedCameraId ?: selectDefaultCameraId().also { selectedCameraId = it }
+        rememberBackCamera(cameraId)
         val device = openCamera(cameraId)
         cameraDevice = device
         beginStabilizationApplication()
@@ -214,6 +219,27 @@ internal class Camera2Capture(
 
     suspend fun resetZoom() {
         setZoomRatio(CameraZoom.DEFAULT_ZOOM_RATIO)
+    }
+
+    suspend fun toggleCameraFacing() {
+        val currentFacing = cameraCharacteristics
+            ?.get(CameraCharacteristics.LENS_FACING)
+            .toLensFacing()
+        val requestedFacing = if (currentFacing == CameraLensFacing.FRONT) {
+            CameraLensFacing.BACK
+        } else {
+            CameraLensFacing.FRONT
+        }
+        val requestedId = when (requestedFacing) {
+            CameraLensFacing.BACK -> selectedBackCameraId
+                ?.takeIf { cameraFacing(it) == CameraLensFacing.BACK }
+                ?: firstCameraId(CameraLensFacing.BACK)
+            CameraLensFacing.FRONT -> firstCameraId(CameraLensFacing.FRONT)
+            CameraLensFacing.EXTERNAL,
+            CameraLensFacing.UNKNOWN,
+            -> null
+        } ?: return
+        switchCamera(requestedId)
     }
 
     suspend fun setStabilizationMode(mode: CameraStabilizationMode) {
@@ -267,10 +293,19 @@ internal class Camera2Capture(
 
     suspend fun selectPhysicalLens(lens: PhysicalLensOption) {
         val requestedId = lens.cameraId ?: return
+        require(cameraFacing(requestedId) == CameraLensFacing.BACK) {
+            "Physical lens selection is limited to rear cameras"
+        }
+        selectedBackCameraId = requestedId
+        switchCamera(requestedId)
+    }
+
+    private suspend fun switchCamera(requestedId: String) {
         if (requestedId == selectedCameraId) return
         val wasRunning = cameraDevice != null
         if (wasRunning) closeCamera()
         selectedCameraId = requestedId
+        rememberBackCamera(requestedId)
         cameraCharacteristics = cameraManager.getCameraCharacteristics(requestedId)
         val supportedModes = availableStabilizationModes()
         cameraState.value = cameraState.value.withStabilizationState(
@@ -314,11 +349,23 @@ internal class Camera2Capture(
 
     private fun selectDefaultCameraId(): String {
         val ids = cameraManager.cameraIdList.toList()
-        val backCamera = ids.firstOrNull { id ->
-            cameraManager.getCameraCharacteristics(id).get(CameraCharacteristics.LENS_FACING) ==
-                CameraCharacteristics.LENS_FACING_BACK
+        return firstCameraId(CameraLensFacing.BACK)
+            ?: ids.firstOrNull()
+            ?: error("No Android camera is available")
+    }
+
+    private fun firstCameraId(facing: CameraLensFacing): String? =
+        cameraManager.cameraIdList.firstOrNull { cameraFacing(it) == facing }
+
+    private fun cameraFacing(cameraId: String): CameraLensFacing =
+        cameraManager.getCameraCharacteristics(cameraId)
+            .get(CameraCharacteristics.LENS_FACING)
+            .toLensFacing()
+
+    private fun rememberBackCamera(cameraId: String) {
+        if (cameraFacing(cameraId) == CameraLensFacing.BACK) {
+            selectedBackCameraId = cameraId
         }
-        return backCamera ?: ids.firstOrNull() ?: error("No Android camera is available")
     }
 
     @SuppressLint("MissingPermission")
@@ -746,25 +793,40 @@ internal class Camera2Capture(
         val characteristics = cameraCharacteristics ?: return
         val availableStabilizationModes = availableStabilizationModes()
         val antiFlickerModes = availableAntiFlickerModes()
+        val lensFacing = characteristics.get(CameraCharacteristics.LENS_FACING).toLensFacing()
+        val availableLensFacings = cameraManager.cameraIdList
+            .map(::cameraFacing)
+            .filter { it == CameraLensFacing.BACK || it == CameraLensFacing.FRONT }
+            .distinct()
         val maximumZoom = characteristics.get(CameraCharacteristics.SCALER_AVAILABLE_MAX_DIGITAL_ZOOM)
             ?: CameraZoom.DEFAULT_ZOOM_RATIO
-        val lensOptions = runCatching {
+        zoomRatio = zoomRatio.coerceIn(CameraZoom.DEFAULT_ZOOM_RATIO, maximumZoom)
+        val lensOptions = if (lensFacing == CameraLensFacing.BACK) runCatching {
             val physicalIds = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
                 characteristics.physicalCameraIds
             } else {
                 emptySet()
             }
-            if (physicalIds.isNotEmpty()) {
-                physicalIds.map { physicalId ->
-                    val label = getPhysicalLensLabel(physicalId)
-                    PhysicalLensOption(label = label, cameraId = physicalId)
-                }
+            val rearCameraIds = if (physicalIds.isNotEmpty()) {
+                physicalIds.filter { cameraFacing(it) == CameraLensFacing.BACK }
             } else {
-                cameraManager.cameraIdList.map { cameraId ->
-                    PhysicalLensOption(label = "Camera $cameraId", cameraId = cameraId)
+                cameraManager.cameraIdList.filter { cameraFacing(it) == CameraLensFacing.BACK }
+            }
+            rearCameraIds
+                .distinct()
+                .sortedBy(::cameraFocalLength)
+                .map { cameraId ->
+                    PhysicalLensOption(label = getPhysicalLensLabel(cameraId), cameraId = cameraId)
+                }
+        }.getOrDefault(emptyList()) else emptyList()
+        val selectedCameraFocalLength = selectedCameraId?.let(::cameraFocalLength)
+        val selectedLens = lensOptions.firstOrNull { it.cameraId == selectedCameraId }
+            ?: selectedCameraFocalLength?.let { focalLength ->
+                lensOptions.minByOrNull { option ->
+                    abs(cameraFocalLength(option.cameraId ?: return@minByOrNull Float.MAX_VALUE) - focalLength)
                 }
             }
-        }.getOrDefault(emptyList())
+            ?: lensOptions.firstOrNull()
         val currentStabilization = cameraState.value.stabilization
         val stabilizationState = if (
             currentStabilization.supportedModes != (listOf(CameraStabilizationMode.OFF) + availableStabilizationModes).distinct() ||
@@ -781,7 +843,12 @@ internal class Camera2Capture(
         }
         cameraState.value = cameraState.value
             .withCameraBounds(CameraZoom.DEFAULT_ZOOM_RATIO, maximumZoom, zoomRatio)
-            .withPhysicalLensOptions(lensOptions)
+            .withCameraSelection(
+                facing = lensFacing,
+                availableFacings = availableLensFacings,
+                lensOptions = lensOptions,
+                selectedLens = selectedLens,
+            )
             .withStabilizationState(stabilizationState)
             .withAntiFlickerSupport(antiFlickerModes)
     }
@@ -791,7 +858,9 @@ internal class Camera2Capture(
             ?: return "Lens $physicalId"
         val focalLengths = physicalChars.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)
         val focalLength = focalLengths?.firstOrNull() ?: 0.0f
-        val mainFocalLengths = cameraCharacteristics?.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)
+        val mainFocalLengths = firstCameraId(CameraLensFacing.BACK)
+            ?.let(cameraManager::getCameraCharacteristics)
+            ?.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)
         val mainFocalLength = mainFocalLengths?.firstOrNull() ?: focalLength
         if (mainFocalLength > 0.0f && focalLength > 0.0f) {
             val ratio = focalLength / mainFocalLength
@@ -803,6 +872,12 @@ internal class Camera2Capture(
         }
         return "Lens $physicalId"
     }
+
+    private fun cameraFocalLength(cameraId: String): Float =
+        cameraManager.getCameraCharacteristics(cameraId)
+            .get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)
+            ?.firstOrNull()
+            ?: Float.MAX_VALUE
 
     private fun closeCamera() {
         captureSession?.close()

@@ -53,6 +53,8 @@ data class CameraInteractionState(
     val stabilization: CameraStabilizationState = CameraStabilizationState(),
     val supportedAntiFlickerModes: List<AntiFlickerMode> = emptyList(),
     val antiFlickerMode: AntiFlickerMode = AntiFlickerMode.AUTO,
+    val lensFacing: CameraLensFacing = CameraLensFacing.UNKNOWN,
+    val availableLensFacings: List<CameraLensFacing> = emptyList(),
     val physicalLensOptions: List<PhysicalLensOption> = emptyList(),
     val selectedPhysicalLens: PhysicalLensOption? = null,
 ) {
@@ -62,6 +64,9 @@ data class CameraInteractionState(
         require(zoomRatio.isFinite()) { "Zoom ratio must be finite" }
         require(selectedPhysicalLens == null || selectedPhysicalLens in physicalLensOptions) {
             "Selected physical lens must be one of the available options"
+        }
+        require(availableLensFacings.distinct().size == availableLensFacings.size) {
+            "Available camera facings must be unique"
         }
     }
 
@@ -123,6 +128,23 @@ data class CameraInteractionState(
             ?: options.firstOrNull()
         return copy(
             physicalLensOptions = options,
+            selectedPhysicalLens = selectedLens,
+        )
+    }
+
+    fun withCameraSelection(
+        facing: CameraLensFacing,
+        availableFacings: List<CameraLensFacing>,
+        lensOptions: List<PhysicalLensOption>,
+        selectedLens: PhysicalLensOption?,
+    ): CameraInteractionState {
+        require(selectedLens == null || selectedLens in lensOptions) {
+            "Selected physical lens must be one of the available options"
+        }
+        return copy(
+            lensFacing = facing,
+            availableLensFacings = availableFacings.distinct(),
+            physicalLensOptions = lensOptions,
             selectedPhysicalLens = selectedLens,
         )
     }
