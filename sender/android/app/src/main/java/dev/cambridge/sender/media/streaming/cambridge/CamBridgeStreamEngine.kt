@@ -287,6 +287,7 @@ class CamBridgeStreamEngine(
             )
             streamEndpoint = endpoint.copy(mediaRtpPort = mediaRtpPort, mediaRtcpPort = mediaRtcpPort)
             currentAdaptiveBitrateBps.set(streamConfiguration.bitrateBps)
+            running = true
             codec?.start()
             startTransportJob(transport, endpoint.generation)
             try {
@@ -300,7 +301,6 @@ class CamBridgeStreamEngine(
                 if (cause is CameraPermissionRequiredException) throw cause
                 throw StreamFailureException(StreamFailure.CameraUnavailable, cause)
             }
-            running = true
             startControlReader(connection, endpoint.generation)
             emit(
                 "stream_started",

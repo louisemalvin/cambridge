@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## Android 0.5.3 - transport worker startup
+
+- Activate the stream generation before starting MediaCodec and its transport
+  worker so the worker cannot exit before delivering the first access unit.
+
 ## Android 0.5.2 and OBS plugin 0.5.2 - GStreamer transport simplification
 
 - Restore GStreamer's adaptive RTX, RTCP scheduling, jitter, and congestion
