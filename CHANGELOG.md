@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## Android 0.5.5 - persistent rear lens controls
+
+- Keep the main rear camera's complete lens pill list visible after selecting
+  an individual rear lens.
+
 ## Android 0.5.4 - camera selection controls
 
 - Replace mixed front, back, and physical-camera choices with one front/back

@@ -802,13 +802,15 @@ internal class Camera2Capture(
             ?: CameraZoom.DEFAULT_ZOOM_RATIO
         zoomRatio = zoomRatio.coerceIn(CameraZoom.DEFAULT_ZOOM_RATIO, maximumZoom)
         val lensOptions = if (lensFacing == CameraLensFacing.BACK) runCatching {
+            val mainRearCharacteristics = firstCameraId(CameraLensFacing.BACK)
+                ?.let(cameraManager::getCameraCharacteristics)
             val physicalIds = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
-                characteristics.physicalCameraIds
+                mainRearCharacteristics?.physicalCameraIds.orEmpty()
             } else {
                 emptySet()
             }
             val rearCameraIds = if (physicalIds.isNotEmpty()) {
-                physicalIds.filter { cameraFacing(it) == CameraLensFacing.BACK }
+                physicalIds
             } else {
                 cameraManager.cameraIdList.filter { cameraFacing(it) == CameraLensFacing.BACK }
             }
