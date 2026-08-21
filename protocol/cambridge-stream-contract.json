@@ -1,6 +1,6 @@
 {
   "name": "cambridge-stream",
-  "protocolVersion": 6,
+  "protocolVersion": 7,
   "control": {
     "framing": "uint32-be-length-prefixed-json",
     "maxMessageBytes": 8192,
@@ -21,7 +21,9 @@
   },
   "defaults": {
     "controlPort": 55031,
-    "mediaPortOffset": 1
+    "mediaRtpPort": 55032,
+    "mediaRtcpPort": 55033,
+    "senderRtcpPort": 55033
   },
   "geometry": {
     "minimumDimension": 16,
@@ -39,28 +41,32 @@
     "maximumBps": 100000000
   },
   "media": {
-    "transport": "rtp-h264-udp-unicast",
+    "transport": "rtp-h264-rtcp-udp-unicast",
     "payloadType": 96,
+    "rtxPayloadType": 97,
     "clockRateHz": 90000,
-    "rtpHeaderBytes": 12,
     "mtuBytes": 1200,
-    "maxDatagramBytes": 1500,
+    "twccExtensionId": 1,
+    "rtpSessionIndex": 0,
+    "jitterLatencyMs": 40,
+    "rtxHistoryMs": 150,
+    "rtcpFeedbackBandwidthFraction": 0.05,
     "maxAccessUnitBytes": 8388608,
     "maxInFlightAccessUnits": 2,
-    "maxReorderPackets": 64,
+    "appsrcMaxBuffers": 4,
+    "gccMinimumBitrateFloorBps": 750000,
     "mailboxCapacity": 1,
     "texturePoolSlots": 3,
     "maxDecoderQueueAgeMs": 100,
     "maxLiveFrameAgeMs": 250,
-    "reorderDeadlineMs": 20,
     "keyframeIntervalSeconds": 1
   },
   "messages": {
-    "probe": "{protocolVersion:6, type:probe, requestId}",
-    "capabilities": "{protocolVersion:6, type:capabilities, requestId, receiverId, displayName, maxLongEdge, maxShortEdge}",
-    "hello": "{protocolVersion:6, type:hello, sessionId, generation, profileId, codec, codedWidth, codedHeight, rotationDegrees, fps, bitrateBps}",
-    "accepted": "{protocolVersion:6, type:accepted, sessionId, generation, profileId, mediaPort, maxLongEdge, maxShortEdge}",
-    "stop": "{protocolVersion:6, type:stop, sessionId, generation}",
-    "error": "{protocolVersion:6, type:error, error}"
+    "probe": "{protocolVersion:7, type:probe, requestId}",
+    "capabilities": "{protocolVersion:7, type:capabilities, requestId, receiverId, displayName, maxLongEdge, maxShortEdge}",
+    "hello": "{protocolVersion:7, type:hello, sessionId, generation, profileId, codec, codedWidth, codedHeight, rotationDegrees, fps, targetBitrateBps, senderRtcpPort}",
+    "accepted": "{protocolVersion:7, type:accepted, sessionId, generation, profileId, mediaRtpPort, mediaRtcpPort, maxLongEdge, maxShortEdge}",
+    "stop": "{protocolVersion:7, type:stop, sessionId, generation}",
+    "error": "{protocolVersion:7, type:error, error}"
   }
 }

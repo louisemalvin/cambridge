@@ -9,18 +9,24 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
 internal object CamBridgeStreamContract {
-    const val PROTOCOL_VERSION = 6
+    const val PROTOCOL_VERSION = 7
     const val CONTROL_HEADER_BYTES = 4
     const val MAXIMUM_CONTROL_MESSAGE_BYTES = 8_192
     const val RTP_PAYLOAD_TYPE = 96
+    const val RTX_PAYLOAD_TYPE = 97
     const val RTP_CLOCK_RATE_HZ = 90_000
-    const val RTP_HEADER_BYTES = 12
     const val RTP_MTU_BYTES = 1_200
-    const val MAXIMUM_ACCESS_UNIT_BYTES = 8 * 1024 * 1024
+    const val TWCC_EXTENSION_ID = 1
+    const val JITTER_LATENCY_MILLIS = 40
+    const val RTX_HISTORY_MILLIS = 150
+    const val MAXIMUM_ACCESS_UNIT_BYTES = 8_388_608
     const val MAXIMUM_ENCODED_QUEUE = 2
-    const val DEFAULT_MEDIA_PORT_OFFSET = 1
+    const val APPSRC_MAXIMUM_BUFFERS = 4
+    const val GCC_MINIMUM_BITRATE_FLOOR_BPS = 750_000
     const val DEFAULT_CONTROL_PORT = 55_031
-    const val DEFAULT_MEDIA_PORT = DEFAULT_CONTROL_PORT + DEFAULT_MEDIA_PORT_OFFSET
+    const val DEFAULT_MEDIA_RTP_PORT = 55_032
+    const val DEFAULT_MEDIA_RTCP_PORT = 55_033
+    const val DEFAULT_SENDER_RTCP_PORT = 55_033
     const val FIRST_STREAM_GENERATION = 1L
     const val CONNECT_TIMEOUT_MILLIS = 2_000
     const val REQUEST_TIMEOUT_MILLIS = 2_000
@@ -56,7 +62,8 @@ internal object CamBridgeStreamContract {
         codedHeight: Int,
         rotationDegrees: Int,
         fps: Int,
-        bitrateBps: Int,
+        targetBitrateBps: Int,
+        senderRtcpPort: Int,
     ): JsonObject = buildJsonObject {
         put("protocolVersion", PROTOCOL_VERSION)
         put("type", MESSAGE_HELLO)
@@ -68,7 +75,8 @@ internal object CamBridgeStreamContract {
         put("codedHeight", codedHeight)
         put("rotationDegrees", rotationDegrees)
         put("fps", fps)
-        put("bitrateBps", bitrateBps)
+        put("targetBitrateBps", targetBitrateBps)
+        put("senderRtcpPort", senderRtcpPort)
     }
 
     fun stop(sessionId: String, generation: Long): JsonObject = buildJsonObject {

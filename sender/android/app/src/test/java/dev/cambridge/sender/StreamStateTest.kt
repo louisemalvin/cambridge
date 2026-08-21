@@ -46,7 +46,8 @@ class StreamStateTest {
         encoderName = "test-h264",
         profile = VideoProfiles.default,
         bitrateBps = VideoProfiles.default.defaultBitrateBps,
-        mediaPort = 50_001,
+        mediaRtpPort = 50_001,
+        mediaRtcpPort = 50_002,
         outputPixelFormat = OutputPixelFormat.NV12,
         warnings = emptyList(),
     )

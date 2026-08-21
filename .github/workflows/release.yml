@@ -65,6 +65,8 @@ jobs:
       - uses: android-actions/setup-android@v3
       - name: Install Android SDK packages
         run: sdkmanager "platforms;android-37.0" "build-tools;36.0.0" "platform-tools"
+      - name: Install pinned GStreamer Android SDK
+        run: ./scripts/sender/android/prepare-gstreamer-android.sh
       - uses: gradle/actions/setup-gradle@v4
       - name: Build signed release APK
         env:
@@ -113,6 +115,10 @@ jobs:
             cmake extra-cmake-modules g++ ninja-build pkg-config python3 curl file tar \
             libavcodec-dev libavformat-dev libavutil-dev libswresample-dev \
             libswscale-dev \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            gstreamer1.0-tools gstreamer1.0-plugins-base \
+            gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
+            gstreamer1.0-plugins-ugly \
             libsimde-dev uthash-dev zlib1g-dev \
             uuid-dev libx11-dev libx11-xcb-dev libxcb1-dev libxcb-xinput-dev \
             libva-dev libva-drm2 libdrm-dev libgl-dev libopengl-dev libglx-dev \

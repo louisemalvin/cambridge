@@ -41,8 +41,9 @@ without Android, OBS, a camera, or a network process:
   60 fps capability decisions;
 - receiver endpoint validation and selection ordering;
 - stream lifecycle state transitions and cleanup ownership;
-- RTP packetization, sequence wrap, marker placement, and malformed input;
-- native RTP, control, mailbox, decoder-path, renderer-path, diagnostics, and
+- GStreamer sender and receiver construction, required factory availability,
+  and transport configuration;
+- native control, mailbox, decoder-path, renderer-path, diagnostics, and
   discovery metadata policies.
 
 Pure tests must assert the decision and its reason, not only that a list or
@@ -66,9 +67,25 @@ API 35 emulator or physical device and is a separate evidence item.
 ### Process and runtime integration
 
 The native fixture starts an isolated OBS process with a Cambridge-only scene
-and profile. It must cover control probe, hello and acceptance, RTP decode,
-first-frame publication, recording output when enabled, sender stop, session
-invalidation, and clean OBS shutdown.
+and profile. It must cover control probe, hello and acceptance, GStreamer RTP
+decode, first-frame publication, recording output when enabled, sender stop,
+session invalidation, and clean OBS shutdown.
+
+The shared GStreamer integration test is mandatory when the pinned transport
+runtime is available. It uses a local RTP proxy to inject deterministic loss,
+delay, and recovery conditions:
+
+- A: continuous delivery with no loss;
+- B: one lost RTP datagram recovered by NACK/RTX without an additional PLI;
+- C: unrecoverable loss requests a keyframe and resumes on a clean IDR;
+- D: ten consecutive lost datagrams do not leave persistent corruption;
+- E: bandwidth reduction drives GCC and the Android bitrate callback down;
+- F: restored bandwidth drives GCC and the callback back toward the target.
+
+The test exits with the CTest skip code when `rtpgccbwe` or the x264 test
+encoder is unavailable. A release environment must install the GStreamer Rust
+RTP plugin and run the test rather than treating that skip as transport
+acceptance.
 
 The Android emulator fixture adds the Camera2 and MediaCodec boundary, but it
 does not prove a particular physical phone's camera modes or stabilization
@@ -100,10 +117,12 @@ The following IDs are used in review reports and test names.
 | SESSION-03 | Stop is requested repeatedly | Stop is idempotent and does not start a new connection. |
 | SESSION-04 | Encoder disconnects while streaming | The session fails as a network disconnect and cleanup runs once. |
 | SESSION-05 | Bitrate changes while idle or streaming | Idle updates fail; active updates reach the engine and are diagnosed. |
-| RTP-01 | Small Annex-B access unit | One RTP packet has the correct timestamp, payload type, and marker. |
-| RTP-02 | Large NAL unit | FU-A start, middle, end, marker, and sequence progression are correct. |
-| RTP-03 | Sequence reaches 65535 | The next packet wraps to zero without corrupting the stream. |
-| RTP-04 | Malformed or rejected UDP output | The packetizer returns failure and the session cleanup path is exercised. |
+| MEDIA-01 | Required GStreamer factories are unavailable | Start fails clearly and no fallback transport is selected. |
+| MEDIA-02 | One RTP datagram is lost | RTCP NACK triggers RTX recovery without an additional keyframe request. |
+| MEDIA-03 | Loss exceeds RTX history | RTCP PLI/FIR reaches the sender, MediaCodec receives a sync-frame request, and delivery resumes at the next IDR. |
+| MEDIA-04 | Ten consecutive datagrams are lost | The receiver does not retain persistent corruption after a clean access unit. |
+| MEDIA-05 | Available bandwidth drops | GCC publishes a lower estimate and the sender applies a bounded MediaCodec bitrate update. |
+| MEDIA-06 | Available bandwidth recovers | GCC and the encoder bitrate return toward the configured target. |
 | OBS-01 | Plugin is loaded by the target OBS ABI | OBS reaches startup complete with only Cambridge enabled and no new coredump. |
 | OBS-02 | Native decoder and renderer path is selected | The selected path is explicit in diagnostics and frames are published. |
 | OBS-03 | CPU fallback is selected | Software decode and rendering are explicit and changing frames are recorded. |
@@ -141,6 +160,10 @@ From the repository root:
 
 ```bash
 python3 scripts/development/check-cambridge-stream-contract.py
+./scripts/sender/android/prepare-gstreamer-android.sh
+export GSTREAMER_ROOT_ANDROID="$PWD/build/gstreamer-android-1.24.13"
+export JAVA_HOME=/path/to/jdk-17
+./scripts/development/check-all.sh
 JAVA_HOME=/path/to/jdk-17 ./scripts/development/check-all.sh
 ```
 
@@ -148,6 +171,8 @@ Android-only checks:
 
 ```bash
 cd sender/android
+../../scripts/sender/android/prepare-gstreamer-android.sh
+export GSTREAMER_ROOT_ANDROID="$PWD/../../build/gstreamer-android-1.24.13"
 JAVA_HOME=/path/to/jdk-17 ./gradlew \
   testDebugUnitTest lint assembleDebug compileDebugAndroidTestKotlin --console=plain
 JAVA_HOME=/path/to/jdk-17 ./gradlew connectedDebugAndroidTest --console=plain
@@ -158,6 +183,8 @@ Native-only checks:
 ```bash
 ./scripts/receiver/linux/build-cambridge-obs-plugin.sh
 ldd -r build/cambridge-obs-plugin/staging/obs-plugins/cambridge-obs-plugin/bin/64bit/cambridge-obs-plugin.so
+GST_PLUGIN_PATH=/path/to/gst-plugin-rtp \
+  ./build/cambridge-shared-tests/cambridge-obs-plugin-tests
 ```
 
 Runtime fixture examples:
@@ -208,7 +235,7 @@ python3 scripts/development/generate-ios-version.py --check
 ```
 
 Android and OBS release tags are `android-v<version>` and `obs-v<version>`.
-Protocol compatibility remains controlled only by the v6 stream contract, not
+Protocol compatibility remains controlled only by the v7 stream contract, not
 by requiring the component marketing versions to be equal.
 
 ## Release acceptance criteria
@@ -216,8 +243,10 @@ by requiring the component marketing versions to be equal.
 A supported release is accepted only when the following evidence is retained:
 
 - contract validation passes;
-- Android JVM tests, lint, debug assembly, and instrumentation compilation
-  pass;
+- Android JVM tests, lint, debug assembly, and instrumentation compilation pass
+  with the pinned GStreamer Android SDK;
+- the six-case GStreamer loss, RTX, keyframe, and adaptive bitrate integration
+  test runs without a skip;
 - native CTest passes and `ldd -r` reports no unresolved symbols or libraries;
 - an isolated Cambridge-only OBS profile reaches startup complete without a new
   coredump;
@@ -231,9 +260,9 @@ A supported release is accepted only when the following evidence is retained:
 - all failures are classified in diagnostics and no acceptance claim relies on
   a test that was only compiled.
 
-The locked phone in the 2026-08-20 review means the physical Android and
-glass-to-glass criteria are pending. No claim about the Vivo's actual 60 fps
-capability should be made until its resolved capability record is retained.
+The physical Android and glass-to-glass criteria remain device evidence. No
+claim about the Vivo's actual 60 fps capability should be made until its
+resolved capability record is retained.
 
 ## Priority follow-ups
 

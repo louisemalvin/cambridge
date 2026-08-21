@@ -15,7 +15,7 @@ import org.junit.Test
 
 class CamBridgeStreamContractTest {
     @Test
-    fun helloUsesV6PhoneAuthoredValuesAndResolvedRotation() {
+    fun helloUsesV7PhoneAuthoredValuesAndResolvedRotation() {
         val hello = CamBridgeStreamContract.hello(
             sessionId = "test-session",
             generation = 1,
@@ -24,7 +24,8 @@ class CamBridgeStreamContractTest {
             codedHeight = 1_440,
             rotationDegrees = 90,
             fps = VideoProfiles.PROFILE_2K30.fps,
-            bitrateBps = 18_000_000,
+            targetBitrateBps = 18_000_000,
+            senderRtcpPort = CamBridgeStreamContract.DEFAULT_SENDER_RTCP_PORT,
         )
 
         assertEquals(CamBridgeStreamContract.PROTOCOL_VERSION, hello.requireProtocolVersion())
@@ -45,7 +46,7 @@ class CamBridgeStreamContractTest {
         val response = Json.parseToJsonElement(
             """
             {
-              "protocolVersion": 6,
+              "protocolVersion": 7,
               "type": "capabilities",
               "requestId": "probe-1",
               "receiverId": "cambridge-obs-source",

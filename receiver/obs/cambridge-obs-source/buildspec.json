@@ -5,6 +5,7 @@
     "cmake": "3.30.9",
     "obsStudio": "32.1.2",
     "ffmpeg": "7.1.1",
+    "gstreamer": "1.24.13",
     "macosDeploymentTarget": "12.0",
     "architectures": [
       "arm64",
@@ -65,6 +66,24 @@
       "version": "7.1.1",
       "url": "https://ffmpeg.org/releases/ffmpeg-7.1.1.tar.xz",
       "sha256": "733984395e0dbbe5c046abda2dc49a5544e7e0e1e2366bba849222ae9e3a03b1"
+    },
+    {
+      "name": "gstreamer-android",
+      "version": "1.24.13",
+      "url": "https://gstreamer.freedesktop.org/data/pkg/android/1.24.13/gstreamer-1.0-android-universal-1.24.13.tar.xz",
+      "sha256": "f420ab69f252e01dcf1b447d128b36ddeddf02ddc7e9e8104ddcfb830dd395b7"
+    },
+    {
+      "name": "gstreamer-macos-runtime",
+      "version": "1.24.13",
+      "url": "https://gstreamer.freedesktop.org/pkg/osx/1.24.13/gstreamer-1.0-1.24.13-universal.pkg",
+      "sha256": "a18458c7cd61e5f2c71bb17c6eb88d54493adb964ec30dd53d96244aac537839"
+    },
+    {
+      "name": "gstreamer-macos-devel",
+      "version": "1.24.13",
+      "url": "https://gstreamer.freedesktop.org/pkg/osx/1.24.13/gstreamer-1.0-devel-1.24.13-universal.pkg",
+      "sha256": "95633de7eec859e1dbfc4e8e7b650b78a47a31075735eee7550ccf9b919ba398"
     }
   ],
   "appleFrameworks": [

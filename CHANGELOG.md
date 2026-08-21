@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+## Android 0.5.0 - GStreamer RTP transport
+
+- Replace application RTP packetization and pacing with the pinned GStreamer
+  RTP/RTCP sender, RTX, TWCC, and GCC pipeline.
+- Add bounded access-unit recovery, MediaCodec keyframe requests, and adaptive
+  bitrate updates from GStreamer estimates.
+- Require the official GStreamer Android SDK and protocol v7 control fields.
+
+## OBS plugin 0.5.0 - GStreamer receiver
+
+- Replace the raw UDP RTP receiver with GStreamer `rtpbin`, jitter buffering,
+  RTCP feedback, RTX receive, H.264 depayloading, and appsink delivery.
+- Add integration coverage for retransmission, keyframe recovery, burst loss,
+  and bandwidth adaptation.
+- Require GStreamer 1.24.13 or newer and the Rust RTP plugin at runtime.
+
 ## Android 0.4.1 - RTP delivery recovery
 
 - Pace H.264 RTP datagrams at the configured media rate so large 2K frames do

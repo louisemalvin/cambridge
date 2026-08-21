@@ -59,7 +59,7 @@ def load_contract(
         "width": width,
         "height": height,
         "fps": fps,
-        "bitrateBps": bitrate_bps,
+        "targetBitrateBps": bitrate_bps,
     }
     return contract, video, profile_id
 
@@ -125,15 +125,18 @@ def connect_control(
             "codedHeight": video["height"],
             "rotationDegrees": rotation_degrees,
             "fps": video["fps"],
-            "bitrateBps": video["bitrateBps"],
+            "targetBitrateBps": video["targetBitrateBps"],
+            "senderRtcpPort": contract["defaults"]["senderRtcpPort"],
         },
     )
     accepted = receive_frame(connection, time.monotonic() + CONTROL_TIMEOUT_SECONDS)
     if accepted.get("type") != "accepted":
         raise RuntimeError(f"receiver rejected fixture: {accepted}")
-    expected_media_port = port + contract["defaults"]["mediaPortOffset"]
-    if accepted.get("mediaPort") != expected_media_port:
-        raise RuntimeError(f"receiver returned unexpected media port: {accepted}")
+    expected_media_rtp_port = contract["defaults"]["mediaRtpPort"]
+    expected_media_rtcp_port = contract["defaults"]["mediaRtcpPort"]
+    if accepted.get("mediaRtpPort") != expected_media_rtp_port or \
+            accepted.get("mediaRtcpPort") != expected_media_rtcp_port:
+        raise RuntimeError(f"receiver returned unexpected media ports: {accepted}")
     connection.setblocking(False)
     return connection, session_id, accepted
 
@@ -141,7 +144,7 @@ def connect_control(
 def start_ffmpeg(
     ffmpeg: str,
     media_host: str,
-    media_port: int,
+    media_rtp_port: int,
     video: dict[str, Any],
     contract: dict[str, Any],
     stderr_path: Path,
@@ -199,11 +202,11 @@ def start_ffmpeg(
         "-tune",
         "zerolatency",
         "-b:v",
-        str(video["bitrateBps"]),
+        str(video["targetBitrateBps"]),
         "-maxrate",
-        str(video["bitrateBps"]),
+        str(video["targetBitrateBps"]),
         "-bufsize",
-        str(video["bitrateBps"] * 2),
+        str(video["targetBitrateBps"] * 2),
         "-g",
         str(keyframe_interval_frames),
         "-keyint_min",
@@ -213,14 +216,14 @@ def start_ffmpeg(
         "-bf",
         "0",
         "-x264-params",
-        f"repeat-headers=1:slice-max-size={media['mtuBytes'] - media['rtpHeaderBytes']}",
+        "repeat-headers=1",
         "-payload_type",
         str(media["payloadType"]),
         "-f",
         "rtp",
         "-rtpflags",
         "h264_mode0",
-        f"rtp://{media_host}:{media_port}?pkt_size={media['mtuBytes']}",
+        f"rtp://{media_host}:{media_rtp_port}?pkt_size={media['mtuBytes']}",
     ]
     stderr = stderr_path.open("wb")
     process = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=stderr)
@@ -249,7 +252,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--bitrate-bps", type=int, default=18_000_000)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--control-port", type=int, default=None)
-    parser.add_argument("--media-port", type=int, default=None)
+    parser.add_argument("--media-rtp-port", type=int, default=None)
+    parser.add_argument("--media-rtcp-port", type=int, default=None)
     parser.add_argument("--duration", type=float, default=30.0)
     parser.add_argument(
         "--rotation-degrees",
@@ -278,11 +282,14 @@ def main() -> int:
         args.profile_id,
     )
     control_port = args.control_port or contract["defaults"]["controlPort"]
-    media_port = args.media_port or control_port + contract["defaults"]["mediaPortOffset"]
+    media_rtp_port = args.media_rtp_port or contract["defaults"]["mediaRtpPort"]
+    media_rtcp_port = args.media_rtcp_port or contract["defaults"]["mediaRtcpPort"]
     summary: dict[str, Any] = {
         "video": video,
         "durationSeconds": args.duration,
         "controlConnections": 0,
+        "mediaRtpPort": media_rtp_port,
+        "mediaRtcpPort": media_rtcp_port,
         "receiverErrors": [],
     }
     connection: socket.socket | None = None
@@ -305,7 +312,7 @@ def main() -> int:
         if args.startup_delay > DEFAULT_STARTUP_DELAY_SECONDS:
             time.sleep(args.startup_delay)
         ffmpeg_process, ffmpeg_stderr = start_ffmpeg(
-            args.ffmpeg, args.host, media_port, video, contract, stderr_path
+            args.ffmpeg, args.host, media_rtp_port, video, contract, stderr_path
         )
         while time.monotonic() - started < args.duration:
             if ffmpeg_process.poll() is not None:

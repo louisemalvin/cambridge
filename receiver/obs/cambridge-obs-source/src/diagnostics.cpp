@@ -122,23 +122,18 @@ bool write_diagnostics(const DiagnosticsSnapshot &snapshot, const std::string &p
            << ",\n  \"cpuFrameCopies\": " << snapshot.cpu_frame_copies
            << ",\n  \"gpuCopies\": " << snapshot.gpu_copies
            << ",\n  \"dmaBufImportFailures\": " << snapshot.dma_buf_import_failures
-           << ",\n  \"packetsReceived\": " << snapshot.packets_received
-           << ",\n  \"bytesReceived\": " << snapshot.bytes_received
-           << ",\n  \"packetsLost\": " << snapshot.packets_lost
-           << ",\n  \"malformedPackets\": " << snapshot.malformed_packets
-           << ",\n  \"invalidSourcePackets\": " << snapshot.invalid_source_packets
+           << ",\n  \"accessUnitsDelivered\": " << snapshot.access_units_delivered
+           << ",\n  \"accessUnitBytesDelivered\": " << snapshot.access_unit_bytes_delivered
+           << ",\n  \"transportErrors\": " << snapshot.transport_errors
            << ",\n  \"decodeFailures\": " << snapshot.decode_failures
            << ",\n  \"decoderQueueDrops\": " << snapshot.decoder_queue_drops
            << ",\n  \"decoderQueueOccupancy\": " << snapshot.decoder_queue_occupancy
-           << ",\n  \"reorderOccupancy\": " << snapshot.reorder_occupancy
-           << ",\n  \"reorderPeak\": " << snapshot.reorder_peak
-           << ",\n  \"reorderDeadlineDrops\": " << snapshot.reorder_deadline_drops
            << ",\n  \"maxReceiveToDecodeMs\": " << snapshot.max_receive_to_decode_ms
            << ",\n  \"maxReceiveToPublishMs\": " << snapshot.max_receive_to_publish_ms
            << ",\n  \"maxReceiveToRenderMs\": " << snapshot.max_receive_to_render_ms
            << ",\n  \"configured\": {\"controlPort\": " << snapshot.configured_control_port
-           << ", \"mediaPort\": " << snapshot.configured_media_port
-           << ", \"reorderDeadlineMs\": " << snapshot.configured_reorder_deadline_ms
+           << ", \"mediaRtpPort\": " << snapshot.configured_media_rtp_port
+           << ", \"mediaRtcpPort\": " << snapshot.configured_media_rtcp_port
            << ", \"maximumDecoderQueueAgeMs\": "
            << snapshot.configured_maximum_decoder_queue_age_ms
            << ", \"maximumLiveFrameAgeMs\": "

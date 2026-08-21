@@ -1,5 +1,5 @@
 {
-  "protocolVersion": 6,
+  "protocolVersion": 7,
   "type": "probe",
   "requestId": "probe-example-request"
 }

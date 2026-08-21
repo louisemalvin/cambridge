@@ -1,5 +1,5 @@
 {
-  "protocolVersion": 6,
+  "protocolVersion": 7,
   "type": "hello",
   "sessionId": "run-example-session",
   "generation": 1,
@@ -9,5 +9,6 @@
   "codedHeight": 1440,
   "rotationDegrees": 0,
   "fps": 30,
-  "bitrateBps": 18000000
+  "targetBitrateBps": 16000000,
+  "senderRtcpPort": 55033
 }

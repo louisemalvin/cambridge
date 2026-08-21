@@ -58,8 +58,12 @@ set(CAMBRIDGE_SHARED_SOURCES
     src/diagnostics.cpp
     src/diagnostics.hpp
     src/discovery_metadata.cpp
+    src/access_unit.hpp
     src/cambridge_source.cpp
-    src/media_receiver.cpp
+    src/gstreamer_runtime.cpp
+    src/gstreamer_runtime.hpp
+    src/gstreamer_media_receiver.cpp
+    src/gstreamer_media_receiver.hpp
     src/media_path.cpp
     src/module.cpp
     src/network_address_candidates.cpp
@@ -72,7 +76,6 @@ set(CAMBRIDGE_SHARED_SOURCES
     src/protocol_contract.generated.hpp
     src/receiver_constants.hpp
     src/renderer.cpp
-    src/rtp.cpp
 )
 
 if(CAMBRIDGE_BUILD_PLUGIN)
@@ -179,6 +182,8 @@ if(CAMBRIDGE_BUILD_TESTS)
 endif()
 
 if(CAMBRIDGE_BUILD_TESTS AND BUILD_TESTING)
+    find_package(Threads REQUIRED)
+
     function(cambridge_add_test target)
         add_executable(${target} ${ARGN})
         target_compile_features(${target} PRIVATE cxx_std_17)
@@ -187,8 +192,27 @@ if(CAMBRIDGE_BUILD_TESTS AND BUILD_TESTING)
     endfunction()
 
     cambridge_add_test(cambridge-obs-plugin-tests
-        tests/rtp_tests.cpp
-        src/rtp.cpp
+        tests/gstreamer_transport_tests.cpp
+        src/gstreamer_runtime.cpp
+        src/gstreamer_media_receiver.cpp
+        ../../../sender/android/app/src/main/jni/gstreamer_sender.cpp
+    )
+    target_include_directories(cambridge-obs-plugin-tests SYSTEM PRIVATE
+        ${CAMBRIDGE_GSTREAMER_INCLUDE_DIRS}
+    )
+    target_include_directories(cambridge-obs-plugin-tests PRIVATE
+        ../../../sender/android/app/src/main/jni
+        src
+    )
+    target_link_directories(cambridge-obs-plugin-tests PRIVATE
+        ${CAMBRIDGE_GSTREAMER_LIBRARY_DIRS}
+    )
+    target_link_libraries(cambridge-obs-plugin-tests PRIVATE
+        ${CAMBRIDGE_GSTREAMER_LIBRARIES}
+        Threads::Threads
+    )
+    set_tests_properties(cambridge-obs-plugin-tests PROPERTIES
+        SKIP_RETURN_CODE 77
     )
 
     cambridge_add_test(cambridge-obs-plugin-contract-tests
@@ -205,7 +229,6 @@ if(CAMBRIDGE_BUILD_TESTS AND BUILD_TESTING)
         ${CAMBRIDGE_JSON_LINK_LIBRARIES}
     )
 
-    find_package(Threads REQUIRED)
     cambridge_add_test(cambridge-obs-plugin-control-server-tests
         tests/control_server_tests.cpp
         src/control_protocol.cpp

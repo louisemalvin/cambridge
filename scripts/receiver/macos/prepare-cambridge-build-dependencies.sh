@@ -22,6 +22,7 @@ command -v curl >/dev/null 2>&1 || { printf 'error: curl is required\n' >&2; exi
 command -v jq >/dev/null 2>&1 || { printf 'error: jq is required\n' >&2; exit 1; }
 command -v lipo >/dev/null 2>&1 || { printf 'error: lipo is required\n' >&2; exit 1; }
 command -v shasum >/dev/null 2>&1 || { printf 'error: shasum is required\n' >&2; exit 1; }
+command -v installer >/dev/null 2>&1 || { printf 'error: installer is required for GStreamer\n' >&2; exit 1; }
 brew install pkg-config jq yasm nasm jansson simde uthash
 
 buildspec="${repo_root}/receiver/obs/cambridge-obs-source/buildspec.json"
@@ -57,6 +58,24 @@ download_and_verify_dependency() {
         "${dependency_url}" --output "${archive_path}"
     printf '%s  %s\n' "${dependency_hash}" "${archive_path}" | shasum -a 256 -c -
 }
+
+gstreamer_version=$(jq -er '.dependencies[] | select(.name == "gstreamer-macos-runtime") | .version' "${buildspec}")
+gstreamer_runtime_pkg="${temp_root}/gstreamer-1.0-${gstreamer_version}-universal.pkg"
+gstreamer_development_pkg="${temp_root}/gstreamer-1.0-devel-${gstreamer_version}-universal.pkg"
+download_and_verify_dependency gstreamer-macos-runtime "${gstreamer_runtime_pkg}"
+download_and_verify_dependency gstreamer-macos-devel "${gstreamer_development_pkg}"
+sudo installer -pkg "${gstreamer_runtime_pkg}" -target /
+sudo installer -pkg "${gstreamer_development_pkg}" -target /
+
+gstreamer_framework_root=/Library/Frameworks/GStreamer.framework/Versions/1.0
+gstreamer_pkg_config_path="${gstreamer_framework_root}/lib/pkgconfig"
+gstreamer_bin_path="${gstreamer_framework_root}/bin"
+[[ -d "${gstreamer_pkg_config_path}" ]] || {
+    printf 'error: GStreamer pkg-config metadata is missing: %s\n' \
+        "${gstreamer_pkg_config_path}" >&2
+    exit 1
+}
+export PATH="${gstreamer_bin_path}:${PATH}"
 
 cmake_version=$(jq -er '.baseline.cmake' "${buildspec}")
 cmake_archive="${temp_root}/cmake-${cmake_version}-macos-universal.tar.gz"
@@ -140,7 +159,7 @@ obs_libobs_entrypoint="${repo_root}/receiver/obs/cambridge-obs-source/cmake/maco
 }
 cp "${obs_libobs_entrypoint}" "${obs_source}/CMakeLists.txt"
 
-obs_pkg_config_path="${ffmpeg_prefix}/lib/pkgconfig:${simde_prefix}/lib/pkgconfig:${uthash_prefix}/lib/pkgconfig:${jansson_prefix}/lib/pkgconfig"
+obs_pkg_config_path="${gstreamer_pkg_config_path}:${ffmpeg_prefix}/lib/pkgconfig:${simde_prefix}/lib/pkgconfig:${uthash_prefix}/lib/pkgconfig:${jansson_prefix}/lib/pkgconfig"
 obs_cmake_prefix_path="${ffmpeg_prefix};${simde_prefix};${uthash_prefix};${jansson_prefix}"
 PKG_CONFIG_PATH="${obs_pkg_config_path}" cmake -S "${obs_source}" -B "${obs_build}" -G Xcode \
     -DCMAKE_OSX_DEPLOYMENT_TARGET="$(jq -er '.baseline.macosDeploymentTarget' "${buildspec}")" \
@@ -212,7 +231,7 @@ export_lines=(
     "CAMBRIDGE_OBS_PREFIX=${obs_prefix}"
     "CAMBRIDGE_JANSSON_PREFIX=${jansson_prefix}"
     "CMAKE_PREFIX_PATH=${obs_prefix};${ffmpeg_prefix};${simde_prefix};${uthash_prefix};${jansson_prefix}"
-    "PKG_CONFIG_PATH=${obs_pc_dir}:${ffmpeg_prefix}/lib/pkgconfig:${simde_prefix}/lib/pkgconfig:${uthash_prefix}/lib/pkgconfig:${jansson_prefix}/lib/pkgconfig"
+    "PKG_CONFIG_PATH=${obs_pc_dir}:${gstreamer_pkg_config_path}:${ffmpeg_prefix}/lib/pkgconfig:${simde_prefix}/lib/pkgconfig:${uthash_prefix}/lib/pkgconfig:${jansson_prefix}/lib/pkgconfig"
     "DYLD_LIBRARY_PATH=${ffmpeg_runtime_library_path}"
 )
 if [[ -n "${GITHUB_ENV:-}" ]]; then

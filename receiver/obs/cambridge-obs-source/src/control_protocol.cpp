@@ -130,15 +130,18 @@ bool decode_control_message(const std::string &json, ControlMessage &message, st
         std::uint64_t coded_height = 0;
         std::uint64_t rotation_degrees = 0;
         std::uint64_t fps = 0;
-        std::uint64_t bitrate = 0;
+        std::uint64_t target_bitrate = 0;
+        std::uint64_t sender_rtcp_port = 0;
         if (!get_unsigned(root, "codedWidth", coded_width, error, contract::kMinimumDimension,
                           contract::kMaximumLongEdge) ||
             !get_unsigned(root, "codedHeight", coded_height, error, contract::kMinimumDimension,
                           contract::kMaximumLongEdge) ||
             !get_unsigned(root, "rotationDegrees", rotation_degrees, error, 0, 270) ||
             !get_unsigned(root, "fps", fps, error, contract::kMinimumFps, contract::kMaximumFps) ||
-            !get_unsigned(root, "bitrateBps", bitrate, error, contract::kMinimumBitrateBps,
-                          contract::kMaximumBitrateBps)) {
+            !get_unsigned(root, "targetBitrateBps", target_bitrate, error, contract::kMinimumBitrateBps,
+                          contract::kMaximumBitrateBps) ||
+            !get_unsigned(root, "senderRtcpPort", sender_rtcp_port, error, contract::kMinimumPort,
+                          contract::kMaximumPort)) {
             json_decref(root);
             return false;
         }
@@ -146,7 +149,8 @@ bool decode_control_message(const std::string &json, ControlMessage &message, st
         message.hello.coded_height = static_cast<std::uint32_t>(coded_height);
         message.hello.rotation_degrees = static_cast<std::uint32_t>(rotation_degrees);
         message.hello.fps = static_cast<std::uint32_t>(fps);
-        message.hello.bitrate_bps = static_cast<std::uint32_t>(bitrate);
+        message.hello.target_bitrate_bps = static_cast<std::uint32_t>(target_bitrate);
+        message.hello.sender_rtcp_port = static_cast<std::uint16_t>(sender_rtcp_port);
         if (!valid_geometry(message.hello.coded_width, message.hello.coded_height,
                             message.hello.rotation_degrees)) {
             error = "control geometry is inconsistent or outside its bounds";
@@ -179,7 +183,8 @@ bool decode_control_message(const std::string &json, ControlMessage &message, st
 
 std::string encode_accepted_message(const std::string &session_id, std::uint64_t generation,
                                     const std::string &profile_id,
-                                    std::uint32_t media_port, std::uint32_t maximum_long_edge,
+                                    std::uint32_t media_rtp_port, std::uint32_t media_rtcp_port,
+                                    std::uint32_t maximum_long_edge,
                                     std::uint32_t maximum_short_edge)
 {
     json_t *root = json_object();
@@ -188,7 +193,8 @@ std::string encode_accepted_message(const std::string &session_id, std::uint64_t
     json_object_set_new(root, "sessionId", json_string(session_id.c_str()));
     json_object_set_new(root, "generation", json_integer(static_cast<json_int_t>(generation)));
     json_object_set_new(root, "profileId", json_string(profile_id.c_str()));
-    json_object_set_new(root, "mediaPort", json_integer(media_port));
+    json_object_set_new(root, "mediaRtpPort", json_integer(media_rtp_port));
+    json_object_set_new(root, "mediaRtcpPort", json_integer(media_rtcp_port));
     json_object_set_new(root, "maxLongEdge", json_integer(maximum_long_edge));
     json_object_set_new(root, "maxShortEdge", json_integer(maximum_short_edge));
     const std::string result = dump_json(root);

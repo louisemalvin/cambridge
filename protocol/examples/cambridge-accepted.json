@@ -1,10 +1,11 @@
 {
-  "protocolVersion": 6,
+  "protocolVersion": 7,
   "type": "accepted",
   "sessionId": "run-example-session",
   "generation": 1,
   "profileId": "sender",
-  "mediaPort": 55032,
+  "mediaRtpPort": 55032,
+  "mediaRtcpPort": 55033,
   "maxLongEdge": 3840,
   "maxShortEdge": 2160
 }

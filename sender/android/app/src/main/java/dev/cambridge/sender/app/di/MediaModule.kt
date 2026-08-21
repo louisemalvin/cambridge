@@ -11,7 +11,7 @@ import dev.cambridge.sender.media.camera.CameraController
 import dev.cambridge.sender.media.capabilities.EncoderCapabilityProbe
 import dev.cambridge.sender.media.capabilities.mediacodec.MediaCodecCapabilityProbe
 import dev.cambridge.sender.media.streaming.StreamEngine
-import dev.cambridge.sender.media.streaming.cambridge.CamBridgeRtpStreamEngine
+import dev.cambridge.sender.media.streaming.cambridge.CamBridgeStreamEngine
 import dev.cambridge.sender.session.StreamSessionController
 import dev.cambridge.sender.session.StreamSessionControllerImpl
 import dev.cambridge.sender.platform.power.StreamingPowerManager
@@ -24,21 +24,21 @@ import javax.inject.Singleton
 object MediaModule {
     @Provides
     @Singleton
-    fun provideCamBridgeRtpStreamEngine(
+    fun provideCamBridgeStreamEngine(
         @ApplicationContext context: Context,
         logger: AppLogger,
-    ): CamBridgeRtpStreamEngine = CamBridgeRtpStreamEngine(context, logger)
+    ): CamBridgeStreamEngine = CamBridgeStreamEngine(context, logger)
 
     @Provides
     @Singleton
     fun provideStreamEngine(
-        engine: CamBridgeRtpStreamEngine,
+        engine: CamBridgeStreamEngine,
     ): StreamEngine = engine
 
     @Provides
     @Singleton
     fun provideCameraController(
-        engine: CamBridgeRtpStreamEngine,
+        engine: CamBridgeStreamEngine,
     ): CameraController = engine
 
     @Provides

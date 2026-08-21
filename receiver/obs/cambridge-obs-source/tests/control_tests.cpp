@@ -16,22 +16,23 @@ void require(bool condition)
 }
 
 std::string hello_json(std::uint32_t width, std::uint32_t height, std::uint32_t rotation,
-                       std::uint32_t fps, std::uint32_t bitrate)
+                       std::uint32_t fps, std::uint32_t target_bitrate)
 {
-    return "{\"protocolVersion\":6,\"type\":\"hello\",\"sessionId\":\"session-test\","
+    return "{\"protocolVersion\":7,\"type\":\"hello\",\"sessionId\":\"session-test\","
            "\"generation\":7,\"profileId\":\"phone-authored-mode\",\"codec\":\"h264\","
            "\"codedWidth\":" + std::to_string(width) + ",\"codedHeight\":" + std::to_string(height) +
            ",\"rotationDegrees\":" + std::to_string(rotation) + ",\"fps\":" + std::to_string(fps) +
-           ",\"bitrateBps\":" + std::to_string(bitrate) + "}";
+           ",\"targetBitrateBps\":" + std::to_string(target_bitrate) +
+           ",\"senderRtcpPort\":55033}";
 }
 
 void test_hello_round_trip()
 {
     const std::string json =
-        R"({"protocolVersion":6,"type":"hello","sessionId":"session-1","generation":7,)"
+        R"({"protocolVersion":7,"type":"hello","sessionId":"session-1","generation":7,)"
         R"("profileId":"2k30",)"
         R"("codec":"h264","codedWidth":2560,"codedHeight":1440,)"
-        R"("rotationDegrees":90,"fps":30,"bitrateBps":18000000})";
+        R"("rotationDegrees":90,"fps":30,"targetBitrateBps":18000000,"senderRtcpPort":55033})";
     cambridge::ControlMessage message;
     std::string error;
     require(cambridge::decode_control_message(json, message, error));
@@ -48,29 +49,29 @@ void test_hello_round_trip()
 void test_duplicate_and_invalid_messages_are_rejected()
 {
     const std::string duplicate =
-        R"({"protocolVersion":6,"protocolVersion":6,"type":"stop","sessionId":"s","generation":1})";
+        R"({"protocolVersion":7,"protocolVersion":7,"type":"stop","sessionId":"s","generation":1})";
     cambridge::ControlMessage message;
     std::string error;
     require(!cambridge::decode_control_message(duplicate, message, error));
 
     const std::string wrong_codec =
-        R"({"protocolVersion":6,"type":"hello","sessionId":"s","generation":1,)"
+        R"({"protocolVersion":7,"type":"hello","sessionId":"s","generation":1,)"
         R"("profileId":"2k30",)"
         R"("codec":"av1","codedWidth":2560,"codedHeight":1440,)"
-        R"("rotationDegrees":0,"fps":30,"bitrateBps":18000000})";
+        R"("rotationDegrees":0,"fps":30,"targetBitrateBps":18000000,"senderRtcpPort":55033})";
     require(!cambridge::decode_control_message(wrong_codec, message, error));
 
     const std::string old_protocol =
         R"({"protocolVersion":3,"type":"hello","sessionId":"s","generation":1,)"
         R"("profileId":"2k30",)"
-        R"("codec":"h264","width":1280,"height":720,"fps":30,"bitrateBps":4000000})";
+        R"("codec":"h264","width":1280,"height":720,"fps":30,"targetBitrateBps":4000000,"senderRtcpPort":55033})";
     require(!cambridge::decode_control_message(old_protocol, message, error));
 
     const std::string malformed_geometry =
-        R"({"protocolVersion":6,"type":"hello","sessionId":"s","generation":1,)"
+        R"({"protocolVersion":7,"type":"hello","sessionId":"s","generation":1,)"
         R"("profileId":"2k30",)"
         R"("codec":"h264","codedWidth":2560,"codedHeight":1440,)"
-        R"("rotationDegrees":45,"fps":30,"bitrateBps":18000000})";
+        R"("rotationDegrees":45,"fps":30,"targetBitrateBps":18000000,"senderRtcpPort":55033})";
     require(!cambridge::decode_control_message(malformed_geometry, message, error));
 }
 
@@ -78,10 +79,10 @@ void test_reverse_orientations_are_valid()
 {
     for (const int rotation : {0, 90, 180, 270}) {
         const std::string json =
-            "{\"protocolVersion\":6,\"type\":\"hello\",\"sessionId\":\"s\",\"generation\":1,"
+            "{\"protocolVersion\":7,\"type\":\"hello\",\"sessionId\":\"s\",\"generation\":1,"
             "\"profileId\":\"2k30\",\"codec\":\"h264\",\"codedWidth\":2560,\"codedHeight\":1440,"
             "\"rotationDegrees\":" +
-            std::to_string(rotation) + ",\"fps\":30,\"bitrateBps\":18000000}";
+            std::to_string(rotation) + ",\"fps\":30,\"targetBitrateBps\":18000000,\"senderRtcpPort\":55033}";
         cambridge::ControlMessage message;
         std::string error;
         require(cambridge::decode_control_message(json, message, error));
@@ -105,7 +106,7 @@ void test_phone_authored_bitrates_are_not_preset_validated()
         std::string error;
         require(cambridge::decode_control_message(
             hello_json(safe_width, safe_height, 0, safe_fps, bitrate), message, error));
-        require(message.hello.bitrate_bps == bitrate);
+        require(message.hello.target_bitrate_bps == bitrate);
         require(message.hello.fps == safe_fps);
         require(message.hello.profile_id == "phone-authored-mode");
     }
@@ -127,7 +128,8 @@ void test_global_bounds_and_alignment_are_enforced_without_ui_presets()
 void test_accepted_uses_shape_independent_bounds()
 {
     const auto accepted = cambridge::encode_accepted_message(
-        "session-1", 7, "2k30", cambridge::contract::kDefaultMediaPort,
+        "session-1", 7, "2k30", cambridge::contract::kDefaultMediaRtpPort,
+        cambridge::contract::kDefaultMediaRtcpPort,
         cambridge::contract::kMaximumLongEdge, cambridge::contract::kMaximumShortEdge);
     require(accepted.find("maxLongEdge") != std::string::npos);
     require(accepted.find("maxShortEdge") != std::string::npos);
@@ -138,7 +140,7 @@ void test_accepted_uses_shape_independent_bounds()
 void test_probe_and_capabilities_round_trip()
 {
     const std::string probe =
-        R"({"protocolVersion":6,"type":"probe","requestId":"request-1"})";
+        R"({"protocolVersion":7,"type":"probe","requestId":"request-1"})";
     cambridge::ControlMessage message;
     std::string error;
     require(cambridge::decode_control_message(probe, message, error));

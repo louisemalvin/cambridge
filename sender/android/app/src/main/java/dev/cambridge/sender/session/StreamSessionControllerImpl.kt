@@ -160,9 +160,13 @@ class StreamSessionControllerImpl(
                     ),
                 )
             }
-            val mediaPort = endpoint.controlPort + CamBridgeStreamContract.DEFAULT_MEDIA_PORT_OFFSET
-            require(mediaPort in CamBridgeStreamContract.MINIMUM_PORT..CamBridgeStreamContract.MAXIMUM_PORT) {
-                "The configured control port cannot derive a media port"
+            val mediaRtpPort = CamBridgeStreamContract.DEFAULT_MEDIA_RTP_PORT
+            val mediaRtcpPort = CamBridgeStreamContract.DEFAULT_MEDIA_RTCP_PORT
+            require(mediaRtpPort != mediaRtcpPort &&
+                mediaRtpPort in CamBridgeStreamContract.MINIMUM_PORT..CamBridgeStreamContract.MAXIMUM_PORT &&
+                mediaRtcpPort in CamBridgeStreamContract.MINIMUM_PORT..CamBridgeStreamContract.MAXIMUM_PORT
+            ) {
+                "The configured CamBridge media ports are invalid"
             }
             val session = StreamSession(
                 sessionId = "$SESSION_ID_PREFIX${UUID.randomUUID()}",
@@ -171,7 +175,8 @@ class StreamSessionControllerImpl(
                 encoderName = encoderName,
                 profile = profile,
                 bitrateBps = configuration.bitrateBps,
-                mediaPort = mediaPort,
+                mediaRtpPort = mediaRtpPort,
+                mediaRtcpPort = mediaRtcpPort,
                 outputPixelFormat = OutputPixelFormat.NV12,
                 warnings = emptyList(),
                 streamGeneration = nextStreamGeneration++,
@@ -182,7 +187,8 @@ class StreamSessionControllerImpl(
             diagnosticEvent(
                 "session_created",
                 mapOf(
-                    "mediaPort" to session.mediaPort,
+                    "mediaRtpPort" to session.mediaRtpPort,
+                    "mediaRtcpPort" to session.mediaRtcpPort,
                     "codec" to session.selectedCodec.protocolId,
                     "encoder" to session.encoderName,
                     "bitrateBps" to session.bitrateBps,
@@ -226,12 +232,19 @@ class StreamSessionControllerImpl(
                     "bitrateBps" to configuration.bitrateBps,
                 ),
             )
-            diagnosticEvent("media_stream_starting", mapOf("mediaPort" to session.mediaPort))
+            diagnosticEvent(
+                "media_stream_starting",
+                mapOf(
+                    "mediaRtpPort" to session.mediaRtpPort,
+                    "mediaRtcpPort" to session.mediaRtcpPort,
+                ),
+            )
             streamEngine.start(
                 CamBridgeStreamEndpoint(
                     host = session.endpoint.host,
                     controlPort = session.endpoint.controlPort,
-                    mediaPort = session.mediaPort,
+                    mediaRtpPort = session.mediaRtpPort,
+                    mediaRtcpPort = session.mediaRtcpPort,
                     sessionId = session.sessionId,
                     generation = session.streamGeneration,
                 ),

@@ -183,14 +183,15 @@ std::string hello_json(std::uint64_t generation)
            ",\"type\":\"hello\",\"sessionId\":\"socket-test\",\"generation\":" +
            std::to_string(generation) + ",\"profileId\":\"1080p30\",\"codec\":\"h264\","
            "\"codedWidth\":1920,\"codedHeight\":1080,\"rotationDegrees\":0,\"fps\":30,"
-           "\"bitrateBps\":10000000}";
+           "\"targetBitrateBps\":10000000,\"senderRtcpPort\":55033}";
 }
 
 cambridge::ControlServer make_server(std::uint16_t port, CallbackState &state)
 {
     return cambridge::ControlServer(
         port,
-        static_cast<std::uint16_t>(port + cambridge::contract::kDefaultMediaPortOffset),
+        static_cast<std::uint16_t>(cambridge::contract::kDefaultMediaRtpPort),
+        static_cast<std::uint16_t>(cambridge::contract::kDefaultMediaRtcpPort),
         cambridge::contract::kMaximumLongEdge,
         cambridge::contract::kMaximumShortEdge,
         [&state](const cambridge::HelloMessage &, const std::string &, std::string &) {

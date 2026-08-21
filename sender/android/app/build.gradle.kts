@@ -1,5 +1,9 @@
 import groovy.json.JsonSlurper
 
+val gstreamerRootAndroid = System.getenv("GSTREAMER_ROOT_ANDROID")
+    ?.takeIf { it.isNotBlank() }
+    ?: error("GSTREAMER_ROOT_ANDROID must point to the official GStreamer Android SDK")
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -87,6 +91,15 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
+        ndk {
+            abiFilters += listOf("arm64-v8a", "x86_64")
+        }
+    }
+
+    externalNativeBuild {
+        ndkBuild {
+            path = file("src/main/jni/Android.mk")
+        }
     }
 
     signingConfigs {

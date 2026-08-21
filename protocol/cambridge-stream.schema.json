@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://cambridge.invalid/protocol/cambridge-stream.schema.json",
-  "title": "CamBridge control messages v6",
+  "title": "CamBridge control messages v7",
   "type": "object",
   "required": ["protocolVersion", "type"],
   "properties": {
-    "protocolVersion": {"const": 6},
+    "protocolVersion": {"const": 7},
     "type": {"enum": ["probe", "capabilities", "hello", "accepted", "stop", "error"]},
     "requestId": {"type": "string", "minLength": 1, "maxLength": 128},
     "receiverId": {"type": "string", "minLength": 1, "maxLength": 128},
@@ -18,8 +18,10 @@
     "codedHeight": {"type": "integer", "minimum": 16, "maximum": 3840, "multipleOf": 2},
     "rotationDegrees": {"enum": [0, 90, 180, 270]},
     "fps": {"type": "integer", "minimum": 1, "maximum": 120},
-    "bitrateBps": {"type": "integer", "minimum": 100000, "maximum": 100000000},
-    "mediaPort": {"type": "integer", "minimum": 1, "maximum": 65535},
+    "targetBitrateBps": {"type": "integer", "minimum": 100000, "maximum": 100000000},
+    "senderRtcpPort": {"type": "integer", "minimum": 1, "maximum": 65535},
+    "mediaRtpPort": {"type": "integer", "minimum": 1, "maximum": 65535},
+    "mediaRtcpPort": {"type": "integer", "minimum": 1, "maximum": 65535},
     "maxLongEdge": {"type": "integer", "minimum": 16, "maximum": 3840},
     "maxShortEdge": {"type": "integer", "minimum": 16, "maximum": 2160},
     "error": {"type": "string", "maxLength": 512}
@@ -38,7 +40,7 @@
       "then": {
         "required": [
           "sessionId", "generation", "profileId", "codec", "codedWidth", "codedHeight",
-          "rotationDegrees", "fps", "bitrateBps"
+          "rotationDegrees", "fps", "targetBitrateBps", "senderRtcpPort"
         ],
         "allOf": [
           {
@@ -62,7 +64,7 @@
     },
     {
       "if": {"properties": {"type": {"const": "accepted"}}},
-      "then": {"required": ["sessionId", "generation", "profileId", "mediaPort", "maxLongEdge", "maxShortEdge"]}
+      "then": {"required": ["sessionId", "generation", "profileId", "mediaRtpPort", "mediaRtcpPort", "maxLongEdge", "maxShortEdge"]}
     },
     {
       "if": {"properties": {"type": {"const": "stop"}}},

@@ -17,7 +17,8 @@ public:
     using MessageHandler = std::function<void(const ControlMessage &)>;
     using DisconnectHandler = std::function<void()>;
 
-    ControlServer(std::uint16_t port, std::uint16_t media_port, std::uint32_t maximum_long_edge,
+    ControlServer(std::uint16_t port, std::uint16_t media_rtp_port, std::uint16_t media_rtcp_port,
+                  std::uint32_t maximum_long_edge,
                   std::uint32_t maximum_short_edge, HelloHandler on_hello, ProbeHandler on_probe,
                   MessageHandler on_message,
                   DisconnectHandler on_disconnect);
@@ -40,7 +41,8 @@ private:
     bool write_frame(int fd, const std::string &json);
 
     std::uint16_t port_;
-    std::uint16_t media_port_;
+    std::uint16_t media_rtp_port_;
+    std::uint16_t media_rtcp_port_;
     std::uint32_t maximum_long_edge_;
     std::uint32_t maximum_short_edge_;
     HelloHandler on_hello_;

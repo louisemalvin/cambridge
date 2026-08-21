@@ -8,7 +8,7 @@
 namespace cambridge::contract {
 
 inline constexpr char kContractName[] = "cambridge-stream";
-inline constexpr std::uint32_t kProtocolVersion = 6;
+inline constexpr std::uint32_t kProtocolVersion = 7;
 
 inline constexpr char kControlFraming[] = "uint32-be-length-prefixed-json";
 inline constexpr std::size_t kMaximumControlMessageBytes = 8192;
@@ -31,8 +31,9 @@ inline constexpr char kDefaultReceiverId[] = "cambridge-obs-source";
 inline constexpr char kDefaultReceiverDisplayName[] = "OBS receiver";
 
 inline constexpr std::uint32_t kDefaultControlPort = 55031;
-inline constexpr std::uint32_t kDefaultMediaPortOffset = 1;
-inline constexpr std::uint32_t kDefaultMediaPort = kDefaultControlPort + kDefaultMediaPortOffset;
+inline constexpr std::uint32_t kDefaultMediaRtpPort = 55032;
+inline constexpr std::uint32_t kDefaultMediaRtcpPort = 55033;
+inline constexpr std::uint32_t kDefaultSenderRtcpPort = 55033;
 
 inline constexpr std::uint32_t kMinimumDimension = 16;
 inline constexpr std::uint32_t kDimensionAlignment = 2;
@@ -48,30 +49,34 @@ inline constexpr std::uint32_t kMaximumFps = 120;
 inline constexpr std::uint32_t kMinimumBitrateBps = 100000;
 inline constexpr std::uint32_t kMaximumBitrateBps = 100000000;
 
-inline constexpr char kMediaTransport[] = "rtp-h264-udp-unicast";
+inline constexpr char kMediaTransport[] = "rtp-h264-rtcp-udp-unicast";
 inline constexpr std::uint32_t kRtpPayloadType = 96;
+inline constexpr std::uint32_t kRtxPayloadType = 97;
 inline constexpr std::uint32_t kRtpClockRateHz = 90000;
-inline constexpr std::size_t kRtpHeaderBytes = 12;
 inline constexpr std::size_t kRtpMtuBytes = 1200;
-inline constexpr std::size_t kMaximumRtpDatagramBytes = 1500;
+inline constexpr std::uint32_t kTwccExtensionId = 1;
+inline constexpr std::uint32_t kRtpSessionIndex = 0;
+inline constexpr std::uint32_t kJitterLatencyMs = 40;
+inline constexpr std::uint32_t kRtxHistoryMs = 150;
+inline constexpr double kRtcpFeedbackBandwidthFraction = 0.05;
 inline constexpr std::size_t kMaximumAccessUnitBytes = 8388608;
 inline constexpr std::size_t kMaximumInFlightAccessUnits = 2;
-inline constexpr std::size_t kMaximumReorderPackets = 64;
+inline constexpr std::size_t kAppsrcMaximumBuffers = 4;
+inline constexpr std::uint32_t kGccMinimumBitrateFloorBps = 750000;
 inline constexpr std::size_t kMailboxCapacity = 1;
 inline constexpr std::size_t kTexturePoolSlots = 3;
 inline constexpr std::uint32_t kDefaultMaximumDecoderQueueAgeMs = 100;
 inline constexpr std::uint32_t kDefaultMaximumLiveFrameAgeMs = 250;
-inline constexpr std::uint32_t kDefaultReorderDeadlineMs = 20;
 inline constexpr std::uint32_t kKeyframeIntervalSeconds = 1;
 
 inline constexpr char kCodecH264[] = "h264";
 
-inline constexpr char kMessageShapeProbe[] = "{protocolVersion:6, type:probe, requestId}";
-inline constexpr char kMessageShapeCapabilities[] = "{protocolVersion:6, type:capabilities, requestId, receiverId, displayName, maxLongEdge, maxShortEdge}";
-inline constexpr char kMessageShapeHello[] = "{protocolVersion:6, type:hello, sessionId, generation, profileId, codec, codedWidth, codedHeight, rotationDegrees, fps, bitrateBps}";
-inline constexpr char kMessageShapeAccepted[] = "{protocolVersion:6, type:accepted, sessionId, generation, profileId, mediaPort, maxLongEdge, maxShortEdge}";
-inline constexpr char kMessageShapeStop[] = "{protocolVersion:6, type:stop, sessionId, generation}";
-inline constexpr char kMessageShapeError[] = "{protocolVersion:6, type:error, error}";
+inline constexpr char kMessageShapeProbe[] = "{protocolVersion:7, type:probe, requestId}";
+inline constexpr char kMessageShapeCapabilities[] = "{protocolVersion:7, type:capabilities, requestId, receiverId, displayName, maxLongEdge, maxShortEdge}";
+inline constexpr char kMessageShapeHello[] = "{protocolVersion:7, type:hello, sessionId, generation, profileId, codec, codedWidth, codedHeight, rotationDegrees, fps, targetBitrateBps, senderRtcpPort}";
+inline constexpr char kMessageShapeAccepted[] = "{protocolVersion:7, type:accepted, sessionId, generation, profileId, mediaRtpPort, mediaRtcpPort, maxLongEdge, maxShortEdge}";
+inline constexpr char kMessageShapeStop[] = "{protocolVersion:7, type:stop, sessionId, generation}";
+inline constexpr char kMessageShapeError[] = "{protocolVersion:7, type:error, error}";
 
 inline constexpr char kMessageProbe[] = "probe";
 inline constexpr char kMessageCapabilities[] = "capabilities";

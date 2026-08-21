@@ -16,8 +16,8 @@ before the public support statement changes.
 
 Install the Android APK from an `android-v<version>` release and the OBS
 plugin from an `obs-v<version>` release. These component versions are
-independent, but both artifacts must use protocol v6. Incompatible protocol
-releases do not connect; protocol v6 is not compatible with protocol v5 from
+independent, but both artifacts must use protocol v7. Incompatible protocol
+releases do not connect; protocol v7 is not compatible with protocol v6 from
 the 0.2.x releases.
 
 ## Android
@@ -51,7 +51,11 @@ includes the Stop control; removing the app task also stops the active stream.
    Linux distribution or ABI build. If more than one supported OBS installation
    is present, it asks which recognizable OBS path to use.
 
-3. If OBS is not discoverable, provide its executable or installation path:
+3. Install GStreamer 1.24.13 or newer and the GStreamer Rust RTP plugin
+   containing `rtpgccbwe` and `rtprtxreceive`. These are runtime dependencies
+   of the OBS source; the release does not replace them with a custom transport.
+
+4. If OBS is not discoverable, provide its executable or installation path:
 
    ```bash
    ./install-linux-plugin.sh --obs-path /path/to/obs
@@ -61,7 +65,7 @@ includes the Stop control; removing the app task also stops the active stream.
    exactly matches the selected OBS installation, the installer leaves any
    existing plugin unchanged and reports the supported installation paths.
 
-4. Restart OBS, add a source named **CamBridge**, and keep the default source
+5. Restart OBS, add a source named **CamBridge**, and keep the default source
    settings for normal use.
 
 ## macOS status

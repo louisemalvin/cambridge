@@ -1,82 +1,80 @@
-# CamBridge Protocol
+# CamBridge protocol
 
-CamBridge uses protocol version **6**. The protocol identity is
-`cambridge-stream`.
-
-Protocol versions are strict compatibility boundaries. Version 6 is not
-compatible with the version 5 sender or receiver, so both release artifacts
-must be upgraded together.
-
-The authoritative machine-readable definition is
-[`protocol/cambridge-stream-contract.json`](../protocol/cambridge-stream-contract.json).
-The schema and examples in `protocol/` are validation fixtures for the same
-contract.
+CamBridge uses protocol version **7**. Protocol versions are strict
+compatibility boundaries. The authoritative definition is
+[`protocol/cambridge-stream-contract.json`](../protocol/cambridge-stream-contract.json);
+the schema and examples are generated validation fixtures.
 
 ## Connections
 
-The sender uses two connections to the receiver:
+The sender uses one control connection and two media sockets:
 
 ```text
-sender → length-prefixed JSON over TCP → receiver
-sender → RFC 6184 H.264 RTP over UDP → receiver
+sender -> length-prefixed JSON over TCP -> receiver control listener
+sender -> RTP/H.264 over UDP -> receiver RTP listener
+sender <- RTCP over UDP <- receiver RTCP sender
 ```
 
 Control messages use a big-endian 32-bit length followed by UTF-8 JSON. The
-default control port is `55031`; the media port is the control port plus the
-contract media-port offset, `55032` by default.
+default control, receiver RTP, receiver RTCP, and sender RTCP ports are
+55031, 55032, 55033, and 55033 respectively. RTP and RTCP are separate
+transport roles even when their default numeric value is shared by the
+contract.
 
 When mDNS/Avahi is available, the receiver advertises `_cambridge._tcp`.
-Android can discover the service and probe it with a side-effect-free
-capabilities request before starting a stream. The DNS-SD SRV record supplies
-the exact control port; discovery does not scan or guess ports. Android probes
-every resolved IPv4 address for each service plus the bounded `address<N>` IPv4
-unicast candidates in its TXT metadata. The candidates let multi-homed receivers expose
-LAN and VPN routes when multicast resolution returns only one interface.
-Android deduplicates successful responses by receiver ID and requires an
-explicit choice when no saved receiver matches and more than one receiver is
-available. The default control port is used only for default or manually
-configured endpoints that have no DNS-SD record.
+Discovery is a candidate source only. Android probes the resolved IPv4
+addresses and bounded TXT address candidates over TCP before Start. Manual
+receiver addressing remains available when discovery is unavailable.
 
 ## Session messages
 
-The control exchange uses these message types:
-
-- `probe` and `capabilities` discover receiver readiness, identity, and hard
-  geometry limits. Capabilities do not advertise video presets.
-- `hello` carries one immutable phone-authored stream session.
-- `accepted` returns the negotiated media port and receiver limits.
+- `probe` and `capabilities` report receiver identity and hard geometry limits.
+- `hello` carries the immutable phone-authored coded geometry, FPS, bitrate,
+  rotation, profile ID, and sender RTCP port.
+- `accepted` returns the receiver RTP and RTCP ports and geometry limits.
 - `stop` ends the active session.
-- `error` reports a rejected or invalid request, or a terminal receiver media
-  failure. After a terminal media failure, the receiver sends the error and
-  closes the control session so the sender can release its resources.
+- `error` reports a rejected request or terminal receiver media failure.
 
-Each session includes a session ID and monotonic generation. Resolution, frame
-rate, codec, bitrate, and rotation are fixed for the session; changing them
-requires a new Start after Stop.
+Every session includes a session ID and monotonic generation. Resolution, frame
+rate, codec, bitrate, and rotation are fixed for the session. Changing them
+requires Stop followed by a new Start.
 
 ## Video configuration ownership
 
-The Android sender selects a camera/encoder-supported resolution, frame rate,
-and bitrate. Those exact coded dimensions, FPS, and bitrate are carried in the
-v6 `hello` and are immutable for the session. `profileId` remains an opaque,
-sender-authored diagnostic mode ID; the receiver never looks it up.
+The Android sender selects a Camera2 and MediaCodec-supported resolution, frame
+rate, and bitrate. Those exact coded values are carried in the v7 `hello`.
+`profileId` is an opaque sender-authored diagnostic identifier; the receiver
+does not look it up or substitute a preset.
 
-The receiver validates only the wire and configured resource bounds. It either
-accepts the exact values or returns an error; it does not negotiate presets or
-silently downgrade the stream.
+The receiver validates wire and resource bounds and either accepts the exact
+values or returns an error. It never silently downgrades the stream.
 
-The sender reports clockwise rotation as `0`, `90`, `180`, or `270` degrees.
-Rotations of `90` and `270` present portrait geometry; the other rotations
-present landscape geometry.
+## Media contract
 
-## Media behavior
+Media is H.264 over RTP/UDP with RTCP feedback. The shared media values are:
 
-Media is best-effort and one-way. The sender paces RTP datagrams at the
-configured media rate. The receiver uses a bounded reorder window and drops
-late or incomplete access units instead of requesting retransmission, media
-feedback, or an IDR frame. Terminal receiver media failures end the control
-session; there is no automatic reconnect.
+| Value | Contract setting |
+| --- | ---: |
+| RTP payload type | 96 |
+| RTX payload type | 97 |
+| RTP clock | 90000 Hz |
+| RTP MTU | 1200 bytes |
+| TWCC extension ID | 1 |
+| Receiver jitter latency | 40 ms |
+| RTX history | 150 ms |
+| Maximum access unit | 8 MiB |
+| Sender queue | 2 access units |
 
-The receiver output is an OBS source texture. The wire protocol does not
-require OBS or a virtual camera device, but the current supported receiver is
-the Linux OBS plugin.
+The Android sender supplies Annex-B access units to GStreamer `appsrc` with
+presentation timestamps. GStreamer performs H.264 parsing, RTP packetization,
+RTX, RTCP, TWCC, and GCC. No application RTP packetizer or pacing loop is
+part of the supported path.
+
+The receiver's GStreamer `rtpbin` uses its jitter buffer and
+`rtprtxreceive`. One lost packet is requested with NACK and repaired when it is
+still in sender history. Loss that cannot be repaired produces PLI/FIR feedback;
+the sender requests a MediaCodec sync frame, and the receiver waits for a clean
+keyframe before delivering more access units.
+
+The wire protocol does not require a virtual camera device. The current
+supported receiver is the native Linux OBS source.

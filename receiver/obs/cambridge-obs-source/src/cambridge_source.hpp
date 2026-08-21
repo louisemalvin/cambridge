@@ -2,8 +2,8 @@
 
 #include "control_server.hpp"
 #include "decoder.hpp"
+#include "gstreamer_media_receiver.hpp"
 #include "latest_frame_mailbox.hpp"
-#include "media_receiver.hpp"
 #include "platform/interfaces/discovery_advertiser.hpp"
 #include "protocol_contract.generated.hpp"
 #include "receiver_constants.hpp"
@@ -28,13 +28,12 @@ namespace cambridge {
 
 struct SourceConfig {
     std::uint16_t control_port = static_cast<std::uint16_t>(contract::kDefaultControlPort);
-    std::uint16_t media_port = static_cast<std::uint16_t>(contract::kDefaultMediaPort);
+    std::uint16_t media_rtp_port = static_cast<std::uint16_t>(contract::kDefaultMediaRtpPort);
+    std::uint16_t media_rtcp_port = static_cast<std::uint16_t>(contract::kDefaultMediaRtcpPort);
     std::uint32_t maximum_long_edge = contract::kDefaultMaximumLongEdge;
     std::uint32_t maximum_short_edge = contract::kDefaultMaximumShortEdge;
-    std::uint32_t reorder_deadline_ms = contract::kDefaultReorderDeadlineMs;
     std::uint32_t maximum_decoder_queue_age_ms = contract::kDefaultMaximumDecoderQueueAgeMs;
     std::uint32_t maximum_live_frame_age_ms = contract::kDefaultMaximumLiveFrameAgeMs;
-    std::size_t receive_buffer_bytes = receiver::kDefaultReceiveBufferBytes;
     std::string drm_device = receiver::kDefaultDrmDevice;
     std::string decoder_mode = receiver::kDefaultDecoderMode;
     std::string diagnostics_path = receiver::kDefaultDiagnosticsPath;
@@ -66,12 +65,12 @@ private:
     void on_control_message(const ControlMessage &message);
     void on_control_disconnect();
     void on_access_unit(AccessUnit access_unit);
-    void on_packet_loss(std::size_t lost);
-    void on_invalid_packet(const std::string &reason);
+    void on_transport_error(const std::string &reason);
     void on_decoder_frame(VideoFramePtr frame);
     void on_decoder_event(const std::string &event);
     void post_media_path_failure(PendingMediaPathFailure failure);
     void drain_media_path_failure();
+    void drain_transport_failure();
     void end_session();
     void end_session_locked();
     void report(const std::string &event) const;
@@ -103,13 +102,13 @@ private:
     LatestFrameMailbox<VideoFrame> mailbox_;
     std::unique_ptr<ControlServer> control_server_;
     std::unique_ptr<DiscoveryAdvertiser> discovery_advertiser_;
-    std::unique_ptr<MediaReceiver> media_receiver_;
+    std::unique_ptr<GStreamerMediaReceiver> media_receiver_;
     std::unique_ptr<Decoder> decoder_;
     Renderer renderer_;
     PendingMediaPathFailureQueue media_path_failures_pending_;
-    std::atomic<std::uint64_t> malformed_events_{0};
-    std::atomic<std::uint64_t> packet_loss_events_{0};
     std::atomic<std::uint64_t> stale_transitions_{0};
+    std::atomic<std::uint64_t> transport_errors_{0};
+    std::atomic<bool> transport_failure_pending_{false};
     std::atomic<bool> first_frame_reported_{false};
     std::atomic<std::uint64_t> max_receive_to_decode_ns_{0};
     std::atomic<std::uint64_t> max_receive_to_publish_ns_{0};

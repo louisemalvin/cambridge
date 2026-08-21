@@ -1,149 +1,113 @@
-# CamBridge Architecture
+# CamBridge architecture
 
-CamBridge connects phone camera senders to one shared native OBS receiver. A
-session is started explicitly by the user and the receiver handles one active
-session at a time. OBS can use the result directly or publish it as a webcam
-through OBS Virtual Camera. The public supported path remains Android to Linux;
-the iOS sender and macOS receiver remain subject to their physical acceptance
-and clean-install gates.
+CamBridge connects one Android camera sender to one native OBS receiver. The
+user owns one explicit Start and Stop lifecycle, and the receiver owns one
+active session. The supported Phase 1 path is Android to Linux OBS.
 
 ## Data flow
 
 ```text
-phone camera
-    → Android Camera2 and MediaCodec, or iOS AVFoundation and VideoToolbox
-    → RTP/H.264 over UDP
-    → shared OBS source
-    → FFmpeg H.264 decoder
-    → one locked media path
-    → OBS texture
-    → optional OBS Virtual Camera
+Android Camera2
+    -> MediaCodec H.264 access units
+    -> GStreamer appsrc -> h264parse -> rtph264pay -> rtpbin
+    -> RTP/RTCP UDP
+    -> receiver rtpbin jitter buffer and RTX -> H.264 depay/parser/appsink
+    -> FFmpeg H.264 decoder
+    -> newest-frame mailbox
+    -> OBS texture
 ```
 
-The receiver selects its path once, before RTP acceptance:
+The Android transport keeps media ownership in GStreamer. The sender's
+application code only supplies normalized Annex-B access units and responds to
+GStreamer bitrate and keyframe callbacks. `rtprtxsend` and `rtpgccbwe` handle
+retransmission and congestion estimation. The receiver sends RTCP feedback to
+the sender and passes only complete H.264 access units to FFmpeg.
+
+The receiver selects its presentation path once per session:
 
 ```text
-native Linux:  FFmpeg → VAAPI → DRM PRIME → DMA-BUF → OBS NV12 textures
-native macOS:  FFmpeg → VideoToolbox → retained CVPixelBuffer
-               → one Metal NV12-to-BGRA conversion → bounded IOSurface pool → OBS
-software:      FFmpeg software H.264 → CPU NV12 → bounded OBS upload
+Linux native:  FFmpeg -> VAAPI -> DRM PRIME -> DMA-BUF -> OBS NV12 textures
+Linux software: FFmpeg software H.264 -> CPU NV12 -> bounded OBS upload
+macOS candidate: FFmpeg -> VideoToolbox -> Metal/IOSurface presentation
 ```
 
-Automatic mode selects native when complete native setup is ready and selects
-software only when setup reports unsupported capability. Native-required rejects
-the session when native setup is unavailable, while software mode never attempts
-native setup. After the path is locked, decode, conversion, import, and upload
-failures end the session instead of rebuilding the decoder or changing paths.
+After the path is locked, decode, conversion, import, and upload failures end
+the session. The receiver does not silently switch paths or reconnect.
 
-The iOS sender follows the same wire path and does not add a second receiver
-or transport:
+## Android sender
 
-```text
-iPhone AVFoundation camera
-    → VideoToolbox hardware H.264
-    → bounded newest-access-unit queue
-    → RFC 6184 RTP/H.264 over UDP
-    → unchanged CamBridge OBS source
-```
+The Android app owns camera discovery, preview, Camera2 capture, MediaCodec
+configuration, receiver discovery, control TCP, and stream lifecycle.
+`CamBridgeStreamEngine` prepares the encoder before connecting the media
+transport. It uses a bounded `ArrayBlockingQueue` containing at most two
+access units. When the queue is full, it requests a sync frame, drops the
+current backlog, waits for the next keyframe, and resumes with that keyframe.
 
-## Components
+The transport worker takes one access unit and calls GStreamer. It does not
+packetize RTP, pace datagrams, open UDP sockets, or sleep for rate control.
 
-### Android sender
+`GStreamerRuntime` initializes the official GStreamer Android SDK once. The
+JNI bridge owns the native sender and a Java global reference for callbacks.
+Callbacks are suppressed during destruction, and native pipeline errors stop
+the pipeline before they are reported to the session controller.
 
-The Android app owns camera discovery, preview, camera controls, capture
-surfaces, H.264 encoding, receiver discovery, and stream lifecycle. The
-session coordinator validates the selected phone mode, bitrate, and orientation
-before starting the camera and encoder. The selected session settings stay
-fixed until the user stops the stream.
+## Control and media transport
 
-Receiver discovery is isolated in the Android `:receiver-discovery` library.
-It runs for the Stream Setup lifecycle, retains every IPv4 address resolved for
-each DNS-SD service, combines them with the receiver's bounded IPv4 unicast
-address metadata, and removes addresses when the service is lost. The
-app coordinator probes those addresses and deduplicates successful responses
-by receiver ID; discovery itself never establishes readiness or starts a
-stream.
-
-### iOS sender candidate
-
-The iOS project is under `sender/ios/` and targets iOS 17.4 or later. Its
-platform-neutral `CamBridgeCore` package owns the generated v6 contract,
-control framing, H.264 normalization, RTP packetization, session state, and
-bounded queue policy. The app target owns AVFoundation, VideoToolbox,
-Network.framework, SwiftUI, persistence, and diagnostics.
-
-The iOS sender exposes independent resolution, frame-rate, and bitrate values
-from the shared sender settings source. Start selects the default AVFoundation
-logical camera and its smallest compatible same-aspect source, configures
-explicit target pixel-buffer dimensions, and creates one real
-hardware-required VideoToolbox session. There is no camera/encoder capability
-matrix or temporary encoder. Coded geometry stays separate from the clockwise
-wire rotation, and preview orientation and mirroring are configured
-independently. Bonjour TXT addresses are candidates only: each selected
-receiver is probed over TCP before Start, and the accepted media port is used
-for the connected UDP path.
-
-### Control and media transport
-
-DNS-SD proposes receiver control endpoints. The control plane then uses
+DNS-SD proposes receiver control endpoints. The control plane uses
 length-prefixed UTF-8 JSON over TCP for capability probing, session setup, and
-stop messages. The media plane carries H.264 access units as RFC 6184 RTP
-packets over UDP.
+stop messages. The media plane uses RFC 6184 H.264 RTP with a separate RTCP
+socket. RTP payload type 96, RTX payload type 97, a 90 kHz clock, MTU 1200, and
+TWCC extension ID 1 are shared contract values.
 
-The two planes share a session ID and generation. The receiver rejects stale
-or incompatible sessions before presenting their frames. Start, replacement,
-failure, disconnect, and stop pass through one serialized lifecycle boundary.
-The bounded failure queue accepts only the first failure for the active
-generation, so a delayed callback from an old decoder or renderer cannot end a
-newer session.
+The sender and receiver use the AVPF RTP profile. The sender advertises H.264
+NACK/PLI and FIR feedback, stores RTX history for 150 ms, and publishes GCC
+estimates. The receiver uses a 40 ms jitter buffer with retransmission and
+loss events enabled. Recoverable packet loss is repaired through NACK/RTX.
+Loss outside the retransmission window causes a keyframe request and the
+receiver waits for a clean IDR before presenting more frames.
 
-### Linux OBS receiver
+## Linux OBS receiver
 
-The CamBridge OBS source starts the control and media listeners when an OBS
-source is created. It validates the session, reorders a bounded number of RTP
-packets, assembles H.264 access units, and passes them to FFmpeg. Decoded
-frames are presented through the OBS graphics API.
+The CamBridge OBS source starts the control listener and GStreamer runtime when
+the source is created. A hello prepares the FFmpeg decoder and starts one
+GStreamer receiver session with the sender's RTCP endpoint. The receiver
+pipeline is:
+
+```text
+udpsrc RTP -> rtpbin -> rtph264depay -> h264parse -> appsink
+udpsrc RTCP -> rtpbin -> udpsink back to Android
+```
+
+`rtprtxreceive` is supplied to `rtpbin` for payload mapping 96 to 97. The
+appsink is live, synchronized off, bounded to two buffers, and drops old
+buffers. It copies Annex-B data, attaches the RTP timestamp and monotonic
+receive time, and submits the access unit to the FFmpeg decoder.
 
 VAAPI with a DRM render node is preferred. When the host cannot provide a
-usable hardware path, the decoder produces software frames and the renderer
-uploads NV12 data to an OBS texture.
-
-### macOS OBS receiver
-
-The macOS implementation uses the same control, RTP, H.264 orchestration,
-session, mailbox, rendering policy, settings, and diagnostics code as Linux.
-VideoToolbox exports retained IOSurface-backed bi-planar NV12 frames. The Metal
-importer performs one GPU conversion into a fixed BGRA IOSurface pool, then uses
-OBS's public IOSurface texture import API. The software path remains separate and
-uploads CPU NV12 frames through the shared renderer.
-
-Bonjour and Avahi both advertise the shared discovery metadata. Discovery is
-helpful but not required: if local-network permission or mDNS discovery is
-denied, manual receiver addressing remains available.
+usable hardware path, the decoder produces software NV12 frames and the
+renderer uploads them to an OBS texture.
 
 ## Ownership boundaries
 
-- Android owns Camera2 and MediaCodec; it does not depend on OBS APIs.
-- iOS owns AVFoundation and VideoToolbox; it does not depend on OBS APIs or
-  the POSIX interoperability fixture.
-- The protocol layer owns message framing, session identity, wire bounds, and
-  RTP/H.264 rules; the shared sender catalog owns phone mode definitions.
-- The receiver owns network input, decoding, frame lifetime, and presentation
-  scheduling.
+- Android owns Camera2 and MediaCodec. GStreamer owns Android media transport.
+- The protocol owns control framing, session identity, wire bounds, RTP values,
+  and RTCP port roles.
+- The receiver owns GStreamer input, FFmpeg decoding, frame lifetime, and
+  presentation scheduling.
 - OBS integration owns source properties, graphics resources, and the output
   texture.
+- The iOS sender and macOS receiver remain deferred candidates. Their current
+  platform code is not part of the Phase 1 release acceptance path.
 
 ## Latency and buffering
 
-The media path is intentionally bounded:
-
 ```text
-camera → encoder queue → RTP sender
-                         ↓
-receiver UDP → reorder window → decoder queue → newest-frame mailbox → OBS
+camera -> MediaCodec -> two-access-unit sender queue -> GStreamer RTP
+                                      |
+receiver GStreamer jitter/RTX -> appsink -> FFmpeg queue -> newest-frame mailbox -> OBS
 ```
 
-Late packets, incomplete access units, and stale decoded frames are dropped.
-The presentation mailbox keeps the newest frame rather than allowing backlog
-to grow. There is no media retransmission or automatic reconnect; after a
-terminal session failure, the user starts another session explicitly.
+The queue, jitter buffer, decoder queue, mailbox, and live-frame age are all
+bounded by contract values. Late or unrecoverable media is dropped, and only
+the newest decoded frame is presented. A terminal failure requires the user to
+start another session explicitly.

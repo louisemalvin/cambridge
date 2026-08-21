@@ -75,6 +75,14 @@ cleanup() {
 
 trap cleanup EXIT
 
+if [[ -z "${GSTREAMER_ROOT_ANDROID:-}" ]]; then
+    gstreamer_setup_output=$("${repo_root}/scripts/sender/android/prepare-gstreamer-android.sh")
+    GSTREAMER_ROOT_ANDROID=$(printf '%s\n' "${gstreamer_setup_output}" \
+        | sed -n 's/^GSTREAMER_ROOT_ANDROID=//p' | tail -n 1)
+fi
+export GSTREAMER_ROOT_ANDROID
+[[ -n "${GSTREAMER_ROOT_ANDROID}" ]] || fail "GStreamer Android SDK path was not resolved"
+
 [[ -x "${adb}" ]] || fail "Android adb not found at ${adb}"
 [[ -x "${emulator}" ]] || fail "Android emulator not found at ${emulator}"
 [[ "${emulator_port}" =~ ^[0-9]+$ ]] || fail "emulator port must be numeric"
@@ -93,8 +101,8 @@ command -v jq >/dev/null 2>&1 || fail "jq is required to read the CamBridge stre
 
 protocol_version=$(jq -er '.protocolVersion' "${contract_json}")
 receiver_control_port=$(jq -er '.defaults.controlPort' "${contract_json}")
-media_port_offset=$(jq -er '.defaults.mediaPortOffset' "${contract_json}")
-receiver_media_port=$((receiver_control_port + media_port_offset))
+receiver_media_rtp_port=$(jq -er '.defaults.mediaRtpPort' "${contract_json}")
+receiver_media_rtcp_port=$(jq -er '.defaults.mediaRtcpPort' "${contract_json}")
 profile_id="${CAMBRIDGE_PROFILE_ID:-fixture-720p30}"
 profile_width="${CAMBRIDGE_WIDTH:-1280}"
 profile_height="${CAMBRIDGE_HEIGHT:-720}"
@@ -291,7 +299,8 @@ refresh_app_log
 
 rg -q '"event":"stream_started"' "${app_log}" || fail "Android did not report stream_started"
 rg -q '"event":"stream_resources_released"' "${app_log}" || fail "Android did not release stream resources"
-rg -q '"mediaPort":'"${receiver_media_port}" "${app_log}" || fail "Android did not use the contract media port"
+rg -q '"mediaRtpPort":'"${receiver_media_rtp_port}" "${app_log}" || fail "Android did not use the contract RTP media port"
+rg -q '"mediaRtcpPort":'"${receiver_media_rtcp_port}" "${app_log}" || fail "Android did not use the contract RTCP media port"
 rg -q 'session_accepted:' "${obs_log}" || fail "OBS did not accept the CamBridge session"
 rg -q 'decoder_ready:h264/(VAAPI|software)' "${obs_log}" || fail "native H.264 decoder did not become ready"
 rg -q 'first_frame_published:mode=' "${obs_log}" || fail "native source did not publish a frame"
@@ -305,7 +314,8 @@ printf 'profile=%s (%sx%s@%s)\n' "${profile_id}" "${profile_width}" "${profile_h
 printf 'rotation=%s\n' "${rotation_degrees}"
 printf 'protocol=%s\n' "${protocol_version}"
 printf 'control=%s:%s\n' "${receiver_host}" "${receiver_control_port}"
-printf 'media_port=%s\n' "${receiver_media_port}"
+printf 'media_rtp=%s\n' "${receiver_media_rtp_port}"
+printf 'media_rtcp=%s\n' "${receiver_media_rtcp_port}"
 printf 'hold_seconds=%s\n' "${stream_wait_seconds}"
 printf 'lifecycle_cycles=%s\n' "${lifecycle_cycles}"
 printf 'apk_sha256='; sha256sum "${apk}" | awk '{print $1}'

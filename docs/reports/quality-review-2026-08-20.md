@@ -132,7 +132,7 @@ The highest-risk remaining gaps are:
    controller behavior.
 2. Android `CamBridgeControlConnection` framing against a real local socket,
    including partial reads, malformed JSON, timeout, and oversized frames.
-3. `CamBridgeRtpStreamEngine` output conversion from MediaCodec AVC
+3. `CamBridgeStreamEngine` output conversion from MediaCodec AVC
    length-prefixed buffers and codec configuration records.
 4. Session cancellation and concurrent start/stop ordering, including a
    foreground-service start failure.

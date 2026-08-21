@@ -30,8 +30,12 @@
   addresses from multi-homed or VPN-connected receivers, but networks that do
   not carry the DNS-SD advertisement still require a receiver endpoint entered
   manually in the Android setup screen.
-- The media path is best-effort. Lost sessions do not reconnect automatically;
-  start the stream again from the phone after fixing the network or receiver.
+- The media path is bounded and best-effort. Short packet loss can be recovered
+  through RTCP NACK/RTX and longer loss requests a keyframe, but a terminal
+  transport failure does not reconnect automatically; start the stream again
+  from the phone after fixing the network or receiver.
+- The Linux OBS source requires GStreamer 1.24.13 or newer plus the Rust RTP
+  plugin that provides `rtpgccbwe` and `rtprtxreceive`.
 - One receiver handles one active session. Resolution, frame rate, and
   orientation changes take effect after Stop and a new Start.
 - The control and media transport is unauthenticated and unencrypted. Use

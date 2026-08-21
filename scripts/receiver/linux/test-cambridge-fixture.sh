@@ -104,9 +104,11 @@ esac
 [[ "${rotation_degrees}" =~ ^(0|90|180|270)$ ]] || fail "rotation must be 0, 90, 180, or 270 degrees"
 
 contract_control_port=$(jq -er '.defaults.controlPort' "${contract_json}")
-media_port_offset=$(jq -er '.defaults.mediaPortOffset' "${contract_json}")
 control_port="${CAMBRIDGE_CONTROL_PORT:-${contract_control_port}}"
-media_port="${CAMBRIDGE_MEDIA_PORT:-$((control_port + media_port_offset))}"
+contract_media_rtp_port=$(jq -er '.defaults.mediaRtpPort' "${contract_json}")
+contract_media_rtcp_port=$(jq -er '.defaults.mediaRtcpPort' "${contract_json}")
+media_rtp_port="${CAMBRIDGE_MEDIA_RTP_PORT:-${contract_media_rtp_port}}"
+media_rtcp_port="${CAMBRIDGE_MEDIA_RTCP_PORT:-${contract_media_rtcp_port}}"
 profile_width="${video_width}"
 profile_height="${video_height}"
 profile_fps="${video_fps}"
@@ -117,9 +119,11 @@ plugin_so="${build_dir}/staging/obs-plugins/cambridge-obs-plugin/bin/64bit/cambr
 
 jq --arg decoder_mode "${decoder_mode}" \
     --argjson control_port "${control_port}" \
-    --argjson media_port "${media_port}" \
+    --argjson media_rtp_port "${media_rtp_port}" \
+    --argjson media_rtcp_port "${media_rtcp_port}" \
     '(.sources[] | select(.id == "cambridge_android_source").settings) |=
-        (.decoder_mode = $decoder_mode | .control_port = $control_port | .media_port = $media_port)' \
+        (.decoder_mode = $decoder_mode | .control_port = $control_port |
+         .media_rtp_port = $media_rtp_port | .media_rtcp_port = $media_rtcp_port)' \
     "${scene_template}" >"${scene_config}"
 mkdir -p "${obs_config}/obs-studio/basic/scenes" \
     "${obs_config}/obs-studio/plugins/cambridge-obs-plugin/bin/64bit"
@@ -191,7 +195,8 @@ fixture_args=(
     --bitrate-bps "${video_bitrate_bps}"
     --host 127.0.0.1
     --control-port "${control_port}"
-    --media-port "${media_port}"
+    --media-rtp-port "${media_rtp_port}"
+    --media-rtcp-port "${media_rtcp_port}"
     --duration "${duration_seconds}"
     --rotation-degrees "${rotation_degrees}"
     --output "${fixture_summary}"
@@ -314,6 +319,7 @@ printf 'decoder_mode=%s\n' "${decoder_mode}"
 printf 'duration_seconds=%s\n' "${duration_seconds}"
 printf 'capture_output=%s\n' "${capture_output}"
 printf 'control=%s\n' "${control_port}"
-printf 'media=%s\n' "${media_port}"
+printf 'media_rtp=%s\n' "${media_rtp_port}"
+printf 'media_rtcp=%s\n' "${media_rtcp_port}"
 printf 'module_sha256='; sha256sum "${plugin_so}" | awk '{print $1}'
 printf 'artifacts=%s\n' "${artifact_dir}"

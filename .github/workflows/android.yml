@@ -4,14 +4,20 @@ on:
   push:
     paths:
       - "sender/android/**"
+      - "protocol/**"
       - "VERSION"
+      - "receiver/obs/cambridge-obs-source/buildspec.json"
+      - "scripts/sender/android/prepare-gstreamer-android.sh"
       - "scripts/development/cambridge_component_versions.py"
       - "scripts/development/test-component-versions.py"
       - ".github/workflows/android.yml"
   pull_request:
     paths:
       - "sender/android/**"
+      - "protocol/**"
       - "VERSION"
+      - "receiver/obs/cambridge-obs-source/buildspec.json"
+      - "scripts/sender/android/prepare-gstreamer-android.sh"
       - "scripts/development/cambridge_component_versions.py"
       - "scripts/development/test-component-versions.py"
       - ".github/workflows/android.yml"
@@ -28,6 +34,8 @@ jobs:
       - uses: android-actions/setup-android@v3
       - name: Install Android SDK packages
         run: sdkmanager "platforms;android-37.0" "build-tools;36.0.0" "platform-tools"
+      - name: Install pinned GStreamer Android SDK
+        run: ./scripts/sender/android/prepare-gstreamer-android.sh
       - uses: gradle/actions/setup-gradle@v4
       - name: Check component release metadata
         run: python3 scripts/development/test-component-versions.py

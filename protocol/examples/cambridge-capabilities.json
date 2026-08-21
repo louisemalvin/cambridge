@@ -1,5 +1,5 @@
 {
-  "protocolVersion": 6,
+  "protocolVersion": 7,
   "type": "capabilities",
   "requestId": "probe-example-request",
   "receiverId": "workstation-obs",

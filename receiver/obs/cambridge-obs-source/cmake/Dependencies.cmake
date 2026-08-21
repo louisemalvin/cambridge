@@ -5,6 +5,7 @@ function(cambridge_read_buildspec)
     file(READ "${buildspec_file}" buildspec_json)
     string(JSON obs_version GET "${buildspec_json}" baseline obsStudio)
     string(JSON ffmpeg_version GET "${buildspec_json}" baseline ffmpeg)
+    string(JSON gstreamer_version GET "${buildspec_json}" baseline gstreamer)
     string(JSON deployment_target GET "${buildspec_json}" baseline macosDeploymentTarget)
     string(JSON linux_obs_version GET "${buildspec_json}"
         linuxCompatibility obsStudioSource version)
@@ -18,6 +19,8 @@ function(cambridge_read_buildspec)
         "OBS baseline recorded in buildspec.json")
     set(CAMBRIDGE_PINNED_FFMPEG_VERSION "${ffmpeg_version}" CACHE INTERNAL
         "FFmpeg baseline recorded in buildspec.json")
+    set(CAMBRIDGE_MIN_GSTREAMER_VERSION "${gstreamer_version}" CACHE INTERNAL
+        "Minimum GStreamer version recorded in buildspec.json")
     set(CAMBRIDGE_MACOS_DEPLOYMENT_TARGET "${deployment_target}" CACHE INTERNAL
         "macOS deployment target recorded in buildspec.json")
     set(CAMBRIDGE_LINUX_MIN_OBS_VERSION "${linux_obs_version}" CACHE INTERNAL
@@ -42,6 +45,9 @@ function(cambridge_configure_dependencies)
     set(CAMBRIDGE_JSON_LINK_LIBRARIES)
     set(CAMBRIDGE_DNS_SD_LINK_LIBRARIES)
     set(CAMBRIDGE_NATIVE_DECODER_LINK_LIBRARIES)
+    set(CAMBRIDGE_GSTREAMER_INCLUDE_DIRS)
+    set(CAMBRIDGE_GSTREAMER_LIBRARY_DIRS)
+    set(CAMBRIDGE_GSTREAMER_LIBRARIES)
     set(CAMBRIDGE_DNS_SD_LIBRARY_NAMES dns_services dns_sd)
 
     if(APPLE AND CAMBRIDGE_BUILD_TESTS)
@@ -56,6 +62,12 @@ function(cambridge_configure_dependencies)
         list(APPEND CAMBRIDGE_JSON_INCLUDE_DIRS ${CAMBRIDGE_JANSSON_INCLUDE_DIRS})
         list(APPEND CAMBRIDGE_JSON_LIBRARY_DIRS ${CAMBRIDGE_JANSSON_LIBRARY_DIRS})
         list(APPEND CAMBRIDGE_JSON_LINK_LIBRARIES ${CAMBRIDGE_JANSSON_LIBRARIES})
+        pkg_check_modules(CAMBRIDGE_GSTREAMER REQUIRED
+            "gstreamer-1.0>=${CAMBRIDGE_MIN_GSTREAMER_VERSION}"
+            "gstreamer-app-1.0>=${CAMBRIDGE_MIN_GSTREAMER_VERSION}"
+            "gstreamer-rtp-1.0>=${CAMBRIDGE_MIN_GSTREAMER_VERSION}"
+            "gstreamer-video-1.0>=${CAMBRIDGE_MIN_GSTREAMER_VERSION}"
+        )
     endif()
 
     if(CAMBRIDGE_BUILD_PLUGIN OR
@@ -142,11 +154,13 @@ function(cambridge_configure_dependencies)
             ${CAMBRIDGE_OBS_INCLUDE_DIRS}
             ${CAMBRIDGE_FFMPEG_INCLUDE_DIRS}
             ${CAMBRIDGE_JSON_INCLUDE_DIRS}
+            ${CAMBRIDGE_GSTREAMER_INCLUDE_DIRS}
         )
         list(APPEND CAMBRIDGE_PLUGIN_LIBRARY_DIRS
             ${CAMBRIDGE_OBS_LIBRARY_DIRS}
             ${CAMBRIDGE_FFMPEG_LIBRARY_DIRS}
             ${CAMBRIDGE_JSON_LIBRARY_DIRS}
+            ${CAMBRIDGE_GSTREAMER_LIBRARY_DIRS}
         )
         if(APPLE AND DEFINED ENV{CAMBRIDGE_OBS_PREFIX})
             set(cambridge_obs_framework_binary
@@ -175,6 +189,7 @@ function(cambridge_configure_dependencies)
         endif()
         list(APPEND CAMBRIDGE_PLUGIN_LINK_LIBRARIES
             ${CAMBRIDGE_FFMPEG_LIBRARIES}
+            ${CAMBRIDGE_GSTREAMER_LIBRARIES}
         )
 
         if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
@@ -251,6 +266,9 @@ function(cambridge_configure_dependencies)
     set(CAMBRIDGE_DNS_SD_LINK_LIBRARIES "${CAMBRIDGE_DNS_SD_LINK_LIBRARIES}" PARENT_SCOPE)
     set(CAMBRIDGE_NATIVE_DECODER_LINK_LIBRARIES
         "${CAMBRIDGE_NATIVE_DECODER_LINK_LIBRARIES}" PARENT_SCOPE)
+    set(CAMBRIDGE_GSTREAMER_INCLUDE_DIRS "${CAMBRIDGE_GSTREAMER_INCLUDE_DIRS}" PARENT_SCOPE)
+    set(CAMBRIDGE_GSTREAMER_LIBRARY_DIRS "${CAMBRIDGE_GSTREAMER_LIBRARY_DIRS}" PARENT_SCOPE)
+    set(CAMBRIDGE_GSTREAMER_LIBRARIES "${CAMBRIDGE_GSTREAMER_LIBRARIES}" PARENT_SCOPE)
     set(CAMBRIDGE_OBS_INCLUDE_DIRS "${CAMBRIDGE_OBS_INCLUDE_DIRS}" PARENT_SCOPE)
     set(CAMBRIDGE_FFMPEG_INCLUDE_DIRS "${CAMBRIDGE_FFMPEG_INCLUDE_DIRS}" PARENT_SCOPE)
     set(CAMBRIDGE_FFMPEG_LIBRARY_DIRS "${CAMBRIDGE_FFMPEG_LIBRARY_DIRS}" PARENT_SCOPE)

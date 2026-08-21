@@ -135,9 +135,11 @@ fi
     fail "fixture profile already exists: ${obs_config}/basic/profiles/${profile_id}"
 
 contract_control_port=$(jq -er '.defaults.controlPort' "${contract_json}")
-media_port_offset=$(jq -er '.defaults.mediaPortOffset' "${contract_json}")
 control_port=${CAMBRIDGE_CONTROL_PORT:-${contract_control_port}}
-media_port=${CAMBRIDGE_MEDIA_PORT:-$((control_port + media_port_offset))}
+contract_media_rtp_port=$(jq -er '.defaults.mediaRtpPort' "${contract_json}")
+contract_media_rtcp_port=$(jq -er '.defaults.mediaRtcpPort' "${contract_json}")
+media_rtp_port=${CAMBRIDGE_MEDIA_RTP_PORT:-${contract_media_rtp_port}}
+media_rtcp_port=${CAMBRIDGE_MEDIA_RTCP_PORT:-${contract_media_rtcp_port}}
 
 "${repo_root}/scripts/receiver/macos/build-cambridge-obs-plugin.sh" \
     >"${artifact_dir}/plugin-build.log"
@@ -157,10 +159,12 @@ cp -R "${staged_plugin_bundle}" "${obs_plugin_bundle}"
 jq --arg decoder_mode "${decoder_mode}" \
     --arg collection_id "${collection_id}" \
     --argjson control_port "${control_port}" \
-    --argjson media_port "${media_port}" \
+    --argjson media_rtp_port "${media_rtp_port}" \
+    --argjson media_rtcp_port "${media_rtcp_port}" \
     --arg diagnostics_path "${diagnostics_path}" \
     '(.name = $collection_id | (.sources[] | select(.id == "cambridge_android_source").settings) |=
-        (.decoder_mode = $decoder_mode | .control_port = $control_port | .media_port = $media_port |
+        (.decoder_mode = $decoder_mode | .control_port = $control_port |
+         .media_rtp_port = $media_rtp_port | .media_rtcp_port = $media_rtcp_port |
          .diagnostics_path = $diagnostics_path)' \
     "${scene_template}" >"${scene_config}"
 cp "${scene_config}" "${obs_config}/basic/scenes/${collection_id}.json"
@@ -233,7 +237,8 @@ python3 "${fixture_script}" \
     --bitrate-bps "${video_bitrate_bps}" \
     --host 127.0.0.1 \
     --control-port "${control_port}" \
-    --media-port "${media_port}" \
+    --media-rtp-port "${media_rtp_port}" \
+    --media-rtcp-port "${media_rtcp_port}" \
     --duration "${duration_seconds}" \
     --rotation-degrees "${rotation_degrees}" \
     --output "${fixture_summary}" \
@@ -349,7 +354,8 @@ printf 'display=%sx%s rotation=%s\n' "${display_width}" "${display_height}" "${r
 printf 'decoder_mode=%s\n' "${decoder_mode}"
 printf 'duration_seconds=%s\n' "${duration_seconds}"
 printf 'control=%s\n' "${control_port}"
-printf 'media=%s\n' "${media_port}"
+printf 'media_rtp=%s\n' "${media_rtp_port}"
+printf 'media_rtcp=%s\n' "${media_rtcp_port}"
 printf 'module_sha256='
 shasum -a 256 "${plugin_binary}" | awk '{print $1}'
 printf 'artifacts=%s\n' "${artifact_dir}"

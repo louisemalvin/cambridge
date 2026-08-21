@@ -3,6 +3,7 @@
 #include "control_protocol.hpp"
 #include "diagnostics.hpp"
 #include "discovery_metadata.hpp"
+#include "gstreamer_runtime.hpp"
 #include "platform/interfaces/source_properties.hpp"
 #include "protocol_contract.generated.hpp"
 
@@ -39,20 +40,13 @@ constexpr std::uint32_t kDimensionStep = 16;
 constexpr std::uint32_t kUnsetDimension = 0;
 constexpr std::uint32_t kMaximumLongEdge = contract::kDefaultMaximumLongEdge;
 constexpr std::uint32_t kMaximumShortEdge = contract::kDefaultMaximumShortEdge;
-constexpr std::uint32_t kMinimumDeadlineMs = 1;
-constexpr std::uint32_t kMaximumDeadlineMs = 5000;
 constexpr std::uint32_t kMinimumQueueAgeMs = 1;
 constexpr std::uint32_t kMaximumQueueAgeMs = 2000;
 constexpr std::uint32_t kMinimumLiveAgeMs = 33;
 constexpr std::uint32_t kMaximumLiveAgeMs = 5000;
-constexpr std::size_t kMinimumSocketBufferBytes = 64 * 1024;
-constexpr std::size_t kMaximumSocketBufferBytes = 32 * 1024 * 1024;
-constexpr std::size_t kSocketBufferStepBytes = 4096;
 constexpr std::uint64_t kNanosecondsPerMillisecond = 1'000'000ULL;
 constexpr std::uint64_t kNanosecondsPerSecond = 1'000'000'000ULL;
-constexpr std::uint32_t kInvalidPacketLogInterval = 32;
 constexpr std::uint32_t kPortStep = 1;
-constexpr std::uint32_t kDeadlineStep = 1;
 constexpr std::uint32_t kQueueAgeStep = 1;
 constexpr std::uint32_t kLiveAgeStep = 1;
 constexpr std::uint32_t kMailboxCapacity = contract::kMailboxCapacity;
@@ -61,13 +55,12 @@ constexpr std::uint32_t kThreeQuarterTurnDegrees = 270;
 constexpr std::uint32_t kModuleProtocolVersion = contract::kProtocolVersion;
 constexpr char kModuleVersion[] = CAMBRIDGE_VERSION;
 constexpr char kPropertyControlPort[] = "control_port";
-constexpr char kPropertyMediaPort[] = "media_port";
+constexpr char kPropertyMediaRtpPort[] = "media_rtp_port";
+constexpr char kPropertyMediaRtcpPort[] = "media_rtcp_port";
 constexpr char kPropertyMaximumLongEdge[] = "maximum_long_edge";
 constexpr char kPropertyMaximumShortEdge[] = "maximum_short_edge";
-constexpr char kPropertyReorderDeadline[] = "reorder_deadline_ms";
 constexpr char kPropertyQueueAge[] = "maximum_decoder_queue_age_ms";
 constexpr char kPropertyLiveAge[] = "maximum_live_frame_age_ms";
-constexpr char kPropertySocketBuffer[] = "receive_buffer_bytes";
 constexpr char kPropertyDecoderMode[] = "decoder_mode";
 constexpr char kPropertyTransparentPlaceholder[] = "transparent_placeholder";
 constexpr char kPropertyDiagnosticsPath[] = "diagnostics_path";
@@ -158,10 +151,15 @@ bool CamBridgeSource::start(std::string &error)
         return true;
     }
     const SourceConfig config = configuration();
-    if (config.control_port < contract::kMinimumPort || config.media_port < contract::kMinimumPort ||
-        config.control_port > contract::kMaximumPort || config.media_port > contract::kMaximumPort ||
-        config.control_port == config.media_port) {
-        error = "control and media ports must be distinct non-zero ports";
+    if (config.control_port < contract::kMinimumPort || config.media_rtp_port < contract::kMinimumPort ||
+        config.media_rtcp_port < contract::kMinimumPort || config.control_port > contract::kMaximumPort ||
+        config.media_rtp_port > contract::kMaximumPort || config.media_rtcp_port > contract::kMaximumPort ||
+        config.control_port == config.media_rtp_port || config.control_port == config.media_rtcp_port ||
+        config.media_rtp_port == config.media_rtcp_port) {
+        error = "control, RTP, and RTCP ports must be distinct non-zero ports";
+        return false;
+    }
+    if (!initialize_gstreamer(error)) {
         return false;
     }
     decoder_ = std::make_unique<Decoder>(
@@ -172,27 +170,22 @@ bool CamBridgeSource::start(std::string &error)
         });
     decoder_->start();
 
-    MediaReceiverConfig media_config;
-    media_config.media_port = config.media_port;
-    media_config.receive_buffer_bytes = config.receive_buffer_bytes;
-    media_config.reorder_deadline_ms = config.reorder_deadline_ms;
-    media_config.maximum_datagram_bytes = contract::kMaximumRtpDatagramBytes;
+    GStreamerMediaReceiverConfig media_config;
+    media_config.rtp_port = config.media_rtp_port;
+    media_config.rtcp_port = config.media_rtcp_port;
     media_config.maximum_access_unit_bytes = contract::kMaximumAccessUnitBytes;
     media_config.payload_type = static_cast<std::uint8_t>(contract::kRtpPayloadType);
-    media_receiver_ = std::make_unique<MediaReceiver>(
+    media_config.rtx_payload_type = static_cast<std::uint8_t>(contract::kRtxPayloadType);
+    media_config.clock_rate_hz = contract::kRtpClockRateHz;
+    media_config.jitter_latency_ms = contract::kJitterLatencyMs;
+    media_receiver_ = std::make_unique<GStreamerMediaReceiver>(
         media_config,
         [this](AccessUnit access_unit) { on_access_unit(std::move(access_unit)); },
-        [this](std::size_t lost) { on_packet_loss(lost); },
-        [this](const std::string &reason) { on_invalid_packet(reason); });
-    if (!media_receiver_->start(error)) {
-        decoder_->stop();
-        decoder_.reset();
-        media_receiver_.reset();
-        return false;
-    }
+        [this](const std::string &reason) { on_transport_error(reason); });
 
     control_server_ = std::make_unique<ControlServer>(
-        config.control_port, config.media_port, config.maximum_long_edge, config.maximum_short_edge,
+        config.control_port, config.media_rtp_port, config.media_rtcp_port, config.maximum_long_edge,
+        config.maximum_short_edge,
         [this](const HelloMessage &hello, const std::string &peer, std::string &reason) {
             return on_hello(hello, peer, reason);
         },
@@ -200,7 +193,6 @@ bool CamBridgeSource::start(std::string &error)
         [this](const ControlMessage &message) { on_control_message(message); },
         [this] { on_control_disconnect(); });
     if (!control_server_->start(error)) {
-        media_receiver_->stop();
         media_receiver_.reset();
         decoder_->stop();
         decoder_.reset();
@@ -221,9 +213,9 @@ bool CamBridgeSource::start(std::string &error)
            " commit=" + std::string(CAMBRIDGE_GIT_COMMIT) + " build=plugin protocol=" +
            std::to_string(kModuleProtocolVersion) + " config=obs-properties");
     report("listening:control=" + std::to_string(config.control_port) +
-           ":media=" + std::to_string(config.media_port) + ":drm=" + config.drm_device);
-    report("bounds:rtp_datagram=" + std::to_string(contract::kMaximumRtpDatagramBytes) +
-           " mtu=" + std::to_string(contract::kRtpMtuBytes) +
+           ":rtp=" + std::to_string(config.media_rtp_port) + ":rtcp=" +
+           std::to_string(config.media_rtcp_port) + ":drm=" + config.drm_device);
+    report("bounds:mtu=" + std::to_string(contract::kRtpMtuBytes) +
            " au_bytes=" + std::to_string(contract::kMaximumAccessUnitBytes) +
            " au_count=" + std::to_string(contract::kMaximumInFlightAccessUnits) +
            " mailbox=" + std::to_string(kMailboxCapacity) +
@@ -243,7 +235,7 @@ void CamBridgeSource::stop()
         control_server_.reset();
     }
     if (media_receiver_) {
-        media_receiver_->stop();
+        media_receiver_->stop_session();
         media_receiver_.reset();
     }
     if (decoder_) {
@@ -259,7 +251,9 @@ void CamBridgeSource::update(obs_data_t *settings)
     bool network_changed = false;
     {
         std::lock_guard<std::mutex> lock(configuration_mutex_);
-        network_changed = next.control_port != config_.control_port || next.media_port != config_.media_port;
+        network_changed = next.control_port != config_.control_port ||
+                          next.media_rtp_port != config_.media_rtp_port ||
+                          next.media_rtcp_port != config_.media_rtcp_port;
         config_ = next;
     }
     if (network_changed && started_) {
@@ -312,6 +306,7 @@ void CamBridgeSource::render(gs_effect_t *)
 void CamBridgeSource::tick(float)
 {
     drain_media_path_failure();
+    drain_transport_failure();
 }
 
 void CamBridgeSource::write_diagnostics()
@@ -350,23 +345,18 @@ void CamBridgeSource::write_diagnostics()
     snapshot.cpu_frame_copies = renderer_.cpu_uploads();
     snapshot.gpu_copies = renderer_.gpu_copies();
     snapshot.dma_buf_import_failures = renderer_.import_failures();
-    snapshot.packets_received = media_receiver_ ? media_receiver_->packets_received() : 0;
-    snapshot.bytes_received = media_receiver_ ? media_receiver_->bytes_received() : 0;
-    snapshot.packets_lost = media_receiver_ ? media_receiver_->packets_lost() : 0;
-    snapshot.malformed_packets = media_receiver_ ? media_receiver_->malformed_packets() : 0;
-    snapshot.invalid_source_packets = media_receiver_ ? media_receiver_->invalid_source_packets() : 0;
+    snapshot.access_units_delivered = media_receiver_ ? media_receiver_->access_units_delivered() : 0;
+    snapshot.access_unit_bytes_delivered = media_receiver_ ? media_receiver_->access_unit_bytes_delivered() : 0;
+    snapshot.transport_errors = transport_errors_.load();
     snapshot.decode_failures = decoder_ ? decoder_->decode_failures() : 0;
     snapshot.decoder_queue_drops = decoder_ ? decoder_->queue_drops() : 0;
     snapshot.decoder_queue_occupancy = decoder_ ? decoder_->queue_occupancy() : 0;
-    snapshot.reorder_occupancy = media_receiver_ ? media_receiver_->reorder_occupancy() : 0;
-    snapshot.reorder_peak = media_receiver_ ? media_receiver_->reorder_peak() : 0;
-    snapshot.reorder_deadline_drops = media_receiver_ ? media_receiver_->reorder_deadline_drops() : 0;
     snapshot.max_receive_to_decode_ms = milliseconds(max_receive_to_decode_ns_.load());
     snapshot.max_receive_to_publish_ms = milliseconds(max_receive_to_publish_ns_.load());
     snapshot.max_receive_to_render_ms = milliseconds(max_receive_to_render_ns_.load());
     snapshot.configured_control_port = config.control_port;
-    snapshot.configured_media_port = config.media_port;
-    snapshot.configured_reorder_deadline_ms = config.reorder_deadline_ms;
+    snapshot.configured_media_rtp_port = config.media_rtp_port;
+    snapshot.configured_media_rtcp_port = config.media_rtcp_port;
     snapshot.configured_maximum_decoder_queue_age_ms = config.maximum_decoder_queue_age_ms;
     snapshot.configured_maximum_live_frame_age_ms = config.maximum_live_frame_age_ms;
     std::string error;
@@ -498,6 +488,24 @@ bool CamBridgeSource::on_hello(const HelloMessage &hello, const std::string &pee
         error = "decoder activation preparation is missing";
         return false;
     }
+    if (!media_receiver_) {
+        decoder_->discard_prepared_session();
+        discard_native_resources();
+        error = "GStreamer receiver is not available";
+        return false;
+    }
+    GStreamerSessionConfig media_session;
+    media_session.generation = hello.generation;
+    media_session.sender_address = peer_address;
+    media_session.sender_rtcp_port = hello.sender_rtcp_port;
+    media_session.target_bitrate_bps = hello.target_bitrate_bps;
+    if (!media_receiver_->start_session(media_session, error)) {
+        decoder_->discard_prepared_session();
+        discard_native_resources();
+        error = "GStreamer receiver setup failed: " + error;
+        return false;
+    }
+    transport_failure_pending_.store(false);
     {
         std::lock_guard<std::mutex> lock(session_mutex_);
         session_id_ = hello.session_id;
@@ -509,7 +517,7 @@ bool CamBridgeSource::on_hello(const HelloMessage &hello, const std::string &pee
         active_display_height_ = display_height;
         active_rotation_degrees_ = hello.rotation_degrees;
         active_fps_ = hello.fps;
-        active_bitrate_bps_ = hello.bitrate_bps;
+        active_bitrate_bps_ = hello.target_bitrate_bps;
         requested_decoder_mode_ = requested_mode;
         active_media_path_ = decision.path;
         media_path_locked_ = true;
@@ -525,15 +533,13 @@ bool CamBridgeSource::on_hello(const HelloMessage &hello, const std::string &pee
     renderer_.activate_session_media_path(decision.path);
     obs_leave_graphics();
     decoder_->activate_prepared_session(decision.path);
-    if (media_receiver_) {
-        media_receiver_->begin_session(hello.generation, peer_address);
-    }
     report("session_accepted:id=" + hello.session_id + ":generation=" + std::to_string(hello.generation) +
            ":profile=" + hello.profile_id +
            ":coded=" + std::to_string(hello.coded_width) + "x" + std::to_string(hello.coded_height) +
            ":display=" + std::to_string(display_width) + "x" +
            std::to_string(display_height) + ":rotation=" + std::to_string(hello.rotation_degrees) +
-           "@" + std::to_string(hello.fps) + ":bitrate=" + std::to_string(hello.bitrate_bps) +
+           "@" + std::to_string(hello.fps) + ":target_bitrate=" +
+           std::to_string(hello.target_bitrate_bps) +
            ":requested=" + std::string(decoder_mode_name(requested_mode)) +
            ":path=" + std::string(session_media_path_name(decision.path)));
     return true;
@@ -580,18 +586,11 @@ void CamBridgeSource::on_access_unit(AccessUnit access_unit)
     }
 }
 
-void CamBridgeSource::on_packet_loss(std::size_t lost)
+void CamBridgeSource::on_transport_error(const std::string &reason)
 {
-    packet_loss_events_.fetch_add(1);
-    report("rtp_loss:packets=" + std::to_string(lost));
-}
-
-void CamBridgeSource::on_invalid_packet(const std::string &reason)
-{
-    malformed_events_.fetch_add(1);
-    if (malformed_events_.load() % kInvalidPacketLogInterval == 1) {
-        report("rtp_invalid:" + reason);
-    }
+    transport_errors_.fetch_add(1);
+    report("gstreamer_transport_error:" + reason);
+    transport_failure_pending_.store(true);
 }
 
 void CamBridgeSource::on_decoder_frame(VideoFramePtr frame)
@@ -671,6 +670,15 @@ void CamBridgeSource::drain_media_path_failure()
     end_session_locked();
 }
 
+void CamBridgeSource::drain_transport_failure()
+{
+    if (!transport_failure_pending_.exchange(false)) {
+        return;
+    }
+    std::lock_guard<std::mutex> lifecycle_lock(session_lifecycle_mutex_);
+    end_session_locked();
+}
+
 void CamBridgeSource::end_session()
 {
     std::lock_guard<std::mutex> lifecycle_lock(session_lifecycle_mutex_);
@@ -683,6 +691,10 @@ void CamBridgeSource::end_session_locked()
     if (test_diagnostics_on_session_end()) {
         write_diagnostics();
     }
+    if (media_receiver_) {
+        media_receiver_->stop_session();
+    }
+    transport_failure_pending_.store(false);
     {
         std::lock_guard<std::mutex> lock(session_mutex_);
         session_active_ = false;
@@ -702,9 +714,6 @@ void CamBridgeSource::end_session_locked()
         first_frame_reported_.store(false);
         last_rendered_frame_generation_.store(0);
     }
-    if (media_receiver_) {
-        media_receiver_->end_session();
-    }
     if (decoder_) {
         decoder_->end_session();
     }
@@ -722,25 +731,23 @@ SourceConfig source_config_from_settings(obs_data_t *settings)
     SourceConfig config;
     config.control_port = static_cast<std::uint16_t>(bounded_setting(
         settings, kPropertyControlPort, contract::kDefaultControlPort, contract::kMinimumPort, contract::kMaximumPort));
-    config.media_port = static_cast<std::uint16_t>(bounded_setting(
-        settings, kPropertyMediaPort, contract::kDefaultMediaPort, contract::kMinimumPort, contract::kMaximumPort));
+    config.media_rtp_port = static_cast<std::uint16_t>(bounded_setting(
+        settings, kPropertyMediaRtpPort, contract::kDefaultMediaRtpPort, contract::kMinimumPort,
+        contract::kMaximumPort));
+    config.media_rtcp_port = static_cast<std::uint16_t>(bounded_setting(
+        settings, kPropertyMediaRtcpPort, contract::kDefaultMediaRtcpPort, contract::kMinimumPort,
+        contract::kMaximumPort));
     config.maximum_long_edge = bounded_setting(settings, kPropertyMaximumLongEdge, contract::kDefaultMaximumLongEdge,
                                                contract::kMinimumDimension, kMaximumLongEdge);
     config.maximum_short_edge = bounded_setting(settings, kPropertyMaximumShortEdge,
                                                 contract::kDefaultMaximumShortEdge,
                                                 contract::kMinimumDimension, kMaximumShortEdge);
-    config.reorder_deadline_ms = bounded_setting(settings, kPropertyReorderDeadline,
-                                                 contract::kDefaultReorderDeadlineMs, kMinimumDeadlineMs,
-                                                 kMaximumDeadlineMs);
     config.maximum_decoder_queue_age_ms = bounded_setting(settings, kPropertyQueueAge,
                                                           contract::kDefaultMaximumDecoderQueueAgeMs,
                                                           kMinimumQueueAgeMs, kMaximumQueueAgeMs);
     config.maximum_live_frame_age_ms = bounded_setting(settings, kPropertyLiveAge,
                                                        contract::kDefaultMaximumLiveFrameAgeMs,
                                                        kMinimumLiveAgeMs, kMaximumLiveAgeMs);
-    config.receive_buffer_bytes = static_cast<std::size_t>(bounded_setting(
-        settings, kPropertySocketBuffer, receiver::kDefaultReceiveBufferBytes, kMinimumSocketBufferBytes,
-        kMaximumSocketBufferBytes));
     read_platform_source_settings(settings, config);
     config.decoder_mode = setting_string(settings, kPropertyDecoderMode, receiver::kDefaultDecoderMode);
     config.diagnostics_path = setting_string(settings, kPropertyDiagnosticsPath, receiver::kDefaultDiagnosticsPath);
@@ -751,13 +758,12 @@ SourceConfig source_config_from_settings(obs_data_t *settings)
 void source_get_defaults(obs_data_t *settings)
 {
     obs_data_set_default_int(settings, kPropertyControlPort, contract::kDefaultControlPort);
-    obs_data_set_default_int(settings, kPropertyMediaPort, contract::kDefaultMediaPort);
+    obs_data_set_default_int(settings, kPropertyMediaRtpPort, contract::kDefaultMediaRtpPort);
+    obs_data_set_default_int(settings, kPropertyMediaRtcpPort, contract::kDefaultMediaRtcpPort);
     obs_data_set_default_int(settings, kPropertyMaximumLongEdge, contract::kDefaultMaximumLongEdge);
     obs_data_set_default_int(settings, kPropertyMaximumShortEdge, contract::kDefaultMaximumShortEdge);
-    obs_data_set_default_int(settings, kPropertyReorderDeadline, contract::kDefaultReorderDeadlineMs);
     obs_data_set_default_int(settings, kPropertyQueueAge, contract::kDefaultMaximumDecoderQueueAgeMs);
     obs_data_set_default_int(settings, kPropertyLiveAge, contract::kDefaultMaximumLiveFrameAgeMs);
-    obs_data_set_default_int(settings, kPropertySocketBuffer, receiver::kDefaultReceiveBufferBytes);
     obs_data_set_default_string(settings, kPropertyDecoderMode, receiver::kDefaultDecoderMode);
     obs_data_set_default_string(settings, kPropertyDiagnosticsPath, receiver::kDefaultDiagnosticsPath);
     obs_data_set_default_bool(settings, kPropertyTransparentPlaceholder, false);
@@ -773,20 +779,18 @@ obs_properties_t *source_get_properties(void *data)
     obs_properties_t *advanced_properties = obs_properties_create();
     obs_properties_add_int(advanced_properties, kPropertyControlPort, "Control port", contract::kMinimumPort,
                            contract::kMaximumPort, kPortStep);
-    obs_properties_add_int(advanced_properties, kPropertyMediaPort, "RTP media port", contract::kMinimumPort,
+    obs_properties_add_int(advanced_properties, kPropertyMediaRtpPort, "RTP media port", contract::kMinimumPort,
+                           contract::kMaximumPort, kPortStep);
+    obs_properties_add_int(advanced_properties, kPropertyMediaRtcpPort, "RTCP media port", contract::kMinimumPort,
                            contract::kMaximumPort, kPortStep);
     obs_properties_add_int(advanced_properties, kPropertyMaximumLongEdge, "Maximum long edge",
                            contract::kMinimumDimension, kMaximumLongEdge, kDimensionStep);
     obs_properties_add_int(advanced_properties, kPropertyMaximumShortEdge, "Maximum short edge",
                            contract::kMinimumDimension, kMaximumShortEdge, kDimensionStep);
-    obs_properties_add_int(advanced_properties, kPropertyReorderDeadline, "RTP reorder deadline (ms)", kMinimumDeadlineMs,
-                           kMaximumDeadlineMs, kDeadlineStep);
     obs_properties_add_int(advanced_properties, kPropertyQueueAge, "Maximum decoder queue age (ms)", kMinimumQueueAgeMs,
                            kMaximumQueueAgeMs, kQueueAgeStep);
     obs_properties_add_int(advanced_properties, kPropertyLiveAge, "Maximum live frame age (ms)", kMinimumLiveAgeMs,
                            kMaximumLiveAgeMs, kLiveAgeStep);
-    obs_properties_add_int(advanced_properties, kPropertySocketBuffer, "UDP receive buffer (bytes)", kMinimumSocketBufferBytes,
-                           kMaximumSocketBufferBytes, kSocketBufferStepBytes);
     add_platform_source_properties(advanced_properties);
     obs_property_t *decoder_mode = obs_properties_add_list(advanced_properties, kPropertyDecoderMode, "Decoder mode",
                                                             OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_STRING);

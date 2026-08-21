@@ -12,10 +12,14 @@ The dated review report is in
 The full repository checks require:
 
 - JDK 17 and the Android SDK/toolchain used by the project
+- the pinned official GStreamer Android SDK, prepared by
+  `scripts/sender/android/prepare-gstreamer-android.sh`
 - CMake, a C++17 compiler, and `pkg-config`
 - OBS Studio development headers (`libobs`)
 - FFmpeg development libraries (`libavcodec`, `libavutil`, and `libswscale`)
 - `libva` with the DRM backend, `libdrm`, and `jansson`
+- GStreamer 1.24.13 or newer with the Rust RTP plugin providing `rtpgccbwe`
+  and `rtprtxreceive`
 - Swift 6.0.3 or Docker for the Linux `CamBridgeCore` and Swift fixture checks
 
 Linux plugin builds use the host OBS and FFmpeg development packages selected by
@@ -88,6 +92,8 @@ From the repository root:
 
 ```bash
 cd sender/android
+../../scripts/sender/android/prepare-gstreamer-android.sh
+export GSTREAMER_ROOT_ANDROID="$PWD/../../build/gstreamer-android-1.24.13"
 JAVA_HOME=/path/to/jdk-17 ./gradlew \
   testDebugUnitTest lint assembleDebug compileDebugAndroidTestKotlin --console=plain
 ```
@@ -271,24 +277,11 @@ Force the bounded CPU fallback with `CAMBRIDGE_DECODER_MODE=cpu`. Set
 `CAMBRIDGE_CAPTURE_OUTPUT=1` to save an isolated OBS recording and frame
 hashes.
 
-Use the Swift transport fixture against the same unchanged native receiver by
-setting `CAMBRIDGE_SENDER_MODE=swift`. For a software-only local run:
-
-```bash
-CAMBRIDGE_SENDER_MODE=swift \
-CAMBRIDGE_DECODER_MODE=cpu \
-CAMBRIDGE_PROFILE_ID=fixture-720p30 \
-CAMBRIDGE_WIDTH=1280 \
-CAMBRIDGE_HEIGHT=720 \
-CAMBRIDGE_FPS=30 \
-CAMBRIDGE_BITRATE_BPS=4000000 \
-CAMBRIDGE_DURATION_SECONDS=1 \
-bash scripts/receiver/linux/test-cambridge-fixture.sh
-```
-
-The Swift fixture performs a probe, validates the returned capabilities,
-sends hello plus Annex-B H.264 RTP, and sends a matching explicit stop. The
-native harness requires OBS, FFmpeg, `jq`, and the Linux plugin environment.
+The FFmpeg fixture is a receiver-side compatibility harness only. It is not a
+production sender and does not replace the Android GStreamer transport. The
+iOS sender remains a deferred, protocol-v6 development candidate until its
+GStreamer migration and physical validation are completed. The native harness
+requires OBS, FFmpeg, `jq`, and the Linux plugin environment.
 
 ## Diagnostics
 

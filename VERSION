@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "components": {
-    "androidSender": "0.4.1",
-    "obsPlugin": "0.4.1",
+    "androidSender": "0.5.0",
+    "obsPlugin": "0.5.0",
     "iosSender": null
   }
 }

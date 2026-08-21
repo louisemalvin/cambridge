@@ -94,11 +94,13 @@ std::string peer_address(const sockaddr_in &peer)
 
 } // namespace
 
-ControlServer::ControlServer(std::uint16_t port, std::uint16_t media_port, std::uint32_t maximum_long_edge,
+ControlServer::ControlServer(std::uint16_t port, std::uint16_t media_rtp_port, std::uint16_t media_rtcp_port,
+                             std::uint32_t maximum_long_edge,
                              std::uint32_t maximum_short_edge, HelloHandler on_hello, ProbeHandler on_probe,
                              MessageHandler on_message,
                              DisconnectHandler on_disconnect)
-    : port_(port), media_port_(media_port), maximum_long_edge_(maximum_long_edge),
+    : port_(port), media_rtp_port_(media_rtp_port), media_rtcp_port_(media_rtcp_port),
+      maximum_long_edge_(maximum_long_edge),
       maximum_short_edge_(maximum_short_edge),
       on_hello_(std::move(on_hello)), on_probe_(std::move(on_probe)), on_message_(std::move(on_message)),
       on_disconnect_(std::move(on_disconnect))
@@ -371,8 +373,8 @@ void ControlServer::run()
                 }
                 accepted = true;
                 if (!write_frame(client, encode_accepted_message(message.hello.session_id, message.hello.generation,
-                                                                  message.hello.profile_id, media_port_, maximum_long_edge_,
-                                                                  maximum_short_edge_))) {
+                                                                  message.hello.profile_id, media_rtp_port_, media_rtcp_port_,
+                                                                  maximum_long_edge_, maximum_short_edge_))) {
                     break;
                 }
                 continue;

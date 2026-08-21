@@ -40,7 +40,8 @@ command -v jq >/dev/null 2>&1 || { printf 'error: jq is required\n' >&2; exit 1;
 command -v ufw >/dev/null 2>&1 || { printf 'error: ufw is required\n' >&2; exit 1; }
 
 control_port=$(jq -er '.defaults.controlPort' "${contract_json}")
-media_port=$((control_port + $(jq -er '.defaults.mediaPortOffset' "${contract_json}")))
+media_rtp_port=$(jq -er '.defaults.mediaRtpPort' "${contract_json}")
+media_rtcp_port=$(jq -er '.defaults.mediaRtcpPort' "${contract_json}")
 computer_interface=$(jq -er '.computer.interface' "${deployment_json}")
 source_cidr=$(jq -er '.computer.sourceCidr' "${deployment_json}")
 [[ -n "${computer_interface}" && -n "${source_cidr}" ]] || {
@@ -85,8 +86,9 @@ apply_rule() {
 }
 
 control_rule="allow in on ${computer_interface} from ${source_cidr} to any port ${control_port} proto tcp"
-media_rule="allow in on ${computer_interface} from ${source_cidr} to any port ${media_port} proto udp"
-rules=("${control_rule}" "${media_rule}")
+media_rtp_rule="allow in on ${computer_interface} from ${source_cidr} to any port ${media_rtp_port} proto udp"
+media_rtcp_rule="allow in on ${computer_interface} from ${source_cidr} to any port ${media_rtcp_port} proto udp"
+rules=("${control_rule}" "${media_rtp_rule}" "${media_rtcp_rule}")
 
 status=0
 for rule in "${rules[@]}"; do

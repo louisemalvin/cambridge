@@ -186,6 +186,7 @@ def main() -> int:
     geometry = contract["geometry"]
     video = contract["video"]
     bitrate = contract["bitrate"]
+    media = contract["media"]
     control = contract["control"]
     computer = deployment.get("computer", {})
     expected_computer_keys = {"id", "displayName", "address", "interface", "sourceCidr"}
@@ -194,8 +195,8 @@ def main() -> int:
     network_values = [computer["address"], computer["interface"], computer["sourceCidr"]]
     if any(network_values) and not all(network_values):
         raise AssertionError("deployment network values must be all present or all blank")
-    if protocol_version != 6:
-        raise AssertionError("the CamBridge stream contract must be protocol v6")
+    if protocol_version != 7:
+        raise AssertionError("the CamBridge stream contract must be protocol v7")
     if schema["properties"]["protocolVersion"]["const"] != protocol_version:
         raise AssertionError("schema protocol version is out of sync")
     if "profiles" in schema["properties"]:
@@ -205,8 +206,8 @@ def main() -> int:
     if schema["properties"]["fps"]["minimum"] != video["minimumFps"] or \
         schema["properties"]["fps"]["maximum"] != video["maximumFps"]:
         raise AssertionError("schema FPS bounds are out of sync")
-    if schema["properties"]["bitrateBps"]["minimum"] != bitrate["minimumBps"] or \
-        schema["properties"]["bitrateBps"]["maximum"] != bitrate["maximumBps"]:
+    if schema["properties"]["targetBitrateBps"]["minimum"] != bitrate["minimumBps"] or \
+        schema["properties"]["targetBitrateBps"]["maximum"] != bitrate["maximumBps"]:
         raise AssertionError("schema bitrate bounds are out of sync")
 
     check_scalar(kotlin_contract, r"const val PROTOCOL_VERSION = (\d+)", protocol_version, "Kotlin protocol version")
@@ -216,8 +217,12 @@ def main() -> int:
                  control["requestTimeoutMs"], "Kotlin control request timeout", integer_literal)
     check_scalar(kotlin_contract, r"const val DEFAULT_CONTROL_PORT = ([0-9_]+)", defaults["controlPort"],
                  "Kotlin control port", integer_literal)
-    check_scalar(kotlin_contract, r"const val DEFAULT_MEDIA_PORT_OFFSET = ([0-9_]+)", defaults["mediaPortOffset"],
-                 "Kotlin media port offset", integer_literal)
+    check_scalar(kotlin_contract, r"const val DEFAULT_MEDIA_RTP_PORT = ([0-9_]+)", defaults["mediaRtpPort"],
+                 "Kotlin media RTP port", integer_literal)
+    check_scalar(kotlin_contract, r"const val DEFAULT_MEDIA_RTCP_PORT = ([0-9_]+)", defaults["mediaRtcpPort"],
+                 "Kotlin media RTCP port", integer_literal)
+    check_scalar(kotlin_contract, r"const val DEFAULT_SENDER_RTCP_PORT = ([0-9_]+)", defaults["senderRtcpPort"],
+                 "Kotlin sender RTCP port", integer_literal)
     check_scalar(kotlin_contract, r"const val MAXIMUM_LONG_EDGE = ([0-9_]+)", geometry["maximumLongEdge"],
                  "Kotlin long-edge limit", integer_literal)
     check_scalar(kotlin_contract, r"const val MAXIMUM_SHORT_EDGE = ([0-9_]+)", geometry["maximumShortEdge"],
@@ -230,6 +235,28 @@ def main() -> int:
                  "Kotlin minimum bitrate", integer_literal)
     check_scalar(kotlin_contract, r"const val MAXIMUM_BITRATE_BPS = ([0-9_]+)", bitrate["maximumBps"],
                  "Kotlin maximum bitrate", integer_literal)
+    media_kotlin_values = {
+        "RTP_PAYLOAD_TYPE": media["payloadType"],
+        "RTX_PAYLOAD_TYPE": media["rtxPayloadType"],
+        "RTP_CLOCK_RATE_HZ": media["clockRateHz"],
+        "RTP_MTU_BYTES": media["mtuBytes"],
+        "TWCC_EXTENSION_ID": media["twccExtensionId"],
+        "JITTER_LATENCY_MILLIS": media["jitterLatencyMs"],
+        "RTX_HISTORY_MILLIS": media["rtxHistoryMs"],
+        "MAXIMUM_ACCESS_UNIT_BYTES": media["maxAccessUnitBytes"],
+        "MAXIMUM_ENCODED_QUEUE": media["maxInFlightAccessUnits"],
+        "APPSRC_MAXIMUM_BUFFERS": media["appsrcMaxBuffers"],
+        "GCC_MINIMUM_BITRATE_FLOOR_BPS": media["gccMinimumBitrateFloorBps"],
+        "KEYFRAME_INTERVAL_SECONDS": media["keyframeIntervalSeconds"],
+    }
+    for constant_name, expected_value in media_kotlin_values.items():
+        check_scalar(
+            kotlin_contract,
+            rf"const val {constant_name} = ([0-9_]+)",
+            expected_value,
+            f"Kotlin media value {constant_name}",
+            integer_literal,
+        )
     check_scalar(kotlin_contract, r'const val DISCOVERY_SERVICE_TYPE = "([^"]+)"',
                  discovery["serviceType"], "Kotlin discovery service type", str)
     check_scalar(kotlin_contract, r"const val DISCOVERY_VERSION = (\d+)", discovery["version"],
@@ -249,8 +276,12 @@ def main() -> int:
                  control["requestTimeoutMs"], "C++ control request timeout", integer_literal)
     check_scalar(cpp_contract, r"kDefaultControlPort = ([0-9']+)", defaults["controlPort"],
                  "C++ control port", integer_literal)
-    check_scalar(cpp_contract, r"kDefaultMediaPortOffset = ([0-9']+)", defaults["mediaPortOffset"],
-                 "C++ media port offset", integer_literal)
+    check_scalar(cpp_contract, r"kDefaultMediaRtpPort = ([0-9']+)", defaults["mediaRtpPort"],
+                 "C++ media RTP port", integer_literal)
+    check_scalar(cpp_contract, r"kDefaultMediaRtcpPort = ([0-9']+)", defaults["mediaRtcpPort"],
+                 "C++ media RTCP port", integer_literal)
+    check_scalar(cpp_contract, r"kDefaultSenderRtcpPort = ([0-9']+)", defaults["senderRtcpPort"],
+                 "C++ sender RTCP port", integer_literal)
     check_scalar(cpp_contract, r"kMaximumLongEdge = ([0-9']+)", geometry["maximumLongEdge"],
                  "C++ long-edge limit", integer_literal)
     check_scalar(cpp_contract, r"kMaximumShortEdge = ([0-9']+)", geometry["maximumShortEdge"],
@@ -263,6 +294,35 @@ def main() -> int:
                  "C++ minimum bitrate", integer_literal)
     check_scalar(cpp_contract, r"kMaximumBitrateBps = ([0-9']+)", bitrate["maximumBps"],
                  "C++ maximum bitrate", integer_literal)
+    cpp_media_values = {
+        "kRtpPayloadType": (r"kRtpPayloadType = ([0-9']+)", media["payloadType"], integer_literal),
+        "kRtxPayloadType": (r"kRtxPayloadType = ([0-9']+)", media["rtxPayloadType"], integer_literal),
+        "kRtpClockRateHz": (r"kRtpClockRateHz = ([0-9']+)", media["clockRateHz"], integer_literal),
+        "kRtpMtuBytes": (r"kRtpMtuBytes = ([0-9']+)", media["mtuBytes"], integer_literal),
+        "kTwccExtensionId": (r"kTwccExtensionId = ([0-9']+)", media["twccExtensionId"], integer_literal),
+        "kRtpSessionIndex": (r"kRtpSessionIndex = ([0-9']+)", media["rtpSessionIndex"], integer_literal),
+        "kJitterLatencyMs": (r"kJitterLatencyMs = ([0-9']+)", media["jitterLatencyMs"], integer_literal),
+        "kRtxHistoryMs": (r"kRtxHistoryMs = ([0-9']+)", media["rtxHistoryMs"], integer_literal),
+        "kMaximumAccessUnitBytes": (
+            r"kMaximumAccessUnitBytes = ([0-9']+)", media["maxAccessUnitBytes"], integer_literal,
+        ),
+        "kMaximumInFlightAccessUnits": (
+            r"kMaximumInFlightAccessUnits = ([0-9']+)", media["maxInFlightAccessUnits"], integer_literal,
+        ),
+        "kAppsrcMaximumBuffers": (
+            r"kAppsrcMaximumBuffers = ([0-9']+)", media["appsrcMaxBuffers"], integer_literal,
+        ),
+        "kGccMinimumBitrateFloorBps": (
+            r"kGccMinimumBitrateFloorBps = ([0-9']+)", media["gccMinimumBitrateFloorBps"], integer_literal,
+        ),
+        "kRtcpFeedbackBandwidthFraction": (
+            r"kRtcpFeedbackBandwidthFraction = ([0-9.]+)",
+            media["rtcpFeedbackBandwidthFraction"],
+            float,
+        ),
+    }
+    for constant_name, (pattern, expected_value, parser) in cpp_media_values.items():
+        check_scalar(cpp_contract, pattern, expected_value, f"C++ media value {constant_name}", parser)
     check_scalar(cpp_contract, r'kDefaultReceiverId\[\] = "([^"]+)"', contract["receiver"]["defaultId"],
                  "C++ default receiver ID", str)
     check_scalar(cpp_contract, r'kDefaultReceiverDisplayName\[\] = "([^"]+)"',
