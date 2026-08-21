@@ -7,7 +7,6 @@ func generatedContractConstants() {
     #expect(CamBridgeContract.protocolVersion == 6)
     #expect(CamBridgeContract.Control.maximumMessageBytes == 8192)
     #expect(CamBridgeContract.Media.mtuBytes == 1200)
-    #expect(CamBridgeContract.Media.maxInFlightAccessUnits == 2)
     #expect(CamBridgeContract.Validation.maximumIdentifierLength == 128)
 }
 

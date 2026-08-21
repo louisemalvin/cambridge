@@ -34,8 +34,8 @@ EXPECTED_FIELDS = {
     "bitrate": {"minimumBps", "maximumBps"},
     "media": {
         "transport", "payloadType", "clockRateHz", "rtpHeaderBytes", "mtuBytes", "maxDatagramBytes",
-        "maxAccessUnitBytes", "maxInFlightAccessUnits", "maxReorderPackets", "mailboxCapacity",
-        "texturePoolSlots", "maxDecoderQueueAgeMs", "maxLiveFrameAgeMs", "reorderDeadlineMs", "keyframeIntervalSeconds",
+        "maxAccessUnitBytes", "maxReorderPackets", "mailboxCapacity", "texturePoolSlots",
+        "reorderDeadlineMs", "keyframeIntervalSeconds",
     },
     "messages": {"probe", "capabilities", "hello", "accepted", "stop", "error"},
 }
@@ -96,8 +96,6 @@ def constant_name(key: str) -> str:
         "connectTimeoutMs": "connectTimeoutMilliseconds",
         "requestTimeoutMs": "requestTimeoutMilliseconds",
         "maximumAddressCount": "maximumAddressCount",
-        "maxDecoderQueueAgeMs": "maximumDecoderQueueAgeMilliseconds",
-        "maxLiveFrameAgeMs": "maximumLiveFrameAgeMilliseconds",
     }
     return names.get(key, key)
 

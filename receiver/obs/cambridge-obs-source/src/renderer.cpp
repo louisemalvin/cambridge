@@ -8,8 +8,6 @@
 #include <obs/obs.h>
 #endif
 
-#include <time.h>
-
 namespace cambridge {
 namespace {
 
@@ -134,16 +132,6 @@ constexpr char kNativeRenderMode[] = "native";
 constexpr char kSoftwareRenderMode[] = "software";
 constexpr std::uint32_t kQuarterTurnDegrees = 90;
 constexpr std::uint32_t kQuarterTurnCount = 4;
-constexpr std::uint64_t kNanosecondsPerSecond = 1'000'000'000ULL;
-
-std::uint64_t monotonic_time_ns()
-{
-    timespec time{};
-    clock_gettime(CLOCK_MONOTONIC, &time);
-    return static_cast<std::uint64_t>(time.tv_sec) * kNanosecondsPerSecond +
-           static_cast<std::uint64_t>(time.tv_nsec);
-}
-
 } // namespace
 
 Renderer::Renderer(RendererConfig config, std::unique_ptr<NativeFrameImporter> importer,
@@ -491,8 +479,7 @@ void Renderer::draw_bgra(const TextureSlot &slot, std::uint32_t output_width,
     }
 }
 
-bool Renderer::render(const VideoFramePtr &frame, std::uint32_t output_width, std::uint32_t output_height,
-                      bool allow_stale_frame)
+bool Renderer::render(const VideoFramePtr &frame, std::uint32_t output_width, std::uint32_t output_height)
 {
     ensure_graphics_resources();
     const SessionMediaPath active_media_path = active_media_path_.load();
@@ -501,9 +488,7 @@ bool Renderer::render(const VideoFramePtr &frame, std::uint32_t output_width, st
         draw_placeholder(output_width, output_height);
         return false;
     }
-    const std::uint64_t now = monotonic_time_ns();
-    if (frame->publish_time_ns == 0 || frame->stale_deadline_ns == 0 ||
-        (!allow_stale_frame && now > frame->stale_deadline_ns)) {
+    if (frame->publish_time_ns == 0) {
         draw_placeholder(output_width, output_height);
         return false;
     }

@@ -12,7 +12,6 @@ class GStreamerTransport(
         val remoteRtcpPort: Int,
         val localRtcpPort: Int,
         val targetBitrateBps: Int,
-        val minimumBitrateBps: Int,
         val mtuBytes: Int,
     )
 
@@ -44,7 +43,6 @@ class GStreamerTransport(
                 config.remoteRtcpPort,
                 config.localRtcpPort,
                 config.targetBitrateBps,
-                config.minimumBitrateBps,
                 config.mtuBytes,
             )) { "CamBridge GStreamer transport failed to start" }
         }
@@ -54,16 +52,16 @@ class GStreamerTransport(
         bytes: ByteArray,
         presentationTimeUs: Long,
         keyFrame: Boolean,
-    ): Boolean = synchronized(lock) {
-        if (nativeHandle == 0L) return@synchronized false
-        nativePushAccessUnit(nativeHandle, bytes, presentationTimeUs, keyFrame)
+    ): Boolean {
+        val handle = synchronized(lock) { nativeHandle }
+        if (handle == 0L) return false
+        return nativePushAccessUnit(handle, bytes, presentationTimeUs, keyFrame)
     }
 
     fun stop() {
-        synchronized(lock) {
-            if (nativeHandle != 0L) {
-                nativeStop(nativeHandle)
-            }
+        val handle = synchronized(lock) { nativeHandle }
+        if (handle != 0L) {
+            nativeStop(handle)
         }
     }
 
@@ -101,7 +99,6 @@ class GStreamerTransport(
         remoteRtcpPort: Int,
         localRtcpPort: Int,
         targetBitrateBps: Int,
-        minimumBitrateBps: Int,
         mtuBytes: Int,
     ): Boolean
 

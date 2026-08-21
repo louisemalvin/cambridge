@@ -24,7 +24,6 @@ struct DiagnosticsSnapshot {
     std::size_t mailbox_occupancy = 0;
     std::size_t mailbox_maximum = contract::kMailboxCapacity;
     std::uint64_t frames_replaced = 0;
-    std::uint64_t frames_stale = 0;
     std::uint64_t frames_decoded = 0;
     std::uint64_t frames_rendered = 0;
     std::uint64_t hardware_cpu_transfers = 0;
@@ -45,16 +44,14 @@ struct DiagnosticsSnapshot {
     std::uint64_t access_unit_bytes_delivered = 0;
     std::uint64_t transport_errors = 0;
     std::uint64_t decode_failures = 0;
-    std::uint64_t decoder_queue_drops = 0;
     std::size_t decoder_queue_occupancy = 0;
+    std::uint64_t last_decoded_frame_age_ms = 0;
     std::uint64_t max_receive_to_decode_ms = 0;
     std::uint64_t max_receive_to_publish_ms = 0;
     std::uint64_t max_receive_to_render_ms = 0;
     std::uint16_t configured_control_port = 0;
     std::uint16_t configured_media_rtp_port = 0;
     std::uint16_t configured_media_rtcp_port = 0;
-    std::uint32_t configured_maximum_decoder_queue_age_ms = 0;
-    std::uint32_t configured_maximum_live_frame_age_ms = 0;
 };
 
 bool write_diagnostics(const DiagnosticsSnapshot &snapshot, const std::string &path,

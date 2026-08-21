@@ -70,6 +70,18 @@ function(cambridge_configure_dependencies)
         )
     endif()
 
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        set(cambridge_ffmpeg_requirements
+            "libavcodec>=${CAMBRIDGE_LINUX_MIN_AVCODEC_ABI}"
+            "libavutil>=${CAMBRIDGE_LINUX_MIN_AVUTIL_ABI}"
+            "libswscale>=${CAMBRIDGE_LINUX_MIN_SWSCALE_ABI}")
+    endif()
+
+    if(CAMBRIDGE_BUILD_TESTS AND NOT CAMBRIDGE_BUILD_PLUGIN AND
+       CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        pkg_check_modules(CAMBRIDGE_FFMPEG REQUIRED ${cambridge_ffmpeg_requirements})
+    endif()
+
     if(CAMBRIDGE_BUILD_PLUGIN OR
        (APPLE AND CAMBRIDGE_BUILD_TESTS) OR
        (APPLE AND CAMBRIDGE_VALIDATE_MACOS_DEPENDENCIES))
@@ -77,10 +89,6 @@ function(cambridge_configure_dependencies)
         if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
             set(cambridge_obs_requirement
                 "libobs>=${CAMBRIDGE_LINUX_MIN_OBS_VERSION}")
-            set(cambridge_ffmpeg_requirements
-                "libavcodec>=${CAMBRIDGE_LINUX_MIN_AVCODEC_ABI}"
-                "libavutil>=${CAMBRIDGE_LINUX_MIN_AVUTIL_ABI}"
-                "libswscale>=${CAMBRIDGE_LINUX_MIN_SWSCALE_ABI}")
             pkg_check_modules(CAMBRIDGE_OBS REQUIRED ${cambridge_obs_requirement})
             pkg_check_modules(CAMBRIDGE_FFMPEG REQUIRED ${cambridge_ffmpeg_requirements})
             message(STATUS

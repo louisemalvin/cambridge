@@ -32,8 +32,6 @@ struct SourceConfig {
     std::uint16_t media_rtcp_port = static_cast<std::uint16_t>(contract::kDefaultMediaRtcpPort);
     std::uint32_t maximum_long_edge = contract::kDefaultMaximumLongEdge;
     std::uint32_t maximum_short_edge = contract::kDefaultMaximumShortEdge;
-    std::uint32_t maximum_decoder_queue_age_ms = contract::kDefaultMaximumDecoderQueueAgeMs;
-    std::uint32_t maximum_live_frame_age_ms = contract::kDefaultMaximumLiveFrameAgeMs;
     std::string drm_device = receiver::kDefaultDrmDevice;
     std::string decoder_mode = receiver::kDefaultDecoderMode;
     std::string diagnostics_path = receiver::kDefaultDiagnosticsPath;
@@ -97,7 +95,6 @@ private:
     bool media_path_locked_ = false;
     bool session_active_ = false;
     bool started_ = false;
-    bool stale_state_ = false;
 
     LatestFrameMailbox<VideoFrame> mailbox_;
     std::unique_ptr<ControlServer> control_server_;
@@ -106,7 +103,6 @@ private:
     std::unique_ptr<Decoder> decoder_;
     Renderer renderer_;
     PendingMediaPathFailureQueue media_path_failures_pending_;
-    std::atomic<std::uint64_t> stale_transitions_{0};
     std::atomic<std::uint64_t> transport_errors_{0};
     std::atomic<bool> transport_failure_pending_{false};
     std::atomic<bool> first_frame_reported_{false};

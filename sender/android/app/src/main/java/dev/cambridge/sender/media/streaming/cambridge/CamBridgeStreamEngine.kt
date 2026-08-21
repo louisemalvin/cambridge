@@ -47,6 +47,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ArrayBlockingQueue
@@ -72,28 +73,6 @@ internal fun transportQueueAction(
     else -> TransportQueueAction.DROP_AND_REQUEST_KEYFRAME
 }
 
-private const val BITRATE_UPDATE_INTERVAL_NS = 250_000_000L
-private const val BITRATE_CHANGE_DIVISOR = 20L
-private const val BITRATE_CHANGE_MINIMUM_BPS = 250_000L
-private const val MINIMUM_RELATIVE_CHANGE_BPS = 1L
-
-internal fun shouldApplyAdaptiveBitrate(
-    previousBitrateBps: Int,
-    requestedBitrateBps: Int,
-    elapsedNs: Long,
-): Boolean {
-    if (elapsedNs < BITRATE_UPDATE_INTERVAL_NS) return false
-    val absoluteChange = kotlin.math.abs(
-        requestedBitrateBps.toLong() - previousBitrateBps.toLong(),
-    )
-    val relativeChangeThreshold = if (previousBitrateBps > 0) {
-        maxOf(MINIMUM_RELATIVE_CHANGE_BPS, previousBitrateBps.toLong() / BITRATE_CHANGE_DIVISOR)
-    } else {
-        Long.MAX_VALUE
-    }
-    return absoluteChange >= BITRATE_CHANGE_MINIMUM_BPS || absoluteChange >= relativeChangeThreshold
-}
-
 class CamBridgeStreamEngine(
     context: Context,
     private val logger: AppLogger = AndroidAppLogger,
@@ -104,10 +83,9 @@ class CamBridgeStreamEngine(
     private val lifecycleMutex = Mutex()
     private val stateFlow = MutableStateFlow<CameraInteractionState>(CameraInteractionState.inactive())
     private val workerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val transportQueue = ArrayBlockingQueue<EncodedAccessUnit>(
-        CamBridgeStreamContract.MAXIMUM_ENCODED_QUEUE,
-    )
+    private val transportQueue = ArrayBlockingQueue<EncodedAccessUnit>(1)
     private val waitingForLocalRecoveryKeyframe = AtomicBoolean(false)
+    private val keyframeRequestPending = AtomicBoolean(false)
     private var codec: MediaCodec? = null
     private var codecThread: HandlerThread? = null
     private var codecHandler: Handler? = null
@@ -132,12 +110,7 @@ class CamBridgeStreamEngine(
     private val encodedKeyFrames = AtomicLong(EMPTY_LONG_VALUE)
     private val localRecoveryEvents = AtomicLong(EMPTY_LONG_VALUE)
     private val lastGccEstimateBps = AtomicInteger(EMPTY_BITRATE_BPS)
-    @Volatile
-    private var currentAdaptiveBitrateBps = EMPTY_BITRATE_BPS
-    private var lastBitrateUpdateNs = EMPTY_LONG_VALUE
-    private var lastKeyframeRequestNs = EMPTY_LONG_VALUE
-    private val keyframeRequestLock = Any()
-    private val adaptiveBitrateLock = Any()
+    private val currentAdaptiveBitrateBps = AtomicInteger(EMPTY_BITRATE_BPS)
     private val lastTransportSummaryNs = AtomicLong(EMPTY_LONG_VALUE)
 
     override val events: Flow<StreamEngineEvent> = eventFlow
@@ -278,17 +251,12 @@ class CamBridgeStreamEngine(
             require(mediaRtpPort != mediaRtcpPort) {
                 "Receiver returned identical RTP and RTCP media ports"
             }
-            val minimumBitrateBps = maxOf(
-                CamBridgeStreamContract.GCC_MINIMUM_BITRATE_FLOOR_BPS,
-                streamConfiguration.bitrateBps / MINIMUM_BITRATE_DIVISOR,
-            )
             val transport = GStreamerTransport(
                 applicationContext,
                 object : GStreamerTransport.Listener {
                     override fun onEstimatedBitrateChanged(bitrateBps: Int) {
                         lastGccEstimateBps.set(bitrateBps)
-                        applyEstimatedBitrate(bitrateBps, endpoint.generation, minimumBitrateBps,
-                            streamConfiguration.bitrateBps)
+                        applyEstimatedBitrate(bitrateBps, endpoint.generation)
                     }
 
                     override fun onKeyframeRequested() {
@@ -314,13 +282,11 @@ class CamBridgeStreamEngine(
                     remoteRtcpPort = mediaRtcpPort,
                     localRtcpPort = CamBridgeStreamContract.DEFAULT_SENDER_RTCP_PORT,
                     targetBitrateBps = streamConfiguration.bitrateBps,
-                    minimumBitrateBps = minimumBitrateBps,
                     mtuBytes = CamBridgeStreamContract.RTP_MTU_BYTES,
                 ),
             )
             streamEndpoint = endpoint.copy(mediaRtpPort = mediaRtpPort, mediaRtcpPort = mediaRtcpPort)
-            currentAdaptiveBitrateBps = streamConfiguration.bitrateBps
-            lastBitrateUpdateNs = EMPTY_LONG_VALUE
+            currentAdaptiveBitrateBps.set(streamConfiguration.bitrateBps)
             codec?.start()
             startTransportJob(transport, endpoint.generation)
             try {
@@ -360,10 +326,7 @@ class CamBridgeStreamEngine(
             }
             codec?.setParameters(Bundle().apply { putInt(MediaCodec.PARAMETER_KEY_VIDEO_BITRATE, bitrateBps) })
                 ?: error("The encoder is not prepared")
-            synchronized(adaptiveBitrateLock) {
-                currentAdaptiveBitrateBps = bitrateBps
-                lastBitrateUpdateNs = System.nanoTime()
-            }
+            currentAdaptiveBitrateBps.set(bitrateBps)
             emit("encoder_bitrate_changed", mapOf("bitrateBps" to bitrateBps))
         }
     }
@@ -438,9 +401,8 @@ class CamBridgeStreamEngine(
         localRecoveryEvents.set(EMPTY_LONG_VALUE)
         lastGccEstimateBps.set(EMPTY_BITRATE_BPS)
         lastTransportSummaryNs.set(EMPTY_LONG_VALUE)
-        currentAdaptiveBitrateBps = EMPTY_BITRATE_BPS
-        lastBitrateUpdateNs = EMPTY_LONG_VALUE
-        lastKeyframeRequestNs = EMPTY_LONG_VALUE
+        currentAdaptiveBitrateBps.set(EMPTY_BITRATE_BPS)
+        keyframeRequestPending.set(false)
         waitingForLocalRecoveryKeyframe.set(false)
     }
 
@@ -497,7 +459,7 @@ class CamBridgeStreamEngine(
         override fun onInputBufferAvailable(codec: MediaCodec, index: Int) = Unit
 
         override fun onOutputBufferAvailable(codec: MediaCodec, index: Int, info: MediaCodec.BufferInfo) {
-            if (configuration?.streamGeneration == generation) {
+            if (isCurrentRunningGeneration(generation)) {
                 runCatching {
                     val buffer = codec.getOutputBuffer(index)
                     if (buffer != null && info.size > EMPTY_BYTE_COUNT) {
@@ -536,6 +498,7 @@ class CamBridgeStreamEngine(
                             encodedAccessUnits.incrementAndGet()
                             encodedBytes.addAndGet(accessUnit.size.toLong())
                             if (isKeyFrame) {
+                                keyframeRequestPending.set(false)
                                 encodedKeyFrames.incrementAndGet()
                             }
                             enqueueAccessUnit(
@@ -653,8 +616,8 @@ class CamBridgeStreamEngine(
 
     private fun startTransportJob(transport: GStreamerTransport, generation: Long) {
         transportJob = workerScope.launch {
-            while (isActive && streamEndpoint?.generation == generation) {
-                val accessUnit = transportQueue.take()
+            while (isActive && isCurrentRunningGeneration(generation)) {
+                val accessUnit = runInterruptible { transportQueue.take() }
                 if (!transport.pushAccessUnit(
                         accessUnit.data,
                         accessUnit.presentationTimeUs,
@@ -684,14 +647,11 @@ class CamBridgeStreamEngine(
     }
 
     private fun requestEncoderKeyframe() {
-        val now = System.nanoTime()
-        synchronized(keyframeRequestLock) {
-            if (lastKeyframeRequestNs != EMPTY_LONG_VALUE &&
-                now - lastKeyframeRequestNs < KEYFRAME_REQUEST_DEBOUNCE_NS
-            ) {
-                return
-            }
-            lastKeyframeRequestNs = now
+        if (!running) {
+            return
+        }
+        if (!keyframeRequestPending.compareAndSet(false, true)) {
+            return
         }
         codecHandler?.post {
             runCatching {
@@ -701,6 +661,7 @@ class CamBridgeStreamEngine(
                     },
                 )
             }.onFailure { error ->
+                keyframeRequestPending.set(false)
                 emit("encoder_keyframe_request_failed", mapOf("reason" to error.message))
             }
         }
@@ -709,40 +670,35 @@ class CamBridgeStreamEngine(
     private fun applyEstimatedBitrate(
         estimatedBitrateBps: Int,
         generation: Long,
-        minimumBitrateBps: Int,
-        targetBitrateBps: Int,
     ) {
-        val requestedBitrateBps = estimatedBitrateBps.coerceIn(minimumBitrateBps, targetBitrateBps)
-        val now = System.nanoTime()
-        val previousBitrateBps: Int
-        synchronized(adaptiveBitrateLock) {
-            previousBitrateBps = currentAdaptiveBitrateBps
-            if (!shouldApplyAdaptiveBitrate(
-                    previousBitrateBps,
-                    requestedBitrateBps,
-                    now - lastBitrateUpdateNs,
-                )) {
-                return
-            }
-            currentAdaptiveBitrateBps = requestedBitrateBps
-            lastBitrateUpdateNs = now
+        if (!isCurrentRunningGeneration(generation)) {
+            return
+        }
+        val streamConfiguration = configuration ?: return
+        val requestedBitrateBps = estimatedBitrateBps.coerceIn(
+            CamBridgeStreamContract.MINIMUM_BITRATE_BPS,
+            streamConfiguration.bitrateBps,
+        )
+        if (currentAdaptiveBitrateBps.getAndSet(requestedBitrateBps) == requestedBitrateBps) {
+            return
         }
         codecHandler?.post {
             runCatching {
-                if (configuration?.streamGeneration == generation) {
-                    codec?.setParameters(
-                        Bundle().apply {
-                            putInt(MediaCodec.PARAMETER_KEY_VIDEO_BITRATE, requestedBitrateBps)
-                        },
-                    )
-                    emit(
-                        "encoder_adaptive_bitrate_changed",
-                        mapOf(
-                            "estimatedBitrateBps" to estimatedBitrateBps,
-                            "bitrateBps" to requestedBitrateBps,
-                        ),
-                    )
+                if (configuration?.streamGeneration != generation) {
+                    return@post
                 }
+                codec?.setParameters(
+                    Bundle().apply {
+                        putInt(MediaCodec.PARAMETER_KEY_VIDEO_BITRATE, requestedBitrateBps)
+                    },
+                )
+                emit(
+                    "encoder_adaptive_bitrate_changed",
+                    mapOf(
+                        "estimatedBitrateBps" to estimatedBitrateBps,
+                        "bitrateBps" to requestedBitrateBps,
+                    ),
+                )
             }.onFailure { error ->
                 emit("encoder_adaptive_bitrate_update_failed", mapOf("reason" to error.message))
             }
@@ -759,7 +715,7 @@ class CamBridgeStreamEngine(
             mapOf(
                 "targetBitrateBps" to configuration?.bitrateBps,
                 "gccEstimateBps" to lastGccEstimateBps.get(),
-                "currentMediaCodecBitrateBps" to currentAdaptiveBitrateBps,
+                "currentMediaCodecBitrateBps" to currentAdaptiveBitrateBps.get(),
                 "encodedAccessUnits" to encodedAccessUnits.get(),
                 "encodedBytes" to encodedBytes.get(),
                 "encodedKeyFrames" to encodedKeyFrames.get(),
@@ -815,13 +771,14 @@ class CamBridgeStreamEngine(
     private suspend fun stopLocked(sendStop: Boolean) {
         val endpoint = streamEndpoint
         running = false
-        runCatching { camera.stop() }
-        runCatching { codec?.stop() }
+        gStreamerTransport?.stop()
         transportJob?.cancelAndJoin()
         transportJob = null
+        runCatching { camera.stop() }
+        runCatching { codec?.stop() }
         transportQueue.clear()
         waitingForLocalRecoveryKeyframe.set(false)
-        gStreamerTransport?.stop()
+        keyframeRequestPending.set(false)
         gStreamerTransport?.close()
         gStreamerTransport = null
         if (sendStop && endpoint != null) {
@@ -854,6 +811,7 @@ class CamBridgeStreamEngine(
         codecConfigAnnexB = ByteArray(EMPTY_BYTE_COUNT)
         transportQueue.clear()
         waitingForLocalRecoveryKeyframe.set(false)
+        keyframeRequestPending.set(false)
     }
 
     private fun emit(name: String, fields: Map<String, Any?> = emptyMap()) {
@@ -897,10 +855,6 @@ class CamBridgeStreamEngine(
         const val TELEMETRY_INTERVAL_MILLIS = 1_000L
         const val NANOSECONDS_PER_MILLISECOND = 1_000_000L
         const val TELEMETRY_INTERVAL_NS = TELEMETRY_INTERVAL_MILLIS * NANOSECONDS_PER_MILLISECOND
-        const val KEYFRAME_REQUEST_DEBOUNCE_MILLIS = 100L
-        const val KEYFRAME_REQUEST_DEBOUNCE_NS =
-            KEYFRAME_REQUEST_DEBOUNCE_MILLIS * NANOSECONDS_PER_MILLISECOND
-        const val MINIMUM_BITRATE_DIVISOR = 4
         const val SYNC_FRAME_REQUEST_VALUE = 0
         const val EMPTY_BITRATE_BPS = 0
         const val LOWEST_PRIORITY = 0

@@ -8,7 +8,6 @@
 #include <gst/rtp/gstrtphdrext.h>
 #include <gst/video/video-event.h>
 
-#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <mutex>
@@ -25,10 +24,14 @@ constexpr gboolean kSynchronizedSink = FALSE;
 constexpr gboolean kAsynchronousSink = FALSE;
 constexpr gboolean kLiveSource = TRUE;
 constexpr gboolean kDoTimestampSourceBuffers = FALSE;
-constexpr gboolean kNonBlockingAppsrc = FALSE;
+constexpr gboolean kBlockingAppsrc = TRUE;
+constexpr gboolean kEmitAppsrcSignals = FALSE;
 constexpr gint kAppsrcLeakyTypeNone = GST_APP_LEAKY_TYPE_NONE;
+constexpr guint kAppsrcMaximumBuffers = 1;
+constexpr guint64 kAppsrcUnlimitedBytes = 0;
+constexpr GstClockTime kAppsrcUnlimitedTime = 0;
 constexpr GstRTPProfile kRtpProfileFeedback = GST_RTP_PROFILE_AVPF;
-constexpr GstClockTime kRtcpMinimumInterval = 0; // Let AVPF use the calculated feedback interval.
+constexpr guint kRtxCacheRetentionMs = 500;
 constexpr gint kPayloaderConfigIntervalEveryIdr = -1;
 constexpr gint kPayloaderAggregateModeNone = 0;
 constexpr guint kDiagnosticsIntervalMs = 1'000;
@@ -169,13 +172,6 @@ GstPadProbeReturn add_rtcp_feedback_caps(GstPad *, GstPadProbeInfo *info, gpoint
     return GST_PAD_PROBE_OK;
 }
 
-gint rtcp_bandwidth_bps(std::uint32_t target_bitrate_bps)
-{
-    const gdouble bandwidth = static_cast<gdouble>(target_bitrate_bps) *
-                              contract::kRtcpFeedbackBandwidthFraction;
-    return static_cast<gint>(std::min(bandwidth, static_cast<gdouble>(G_MAXINT)));
-}
-
 } // namespace
 
 struct GStreamerSender::Impl {
@@ -263,8 +259,6 @@ bool GStreamerSender::Impl::start(const Config &sender_config, std::string &erro
         !valid_port(sender_config.remote_rtcp_port) || !valid_port(sender_config.local_rtcp_port) ||
         sender_config.remote_rtp_port == sender_config.remote_rtcp_port ||
         sender_config.target_bitrate_bps < contract::kMinimumBitrateBps ||
-        sender_config.minimum_bitrate_bps < contract::kMinimumBitrateBps ||
-        sender_config.minimum_bitrate_bps > sender_config.target_bitrate_bps ||
         sender_config.mtu_bytes < contract::kRtpMtuBytes) {
         error = "invalid GStreamer sender configuration";
         return false;
@@ -360,8 +354,11 @@ bool GStreamerSender::Impl::build_pipeline(std::string &error)
         "format", GST_FORMAT_TIME,
         "do-timestamp", kDoTimestampSourceBuffers,
         "leaky-type", kAppsrcLeakyTypeNone,
-        "max-buffers", static_cast<guint>(contract::kAppsrcMaximumBuffers),
-        "block", kNonBlockingAppsrc,
+        "block", kBlockingAppsrc,
+        "max-buffers", kAppsrcMaximumBuffers,
+        "max-bytes", kAppsrcUnlimitedBytes,
+        "max-time", kAppsrcUnlimitedTime,
+        "emit-signals", kEmitAppsrcSignals,
         nullptr);
     g_object_set(
         payloader,
@@ -436,23 +433,6 @@ bool GStreamerSender::Impl::build_pipeline(std::string &error)
     }
     gst_object_unref(payloader_src);
     gst_object_unref(rtp_sink_pad);
-
-    GstElement *internal_session = nullptr;
-    g_signal_emit_by_name(rtpbin, "get-internal-session", kVideoSession, &internal_session);
-    if (!internal_session) {
-        error = "could not access the GStreamer RTP session";
-        gst_element_set_state(new_pipeline, GST_STATE_NULL);
-        gst_object_unref(new_pipeline);
-        return false;
-    }
-    g_object_set(internal_session,
-                 "bandwidth", static_cast<gdouble>(config.target_bitrate_bps),
-                 "rtcp-min-interval", kRtcpMinimumInterval,
-                 "rtcp-fraction", contract::kRtcpFeedbackBandwidthFraction,
-                 "rtcp-rr-bandwidth", rtcp_bandwidth_bps(config.target_bitrate_bps),
-                 "rtcp-rs-bandwidth", rtcp_bandwidth_bps(config.target_bitrate_bps),
-                 nullptr);
-    gst_object_unref(internal_session);
 
     const std::string send_rtp_src_name = session_pad_name("send_rtp_src_");
     GstPad *rtp_src_pad = gst_element_get_static_pad(rtpbin, send_rtp_src_name.c_str());
@@ -544,19 +524,16 @@ GstElement *GStreamerSender::Impl::make_aux_sender(std::string &error)
     GstStructure *payload_map = make_payload_type_map(
         static_cast<std::uint8_t>(contract::kRtpPayloadType),
         static_cast<std::uint8_t>(contract::kRtxPayloadType));
-    const guint minimum_bitrate = std::max(
-        config.minimum_bitrate_bps,
-        static_cast<std::uint32_t>(contract::kGccMinimumBitrateFloorBps));
     g_object_set(
         rtx_sender,
         "payload-type-map", payload_map,
-        "max-size-time", static_cast<GstClockTime>(contract::kRtxHistoryMs) * GST_MSECOND,
+        "max-size-packets", 0u,
+        "max-size-time", kRtxCacheRetentionMs,
         nullptr);
     g_object_set(
         gcc,
         "max-bitrate", static_cast<guint>(config.target_bitrate_bps),
         "estimated-bitrate", static_cast<guint>(config.target_bitrate_bps),
-        "min-bitrate", static_cast<guint>(minimum_bitrate),
         nullptr);
     gst_structure_free(payload_map);
     g_signal_connect(gcc, "notify::estimated-bitrate",
@@ -781,31 +758,29 @@ bool GStreamerSender::Impl::push_access_unit(const std::uint8_t *data, std::size
         report_error("invalid H.264 access unit supplied to GStreamer");
         return false;
     }
-    GstFlowReturn result = GST_FLOW_ERROR;
-    bool allocation_failed = false;
+    GstElement *source = nullptr;
     {
         std::lock_guard<std::mutex> lock(mutex);
         if (!active || stopping || !appsrc) {
             return false;
         }
-        GstBuffer *buffer = gst_buffer_new_allocate(nullptr, size, nullptr);
-        if (!buffer) {
-            allocation_failed = true;
-        } else {
-            gst_buffer_fill(buffer, 0, data, size);
-            const GstClockTime timestamp = static_cast<GstClockTime>(presentation_time_us) * GST_USECOND;
-            GST_BUFFER_PTS(buffer) = timestamp;
-            GST_BUFFER_DTS(buffer) = timestamp;
-            if (!keyframe) {
-                GST_BUFFER_FLAG_SET(buffer, GST_BUFFER_FLAG_DELTA_UNIT);
-            }
-            result = gst_app_src_push_buffer(GST_APP_SRC(appsrc), buffer);
-        }
+        source = GST_ELEMENT(gst_object_ref(appsrc));
     }
-    if (allocation_failed) {
+    GstBuffer *buffer = gst_buffer_new_allocate(nullptr, size, nullptr);
+    if (!buffer) {
+        gst_object_unref(source);
         report_error("GStreamer could not allocate an H.264 access unit buffer");
         return false;
     }
+    gst_buffer_fill(buffer, 0, data, size);
+    const GstClockTime timestamp = static_cast<GstClockTime>(presentation_time_us) * GST_USECOND;
+    GST_BUFFER_PTS(buffer) = timestamp;
+    GST_BUFFER_DTS(buffer) = timestamp;
+    if (!keyframe) {
+        GST_BUFFER_FLAG_SET(buffer, GST_BUFFER_FLAG_DELTA_UNIT);
+    }
+    const GstFlowReturn result = gst_app_src_push_buffer(GST_APP_SRC(source), buffer);
+    gst_object_unref(source);
     if (result != GST_FLOW_OK) {
         report_error("GStreamer appsrc rejected an H.264 access unit");
         return false;
@@ -858,6 +833,7 @@ void GStreamerSender::Impl::run_main_loop()
 void GStreamerSender::Impl::stop()
 {
     GMainLoop *main_loop = nullptr;
+    GstElement *old_appsrc = nullptr;
     GstElement *old_pipeline = nullptr;
     GMainContext *old_context = nullptr;
     GSource *old_diagnostics_source = nullptr;
@@ -866,6 +842,13 @@ void GStreamerSender::Impl::stop()
         stopping = true;
         active = false;
         main_loop = loop;
+        if (appsrc) {
+            old_appsrc = GST_ELEMENT(gst_object_ref(appsrc));
+        }
+    }
+    if (old_appsrc) {
+        gst_app_src_end_of_stream(GST_APP_SRC(old_appsrc));
+        gst_object_unref(old_appsrc);
     }
     if (main_loop) {
         g_main_loop_quit(main_loop);

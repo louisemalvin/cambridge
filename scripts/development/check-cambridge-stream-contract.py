@@ -241,12 +241,7 @@ def main() -> int:
         "RTP_CLOCK_RATE_HZ": media["clockRateHz"],
         "RTP_MTU_BYTES": media["mtuBytes"],
         "TWCC_EXTENSION_ID": media["twccExtensionId"],
-        "JITTER_LATENCY_MILLIS": media["jitterLatencyMs"],
-        "RTX_HISTORY_MILLIS": media["rtxHistoryMs"],
         "MAXIMUM_ACCESS_UNIT_BYTES": media["maxAccessUnitBytes"],
-        "MAXIMUM_ENCODED_QUEUE": media["maxInFlightAccessUnits"],
-        "APPSRC_MAXIMUM_BUFFERS": media["appsrcMaxBuffers"],
-        "GCC_MINIMUM_BITRATE_FLOOR_BPS": media["gccMinimumBitrateFloorBps"],
         "KEYFRAME_INTERVAL_SECONDS": media["keyframeIntervalSeconds"],
     }
     for constant_name, expected_value in media_kotlin_values.items():
@@ -301,24 +296,8 @@ def main() -> int:
         "kRtpMtuBytes": (r"kRtpMtuBytes = ([0-9']+)", media["mtuBytes"], integer_literal),
         "kTwccExtensionId": (r"kTwccExtensionId = ([0-9']+)", media["twccExtensionId"], integer_literal),
         "kRtpSessionIndex": (r"kRtpSessionIndex = ([0-9']+)", media["rtpSessionIndex"], integer_literal),
-        "kJitterLatencyMs": (r"kJitterLatencyMs = ([0-9']+)", media["jitterLatencyMs"], integer_literal),
-        "kRtxHistoryMs": (r"kRtxHistoryMs = ([0-9']+)", media["rtxHistoryMs"], integer_literal),
         "kMaximumAccessUnitBytes": (
             r"kMaximumAccessUnitBytes = ([0-9']+)", media["maxAccessUnitBytes"], integer_literal,
-        ),
-        "kMaximumInFlightAccessUnits": (
-            r"kMaximumInFlightAccessUnits = ([0-9']+)", media["maxInFlightAccessUnits"], integer_literal,
-        ),
-        "kAppsrcMaximumBuffers": (
-            r"kAppsrcMaximumBuffers = ([0-9']+)", media["appsrcMaxBuffers"], integer_literal,
-        ),
-        "kGccMinimumBitrateFloorBps": (
-            r"kGccMinimumBitrateFloorBps = ([0-9']+)", media["gccMinimumBitrateFloorBps"], integer_literal,
-        ),
-        "kRtcpFeedbackBandwidthFraction": (
-            r"kRtcpFeedbackBandwidthFraction = ([0-9.]+)",
-            media["rtcpFeedbackBandwidthFraction"],
-            float,
         ),
     }
     for constant_name, (pattern, expected_value, parser) in cpp_media_values.items():

@@ -48,17 +48,9 @@
     "mtuBytes": 1200,
     "twccExtensionId": 1,
     "rtpSessionIndex": 0,
-    "jitterLatencyMs": 40,
-    "rtxHistoryMs": 150,
-    "rtcpFeedbackBandwidthFraction": 0.05,
     "maxAccessUnitBytes": 8388608,
-    "maxInFlightAccessUnits": 2,
-    "appsrcMaxBuffers": 4,
-    "gccMinimumBitrateFloorBps": 750000,
     "mailboxCapacity": 1,
     "texturePoolSlots": 3,
-    "maxDecoderQueueAgeMs": 100,
-    "maxLiveFrameAgeMs": 250,
     "keyframeIntervalSeconds": 1
   },
   "messages": {

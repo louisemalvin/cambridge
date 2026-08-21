@@ -22,7 +22,6 @@ constexpr AVCodecID kCodecId = AV_CODEC_ID_H264;
 constexpr AVPixelFormat kSoftwarePixelFormat = AV_PIX_FMT_YUV420P;
 constexpr AVPixelFormat kOutputPixelFormat = AV_PIX_FMT_NV12;
 constexpr int kDecoderThreadCount = 1;
-constexpr std::uint64_t kNanosecondsPerMillisecond = 1'000'000ULL;
 constexpr std::uint64_t kNanosecondsPerSecond = 1'000'000'000ULL;
 constexpr std::uint64_t kMicrosecondsPerSecond = 1'000'000ULL;
 constexpr std::uint32_t kRtpClockRate = contract::kRtpClockRateHz;
@@ -100,6 +99,7 @@ NativeSetupResult Decoder::prepare_native_session(std::uint64_t stream_generatio
         active_path_ = SessionMediaPath::Unselected;
         queue_.clear();
     }
+    condition_.notify_all();
 
     std::string error;
     NativeSetupStatus status = NativeSetupStatus::Failed;
@@ -135,6 +135,7 @@ bool Decoder::prepare_software_session(std::uint64_t stream_generation, DecoderC
         active_path_ = SessionMediaPath::Unselected;
         queue_.clear();
     }
+    condition_.notify_all();
 
     NativeSetupStatus ignored_status = NativeSetupStatus::Failed;
     bool opened = false;
@@ -180,6 +181,7 @@ void Decoder::discard_prepared_session()
         prepared_generation_ = 0;
         queue_.clear();
     }
+    condition_.notify_all();
     std::lock_guard<std::mutex> codec_lock(codec_mutex_);
     close_codec();
 }
@@ -196,6 +198,7 @@ void Decoder::end_session()
         failure_reported_generation_ = 0;
         queue_.clear();
     }
+    condition_.notify_all();
     std::lock_guard<std::mutex> codec_lock(codec_mutex_);
     close_codec();
 }
@@ -203,23 +206,19 @@ void Decoder::end_session()
 bool Decoder::submit(AccessUnit access_unit)
 {
     if (access_unit.annex_b.empty() || access_unit.annex_b.size() > contract::kMaximumAccessUnitBytes) {
-        queue_drops_.fetch_add(1);
         return false;
     }
-    bool accepted = false;
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (session_active_ && !stopping_) {
-            if (queue_.size() >= contract::kMaximumInFlightAccessUnits) {
-                queue_.pop_front();
-                queue_drops_.fetch_add(1);
-            }
-            queue_.push_back(std::move(access_unit));
-            accepted = true;
-        }
+    std::unique_lock<std::mutex> lock(mutex_);
+    condition_.wait(lock, [this] {
+        return stopping_ || !session_active_ || queue_.empty();
+    });
+    if (stopping_ || !session_active_) {
+        return false;
     }
-    condition_.notify_one();
-    return accepted;
+    queue_.push_back(std::move(access_unit));
+    lock.unlock();
+    condition_.notify_all();
+    return true;
 }
 
 bool Decoder::prepared_session_ready() const
@@ -343,25 +342,10 @@ void Decoder::close_codec()
     current_render_mode_ = RenderMode::Placeholder;
 }
 
-void Decoder::flush_codec()
-{
-    if (codec_context_) {
-        avcodec_flush_buffers(codec_context_);
-    }
-}
-
 void Decoder::decode_access_unit(const AccessUnit &access_unit, std::uint64_t stream_generation,
                                  const DecoderConfig &config)
 {
     if (!generation_active(stream_generation)) {
-        return;
-    }
-    const std::uint64_t now = monotonic_time_ns();
-    const std::uint64_t maximum_age = static_cast<std::uint64_t>(config.maximum_queue_age_ms) *
-                                      kNanosecondsPerMillisecond;
-    if (now > access_unit.receive_time_ns && now - access_unit.receive_time_ns > maximum_age) {
-        stale_frames_.fetch_add(1);
-        flush_codec();
         return;
     }
     if (!codec_context_) {
@@ -459,9 +443,6 @@ void Decoder::publish_frame(AVFrame *decoded, const AccessUnit &access_unit, std
         frame->decode_time_ns = decode_time;
         frame->complete_time_ns = decode_time;
         frame->publish_time_ns = decode_time;
-        frame->stale_deadline_ns = decode_time +
-                                   static_cast<std::uint64_t>(config.maximum_live_frame_age_ms) *
-                                       kNanosecondsPerMillisecond;
         frame->render_mode = RenderMode::Native;
         frame->pixel_format = "native";
         frame->color_range = decoded->color_range == AVCOL_RANGE_JPEG ? "full" : "limited";
@@ -518,9 +499,6 @@ void Decoder::publish_nv12(AVFrame *decoded, const AccessUnit &access_unit, std:
     frame->decode_time_ns = now;
     frame->complete_time_ns = now;
     frame->publish_time_ns = now;
-    frame->stale_deadline_ns = now +
-                               static_cast<std::uint64_t>(config.maximum_live_frame_age_ms) *
-                                   kNanosecondsPerMillisecond;
     frame->render_mode = RenderMode::CpuNv12;
     frame->pixel_format = "nv12";
     frame->color_range = decoded->color_range == AVCOL_RANGE_JPEG ? "full" : "limited";
@@ -545,6 +523,7 @@ void Decoder::fail(std::uint64_t stream_generation, MediaPathFailureCode code, c
             should_post = true;
         }
     }
+    condition_.notify_all();
     if (should_post && on_failure_) {
         on_failure_(stream_generation, code, detail);
     }
@@ -581,6 +560,7 @@ void Decoder::run()
             }
             access_unit = std::move(queue_.front());
             queue_.pop_front();
+            condition_.notify_all();
             generation = active_generation_;
             config = active_config_;
         }

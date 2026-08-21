@@ -98,7 +98,6 @@ bool write_diagnostics(const DiagnosticsSnapshot &snapshot, const std::string &p
     output << ",\n  \"mailboxOccupancy\": " << snapshot.mailbox_occupancy
            << ",\n  \"mailboxMaximum\": " << snapshot.mailbox_maximum
            << ",\n  \"framesReplaced\": " << snapshot.frames_replaced
-           << ",\n  \"framesStale\": " << snapshot.frames_stale
            << ",\n  \"framesDecoded\": " << snapshot.frames_decoded
            << ",\n  \"framesRendered\": " << snapshot.frames_rendered
            << ",\n  \"hardwareCpuTransfers\": " << snapshot.hardware_cpu_transfers
@@ -126,18 +125,14 @@ bool write_diagnostics(const DiagnosticsSnapshot &snapshot, const std::string &p
            << ",\n  \"accessUnitBytesDelivered\": " << snapshot.access_unit_bytes_delivered
            << ",\n  \"transportErrors\": " << snapshot.transport_errors
            << ",\n  \"decodeFailures\": " << snapshot.decode_failures
-           << ",\n  \"decoderQueueDrops\": " << snapshot.decoder_queue_drops
            << ",\n  \"decoderQueueOccupancy\": " << snapshot.decoder_queue_occupancy
+           << ",\n  \"lastDecodedFrameAgeMs\": " << snapshot.last_decoded_frame_age_ms
            << ",\n  \"maxReceiveToDecodeMs\": " << snapshot.max_receive_to_decode_ms
            << ",\n  \"maxReceiveToPublishMs\": " << snapshot.max_receive_to_publish_ms
            << ",\n  \"maxReceiveToRenderMs\": " << snapshot.max_receive_to_render_ms
            << ",\n  \"configured\": {\"controlPort\": " << snapshot.configured_control_port
            << ", \"mediaRtpPort\": " << snapshot.configured_media_rtp_port
-           << ", \"mediaRtcpPort\": " << snapshot.configured_media_rtcp_port
-           << ", \"maximumDecoderQueueAgeMs\": "
-           << snapshot.configured_maximum_decoder_queue_age_ms
-           << ", \"maximumLiveFrameAgeMs\": "
-           << snapshot.configured_maximum_live_frame_age_ms << "}\n"
+           << ", \"mediaRtcpPort\": " << snapshot.configured_media_rtcp_port << "}\n"
            << "}\n";
     if (!output) {
         error = "could not write diagnostics path";

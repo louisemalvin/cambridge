@@ -1,5 +1,6 @@
 #include "../src/gstreamer_media_receiver.hpp"
 #include "../src/gstreamer_runtime.hpp"
+#include "../src/decoder.hpp"
 #include "../../../../sender/android/app/src/main/jni/gstreamer_sender.hpp"
 #include "../src/protocol_contract.generated.hpp"
 
@@ -11,13 +12,13 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#include <algorithm>
 #include <array>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
 #include <cstdlib>
+#include <functional>
 #include <iostream>
 #include <memory>
 #include <mutex>
@@ -27,6 +28,15 @@
 #include <utility>
 #include <vector>
 
+namespace cambridge {
+
+std::unique_ptr<NativeDecoderAdapter> create_native_decoder_adapter()
+{
+    return nullptr;
+}
+
+} // namespace cambridge
+
 namespace {
 
 namespace contract = cambridge::contract;
@@ -35,25 +45,35 @@ constexpr char kLoopbackAddress[] = "127.0.0.1";
 constexpr std::uint16_t kEphemeralPort = 0;
 constexpr std::uint64_t kTestGeneration = 1;
 constexpr std::uint32_t kTestTargetBitrateBps = 2'000'000;
-constexpr std::uint32_t kTestMinimumBitrateBps = 750'000;
 constexpr std::uint32_t kTestFrameRate = 30;
 constexpr std::uint32_t kTestFrameIntervalUs = 1'000'000 / kTestFrameRate;
 constexpr std::uint32_t kTestFrameCount = 36;
 constexpr std::uint32_t kTestVideoWidth = 256;
 constexpr std::uint32_t kTestVideoHeight = 256;
+constexpr std::uint32_t kHighRateTargetBitrateBps = 16'000'000;
+constexpr std::uint32_t kHighRateVideoWidth = 2'560;
+constexpr std::uint32_t kHighRateVideoHeight = 1'440;
+constexpr std::uint32_t kHighRateDurationSeconds = 30;
+constexpr std::uint32_t kHighRateSourceFrameCount = kTestFrameRate;
+constexpr std::uint32_t kHighRateFrameCount = kTestFrameRate * kHighRateDurationSeconds;
+constexpr std::uint32_t kBitsPerKilobit = 1'000;
 constexpr std::uint32_t kTestDeliveryTimeoutMs = 3'000;
 constexpr std::uint32_t kTestRecoveryTimeoutMs = 4'000;
-constexpr std::uint32_t kTestThrottleDelayUs = 8'000;
 constexpr std::uint32_t kInitialRtcpSettleMs = 1'250;
-constexpr std::uint32_t kBandwidthObservationMs = 1'000;
+constexpr std::uint32_t kPipelineStartupSettleMs = 250;
+constexpr std::uint32_t kDecoderSlowFrameCount = 8;
+constexpr std::uint32_t kDecoderSlowdownMs = 100;
+constexpr std::uint32_t kDecoderRecoveryMinimumFrames = 10;
 constexpr std::uint32_t kUnrecoverableFrameCount = 8;
+constexpr std::uint32_t kRecoveryKeyFrameIndex = kTestFrameRate;
 constexpr std::size_t kSingleLostDatagramCount = 1;
 constexpr std::size_t kBurstLostDatagramCount = 10;
-constexpr std::size_t kUnrecoverableDatagramCount = 64;
 constexpr std::size_t kMinimumExpectedAccessUnits = 2;
-constexpr std::size_t kExpectedBandwidthSamples = 2;
 constexpr int kPollTimeoutMs = 25;
-constexpr int kSocketReceiveBufferBytes = 64 * 1024;
+constexpr int kSocketReceiveBufferBytes = 4 * 1024 * 1024;
+constexpr std::size_t kRtpPayloadTypeByteOffset = 1;
+constexpr std::uint8_t kRtpPayloadTypeMask = 0x7f;
+constexpr int kNoDroppedPayloadType = -1;
 
 struct GeneratedAccessUnit {
     std::vector<std::uint8_t> data;
@@ -137,6 +157,7 @@ public:
         std::lock_guard<std::mutex> lock(mutex_);
         drop_all_ = false;
         drop_remaining_ = 0;
+        dropped_payload_type_ = kNoDroppedPayloadType;
     }
 
     void drop_all()
@@ -145,10 +166,10 @@ public:
         drop_all_ = true;
     }
 
-    void set_delay(std::chrono::microseconds delay)
+    void drop_payload_type(std::uint8_t payload_type)
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        delay_ = delay;
+        dropped_payload_type_ = payload_type;
     }
 
     [[nodiscard]] std::uint64_t forwarded() const { return forwarded_.load(); }
@@ -167,7 +188,6 @@ private:
             if (received <= 0) {
                 continue;
             }
-            std::chrono::microseconds delay;
             bool drop = false;
             {
                 std::lock_guard<std::mutex> lock(mutex_);
@@ -177,14 +197,15 @@ private:
                     }
                     drop = true;
                 }
-                delay = delay_;
+                if (received > static_cast<ssize_t>(kRtpPayloadTypeByteOffset) &&
+                    (buffer[kRtpPayloadTypeByteOffset] & kRtpPayloadTypeMask) ==
+                        dropped_payload_type_) {
+                    drop = true;
+                }
             }
             if (drop) {
                 dropped_.fetch_add(1);
                 continue;
-            }
-            if (delay.count() != 0) {
-                std::this_thread::sleep_for(delay);
             }
             sendto(socket_fd_, buffer.data(), static_cast<std::size_t>(received), 0,
                    reinterpret_cast<const sockaddr *>(&output_address_), sizeof(output_address_));
@@ -199,7 +220,7 @@ private:
     mutable std::mutex mutex_;
     std::size_t drop_remaining_ = 0;
     bool drop_all_ = false;
-    std::chrono::microseconds delay_{0};
+    int dropped_payload_type_ = kNoDroppedPayloadType;
     std::atomic<std::uint64_t> forwarded_{0};
     std::atomic<std::uint64_t> dropped_{0};
 };
@@ -208,39 +229,48 @@ class AccessUnitCollector {
 public:
     void add(cambridge::AccessUnit access_unit)
     {
+        require(!access_unit.annex_b.empty(), "receiver delivered an empty access unit");
         std::lock_guard<std::mutex> lock(mutex_);
-        access_units_.push_back(std::move(access_unit.annex_b));
+        ++count_;
         condition_.notify_all();
     }
 
     [[nodiscard]] std::size_t count() const
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        return access_units_.size();
+        return count_;
     }
 
     bool wait_for_count(std::size_t expected, std::uint32_t timeout_ms)
     {
         std::unique_lock<std::mutex> lock(mutex_);
         return condition_.wait_for(lock, std::chrono::milliseconds(timeout_ms), [this, expected] {
-            return access_units_.size() >= expected;
+            return count_ >= expected;
         });
     }
 
 private:
     mutable std::mutex mutex_;
     std::condition_variable condition_;
-    std::vector<std::vector<std::uint8_t>> access_units_;
+    std::size_t count_ = 0;
 };
 
 class GStreamerHarness {
 public:
-    GStreamerHarness()
+    using AccessUnitConsumer = std::function<void(cambridge::AccessUnit)>;
+
+    explicit GStreamerHarness(
+        std::uint32_t target_bitrate_bps = kTestTargetBitrateBps,
+        AccessUnitConsumer consumer = {},
+        bool enable_loss_injection = false)
+        : consumer_(std::move(consumer))
     {
         const std::uint16_t receiver_rtp_port = allocate_loopback_port();
         const std::uint16_t receiver_rtcp_port = allocate_loopback_port();
         const std::uint16_t sender_rtcp_port = allocate_loopback_port();
-        const std::uint16_t proxy_port = allocate_loopback_port();
+        const std::uint16_t sender_rtp_port = enable_loss_injection
+                                                  ? allocate_loopback_port()
+                                                  : receiver_rtp_port;
 
         cambridge::GStreamerMediaReceiverConfig receiver_config;
         receiver_config.rtp_port = receiver_rtp_port;
@@ -248,11 +278,18 @@ public:
         receiver_config.payload_type = static_cast<std::uint8_t>(contract::kRtpPayloadType);
         receiver_config.rtx_payload_type = static_cast<std::uint8_t>(contract::kRtxPayloadType);
         receiver_config.clock_rate_hz = contract::kRtpClockRateHz;
-        receiver_config.jitter_latency_ms = contract::kJitterLatencyMs;
         receiver_config.maximum_access_unit_bytes = contract::kMaximumAccessUnitBytes;
         receiver_ = std::make_unique<cambridge::GStreamerMediaReceiver>(
             receiver_config,
-            [this](cambridge::AccessUnit access_unit) { collector_.add(std::move(access_unit)); },
+            [this](cambridge::AccessUnit access_unit) {
+                if (consumer_) {
+                    cambridge::AccessUnit observed = access_unit;
+                    collector_.add(std::move(observed));
+                    consumer_(std::move(access_unit));
+                } else {
+                    collector_.add(std::move(access_unit));
+                }
+            },
             [this](const std::string &message) {
                 std::lock_guard<std::mutex> lock(callback_mutex_);
                 receiver_error_ = message;
@@ -262,19 +299,17 @@ public:
         session.generation = kTestGeneration;
         session.sender_address = kLoopbackAddress;
         session.sender_rtcp_port = sender_rtcp_port;
-        session.target_bitrate_bps = kTestTargetBitrateBps;
         std::string error;
         require(receiver_->start_session(session, error),
                 "receiver session did not start: " + error);
 
-        proxy_ = std::make_unique<UdpForwarder>();
-        proxy_->start(proxy_port, receiver_rtp_port);
+        if (enable_loss_injection) {
+            proxy_ = std::make_unique<UdpForwarder>();
+            proxy_->start(sender_rtp_port, receiver_rtp_port);
+        }
 
         GStreamerSender::Callbacks callbacks;
-        callbacks.estimated_bitrate_changed = [this](std::uint32_t bitrate) {
-            std::lock_guard<std::mutex> lock(callback_mutex_);
-            estimated_bitrates_.push_back(bitrate);
-        };
+        callbacks.estimated_bitrate_changed = [](std::uint32_t) {};
         callbacks.keyframe_requested = [this] { keyframe_requests_.fetch_add(1); };
         callbacks.transport_error = [this](const std::string &message) {
             std::lock_guard<std::mutex> lock(callback_mutex_);
@@ -284,14 +319,14 @@ public:
 
         GStreamerSender::Config sender_config;
         sender_config.remote_host = kLoopbackAddress;
-        sender_config.remote_rtp_port = proxy_port;
+        sender_config.remote_rtp_port = sender_rtp_port;
         sender_config.remote_rtcp_port = receiver_rtcp_port;
         sender_config.local_rtcp_port = sender_rtcp_port;
-        sender_config.target_bitrate_bps = kTestTargetBitrateBps;
-        sender_config.minimum_bitrate_bps = kTestMinimumBitrateBps;
+        sender_config.target_bitrate_bps = target_bitrate_bps;
         sender_config.mtu_bytes = contract::kRtpMtuBytes;
         const bool sender_started = sender_->start(sender_config, error);
         require(sender_started, "sender did not start: " + error);
+        std::this_thread::sleep_for(std::chrono::milliseconds(kPipelineStartupSettleMs));
     }
 
     ~GStreamerHarness()
@@ -319,13 +354,16 @@ public:
     }
 
     [[nodiscard]] AccessUnitCollector &collector() { return collector_; }
-    [[nodiscard]] UdpForwarder &proxy() { return *proxy_; }
-    [[nodiscard]] std::size_t keyframe_requests() const { return keyframe_requests_.load(); }
-
-    [[nodiscard]] std::vector<std::uint32_t> estimated_bitrates() const
+    [[nodiscard]] UdpForwarder &proxy()
     {
-        std::lock_guard<std::mutex> lock(callback_mutex_);
-        return estimated_bitrates_;
+        require(proxy_ != nullptr, "loss injection was not enabled for this test harness");
+        return *proxy_;
+    }
+    [[nodiscard]] std::size_t keyframe_requests() const { return keyframe_requests_.load(); }
+    void reset_keyframe_requests() { keyframe_requests_.store(0); }
+    [[nodiscard]] cambridge::GStreamerJitterbufferStats jitterbuffer_stats() const
+    {
+        return receiver_->jitterbuffer_stats();
     }
 
 private:
@@ -336,11 +374,15 @@ private:
     mutable std::mutex callback_mutex_;
     std::string receiver_error_;
     std::string sender_error_;
-    std::vector<std::uint32_t> estimated_bitrates_;
     std::atomic<std::size_t> keyframe_requests_{0};
+    AccessUnitConsumer consumer_;
 };
 
-std::vector<GeneratedAccessUnit> generate_access_units()
+std::vector<GeneratedAccessUnit> generate_access_units(
+    std::uint32_t frame_count = kTestFrameCount,
+    std::uint32_t width = kTestVideoWidth,
+    std::uint32_t height = kTestVideoHeight,
+    std::uint32_t bitrate_bps = kTestTargetBitrateBps)
 {
     GstElementFactory *encoder_factory = gst_element_factory_find("x264enc");
     if (!encoder_factory) {
@@ -350,11 +392,12 @@ std::vector<GeneratedAccessUnit> generate_access_units()
 
     GError *parse_error = nullptr;
     const std::string pipeline_description =
-        "videotestsrc num-buffers=" + std::to_string(kTestFrameCount) + " pattern=smpte ! "
-        "video/x-raw,width=" + std::to_string(kTestVideoWidth) + ",height=" +
-        std::to_string(kTestVideoHeight) + ",framerate=" + std::to_string(kTestFrameRate) + "/1 ! "
+        "videotestsrc num-buffers=" + std::to_string(frame_count) + " pattern=snow ! "
+        "video/x-raw,width=" + std::to_string(width) + ",height=" +
+        std::to_string(height) + ",framerate=" + std::to_string(kTestFrameRate) + "/1 ! "
         "x264enc tune=zerolatency speed-preset=ultrafast key-int-max=" +
-        std::to_string(kTestFrameRate) + " byte-stream=true ! "
+        std::to_string(kTestFrameRate) + " bitrate=" +
+        std::to_string(bitrate_bps / kBitsPerKilobit) + " byte-stream=true ! "
         "h264parse config-interval=-1 ! "
         "video/x-h264,stream-format=byte-stream,alignment=au ! "
         "appsink name=cambridge-h264-sink emit-signals=false sync=false";
@@ -372,7 +415,7 @@ std::vector<GeneratedAccessUnit> generate_access_units()
             "could not start the H.264 test pipeline");
 
     std::vector<GeneratedAccessUnit> access_units;
-    for (std::uint32_t index = 0; index < kTestFrameCount; ++index) {
+    for (std::uint32_t index = 0; index < frame_count; ++index) {
         GstSample *sample = gst_app_sink_pull_sample(GST_APP_SINK(sink));
         require(sample != nullptr, "H.264 test pipeline ended before producing all frames");
         GstBuffer *buffer = gst_sample_get_buffer(sample);
@@ -407,17 +450,28 @@ void test_no_loss(const std::vector<GeneratedAccessUnit> &access_units)
 {
     GStreamerHarness harness;
     const std::size_t expected_access_units = access_units.size();
-    for (std::uint32_t index = 0; index < expected_access_units; ++index) {
+    harness.push(access_units.front(), 0);
+    require(harness.collector().wait_for_count(1, kTestDeliveryTimeoutMs),
+            "no-loss transport did not establish its first keyframe");
+    std::this_thread::sleep_for(std::chrono::milliseconds(kInitialRtcpSettleMs));
+    harness.reset_keyframe_requests();
+    for (std::uint32_t index = 1; index < expected_access_units; ++index) {
         harness.push(access_units[index], index);
         std::this_thread::sleep_for(std::chrono::milliseconds(kTestFrameIntervalUs / 1'000));
     }
     require(harness.collector().wait_for_count(expected_access_units, kTestDeliveryTimeoutMs),
             "no-loss transport did not deliver continuous access units");
+    const auto stats = harness.jitterbuffer_stats();
+    require(stats.num_lost == 0, "no-loss transport reported packet loss");
+    require(stats.num_late == 0, "no-loss transport reported late packets");
+    require(stats.rtx_count == 0, "no-loss transport requested retransmission");
+    require(harness.keyframe_requests() == 0,
+            "no-loss transport requested keyframe recovery");
 }
 
 void test_one_packet_loss_is_recovered(const std::vector<GeneratedAccessUnit> &access_units)
 {
-    GStreamerHarness harness;
+    GStreamerHarness harness(kTestTargetBitrateBps, {}, true);
     harness.push(access_units.front(), 0);
     require(harness.collector().wait_for_count(1, kTestDeliveryTimeoutMs),
             "one-loss test did not establish the initial access unit");
@@ -431,37 +485,51 @@ void test_one_packet_loss_is_recovered(const std::vector<GeneratedAccessUnit> &a
             "one-loss test did not inject its configured loss");
     require(harness.keyframe_requests() == initial_keyframe_requests,
             "single retransmittable packet loss unnecessarily requested an additional keyframe");
+    const auto stats = harness.jitterbuffer_stats();
+    require(stats.rtx_count > 0, "single packet loss did not request retransmission");
+    require(stats.rtx_success_count > 0, "single packet loss was not recovered by RTX");
 }
 
 void test_unrecoverable_loss_requests_keyframe(const std::vector<GeneratedAccessUnit> &access_units)
 {
     require(access_units.size() > kUnrecoverableFrameCount,
             "unrecoverable-loss test did not receive enough generated frames");
-    GStreamerHarness harness;
+    require(access_units.size() > kRecoveryKeyFrameIndex &&
+                access_units[kRecoveryKeyFrameIndex].keyframe,
+            "unrecoverable-loss test did not receive a later clean keyframe");
+    GStreamerHarness harness(kTestTargetBitrateBps, {}, true);
     harness.push(access_units.front(), 0);
     require(harness.collector().wait_for_count(1, kTestDeliveryTimeoutMs),
             "unrecoverable-loss test did not establish the initial access unit");
     std::this_thread::sleep_for(std::chrono::milliseconds(kInitialRtcpSettleMs));
     const std::size_t initial_keyframe_requests = harness.keyframe_requests();
-    harness.proxy().drop_all();
+    harness.proxy().drop_payload_type(static_cast<std::uint8_t>(contract::kRtxPayloadType));
+    harness.proxy().drop_next(kSingleLostDatagramCount);
     for (std::uint32_t offset = 0; offset < kUnrecoverableFrameCount; ++offset) {
         const std::uint32_t frame_index = offset + 1;
         harness.push(access_units[frame_index], frame_index);
         std::this_thread::sleep_for(std::chrono::milliseconds(kTestFrameIntervalUs / 1'000));
     }
-    harness.proxy().clear_drops();
-    harness.push(access_units.front(), kUnrecoverableFrameCount + 1);
-    require(harness.collector().wait_for_count(kMinimumExpectedAccessUnits, kTestRecoveryTimeoutMs),
-            "receiver did not resume after a clean keyframe following unrecoverable loss");
+    const auto keyframe_request_deadline = std::chrono::steady_clock::now() +
+                                           std::chrono::milliseconds(kTestRecoveryTimeoutMs);
+    while (harness.keyframe_requests() == initial_keyframe_requests &&
+           std::chrono::steady_clock::now() < keyframe_request_deadline) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(kPollTimeoutMs));
+    }
     require(harness.keyframe_requests() > initial_keyframe_requests,
             "unrecoverable loss did not produce a GStreamer keyframe request");
-    require(harness.proxy().dropped() >= kUnrecoverableDatagramCount,
-            "unrecoverable-loss test did not hold the configured loss window");
+    harness.proxy().clear_drops();
+    harness.push(access_units[kRecoveryKeyFrameIndex], kRecoveryKeyFrameIndex);
+    harness.push(access_units[kRecoveryKeyFrameIndex + 1], kRecoveryKeyFrameIndex + 1);
+    require(harness.collector().wait_for_count(kMinimumExpectedAccessUnits, kTestRecoveryTimeoutMs),
+            "receiver did not resume after a clean keyframe following unrecoverable loss");
+    require(harness.proxy().dropped() > kSingleLostDatagramCount,
+            "unrecoverable-loss test did not suppress RTX packets");
 }
 
 void test_burst_loss_does_not_persist(const std::vector<GeneratedAccessUnit> &access_units)
 {
-    GStreamerHarness harness;
+    GStreamerHarness harness(kTestTargetBitrateBps, {}, true);
     harness.push(access_units.front(), 0);
     require(harness.collector().wait_for_count(1, kTestDeliveryTimeoutMs),
             "burst-loss test did not establish the initial access unit");
@@ -483,31 +551,85 @@ void push_motion_sequence(GStreamerHarness &harness, const std::vector<Generated
     }
 }
 
-void test_bandwidth_drop_and_recovery(const std::vector<GeneratedAccessUnit> &access_units)
+void test_high_packet_rate_has_no_recovery_storm()
 {
-    GStreamerHarness harness;
-    push_motion_sequence(harness, access_units, 0);
-    std::this_thread::sleep_for(std::chrono::milliseconds(kBandwidthObservationMs));
-    harness.proxy().set_delay(std::chrono::microseconds(kTestThrottleDelayUs));
-    push_motion_sequence(harness, access_units, kTestFrameCount);
-    std::this_thread::sleep_for(std::chrono::milliseconds(kBandwidthObservationMs));
-    const std::vector<std::uint32_t> throttled_estimates = harness.estimated_bitrates();
-    require(!throttled_estimates.empty(), "GCC did not publish an estimate during the bandwidth drop");
-    harness.proxy().set_delay(std::chrono::microseconds(0));
-    push_motion_sequence(harness, access_units, kTestFrameCount * 2);
-    std::this_thread::sleep_for(std::chrono::milliseconds(kBandwidthObservationMs));
-    const std::vector<std::uint32_t> recovered_estimates = harness.estimated_bitrates();
-    require(harness.collector().count() >= kMinimumExpectedAccessUnits,
-            "bandwidth test lost all access-unit delivery");
-    require(recovered_estimates.size() >= kExpectedBandwidthSamples,
-            "GCC did not publish enough estimates during bandwidth recovery");
-    const auto throttled_minimum = *std::min_element(throttled_estimates.begin(), throttled_estimates.end());
-    const auto throttled_maximum = *std::max_element(throttled_estimates.begin(), throttled_estimates.end());
-    const auto recovered_maximum = *std::max_element(recovered_estimates.begin(), recovered_estimates.end());
-    require(throttled_minimum < kTestTargetBitrateBps,
-            "GCC estimate did not decrease during the bandwidth drop");
-    require(recovered_maximum > throttled_maximum,
-            "GCC estimate did not recover after bandwidth was restored");
+    const auto access_units = generate_access_units(
+        kHighRateSourceFrameCount,
+        kHighRateVideoWidth,
+        kHighRateVideoHeight,
+        kHighRateTargetBitrateBps);
+    require(access_units.size() == kHighRateSourceFrameCount,
+            "high-rate source did not produce one second of 2K video");
+    GStreamerHarness harness(kHighRateTargetBitrateBps);
+    harness.push(access_units.front(), 0);
+    require(harness.collector().wait_for_count(1, kTestDeliveryTimeoutMs),
+            "high-rate transport did not establish its first keyframe");
+    std::this_thread::sleep_for(std::chrono::milliseconds(kInitialRtcpSettleMs));
+    harness.reset_keyframe_requests();
+    for (std::uint32_t index = 1; index < kHighRateFrameCount; ++index) {
+        harness.push(access_units[index % access_units.size()], index);
+        std::this_thread::sleep_for(std::chrono::milliseconds(kTestFrameIntervalUs / 1'000));
+    }
+    require(harness.collector().wait_for_count(kHighRateFrameCount, kTestDeliveryTimeoutMs),
+            "high-rate transport starved access-unit delivery");
+    const auto stats = harness.jitterbuffer_stats();
+    require(stats.num_lost == 0, "high-rate clean transport reported packet loss");
+    require(stats.num_late == 0, "high-rate clean transport reported late packets");
+    require(stats.rtx_count == 0, "high-rate clean transport entered RTX recovery");
+    require(harness.keyframe_requests() == 0,
+            "high-rate clean transport entered keyframe recovery");
+}
+
+void test_temporary_decoder_slowdown_applies_backpressure(
+    const std::vector<GeneratedAccessUnit> &access_units)
+{
+    std::atomic<std::uint32_t> slow_frames{kDecoderSlowFrameCount};
+    std::atomic<std::uint64_t> decoder_failures{0};
+    cambridge::Decoder decoder(
+        [&slow_frames](cambridge::VideoFramePtr) {
+            std::uint32_t remaining = slow_frames.load();
+            while (remaining > 0 &&
+                   !slow_frames.compare_exchange_weak(remaining, remaining - 1)) {
+            }
+            if (remaining > 0) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(kDecoderSlowdownMs));
+            }
+        },
+        {},
+        [&decoder_failures](std::uint64_t, cambridge::MediaPathFailureCode, const std::string &) {
+            decoder_failures.fetch_add(1);
+        });
+    decoder.start();
+    cambridge::DecoderConfig decoder_config;
+    decoder_config.width = kTestVideoWidth;
+    decoder_config.height = kTestVideoHeight;
+    std::string error;
+    require(decoder.prepare_software_session(kTestGeneration, decoder_config, error),
+            "software decoder did not prepare: " + error);
+    decoder.activate_prepared_session(cambridge::SessionMediaPath::Software);
+    {
+        GStreamerHarness harness(
+            kTestTargetBitrateBps,
+            [&decoder](cambridge::AccessUnit access_unit) {
+                require(decoder.submit(std::move(access_unit)),
+                        "decoder rejected an active access unit");
+            });
+        push_motion_sequence(harness, access_units, 0);
+        const auto deadline = std::chrono::steady_clock::now() +
+                              std::chrono::milliseconds(kTestRecoveryTimeoutMs);
+        while (decoder.frames_decoded() < kDecoderRecoveryMinimumFrames &&
+               std::chrono::steady_clock::now() < deadline) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(kPollTimeoutMs));
+        }
+        require(decoder.frames_decoded() >= kDecoderRecoveryMinimumFrames,
+                "decoder did not recover after temporary slowdown");
+        require(decoder.queue_occupancy() <= 1,
+                "decoder backpressure exceeded one pending access unit");
+        require(decoder_failures.load() == 0,
+                "temporary slowdown caused a decoder failure");
+    }
+    decoder.end_session();
+    decoder.stop();
 }
 
 } // namespace
@@ -530,7 +652,8 @@ int main()
         test_one_packet_loss_is_recovered(access_units);
         test_unrecoverable_loss_requests_keyframe(access_units);
         test_burst_loss_does_not_persist(access_units);
-        test_bandwidth_drop_and_recovery(access_units);
+        test_temporary_decoder_slowdown_applies_backpressure(access_units);
+        test_high_packet_rate_has_no_recovery_storm();
         return EXIT_SUCCESS;
     } catch (const std::exception &error) {
         std::cerr << error.what() << '\n';

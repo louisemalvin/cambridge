@@ -225,13 +225,12 @@ Java_dev_cambridge_sender_media_streaming_cambridge_GStreamerTransport_nativeCre
 extern "C" JNIEXPORT jboolean JNICALL
 Java_dev_cambridge_sender_media_streaming_cambridge_GStreamerTransport_nativeStart(
     JNIEnv *environment, jobject, jlong handle, jstring remote_host, jint remote_rtp_port,
-    jint remote_rtcp_port, jint local_rtcp_port, jint target_bitrate_bps,
-    jint minimum_bitrate_bps, jint mtu_bytes)
+    jint remote_rtcp_port, jint local_rtcp_port, jint target_bitrate_bps, jint mtu_bytes)
 {
     NativeTransport *native_transport = from_handle(handle);
     if (!native_transport || !remote_host || !valid_java_port(remote_rtp_port) ||
         !valid_java_port(remote_rtcp_port) || !valid_java_port(local_rtcp_port) ||
-        target_bitrate_bps <= 0 || minimum_bitrate_bps <= 0 || mtu_bytes <= 0) {
+        target_bitrate_bps <= 0 || mtu_bytes <= 0) {
         return JNI_FALSE;
     }
     const char *host_chars = environment->GetStringUTFChars(remote_host, nullptr);
@@ -244,7 +243,6 @@ Java_dev_cambridge_sender_media_streaming_cambridge_GStreamerTransport_nativeSta
     config.remote_rtcp_port = static_cast<std::uint16_t>(remote_rtcp_port);
     config.local_rtcp_port = static_cast<std::uint16_t>(local_rtcp_port);
     config.target_bitrate_bps = static_cast<std::uint32_t>(target_bitrate_bps);
-    config.minimum_bitrate_bps = static_cast<std::uint32_t>(minimum_bitrate_bps);
     config.mtu_bytes = static_cast<std::uint32_t>(mtu_bytes);
     environment->ReleaseStringUTFChars(remote_host, host_chars);
 

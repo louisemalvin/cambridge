@@ -79,9 +79,10 @@ udpsrc RTCP -> rtpbin -> udpsink back to Android
 ```
 
 `rtprtxreceive` is supplied to `rtpbin` for payload mapping 96 to 97. The
-appsink is live, synchronized off, bounded to two buffers, and drops old
-buffers. It copies Annex-B data, attaches the RTP timestamp and monotonic
-receive time, and submits the access unit to the FFmpeg decoder.
+appsink is synchronized off, bounded to one buffer, and applies backpressure
+instead of dropping encoded access units. It copies Annex-B data, attaches the
+RTP timestamp and monotonic receive time, and submits the access unit to the
+FFmpeg decoder.
 
 VAAPI with a DRM render node is preferred. When the host cannot provide a
 usable hardware path, the decoder produces software NV12 frames and the
@@ -102,12 +103,12 @@ renderer uploads them to an OBS texture.
 ## Latency and buffering
 
 ```text
-camera -> MediaCodec -> two-access-unit sender queue -> GStreamer RTP
-                                      |
-receiver GStreamer jitter/RTX -> appsink -> FFmpeg queue -> newest-frame mailbox -> OBS
+camera -> MediaCodec -> one-access-unit sender queue -> blocking appsrc -> GStreamer RTP
+receiver GStreamer jitter/RTX -> appsink -> one-access-unit FFmpeg queue -> newest-frame mailbox -> OBS
 ```
 
-The queue, jitter buffer, decoder queue, mailbox, and live-frame age are all
-bounded by contract values. Late or unrecoverable media is dropped, and only
-the newest decoded frame is presented. A terminal failure requires the user to
-start another session explicitly.
+The sender handoff, appsrc, appsink, and decoder queue each hold at most one
+encoded access unit. GStreamer's 40 ms receiver latency budget is the only
+playout policy. While a session is active, OBS holds the latest valid decoded
+frame until a replacement arrives. Session end or terminal failure clears the
+mailbox and requires the user to start another session explicitly.

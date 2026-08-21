@@ -72,15 +72,16 @@ decode, first-frame publication, recording output when enabled, sender stop,
 session invalidation, and clean OBS shutdown.
 
 The shared GStreamer integration test is mandatory when the pinned transport
-runtime is available. It uses a local RTP proxy to inject deterministic loss,
-delay, and recovery conditions:
+runtime is available. Clean cases use direct loopback transport, and loss cases
+use a local RTP proxy for deterministic packet removal:
 
-- A: continuous delivery with no loss;
+- A: production-like packet delivery with no loss, RTX, or recovery requests;
 - B: one lost RTP datagram recovered by NACK/RTX without an additional PLI;
 - C: unrecoverable loss requests a keyframe and resumes on a clean IDR;
-- D: ten consecutive lost datagrams do not leave persistent corruption;
-- E: bandwidth reduction drives GCC and the Android bitrate callback down;
-- F: restored bandwidth drives GCC and the callback back toward the target.
+- D: 2K30 traffic at a 16 Mbps target runs for 30 seconds without recovery
+  storms, queue growth, decoder drops, or starvation;
+- E: a temporary decoder slowdown produces bounded backpressure and clean
+  recovery without discarding a queued access unit.
 
 The test exits with the CTest skip code when `rtpgccbwe` or the x264 test
 encoder is unavailable. A release environment must install the GStreamer Rust
@@ -119,10 +120,10 @@ The following IDs are used in review reports and test names.
 | SESSION-05 | Bitrate changes while idle or streaming | Idle updates fail; active updates reach the engine and are diagnosed. |
 | MEDIA-01 | Required GStreamer factories are unavailable | Start fails clearly and no fallback transport is selected. |
 | MEDIA-02 | One RTP datagram is lost | RTCP NACK triggers RTX recovery without an additional keyframe request. |
-| MEDIA-03 | Loss exceeds RTX history | RTCP PLI/FIR reaches the sender, MediaCodec receives a sync-frame request, and delivery resumes at the next IDR. |
+| MEDIA-03 | A lost packet cannot be recovered by RTX | RTCP PLI/FIR reaches the sender, MediaCodec receives one pending sync-frame request, and delivery resumes at the next IDR. |
 | MEDIA-04 | Ten consecutive datagrams are lost | The receiver does not retain persistent corruption after a clean access unit. |
-| MEDIA-05 | Available bandwidth drops | GCC publishes a lower estimate and the sender applies a bounded MediaCodec bitrate update. |
-| MEDIA-06 | Available bandwidth recovers | GCC and the encoder bitrate return toward the configured target. |
+| MEDIA-05 | GCC publishes a changed estimate | The sender clamps it to the product bitrate range and applies it directly to MediaCodec once per distinct value. |
+| MEDIA-06 | Decoder processing temporarily slows | Backpressure keeps the appsink and decoder queues bounded without dropping an arbitrary encoded access unit. |
 | OBS-01 | Plugin is loaded by the target OBS ABI | OBS reaches startup complete with only Cambridge enabled and no new coredump. |
 | OBS-02 | Native decoder and renderer path is selected | The selected path is explicit in diagnostics and frames are published. |
 | OBS-03 | CPU fallback is selected | Software decode and rendering are explicit and changing frames are recorded. |

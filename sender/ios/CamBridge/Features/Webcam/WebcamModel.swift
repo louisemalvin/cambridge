@@ -115,5 +115,6 @@ public final class WebcamModel {
     }
 
     private static let nanosecondsPerMillisecond: UInt64 = 1_000_000
-    private static let stateRefreshNanoseconds = UInt64(CamBridgeContract.Media.maximumLiveFrameAgeMilliseconds) * nanosecondsPerMillisecond
+    private static let stateRefreshIntervalMilliseconds: UInt64 = 250
+    private static let stateRefreshNanoseconds = stateRefreshIntervalMilliseconds * nanosecondsPerMillisecond
 }

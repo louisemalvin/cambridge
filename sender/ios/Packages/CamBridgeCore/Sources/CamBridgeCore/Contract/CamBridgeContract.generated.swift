@@ -57,12 +57,9 @@ public enum CamBridgeContract {
         public static let mtuBytes = 1200
         public static let maxDatagramBytes = 1500
         public static let maxAccessUnitBytes = 8388608
-        public static let maxInFlightAccessUnits = 2
         public static let maxReorderPackets = 64
         public static let mailboxCapacity = 1
         public static let texturePoolSlots = 3
-        public static let maximumDecoderQueueAgeMilliseconds = 100
-        public static let maximumLiveFrameAgeMilliseconds = 250
         public static let reorderDeadlineMs = 20
         public static let keyframeIntervalSeconds = 1
     }

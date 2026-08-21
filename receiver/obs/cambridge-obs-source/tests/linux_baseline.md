@@ -10,7 +10,7 @@ Record the following for each accepted run:
 
 - protocol version 7 and the negotiated RTP and RTCP ports;
 - GStreamer runtime version and the `rtpgccbwe` factory;
-- sender and receiver GStreamer integration cases A through F;
+- sender and receiver GStreamer integration cases A through E;
 - selected decoder and renderer path;
 - access units delivered, bytes delivered, transport errors, and first-frame
   publication;

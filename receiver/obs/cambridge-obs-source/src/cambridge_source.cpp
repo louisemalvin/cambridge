@@ -4,7 +4,6 @@
 #include "diagnostics.hpp"
 #include "discovery_metadata.hpp"
 #include "gstreamer_runtime.hpp"
-#include "live_frame_policy.hpp"
 #include "platform/interfaces/source_properties.hpp"
 #include "protocol_contract.generated.hpp"
 
@@ -41,15 +40,9 @@ constexpr std::uint32_t kDimensionStep = 16;
 constexpr std::uint32_t kUnsetDimension = 0;
 constexpr std::uint32_t kMaximumLongEdge = contract::kDefaultMaximumLongEdge;
 constexpr std::uint32_t kMaximumShortEdge = contract::kDefaultMaximumShortEdge;
-constexpr std::uint32_t kMinimumQueueAgeMs = 1;
-constexpr std::uint32_t kMaximumQueueAgeMs = 2000;
-constexpr std::uint32_t kMinimumLiveAgeMs = 33;
-constexpr std::uint32_t kMaximumLiveAgeMs = 5000;
 constexpr std::uint64_t kNanosecondsPerMillisecond = 1'000'000ULL;
 constexpr std::uint64_t kNanosecondsPerSecond = 1'000'000'000ULL;
 constexpr std::uint32_t kPortStep = 1;
-constexpr std::uint32_t kQueueAgeStep = 1;
-constexpr std::uint32_t kLiveAgeStep = 1;
 constexpr std::uint32_t kMailboxCapacity = contract::kMailboxCapacity;
 constexpr std::uint32_t kQuarterTurnDegrees = 90;
 constexpr std::uint32_t kThreeQuarterTurnDegrees = 270;
@@ -60,8 +53,6 @@ constexpr char kPropertyMediaRtpPort[] = "media_rtp_port";
 constexpr char kPropertyMediaRtcpPort[] = "media_rtcp_port";
 constexpr char kPropertyMaximumLongEdge[] = "maximum_long_edge";
 constexpr char kPropertyMaximumShortEdge[] = "maximum_short_edge";
-constexpr char kPropertyQueueAge[] = "maximum_decoder_queue_age_ms";
-constexpr char kPropertyLiveAge[] = "maximum_live_frame_age_ms";
 constexpr char kPropertyDecoderMode[] = "decoder_mode";
 constexpr char kPropertyTransparentPlaceholder[] = "transparent_placeholder";
 constexpr char kPropertyDiagnosticsPath[] = "diagnostics_path";
@@ -178,7 +169,6 @@ bool CamBridgeSource::start(std::string &error)
     media_config.payload_type = static_cast<std::uint8_t>(contract::kRtpPayloadType);
     media_config.rtx_payload_type = static_cast<std::uint8_t>(contract::kRtxPayloadType);
     media_config.clock_rate_hz = contract::kRtpClockRateHz;
-    media_config.jitter_latency_ms = contract::kJitterLatencyMs;
     media_receiver_ = std::make_unique<GStreamerMediaReceiver>(
         media_config,
         [this](AccessUnit access_unit) { on_access_unit(std::move(access_unit)); },
@@ -218,7 +208,6 @@ bool CamBridgeSource::start(std::string &error)
            std::to_string(config.media_rtcp_port) + ":drm=" + config.drm_device);
     report("bounds:mtu=" + std::to_string(contract::kRtpMtuBytes) +
            " au_bytes=" + std::to_string(contract::kMaximumAccessUnitBytes) +
-           " au_count=" + std::to_string(contract::kMaximumInFlightAccessUnits) +
            " mailbox=" + std::to_string(kMailboxCapacity) +
            " texture_slots=" + std::to_string(contract::kTexturePoolSlots));
     return true;
@@ -268,39 +257,22 @@ void CamBridgeSource::update(obs_data_t *settings)
 
 void CamBridgeSource::render(gs_effect_t *)
 {
-    const SourceConfig config = configuration();
     const VideoFramePtr frame = mailbox_.acquire();
     const std::uint32_t output_width = width();
     const std::uint32_t output_height = height();
     std::uint64_t active_generation = 0;
+    bool session_active = false;
     {
         std::lock_guard<std::mutex> lock(session_mutex_);
         active_generation = stream_generation_;
+        session_active = session_active_;
     }
     const std::uint64_t now = monotonic_time_ns();
-    const std::uint64_t recovery_grace_ns =
-        live_frame_recovery_grace_ns(config.maximum_live_frame_age_ms);
-    const LiveFramePresentation presentation =
-        classify_live_frame(frame, active_generation, now, recovery_grace_ns);
-    const bool stale = presentation == LiveFramePresentation::Placeholder;
-    bool stale_changed = false;
-    {
-        std::lock_guard<std::mutex> lock(session_mutex_);
-        stale_changed = stale != stale_state_;
-        stale_state_ = stale;
-    }
-    if (stale_changed) {
-        if (stale) {
-            stale_transitions_.fetch_add(1);
-            report("live_frame_stale_placeholder");
-        }
-    }
-    if (stale) {
-        renderer_.render(nullptr, output_width, output_height, false);
+    if (!session_active || !frame || frame->stream_generation != active_generation) {
+        renderer_.render(nullptr, output_width, output_height);
         return;
     }
-    const bool presented = renderer_.render(
-        frame, output_width, output_height, presentation == LiveFramePresentation::RecoveryFrame);
+    const bool presented = renderer_.render(frame, output_width, output_height);
     if (presented && frame->frame_generation != last_rendered_frame_generation_.load()) {
         last_rendered_frame_generation_.store(frame->frame_generation);
         frames_rendered_.fetch_add(1);
@@ -328,9 +300,13 @@ void CamBridgeSource::tick(float)
     report(
         "receiver_decoder_summary:decoderQueueOccupancy=" +
         std::to_string(decoder_ ? decoder_->queue_occupancy() : 0) +
-        ":decoderQueueDrops=" + std::to_string(decoder_ ? decoder_->queue_drops() : 0) +
         ":mailboxOccupancy=" + std::to_string(mailbox_.occupancy()) +
-        ":staleTransitions=" + std::to_string(stale_transitions_.load()));
+        ":lastDecodedFrameAgeMs=" + std::to_string([&] {
+            const VideoFramePtr latest = mailbox_.acquire();
+            return latest && now >= latest->decode_time_ns
+                       ? milliseconds(now - latest->decode_time_ns)
+                       : 0;
+        }()));
 }
 
 void CamBridgeSource::write_diagnostics()
@@ -360,7 +336,6 @@ void CamBridgeSource::write_diagnostics()
     snapshot.render = renderer_.render_mode();
     snapshot.mailbox_occupancy = mailbox_.occupancy();
     snapshot.frames_replaced = mailbox_.replaced_count();
-    snapshot.frames_stale = stale_transitions_.load();
     snapshot.frames_decoded = decoder_ ? decoder_->frames_decoded() : 0;
     snapshot.frames_rendered = frames_rendered_.load();
     snapshot.media_path_failures = media_path_failures_.load();
@@ -373,16 +348,18 @@ void CamBridgeSource::write_diagnostics()
     snapshot.access_unit_bytes_delivered = media_receiver_ ? media_receiver_->access_unit_bytes_delivered() : 0;
     snapshot.transport_errors = transport_errors_.load();
     snapshot.decode_failures = decoder_ ? decoder_->decode_failures() : 0;
-    snapshot.decoder_queue_drops = decoder_ ? decoder_->queue_drops() : 0;
     snapshot.decoder_queue_occupancy = decoder_ ? decoder_->queue_occupancy() : 0;
+    const VideoFramePtr latest = mailbox_.acquire();
+    const std::uint64_t now = monotonic_time_ns();
+    snapshot.last_decoded_frame_age_ms = latest && now >= latest->decode_time_ns
+                                             ? milliseconds(now - latest->decode_time_ns)
+                                             : 0;
     snapshot.max_receive_to_decode_ms = milliseconds(max_receive_to_decode_ns_.load());
     snapshot.max_receive_to_publish_ms = milliseconds(max_receive_to_publish_ns_.load());
     snapshot.max_receive_to_render_ms = milliseconds(max_receive_to_render_ns_.load());
     snapshot.configured_control_port = config.control_port;
     snapshot.configured_media_rtp_port = config.media_rtp_port;
     snapshot.configured_media_rtcp_port = config.media_rtcp_port;
-    snapshot.configured_maximum_decoder_queue_age_ms = config.maximum_decoder_queue_age_ms;
-    snapshot.configured_maximum_live_frame_age_ms = config.maximum_live_frame_age_ms;
     std::string error;
     if (!::cambridge::write_diagnostics(snapshot, config.diagnostics_path, error)) {
         report("diagnostics_write_failed:path=" + config.diagnostics_path + ":reason=" + error);
@@ -441,9 +418,6 @@ bool CamBridgeSource::on_hello(const HelloMessage &hello, const std::string &pee
     decoder_config.width = hello.coded_width;
     decoder_config.height = hello.coded_height;
     decoder_config.rotation_degrees = hello.rotation_degrees;
-    decoder_config.fps = hello.fps;
-    decoder_config.maximum_queue_age_ms = config.maximum_decoder_queue_age_ms;
-    decoder_config.maximum_live_frame_age_ms = config.maximum_live_frame_age_ms;
     decoder_config.drm_device = config.drm_device;
 
     std::optional<NativeSetupResult> native_setup;
@@ -522,7 +496,6 @@ bool CamBridgeSource::on_hello(const HelloMessage &hello, const std::string &pee
     media_session.generation = hello.generation;
     media_session.sender_address = peer_address;
     media_session.sender_rtcp_port = hello.sender_rtcp_port;
-    media_session.target_bitrate_bps = hello.target_bitrate_bps;
     if (!media_receiver_->start_session(media_session, error)) {
         decoder_->discard_prepared_session();
         discard_native_resources();
@@ -550,7 +523,6 @@ bool CamBridgeSource::on_hello(const HelloMessage &hello, const std::string &pee
         native_setup_reason_ = native_setup ? native_setup->reason : "not_attempted";
         native_setup_attempted_ = native_setup.has_value();
         session_active_ = true;
-        stale_state_ = true;
     }
     media_path_failures_pending_.activate(hello.generation);
     mailbox_.clear();
@@ -716,11 +688,11 @@ void CamBridgeSource::end_session_locked()
     if (test_diagnostics_on_session_end()) {
         write_diagnostics();
     }
-    if (media_receiver_) {
-        media_receiver_->stop_session();
-    }
     if (decoder_) {
         decoder_->end_session();
+    }
+    if (media_receiver_) {
+        media_receiver_->stop_session();
     }
     transport_failure_pending_.store(false);
     {
@@ -738,7 +710,6 @@ void CamBridgeSource::end_session_locked()
         active_rotation_degrees_ = 0;
         active_fps_ = 0;
         active_bitrate_bps_ = 0;
-        stale_state_ = false;
         first_frame_reported_.store(false);
         last_rendered_frame_generation_.store(0);
     }
@@ -767,12 +738,6 @@ SourceConfig source_config_from_settings(obs_data_t *settings)
     config.maximum_short_edge = bounded_setting(settings, kPropertyMaximumShortEdge,
                                                 contract::kDefaultMaximumShortEdge,
                                                 contract::kMinimumDimension, kMaximumShortEdge);
-    config.maximum_decoder_queue_age_ms = bounded_setting(settings, kPropertyQueueAge,
-                                                          contract::kDefaultMaximumDecoderQueueAgeMs,
-                                                          kMinimumQueueAgeMs, kMaximumQueueAgeMs);
-    config.maximum_live_frame_age_ms = bounded_setting(settings, kPropertyLiveAge,
-                                                       contract::kDefaultMaximumLiveFrameAgeMs,
-                                                       kMinimumLiveAgeMs, kMaximumLiveAgeMs);
     read_platform_source_settings(settings, config);
     config.decoder_mode = setting_string(settings, kPropertyDecoderMode, receiver::kDefaultDecoderMode);
     config.diagnostics_path = setting_string(settings, kPropertyDiagnosticsPath, receiver::kDefaultDiagnosticsPath);
@@ -787,8 +752,6 @@ void source_get_defaults(obs_data_t *settings)
     obs_data_set_default_int(settings, kPropertyMediaRtcpPort, contract::kDefaultMediaRtcpPort);
     obs_data_set_default_int(settings, kPropertyMaximumLongEdge, contract::kDefaultMaximumLongEdge);
     obs_data_set_default_int(settings, kPropertyMaximumShortEdge, contract::kDefaultMaximumShortEdge);
-    obs_data_set_default_int(settings, kPropertyQueueAge, contract::kDefaultMaximumDecoderQueueAgeMs);
-    obs_data_set_default_int(settings, kPropertyLiveAge, contract::kDefaultMaximumLiveFrameAgeMs);
     obs_data_set_default_string(settings, kPropertyDecoderMode, receiver::kDefaultDecoderMode);
     obs_data_set_default_string(settings, kPropertyDiagnosticsPath, receiver::kDefaultDiagnosticsPath);
     obs_data_set_default_bool(settings, kPropertyTransparentPlaceholder, false);
@@ -812,10 +775,6 @@ obs_properties_t *source_get_properties(void *data)
                            contract::kMinimumDimension, kMaximumLongEdge, kDimensionStep);
     obs_properties_add_int(advanced_properties, kPropertyMaximumShortEdge, "Maximum short edge",
                            contract::kMinimumDimension, kMaximumShortEdge, kDimensionStep);
-    obs_properties_add_int(advanced_properties, kPropertyQueueAge, "Maximum decoder queue age (ms)", kMinimumQueueAgeMs,
-                           kMaximumQueueAgeMs, kQueueAgeStep);
-    obs_properties_add_int(advanced_properties, kPropertyLiveAge, "Maximum live frame age (ms)", kMinimumLiveAgeMs,
-                           kMaximumLiveAgeMs, kLiveAgeStep);
     add_platform_source_properties(advanced_properties);
     obs_property_t *decoder_mode = obs_properties_add_list(advanced_properties, kPropertyDecoderMode, "Decoder mode",
                                                             OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_STRING);

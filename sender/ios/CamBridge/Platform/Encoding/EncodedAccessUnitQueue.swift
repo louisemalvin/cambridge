@@ -122,14 +122,16 @@ public actor EncodedAccessUnitQueue {
     private var finished = false
     private var maximumOccupancy = Int.zero
 
-    public init(capacity: Int = CamBridgeContract.Media.maxInFlightAccessUnits) throws {
+    public init(capacity: Int = Self.defaultCapacity) throws {
         guard capacity > Self.ingressCapacity,
-              capacity <= CamBridgeContract.Media.maxInFlightAccessUnits else {
+              capacity <= Self.defaultCapacity else {
             throw EncodedAccessUnitQueueError.invalidCapacity(capacity)
         }
         ingress = EncodedAccessUnitIngress()
         buffer = try NewestItemBuffer(capacity: capacity - Self.ingressCapacity)
     }
+
+    private static let defaultCapacity = 2
 
     // Called directly by the synchronous VideoToolbox callback. This method
     // only performs a bounded mailbox replacement and never awaits.

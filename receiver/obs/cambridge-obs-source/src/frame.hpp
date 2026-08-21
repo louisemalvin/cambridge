@@ -46,7 +46,6 @@ struct VideoFrame {
     std::uint64_t complete_time_ns = 0;
     std::uint64_t decode_time_ns = 0;
     std::uint64_t publish_time_ns = 0;
-    std::uint64_t stale_deadline_ns = 0;
     RenderMode render_mode = RenderMode::Placeholder;
     std::string pixel_format;
     std::string color_range;

@@ -14,7 +14,6 @@ public:
         std::uint16_t remote_rtcp_port = 0;
         std::uint16_t local_rtcp_port = 0;
         std::uint32_t target_bitrate_bps = 0;
-        std::uint32_t minimum_bitrate_bps = 0;
         std::uint32_t mtu_bytes = 0;
     };
 

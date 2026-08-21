@@ -195,10 +195,14 @@ if(CAMBRIDGE_BUILD_TESTS AND BUILD_TESTING)
         tests/gstreamer_transport_tests.cpp
         src/gstreamer_runtime.cpp
         src/gstreamer_media_receiver.cpp
+        src/decoder.cpp
+        src/media_path.cpp
+        src/platform/posix/posix_compat.cpp
         ../../../sender/android/app/src/main/jni/gstreamer_sender.cpp
     )
     target_include_directories(cambridge-obs-plugin-tests SYSTEM PRIVATE
         ${CAMBRIDGE_GSTREAMER_INCLUDE_DIRS}
+        ${CAMBRIDGE_FFMPEG_INCLUDE_DIRS}
     )
     target_include_directories(cambridge-obs-plugin-tests PRIVATE
         ../../../sender/android/app/src/main/jni
@@ -206,9 +210,11 @@ if(CAMBRIDGE_BUILD_TESTS AND BUILD_TESTING)
     )
     target_link_directories(cambridge-obs-plugin-tests PRIVATE
         ${CAMBRIDGE_GSTREAMER_LIBRARY_DIRS}
+        ${CAMBRIDGE_FFMPEG_LIBRARY_DIRS}
     )
     target_link_libraries(cambridge-obs-plugin-tests PRIVATE
         ${CAMBRIDGE_GSTREAMER_LIBRARIES}
+        ${CAMBRIDGE_FFMPEG_LIBRARIES}
         Threads::Threads
     )
     set_tests_properties(cambridge-obs-plugin-tests PROPERTIES
@@ -269,10 +275,6 @@ if(CAMBRIDGE_BUILD_TESTS AND BUILD_TESTING)
     cambridge_add_test(cambridge-obs-plugin-renderer-policy-tests
         tests/renderer_policy_tests.cpp
         src/media_path.cpp
-    )
-
-    cambridge_add_test(cambridge-obs-plugin-live-frame-policy-tests
-        tests/live_frame_policy_tests.cpp
     )
 
     cambridge_add_test(cambridge-obs-plugin-posix-compat-tests

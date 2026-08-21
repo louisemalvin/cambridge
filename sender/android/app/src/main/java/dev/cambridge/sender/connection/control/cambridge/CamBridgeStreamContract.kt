@@ -17,12 +17,7 @@ internal object CamBridgeStreamContract {
     const val RTP_CLOCK_RATE_HZ = 90_000
     const val RTP_MTU_BYTES = 1_200
     const val TWCC_EXTENSION_ID = 1
-    const val JITTER_LATENCY_MILLIS = 40
-    const val RTX_HISTORY_MILLIS = 150
     const val MAXIMUM_ACCESS_UNIT_BYTES = 8_388_608
-    const val MAXIMUM_ENCODED_QUEUE = 2
-    const val APPSRC_MAXIMUM_BUFFERS = 4
-    const val GCC_MINIMUM_BITRATE_FLOOR_BPS = 750_000
     const val DEFAULT_CONTROL_PORT = 55_031
     const val DEFAULT_MEDIA_RTP_PORT = 55_032
     const val DEFAULT_MEDIA_RTCP_PORT = 55_033

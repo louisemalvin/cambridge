@@ -596,8 +596,9 @@ extension StreamSessionCoordinator: StreamSessionStarting {}
 
 private enum StreamSessionTimeouts {
     static let nanosecondsPerMillisecond: UInt64 = 1_000_000
+    static let cameraStatePollIntervalMilliseconds: UInt64 = 250
     static let requestTimeoutNanoseconds = UInt64(CamBridgeContract.Control.requestTimeoutMilliseconds) * nanosecondsPerMillisecond
-    static let cameraStatePollNanoseconds = UInt64(CamBridgeContract.Media.maximumLiveFrameAgeMilliseconds) * nanosecondsPerMillisecond
+    static let cameraStatePollNanoseconds = cameraStatePollIntervalMilliseconds * nanosecondsPerMillisecond
 }
 
 private func sendControlMessageWithTimeout(

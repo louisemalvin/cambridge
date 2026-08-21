@@ -56,17 +56,9 @@ inline constexpr std::uint32_t kRtpClockRateHz = 90000;
 inline constexpr std::size_t kRtpMtuBytes = 1200;
 inline constexpr std::uint32_t kTwccExtensionId = 1;
 inline constexpr std::uint32_t kRtpSessionIndex = 0;
-inline constexpr std::uint32_t kJitterLatencyMs = 40;
-inline constexpr std::uint32_t kRtxHistoryMs = 150;
-inline constexpr double kRtcpFeedbackBandwidthFraction = 0.05;
 inline constexpr std::size_t kMaximumAccessUnitBytes = 8388608;
-inline constexpr std::size_t kMaximumInFlightAccessUnits = 2;
-inline constexpr std::size_t kAppsrcMaximumBuffers = 4;
-inline constexpr std::uint32_t kGccMinimumBitrateFloorBps = 750000;
 inline constexpr std::size_t kMailboxCapacity = 1;
 inline constexpr std::size_t kTexturePoolSlots = 3;
-inline constexpr std::uint32_t kDefaultMaximumDecoderQueueAgeMs = 100;
-inline constexpr std::uint32_t kDefaultMaximumLiveFrameAgeMs = 250;
 inline constexpr std::uint32_t kKeyframeIntervalSeconds = 1;
 
 inline constexpr char kCodecH264[] = "h264";

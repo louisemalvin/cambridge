@@ -1,8 +1,6 @@
 package dev.cambridge.sender.media.streaming.cambridge
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CamBridgeStreamEnginePolicyTest {
@@ -54,41 +52,6 @@ class CamBridgeStreamEnginePolicyTest {
                 waitingForRecoveryKeyframe = false,
                 keyFrame = false,
                 offerSucceeded = true,
-            ),
-        )
-    }
-
-    @Test
-    fun adaptiveBitrateHonoursTimeAndChangeThresholds() {
-        val updateIntervalNs = 250_000_000L
-        val selectedBitrateBps = 16_000_000
-
-        assertFalse(
-            shouldApplyAdaptiveBitrate(
-                previousBitrateBps = selectedBitrateBps,
-                requestedBitrateBps = 8_000_000,
-                elapsedNs = updateIntervalNs - 1,
-            ),
-        )
-        assertFalse(
-            shouldApplyAdaptiveBitrate(
-                previousBitrateBps = selectedBitrateBps,
-                requestedBitrateBps = 15_900_000,
-                elapsedNs = updateIntervalNs,
-            ),
-        )
-        assertTrue(
-            shouldApplyAdaptiveBitrate(
-                previousBitrateBps = selectedBitrateBps,
-                requestedBitrateBps = 15_700_000,
-                elapsedNs = updateIntervalNs,
-            ),
-        )
-        assertTrue(
-            shouldApplyAdaptiveBitrate(
-                previousBitrateBps = selectedBitrateBps,
-                requestedBitrateBps = 15_200_000,
-                elapsedNs = updateIntervalNs,
             ),
         )
     }

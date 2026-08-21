@@ -27,9 +27,6 @@ struct DecoderConfig {
     std::uint32_t width = 0;
     std::uint32_t height = 0;
     std::uint32_t rotation_degrees = 0;
-    std::uint32_t fps = 0;
-    std::uint32_t maximum_queue_age_ms = 0;
-    std::uint32_t maximum_live_frame_age_ms = 0;
     std::string drm_device;
 };
 
@@ -58,8 +55,6 @@ public:
     [[nodiscard]] RenderMode render_mode() const;
     [[nodiscard]] std::uint64_t frames_decoded() const { return frames_decoded_.load(); }
     [[nodiscard]] std::uint64_t decode_failures() const { return decode_failures_.load(); }
-    [[nodiscard]] std::uint64_t stale_frames() const { return stale_frames_.load(); }
-    [[nodiscard]] std::uint64_t queue_drops() const { return queue_drops_.load(); }
     [[nodiscard]] std::size_t queue_occupancy() const;
 
 private:
@@ -69,7 +64,6 @@ private:
     bool open_codec(const DecoderConfig &config, bool native_requested, std::string &error,
                     NativeSetupStatus &native_status);
     void close_codec();
-    void flush_codec();
     void decode_access_unit(const AccessUnit &access_unit, std::uint64_t stream_generation,
                             const DecoderConfig &config);
     void publish_frame(AVFrame *decoded, const AccessUnit &access_unit, std::uint64_t stream_generation,
@@ -108,8 +102,6 @@ private:
 
     std::atomic<std::uint64_t> frames_decoded_{0};
     std::atomic<std::uint64_t> decode_failures_{0};
-    std::atomic<std::uint64_t> stale_frames_{0};
-    std::atomic<std::uint64_t> queue_drops_{0};
 };
 
 } // namespace cambridge

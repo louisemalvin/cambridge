@@ -16,8 +16,8 @@ public struct NewestItemBuffer<Item: Sendable>: Sendable {
     public private(set) var maximumOccupancy = Int.zero
     private var items: [Item] = []
 
-    public init(capacity: Int = CamBridgeContract.Media.maxInFlightAccessUnits) throws {
-        guard capacity > .zero, capacity <= CamBridgeContract.Media.maxInFlightAccessUnits else {
+    public init(capacity: Int = Self.defaultCapacity) throws {
+        guard capacity > .zero, capacity <= Self.defaultCapacity else {
             throw NewestItemBufferError.invalidCapacity(capacity)
         }
         self.capacity = capacity
@@ -65,6 +65,8 @@ public struct NewestItemBuffer<Item: Sendable>: Sendable {
         items.removeAll(keepingCapacity: true)
         return discarded
     }
+
+    private static var defaultCapacity: Int { 2 }
 }
 
 public enum NewestItemBufferError: Error, Equatable, Sendable {
