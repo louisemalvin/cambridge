@@ -1,22 +1,9 @@
-name: Release artifacts
+name: Release
 
 on:
   push:
     tags:
-      - "*-v*.*.*"
-  workflow_dispatch:
-    inputs:
-      component:
-        description: "Component to release"
-        required: true
-        type: choice
-        options:
-          - android
-          - obs
-      version:
-        description: "Semantic version from VERSION"
-        required: true
-        type: string
+      - "v*"
 
 permissions:
   contents: write
@@ -24,36 +11,18 @@ permissions:
 jobs:
   verify-version:
     outputs:
-      component: ${{ steps.version.outputs.component }}
       version: ${{ steps.version.outputs.version }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Verify component version
+      - name: Validate CamBridge release tag
         id: version
-        env:
-          COMPONENT_INPUT: ${{ inputs.component }}
-          VERSION_INPUT: ${{ inputs.version }}
         run: |
           set -euo pipefail
-          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
-            version_output="$(python3 scripts/development/cambridge_component_versions.py \
-              --tag "${GITHUB_REF_NAME}")"
-          else
-            test -n "${COMPONENT_INPUT}"
-            test -n "${VERSION_INPUT}"
-            version_output="$(python3 scripts/development/cambridge_component_versions.py \
-              --component "${COMPONENT_INPUT}" --version "${VERSION_INPUT}")"
-          fi
-          component="$(printf '%s\n' "${version_output}" | awk -F= '$1 == "component" { print $2 }')"
-          version="$(printf '%s\n' "${version_output}" | awk -F= '$1 == "version" { print $2 }')"
-          test -n "${component}"
-          test -n "${version}"
-          printf 'component=%s\n' "${component}" >>"${GITHUB_OUTPUT}"
+          version=$(python3 scripts/development/cambridge_version.py --tag "${GITHUB_REF_NAME}")
           printf 'version=%s\n' "${version}" >>"${GITHUB_OUTPUT}"
 
   android:
-    if: needs.verify-version.outputs.component == 'android'
     needs: verify-version
     runs-on: ubuntu-latest
     steps:
@@ -70,12 +39,12 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Build signed release APK
         env:
-          CAMBRIDGE_ANDROID_VERSION: ${{ needs.verify-version.outputs.version }}
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_SIGNING_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_SIGNING_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
+          set -euo pipefail
           test -n "${ANDROID_KEYSTORE_BASE64}"
           test -n "${ANDROID_SIGNING_STORE_PASSWORD}"
           test -n "${ANDROID_SIGNING_KEY_ALIAS}"
@@ -87,298 +56,20 @@ jobs:
           apk="sender/android/app/build/outputs/apk/release/app-release.apk"
           test -f "${apk}"
           mkdir -p dist
-          cp "${apk}" "dist/cambridge-android-${CAMBRIDGE_ANDROID_VERSION}.apk"
+          release_version="${{ needs.verify-version.outputs.version }}"
+          cp "${apk}" "dist/cambridge-android-${release_version}.apk"
           (
             cd dist
-            sha256sum "cambridge-android-${CAMBRIDGE_ANDROID_VERSION}.apk" \
-              >"cambridge-android-${CAMBRIDGE_ANDROID_VERSION}.apk.sha256"
-            sha256sum --check "cambridge-android-${CAMBRIDGE_ANDROID_VERSION}.apk.sha256"
+            sha256sum "cambridge-android-${release_version}.apk" \
+              >"cambridge-android-${release_version}.apk.sha256"
+            sha256sum --check "cambridge-android-${release_version}.apk.sha256"
           )
       - uses: actions/upload-artifact@v4
         with:
           name: android-release
           path: dist/
 
-  linux-ubuntu-build:
-    if: needs.verify-version.outputs.component == 'obs'
-    needs: verify-version
-    runs-on: ubuntu-26.04
-    env:
-      LD_LIBRARY_PATH: ${{ github.workspace }}/build/cambridge-obs-dependencies/obs/lib
-      PKG_CONFIG_PATH: ${{ github.workspace }}/build/cambridge-obs-dependencies/obs/lib/pkgconfig
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install native dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            cmake extra-cmake-modules g++ ninja-build pkg-config python3 curl file tar \
-            libavcodec-dev libavformat-dev libavutil-dev libswresample-dev \
-            libswscale-dev \
-            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
-            gstreamer1.0-tools gstreamer1.0-plugins-base \
-            gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
-            gstreamer1.0-plugins-ugly \
-            libsimde-dev uthash-dev zlib1g-dev \
-            uuid-dev libx11-dev libx11-xcb-dev libxcb1-dev libxcb-xinput-dev \
-            libva-dev libva-drm2 libdrm-dev libgl-dev libopengl-dev libglx-dev \
-            libjansson-dev \
-            libavahi-client-dev
-      - name: Build x86_64-obs30-ffmpeg62 profile on Ubuntu 26.04
-        env:
-          CAMBRIDGE_LINUX_VARIANT_ID: x86_64-obs30-ffmpeg62
-          CAMBRIDGE_LINUX_VARIANT_PROVENANCE: Ubuntu 26.04 release environment
-          CAMBRIDGE_REQUIRE_AVAHI: ON
-        run: |
-          ./scripts/receiver/linux/prepare-cambridge-obs-dependencies.sh
-          ./scripts/receiver/linux/build-cambridge-obs-plugin-variant.sh
-      - name: Run Ubuntu native OBS smoke when OBS is available
-        env:
-          CAMBRIDGE_BUILD_DIR: build/cambridge-obs-plugin
-          CAMBRIDGE_STAGING_DIR: build/cambridge-obs-plugin/staging
-          CAMBRIDGE_LINUX_VARIANT_ID: x86_64-obs30-ffmpeg62
-          CAMBRIDGE_REQUIRE_AVAHI: ON
-          CAMBRIDGE_DECODER_MODE: cpu
-          CAMBRIDGE_PROFILE_ID: fixture-720p30
-          CAMBRIDGE_WIDTH: 1280
-          CAMBRIDGE_HEIGHT: 720
-          CAMBRIDGE_FPS: 30
-          CAMBRIDGE_BITRATE_BPS: 4000000
-          CAMBRIDGE_DURATION_SECONDS: 5
-          CAMBRIDGE_EXPECT_DISCOVERY: required
-        run: |
-          if command -v obs >/dev/null 2>&1; then
-            ./scripts/receiver/linux/test-cambridge-fixture.sh
-          else
-            echo "OBS executable unavailable; isolated smoke test is pending for this runner"
-          fi
-      - uses: actions/upload-artifact@v4
-        with:
-          name: linux-variant-x86_64-obs30-ffmpeg62
-          path: build/linux-variants/x86_64-obs30-ffmpeg62/
-
-  linux-cachyos-build:
-    if: needs.verify-version.outputs.component == 'obs'
-    needs: verify-version
-    runs-on: [self-hosted, linux, x64, cachyos]
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build x86_64-obs30-ffmpeg63 profile on CachyOS OBS 32.2.2
-        env:
-          CAMBRIDGE_LINUX_VARIANT_ID: x86_64-obs30-ffmpeg63
-          CAMBRIDGE_LINUX_VARIANT_PROVENANCE: CachyOS with OBS 32.2.2
-          CAMBRIDGE_REQUIRE_AVAHI: ON
-        run: ./scripts/receiver/linux/build-cambridge-obs-plugin-variant.sh
-      - name: Run CachyOS native OBS smoke when OBS is available
-        env:
-          CAMBRIDGE_BUILD_DIR: build/cambridge-obs-plugin
-          CAMBRIDGE_STAGING_DIR: build/cambridge-obs-plugin/staging
-          CAMBRIDGE_LINUX_VARIANT_ID: x86_64-obs30-ffmpeg63
-          CAMBRIDGE_REQUIRE_AVAHI: ON
-          CAMBRIDGE_DECODER_MODE: cpu
-          CAMBRIDGE_PROFILE_ID: fixture-720p30
-          CAMBRIDGE_WIDTH: 1280
-          CAMBRIDGE_HEIGHT: 720
-          CAMBRIDGE_FPS: 30
-          CAMBRIDGE_BITRATE_BPS: 4000000
-          CAMBRIDGE_DURATION_SECONDS: 5
-          CAMBRIDGE_EXPECT_DISCOVERY: required
-        run: |
-          if command -v obs >/dev/null 2>&1; then
-            ./scripts/receiver/linux/test-cambridge-fixture.sh
-          else
-            echo "OBS executable unavailable; isolated smoke test is pending for this runner"
-          fi
-      - uses: actions/upload-artifact@v4
-        with:
-          name: linux-variant-x86_64-obs30-ffmpeg63
-          path: build/linux-variants/x86_64-obs30-ffmpeg63/
-
-  linux-package:
-    if: needs.verify-version.outputs.component == 'obs'
-    needs:
-      - verify-version
-      - linux-ubuntu-build
-      - linux-cachyos-build
-    runs-on: ubuntu-26.04
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          name: linux-variant-x86_64-obs30-ffmpeg62
-          path: build/linux-variants/x86_64-obs30-ffmpeg62
-      - uses: actions/download-artifact@v4
-        with:
-          name: linux-variant-x86_64-obs30-ffmpeg63
-          path: build/linux-variants/x86_64-obs30-ffmpeg63
-      - name: Assemble one Linux multi-variant installer bundle
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y file python3 tar
-          CAMBRIDGE_SKIP_BUILD=ON \
-          CAMBRIDGE_SKIP_RUNTIME_VALIDATION=ON \
-          CAMBRIDGE_REQUIRE_ALL_LINUX_VARIANTS=ON \
-          CAMBRIDGE_LINUX_VARIANT_INPUT_DIR=build/linux-variants \
-            ./scripts/release/package-linux-plugin.sh
-      - uses: actions/upload-artifact@v4
-        with:
-          name: linux-x86_64-release
-          path: |
-            build/release/*.tar.gz
-            build/release/*.tar.gz.sha256
-
-  macos-build:
-    if: needs.verify-version.outputs.component == 'obs' && vars.CAMBRIDGE_RELEASE_MACOS == 'true'
-    needs: verify-version
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: macos-15
-            architecture: arm64
-          - runner: macos-15-intel
-            architecture: x86_64
-    runs-on: ${{ matrix.runner }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Prepare pinned macOS build dependencies
-        env:
-          CAMBRIDGE_MACOS_ARCHITECTURE: ${{ matrix.architecture }}
-        run: ./scripts/receiver/macos/prepare-cambridge-build-dependencies.sh
-      - name: Build macOS plugin slice
-        env:
-          CAMBRIDGE_BUILD_DIR: build/cambridge-obs-plugin-macos-release
-          CAMBRIDGE_STAGING_DIR: build/cambridge-obs-plugin-macos-release/staging
-          CAMBRIDGE_BUILD_TYPE: Release
-          CAMBRIDGE_MACOS_ARCHITECTURES: ${{ matrix.architecture }}
-          CAMBRIDGE_REQUIRE_UNIVERSAL: OFF
-        run: ./scripts/receiver/macos/build-cambridge-obs-plugin.sh
-      - name: Stage macOS plugin slice
-        env:
-          CAMBRIDGE_ARCHITECTURE: ${{ matrix.architecture }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          bundle="build/cambridge-obs-plugin-macos-release/staging/obs-plugins/cambridge-obs-plugin.plugin"
-          plugin="${bundle}/Contents/MacOS/cambridge-obs-plugin"
-          lipo -verify_arch "${CAMBRIDGE_ARCHITECTURE}" "${plugin}"
-          mkdir -p "dist/${CAMBRIDGE_ARCHITECTURE}"
-          cp -R "${bundle}" "dist/${CAMBRIDGE_ARCHITECTURE}/cambridge-obs-plugin.plugin"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: macos-plugin-${{ matrix.architecture }}
-          path: dist/${{ matrix.architecture }}/
-
-  macos-package:
-    if: needs.verify-version.outputs.component == 'obs' && vars.CAMBRIDGE_RELEASE_MACOS == 'true'
-    needs:
-      - verify-version
-      - macos-build
-    runs-on: macos-15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          name: macos-plugin-arm64
-          path: dist-input/arm64
-      - uses: actions/download-artifact@v4
-        with:
-          name: macos-plugin-x86_64
-          path: dist-input/x86_64
-      - name: Import macOS signing identities and configure notarization
-        env:
-          CAMBRIDGE_APPLICATION_P12_BASE64: ${{ secrets.CAMBRIDGE_DEVELOPER_ID_APPLICATION_P12_BASE64 }}
-          CAMBRIDGE_APPLICATION_P12_PASSWORD: ${{ secrets.CAMBRIDGE_DEVELOPER_ID_APPLICATION_P12_PASSWORD }}
-          CAMBRIDGE_INSTALLER_P12_BASE64: ${{ secrets.CAMBRIDGE_DEVELOPER_ID_INSTALLER_P12_BASE64 }}
-          CAMBRIDGE_INSTALLER_P12_PASSWORD: ${{ secrets.CAMBRIDGE_DEVELOPER_ID_INSTALLER_P12_PASSWORD }}
-          CAMBRIDGE_KEYCHAIN_PASSWORD: ${{ secrets.CAMBRIDGE_SIGNING_KEYCHAIN_PASSWORD }}
-          CAMBRIDGE_NOTARY_PROFILE: ${{ secrets.CAMBRIDGE_NOTARY_PROFILE }}
-          CAMBRIDGE_NOTARY_APPLE_ID: ${{ secrets.CAMBRIDGE_NOTARY_APPLE_ID }}
-          CAMBRIDGE_NOTARY_TEAM_ID: ${{ secrets.CAMBRIDGE_NOTARY_TEAM_ID }}
-          CAMBRIDGE_NOTARY_APP_PASSWORD: ${{ secrets.CAMBRIDGE_NOTARY_APP_PASSWORD }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          required_values=(
-            "${CAMBRIDGE_APPLICATION_P12_BASE64}"
-            "${CAMBRIDGE_APPLICATION_P12_PASSWORD}"
-            "${CAMBRIDGE_INSTALLER_P12_BASE64}"
-            "${CAMBRIDGE_INSTALLER_P12_PASSWORD}"
-            "${CAMBRIDGE_KEYCHAIN_PASSWORD}"
-            "${CAMBRIDGE_NOTARY_PROFILE}"
-            "${CAMBRIDGE_NOTARY_APPLE_ID}"
-            "${CAMBRIDGE_NOTARY_TEAM_ID}"
-            "${CAMBRIDGE_NOTARY_APP_PASSWORD}"
-          )
-          for required_value in "${required_values[@]}"; do
-            test -n "${required_value}"
-          done
-          keychain_path="${RUNNER_TEMP}/cambridge-signing.keychain-db"
-          application_p12="${RUNNER_TEMP}/cambridge-application.p12"
-          installer_p12="${RUNNER_TEMP}/cambridge-installer.p12"
-          printf '%s' "${CAMBRIDGE_APPLICATION_P12_BASE64}" | base64 -D >"${application_p12}"
-          printf '%s' "${CAMBRIDGE_INSTALLER_P12_BASE64}" | base64 -D >"${installer_p12}"
-          security create-keychain -p "${CAMBRIDGE_KEYCHAIN_PASSWORD}" "${keychain_path}"
-          security set-keychain-settings -lut 21600 "${keychain_path}"
-          security unlock-keychain -p "${CAMBRIDGE_KEYCHAIN_PASSWORD}" "${keychain_path}"
-          security import "${application_p12}" -k "${keychain_path}" \
-            -P "${CAMBRIDGE_APPLICATION_P12_PASSWORD}" -T /usr/bin/codesign
-          security import "${installer_p12}" -k "${keychain_path}" \
-            -P "${CAMBRIDGE_INSTALLER_P12_PASSWORD}" -T /usr/bin/pkgbuild \
-            -T /usr/bin/productbuild
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s \
-            -k "${CAMBRIDGE_KEYCHAIN_PASSWORD}" "${keychain_path}"
-          security list-keychains -d user -s "${keychain_path}"
-          xcrun notarytool store-credentials "${CAMBRIDGE_NOTARY_PROFILE}" \
-            --apple-id "${CAMBRIDGE_NOTARY_APPLE_ID}" \
-            --team-id "${CAMBRIDGE_NOTARY_TEAM_ID}" \
-            --password "${CAMBRIDGE_NOTARY_APP_PASSWORD}" \
-            --keychain "${keychain_path}"
-          printf 'CAMBRIDGE_NOTARY_KEYCHAIN=%s\n' "${keychain_path}" >>"${GITHUB_ENV}"
-      - name: Assemble, sign, notarize, and staple macOS universal package
-        env:
-          CAMBRIDGE_BUILD_DIR: build/cambridge-obs-plugin-macos-release
-          CAMBRIDGE_STAGING_DIR: build/cambridge-obs-plugin-macos-release/staging
-          CAMBRIDGE_SKIP_BUILD: ON
-          CAMBRIDGE_DEVELOPER_ID_APPLICATION: ${{ secrets.CAMBRIDGE_DEVELOPER_ID_APPLICATION }}
-          CAMBRIDGE_DEVELOPER_ID_INSTALLER: ${{ secrets.CAMBRIDGE_DEVELOPER_ID_INSTALLER }}
-          CAMBRIDGE_NOTARY_PROFILE: ${{ secrets.CAMBRIDGE_NOTARY_PROFILE }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          plugin_bundle="${CAMBRIDGE_STAGING_DIR}/obs-plugins/cambridge-obs-plugin.plugin"
-          plugin_binary="${plugin_bundle}/Contents/MacOS/cambridge-obs-plugin"
-          mkdir -p "${CAMBRIDGE_STAGING_DIR}/obs-plugins"
-          cp -R dist-input/arm64/cambridge-obs-plugin.plugin "${plugin_bundle}"
-          lipo -create \
-            dist-input/arm64/cambridge-obs-plugin.plugin/Contents/MacOS/cambridge-obs-plugin \
-            dist-input/x86_64/cambridge-obs-plugin.plugin/Contents/MacOS/cambridge-obs-plugin \
-            -output "${plugin_binary}"
-          ./scripts/release/package-macos-plugin.sh
-      - name: Remove temporary macOS signing material
-        if: always()
-        env:
-          CAMBRIDGE_KEYCHAIN_PASSWORD: ${{ secrets.CAMBRIDGE_SIGNING_KEYCHAIN_PASSWORD }}
-        shell: bash
-        run: |
-          keychain_path="${RUNNER_TEMP}/cambridge-signing.keychain-db"
-          if [[ -e "${keychain_path}" ]]; then
-            security delete-keychain "${keychain_path}"
-          fi
-          rm -f "${RUNNER_TEMP}/cambridge-application.p12" \
-            "${RUNNER_TEMP}/cambridge-installer.p12"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: macos-universal-release
-          path: |
-            build/release/*.pkg
-            build/release/*.pkg.sha256
-
-  publish-android:
-    if: >-
-      always() && github.ref_type == 'tag' &&
-      needs.verify-version.outputs.component == 'android' &&
-      needs.android.result == 'success'
+  publish:
     needs:
       - verify-version
       - android
@@ -387,59 +78,22 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
+          name: android-release
           path: dist
-          merge-multiple: true
-      - name: Publish Android GitHub release
+      - name: Publish one CamBridge GitHub release
         env:
           CAMBRIDGE_RELEASE_VERSION: ${{ needs.verify-version.outputs.version }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          release_notes="${RUNNER_TEMP}/cambridge-android-release-notes.md"
-          awk -v heading="## Android ${CAMBRIDGE_RELEASE_VERSION} " '
-            index($0, heading) == 1 { include = 1; next }
-            include && /^## / { exit }
-            include { print }
-          ' CHANGELOG.md >"${release_notes}"
+          set -euo pipefail
+          release_notes="${RUNNER_TEMP}/cambridge-release-notes.md"
+          awk '/^## Unreleased$/ { include = 1; next } include && /^## / { exit } include { print }' \
+            CHANGELOG.md >"${release_notes}"
           test -s "${release_notes}"
           mapfile -d '' release_assets < <(find dist -type f -print0)
           test "${#release_assets[@]}" -gt 0
           gh release create "${GITHUB_REF_NAME}" "${release_assets[@]}" \
-            --title "CamBridge Android ${CAMBRIDGE_RELEASE_VERSION}" \
-            --notes-file "${release_notes}"
-
-  publish-obs:
-    if: >-
-      always() && github.ref_type == 'tag' &&
-      needs.verify-version.outputs.component == 'obs' &&
-      needs.linux-package.result == 'success' &&
-      ((needs.macos-build.result == 'skipped' && needs.macos-package.result == 'skipped') ||
-       (needs.macos-build.result == 'success' && needs.macos-package.result == 'success'))
-    needs:
-      - verify-version
-      - linux-package
-      - macos-build
-      - macos-package
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          path: dist
-          merge-multiple: true
-      - name: Publish OBS plugin GitHub release
-        env:
-          CAMBRIDGE_RELEASE_VERSION: ${{ needs.verify-version.outputs.version }}
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          release_notes="${RUNNER_TEMP}/cambridge-obs-release-notes.md"
-          awk -v heading="## OBS plugin ${CAMBRIDGE_RELEASE_VERSION} " '
-            index($0, heading) == 1 { include = 1; next }
-            include && /^## / { exit }
-            include { print }
-          ' CHANGELOG.md >"${release_notes}"
-          test -s "${release_notes}"
-          mapfile -d '' release_assets < <(find dist -type f -print0)
-          test "${#release_assets[@]}" -gt 0
-          gh release create "${GITHUB_REF_NAME}" "${release_assets[@]}" \
-            --title "CamBridge OBS plugin ${CAMBRIDGE_RELEASE_VERSION}" \
+            --verify-tag \
+            --latest \
+            --title "CamBridge ${CAMBRIDGE_RELEASE_VERSION}" \
             --notes-file "${release_notes}"
