@@ -662,6 +662,12 @@ void CamBridgeSource::drain_media_path_failure()
     }
     report("media_path_failure:code=" +
            std::string(media_path_failure_code_name(pending->code)) + ":detail=" + pending->detail);
+    if (control_server_) {
+        const std::string reason = "media path failure: " + pending->detail;
+        if (!control_server_->send_json_and_close(encode_error_message(reason))) {
+            report("control_media_failure_delivery_failed");
+        }
+    }
     end_session_locked();
 }
 

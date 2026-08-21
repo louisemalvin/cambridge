@@ -186,6 +186,27 @@ bool ControlServer::send_json(const std::string &json)
     return write_frame(descriptor, json);
 }
 
+bool ControlServer::send_json_and_close(const std::string &json)
+{
+    if (json.size() > contract::kMaximumControlMessageBytes) {
+        return false;
+    }
+    int descriptor = kInvalidSocket;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        descriptor = active_fd_;
+        active_fd_ = kInvalidSocket;
+    }
+    if (descriptor == kInvalidSocket) {
+        return false;
+    }
+    const bool sent = write_frame(descriptor, json);
+    // The control thread owns the final close for an accepted client. Shutdown
+    // wakes its blocking read without allowing this thread to reuse the fd.
+    shutdown(descriptor, SHUT_RDWR);
+    return sent;
+}
+
 bool ControlServer::is_connected() const
 {
     std::lock_guard<std::mutex> lock(mutex_);

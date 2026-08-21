@@ -29,6 +29,7 @@ public:
     bool start(std::string &error);
     void stop();
     bool send_json(const std::string &json);
+    bool send_json_and_close(const std::string &json);
     bool is_connected() const;
 
 private:

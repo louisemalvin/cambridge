@@ -41,6 +41,8 @@ constexpr std::size_t kFragmentHeaderMiddleBytes = 2;
 constexpr std::size_t kFragmentPayloadFirstBytes = 7;
 constexpr std::size_t kExpectedHelloCount = 1;
 constexpr std::size_t kExpectedDisconnectCount = 1;
+constexpr std::size_t kExpectedReplacementHelloCount = 2;
+constexpr std::size_t kExpectedReplacementDisconnectCount = 2;
 
 void require(bool condition)
 {
@@ -305,6 +307,48 @@ void test_malformed_and_oversized_frames_are_rejected()
     server.stop();
 }
 
+void test_error_closes_active_connection_for_recovery()
+{
+    CallbackState state;
+    const auto port = unused_loopback_port();
+    auto server = make_server(port, state);
+    start_server(server);
+
+    const int client = connect_loopback(port);
+    const auto frame = cambridge::frame_control_message(hello_json(cambridge::contract::kMinimumGeneration));
+    send_all(client, frame.data(), frame.size());
+    std::string accepted;
+    require(receive_frame(client, accepted, 1s));
+    require(wait_for(
+        state,
+        [&state]() { return state.hello_count == kExpectedHelloCount; },
+        std::chrono::milliseconds(cambridge::receiver::kWorkerPollIntervalMs * kWaitPolls)));
+
+    require(server.send_json_and_close(cambridge::encode_error_message("media path failure")));
+    std::string error;
+    require(receive_frame(client, error, 1s));
+    require(error.find("\"type\":\"error\"") != std::string::npos);
+    require(wait_for(
+        state,
+        [&state]() { return state.disconnect_count == kExpectedDisconnectCount; },
+        std::chrono::milliseconds(cambridge::receiver::kWorkerPollIntervalMs * kWaitPolls)));
+    close(client);
+
+    const int replacement = connect_loopback(port);
+    send_all(replacement, frame.data(), frame.size());
+    require(receive_frame(replacement, accepted, 1s));
+    require(wait_for(
+        state,
+        [&state]() { return state.hello_count == kExpectedReplacementHelloCount; },
+        std::chrono::milliseconds(cambridge::receiver::kWorkerPollIntervalMs * kWaitPolls)));
+    close(replacement);
+    require(wait_for(
+        state,
+        [&state]() { return state.disconnect_count == kExpectedReplacementDisconnectCount; },
+        std::chrono::milliseconds(cambridge::receiver::kWorkerPollIntervalMs * kWaitPolls)));
+    server.stop();
+}
+
 void test_stop_cancels_pending_initial_read()
 {
     CallbackState state;
@@ -327,6 +371,7 @@ int main()
     test_initial_frame_timeout_with_connected_peer();
     test_fragmented_hello_and_quiet_accepted_connection();
     test_malformed_and_oversized_frames_are_rejected();
+    test_error_closes_active_connection_for_recovery();
     test_stop_cancels_pending_initial_read();
     return 0;
 }
