@@ -27,7 +27,17 @@ constexpr gboolean kDropOldAppSinkBuffers = TRUE;
 constexpr gint kRtxDeadlineMs = static_cast<gint>(contract::kRtxHistoryMs);
 constexpr gint kRtxRetryPeriodMs = static_cast<gint>(contract::kRtxHistoryMs);
 constexpr GstClockTime kRtcpMinimumInterval = 0; // Let AVPF use the calculated feedback interval.
+constexpr guint kDiagnosticsIntervalMs = 1'000;
 constexpr char kRtpAddress[] = "0.0.0.0";
+constexpr char kRtpBinName[] = "rtpbin";
+constexpr char kRtxReceiverName[] = "rtx-receiver";
+constexpr char kAppSinkName[] = "h264-appsink";
+constexpr char kStatsProperty[] = "stats";
+constexpr char kCurrentLevelBuffersProperty[] = "current-level-buffers";
+constexpr char kDroppedBuffersProperty[] = "dropped";
+constexpr char kRtxRequestsProperty[] = "num-rtx-requests";
+constexpr char kRtxPacketsProperty[] = "num-rtx-packets";
+constexpr char kRtxAssociatedPacketsProperty[] = "num-rtx-assoc-packets";
 constexpr char kRtpMedia[] = "video";
 constexpr char kRtpEncodingName[] = "H264";
 constexpr char kRtpExtensionFieldPrefix[] = "extmap-";
@@ -53,6 +63,19 @@ std::uint64_t monotonic_time_ns()
     clock_gettime(CLOCK_MONOTONIC, &time);
     return static_cast<std::uint64_t>(time.tv_sec) * kNanosecondsPerSecond +
            static_cast<std::uint64_t>(time.tv_nsec);
+}
+
+std::uint64_t structure_uint64(const GstStructure *structure, const char *field)
+{
+    guint64 value = 0;
+    if (structure && gst_structure_get_uint64(structure, field, &value)) {
+        return value;
+    }
+    guint value32 = 0;
+    if (structure && gst_structure_get_uint(structure, field, &value32)) {
+        return value32;
+    }
+    return 0;
 }
 
 std::string element_name(GstMessage *message)
@@ -228,6 +251,8 @@ bool GStreamerMediaReceiver::start_session(
         sender_address_ = session.sender_address;
         sender_rtcp_port_ = session.sender_rtcp_port;
         target_bitrate_bps_ = session.target_bitrate_bps;
+        diagnostics_source_ = nullptr;
+        jitterbuffer_ = nullptr;
     }
     thread_ = std::thread(&GStreamerMediaReceiver::run_pipeline, this);
     {
@@ -260,13 +285,17 @@ void GStreamerMediaReceiver::stop_session()
     }
     GMainLoop *old_loop = nullptr;
     GMainContext *old_context = nullptr;
+    GSource *old_diagnostics_source = nullptr;
     {
         std::lock_guard<std::mutex> lock(mutex_);
         old_loop = loop_;
         old_context = context_;
+        old_diagnostics_source = diagnostics_source_;
         loop_ = nullptr;
         context_ = nullptr;
         pipeline_ = nullptr;
+        diagnostics_source_ = nullptr;
+        jitterbuffer_ = nullptr;
         startup_complete_ = false;
         startup_success_ = false;
         startup_error_.clear();
@@ -277,6 +306,10 @@ void GStreamerMediaReceiver::stop_session()
     }
     if (old_loop) {
         g_main_loop_unref(old_loop);
+    }
+    if (old_diagnostics_source) {
+        g_source_destroy(old_diagnostics_source);
+        g_source_unref(old_diagnostics_source);
     }
     if (old_context) {
         g_main_context_unref(old_context);
@@ -323,6 +356,11 @@ void GStreamerMediaReceiver::run_pipeline()
     GstBus *bus = gst_element_get_bus(pipeline);
     gst_bus_add_watch(bus, &GStreamerMediaReceiver::on_bus_message, this);
     gst_object_unref(bus);
+    diagnostics_source_ = g_timeout_source_new(kDiagnosticsIntervalMs);
+    if (diagnostics_source_) {
+        g_source_set_callback(diagnostics_source_, &GStreamerMediaReceiver::on_diagnostics, this, nullptr);
+        g_source_attach(diagnostics_source_, context);
+    }
     const GstStateChangeReturn state_result = gst_element_set_state(pipeline, GST_STATE_PLAYING);
     if (state_result == GST_STATE_CHANGE_FAILURE) {
         error = "GStreamer receiver pipeline could not enter PLAYING";
@@ -424,6 +462,14 @@ bool GStreamerMediaReceiver::build_pipeline(const GStreamerSessionConfig &sessio
     g_signal_connect(rtpbin, "new-jitterbuffer", G_CALLBACK(&GStreamerMediaReceiver::configure_jitterbuffer), this);
     g_signal_connect(rtpbin, "pad-added", G_CALLBACK(&GStreamerMediaReceiver::on_rtp_pad_added), this);
     g_signal_connect(appsink, "new-sample", G_CALLBACK(&GStreamerMediaReceiver::on_new_sample), this);
+
+    GstPad *depay_sink = gst_element_get_static_pad(depay, "sink");
+    if (depay_sink) {
+        gst_pad_add_probe(
+            depay_sink, GST_PAD_PROBE_TYPE_EVENT_UPSTREAM,
+            &GStreamerMediaReceiver::on_depay_event, this, nullptr);
+        gst_object_unref(depay_sink);
+    }
 
     if (!gst_element_link(depay, parser) || !gst_element_link(parser, appsink) ||
         !link_pad_to_request_pad(
@@ -545,6 +591,7 @@ void GStreamerMediaReceiver::configure_jitterbuffer(
     if (session != kVideoSession) {
         return;
     }
+    receiver->jitterbuffer_ = jitterbuffer;
     g_object_set(
         jitterbuffer,
         "latency", receiver->config_.jitter_latency_ms,
@@ -554,6 +601,17 @@ void GStreamerMediaReceiver::configure_jitterbuffer(
         "rtx-deadline", kRtxDeadlineMs,
         "rtx-retry-period", kRtxRetryPeriodMs,
         nullptr);
+}
+
+GstPadProbeReturn GStreamerMediaReceiver::on_depay_event(
+    GstPad *, GstPadProbeInfo *info, gpointer user_data)
+{
+    auto *receiver = static_cast<GStreamerMediaReceiver *>(user_data);
+    GstEvent *event = info ? GST_PAD_PROBE_INFO_EVENT(info) : nullptr;
+    if (receiver && event && gst_video_event_is_force_key_unit(event)) {
+        receiver->keyframe_requests_.fetch_add(1);
+    }
+    return GST_PAD_PROBE_OK;
 }
 
 void GStreamerMediaReceiver::on_rtp_pad_added(GstElement *, GstPad *pad, gpointer user_data)
@@ -630,6 +688,125 @@ GstFlowReturn GStreamerMediaReceiver::on_new_sample(GstAppSink *sink, gpointer u
         receiver->access_unit_callback_(std::move(access_unit));
     }
     return GST_FLOW_OK;
+}
+
+gboolean GStreamerMediaReceiver::on_diagnostics(gpointer user_data)
+{
+    auto *receiver = static_cast<GStreamerMediaReceiver *>(user_data);
+    if (!receiver) {
+        return G_SOURCE_REMOVE;
+    }
+    receiver->emit_diagnostics();
+    return G_SOURCE_CONTINUE;
+}
+
+void GStreamerMediaReceiver::emit_diagnostics()
+{
+    GstElement *receiver_pipeline = nullptr;
+    GstElement *jitterbuffer = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!session_active_ || !pipeline_) {
+            return;
+        }
+        receiver_pipeline = pipeline_;
+        jitterbuffer = jitterbuffer_;
+    }
+
+    GstElement *rtpbin = gst_bin_get_by_name(GST_BIN(receiver_pipeline), kRtpBinName);
+    GstElement *rtx_receiver = gst_bin_get_by_name(GST_BIN(receiver_pipeline), kRtxReceiverName);
+    GstElement *appsink = gst_bin_get_by_name(GST_BIN(receiver_pipeline), kAppSinkName);
+
+    guint64 jitter_lost = 0;
+    guint64 jitter_average = 0;
+    guint64 jitter_rtx_count = 0;
+    guint64 jitter_rtx_success_count = 0;
+    GstStructure *jitter_stats = nullptr;
+    if (jitterbuffer) {
+        g_object_get(jitterbuffer, kStatsProperty, &jitter_stats, nullptr);
+        jitter_lost = structure_uint64(jitter_stats, "num-lost");
+        jitter_average = structure_uint64(jitter_stats, "avg-jitter");
+        jitter_rtx_count = structure_uint64(jitter_stats, "rtx-count");
+        jitter_rtx_success_count = structure_uint64(jitter_stats, "rtx-success-count");
+    }
+
+    guint rtx_requests = 0;
+    guint rtx_packets = 0;
+    guint rtx_associated_packets = 0;
+    if (rtx_receiver) {
+        g_object_get(
+            rtx_receiver,
+            kRtxRequestsProperty, &rtx_requests,
+            kRtxPacketsProperty, &rtx_packets,
+            kRtxAssociatedPacketsProperty, &rtx_associated_packets,
+            nullptr);
+    }
+
+    guint64 appsink_queued_buffers = 0;
+    guint64 appsink_dropped_buffers = 0;
+    if (appsink) {
+        g_object_get(
+            appsink,
+            kCurrentLevelBuffersProperty, &appsink_queued_buffers,
+            kDroppedBuffersProperty, &appsink_dropped_buffers,
+            nullptr);
+    }
+
+    guint session_received_nacks = 0;
+    guint session_sent_nacks = 0;
+    guint session_rtx_count = 0;
+    GstStructure *session_stats = nullptr;
+    GstElement *internal_session = nullptr;
+    if (rtpbin) {
+        g_signal_emit_by_name(rtpbin, "get-internal-session", kVideoSession, &internal_session);
+    }
+    if (internal_session) {
+        g_object_get(internal_session, kStatsProperty, &session_stats, nullptr);
+        session_received_nacks = static_cast<guint>(structure_uint64(session_stats, "recv-nack-count"));
+        session_sent_nacks = static_cast<guint>(structure_uint64(session_stats, "sent-nack-count"));
+        session_rtx_count = static_cast<guint>(structure_uint64(session_stats, "rtx-count"));
+        gst_object_unref(internal_session);
+    }
+
+    GstState state = GST_STATE_NULL;
+    GstState pending = GST_STATE_VOID_PENDING;
+    gst_element_get_state(receiver_pipeline, &state, &pending, 0);
+
+    std::ostringstream output;
+    output << "[cambridge] receiver_summary ausDelivered=" << access_units_delivered_.load()
+           << " auBytesDelivered=" << access_unit_bytes_delivered_.load()
+           << " rtxRequests=" << rtx_requests
+           << " rtxPackets=" << rtx_packets
+           << " rtxAssociatedPackets=" << rtx_associated_packets
+           << " rtxRecovered=" << std::max(jitter_rtx_success_count,
+                                             static_cast<guint64>(rtx_associated_packets))
+           << " packetLoss=" << jitter_lost
+           << " jitter=" << jitter_average
+           << " keyframeRequests=" << keyframe_requests_.load()
+           << " sessionReceivedNacks=" << session_received_nacks
+           << " sessionSentNacks=" << session_sent_nacks
+           << " sessionRtxCount=" << session_rtx_count
+           << " jitterRtxCount=" << jitter_rtx_count
+           << " appsinkQueuedBuffers=" << appsink_queued_buffers
+           << " appsinkDroppedBuffers=" << appsink_dropped_buffers
+           << " pipelineState=" << gst_element_state_get_name(state);
+    g_message("%s", output.str().c_str());
+
+    if (session_stats) {
+        gst_structure_free(session_stats);
+    }
+    if (jitter_stats) {
+        gst_structure_free(jitter_stats);
+    }
+    if (appsink) {
+        gst_object_unref(appsink);
+    }
+    if (rtx_receiver) {
+        gst_object_unref(rtx_receiver);
+    }
+    if (rtpbin) {
+        gst_object_unref(rtpbin);
+    }
 }
 
 gboolean GStreamerMediaReceiver::on_bus_message(GstBus *, GstMessage *message, gpointer user_data)

@@ -114,6 +114,7 @@ private:
     std::atomic<std::uint64_t> max_receive_to_publish_ns_{0};
     std::atomic<std::uint64_t> max_receive_to_render_ns_{0};
     std::atomic<std::uint64_t> frames_rendered_{0};
+    std::atomic<std::uint64_t> last_receiver_summary_ns_{0};
     std::atomic<std::uint64_t> last_rendered_frame_generation_{0};
     std::atomic<std::uint64_t> media_path_failures_{0};
     std::atomic<std::uint64_t> native_import_failures_{0};

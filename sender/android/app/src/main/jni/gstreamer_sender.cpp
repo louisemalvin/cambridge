@@ -31,7 +31,19 @@ constexpr GstRTPProfile kRtpProfileFeedback = GST_RTP_PROFILE_AVPF;
 constexpr GstClockTime kRtcpMinimumInterval = 0; // Let AVPF use the calculated feedback interval.
 constexpr gint kPayloaderConfigIntervalEveryIdr = -1;
 constexpr gint kPayloaderAggregateModeNone = 0;
+constexpr guint kDiagnosticsIntervalMs = 1'000;
 constexpr char kRtpAddress[] = "0.0.0.0";
+constexpr char kAppsrcName[] = "h264-appsrc";
+constexpr char kRtpBinName[] = "rtpbin";
+constexpr char kRtxSenderName[] = "rtx-sender";
+constexpr char kGccName[] = "gcc-bwe";
+constexpr char kCurrentLevelBuffersProperty[] = "current-level-buffers";
+constexpr char kCurrentLevelTimeProperty[] = "current-level-time";
+constexpr char kDroppedBuffersProperty[] = "dropped";
+constexpr char kEstimatedBitrateProperty[] = "estimated-bitrate";
+constexpr char kRtxRequestsProperty[] = "num-rtx-requests";
+constexpr char kRtxPacketsProperty[] = "num-rtx-packets";
+constexpr char kSessionStatsProperty[] = "stats";
 constexpr char kRtcpCapsName[] = "application/x-rtcp";
 constexpr char kH264CapsName[] = "video/x-h264";
 constexpr char kByteStreamFormat[] = "byte-stream";
@@ -118,6 +130,19 @@ std::string session_pad_name(const char *prefix)
     return std::string(prefix) + std::to_string(kVideoSession);
 }
 
+std::uint64_t structure_uint64(const GstStructure *structure, const char *field)
+{
+    guint64 value = 0;
+    if (structure && gst_structure_get_uint64(structure, field, &value)) {
+        return value;
+    }
+    guint value32 = 0;
+    if (structure && gst_structure_get_uint(structure, field, &value32)) {
+        return value32;
+    }
+    return 0;
+}
+
 GstPadProbeReturn add_rtcp_feedback_caps(GstPad *, GstPadProbeInfo *info, gpointer)
 {
     GstEvent *event = info ? GST_PAD_PROBE_INFO_EVENT(info) : nullptr;
@@ -170,11 +195,13 @@ struct GStreamerSender::Impl {
     static void on_estimated_bitrate_changed(GObject *, GParamSpec *, gpointer user_data);
     static GstPadProbeReturn on_upstream_event(GstPad *, GstPadProbeInfo *info, gpointer user_data);
     static gboolean on_bus_message(GstBus *, GstMessage *message, gpointer user_data);
+    static gboolean on_diagnostics(gpointer user_data);
 
     GstElement *make_aux_sender(std::string &error);
     bool build_pipeline(std::string &error);
     bool check_required_factories(std::string &error) const;
     void report_error(const std::string &message);
+    void emit_diagnostics();
     void run_main_loop();
 
     mutable std::mutex mutex;
@@ -184,6 +211,7 @@ struct GStreamerSender::Impl {
     GstElement *appsrc = nullptr;
     GMainContext *context = nullptr;
     GMainLoop *loop = nullptr;
+    GSource *diagnostics_source = nullptr;
     std::thread main_loop_thread;
     bool active = false;
     bool stopping = false;
@@ -271,6 +299,11 @@ bool GStreamerSender::Impl::start(const Config &sender_config, std::string &erro
     GstBus *bus = gst_element_get_bus(pipeline);
     g_main_context_push_thread_default(context);
     gst_bus_add_watch(bus, &GStreamerSender::Impl::on_bus_message, this);
+    diagnostics_source = g_timeout_source_new(kDiagnosticsIntervalMs);
+    if (diagnostics_source) {
+        g_source_set_callback(diagnostics_source, &GStreamerSender::Impl::on_diagnostics, this, nullptr);
+        g_source_attach(diagnostics_source, context);
+    }
     g_main_context_pop_thread_default(context);
     gst_object_unref(bus);
 
@@ -294,10 +327,10 @@ bool GStreamerSender::Impl::start(const Config &sender_config, std::string &erro
 bool GStreamerSender::Impl::build_pipeline(std::string &error)
 {
     GstElement *new_pipeline = gst_pipeline_new("cambridge-gstreamer-sender");
-    GstElement *new_appsrc = gst_element_factory_make("appsrc", "h264-appsrc");
+    GstElement *new_appsrc = gst_element_factory_make("appsrc", kAppsrcName);
     GstElement *parser = gst_element_factory_make("h264parse", "h264-parse");
     GstElement *payloader = gst_element_factory_make("rtph264pay", "h264-payloader");
-    GstElement *rtpbin = gst_element_factory_make("rtpbin", "rtpbin");
+    GstElement *rtpbin = gst_element_factory_make("rtpbin", kRtpBinName);
     GstElement *rtp_sink = gst_element_factory_make("udpsink", "rtp-sink");
     GstElement *rtcp_sink = gst_element_factory_make("udpsink", "rtcp-sink");
     GstElement *rtcp_source = gst_element_factory_make("udpsrc", "rtcp-source");
@@ -499,8 +532,8 @@ bool GStreamerSender::Impl::build_pipeline(std::string &error)
 GstElement *GStreamerSender::Impl::make_aux_sender(std::string &error)
 {
     GstBin *aux_bin = GST_BIN(gst_bin_new("cambridge-rtp-aux-sender"));
-    GstElement *rtx_sender = gst_element_factory_make("rtprtxsend", "rtx-sender");
-    GstElement *gcc = gst_element_factory_make("rtpgccbwe", "gcc-bwe");
+    GstElement *rtx_sender = gst_element_factory_make("rtprtxsend", kRtxSenderName);
+    GstElement *gcc = gst_element_factory_make("rtpgccbwe", kGccName);
     if (!aux_bin || !rtx_sender || !gcc) {
         error = "required GStreamer RTP auxiliary sender element could not be created";
         if (aux_bin) {
@@ -598,6 +631,102 @@ void GStreamerSender::Impl::on_estimated_bitrate_changed(GObject *object, GParam
     }
     if (callback) {
         callback(bitrate);
+    }
+}
+
+gboolean GStreamerSender::Impl::on_diagnostics(gpointer user_data)
+{
+    auto *sender = static_cast<GStreamerSender::Impl *>(user_data);
+    if (!sender) {
+        return G_SOURCE_REMOVE;
+    }
+    sender->emit_diagnostics();
+    return G_SOURCE_CONTINUE;
+}
+
+void GStreamerSender::Impl::emit_diagnostics()
+{
+    GstElement *sender_pipeline = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        if (!active || stopping || !pipeline) {
+            return;
+        }
+        sender_pipeline = pipeline;
+    }
+
+    GstElement *sender_appsrc = gst_bin_get_by_name(GST_BIN(sender_pipeline), kAppsrcName);
+    GstElement *rtpbin = gst_bin_get_by_name(GST_BIN(sender_pipeline), kRtpBinName);
+    GstElement *rtx_sender = gst_bin_get_by_name(GST_BIN(sender_pipeline), kRtxSenderName);
+    GstElement *gcc = gst_bin_get_by_name(GST_BIN(sender_pipeline), kGccName);
+
+    guint64 appsrc_queued_buffers = 0;
+    guint64 appsrc_queued_time = 0;
+    guint64 appsrc_dropped_buffers = 0;
+    if (sender_appsrc) {
+        g_object_get(
+            sender_appsrc,
+            kCurrentLevelBuffersProperty, &appsrc_queued_buffers,
+            kCurrentLevelTimeProperty, &appsrc_queued_time,
+            kDroppedBuffersProperty, &appsrc_dropped_buffers,
+            nullptr);
+    }
+
+    guint estimated_bitrate = 0;
+    guint rtx_requests = 0;
+    guint rtx_packets = 0;
+    if (gcc) {
+        g_object_get(gcc, kEstimatedBitrateProperty, &estimated_bitrate, nullptr);
+    }
+    if (rtx_sender) {
+        g_object_get(
+            rtx_sender,
+            kRtxRequestsProperty, &rtx_requests,
+            kRtxPacketsProperty, &rtx_packets,
+            nullptr);
+    }
+
+    guint session_received_nacks = 0;
+    guint session_rtx_count = 0;
+    GstStructure *session_stats = nullptr;
+    GstElement *internal_session = nullptr;
+    if (rtpbin) {
+        g_signal_emit_by_name(rtpbin, "get-internal-session", kVideoSession, &internal_session);
+    }
+    if (internal_session) {
+        g_object_get(internal_session, kSessionStatsProperty, &session_stats, nullptr);
+        session_received_nacks = static_cast<guint>(
+            structure_uint64(session_stats, "recv-nack-count"));
+        session_rtx_count = static_cast<guint>(structure_uint64(session_stats, "rtx-count"));
+        gst_object_unref(internal_session);
+    }
+
+    std::ostringstream output;
+    output << "[cambridge] sender_summary targetBitrateBps=" << config.target_bitrate_bps
+           << " gccEstimateBps=" << estimated_bitrate
+           << " appsrcQueuedBuffers=" << appsrc_queued_buffers
+           << " appsrcQueuedTimeNs=" << appsrc_queued_time
+           << " appsrcDroppedBuffers=" << appsrc_dropped_buffers
+           << " rtxRequests=" << rtx_requests
+           << " rtxPackets=" << rtx_packets
+           << " sessionReceivedNacks=" << session_received_nacks
+           << " sessionRtxCount=" << session_rtx_count;
+    g_message("%s", output.str().c_str());
+
+    if (session_stats) {
+        gst_structure_free(session_stats);
+    }
+    if (gcc) {
+        gst_object_unref(gcc);
+    }
+    if (rtx_sender) {
+        gst_object_unref(rtx_sender);
+    }
+    if (rtpbin) {
+        gst_object_unref(rtpbin);
+    }
+    if (sender_appsrc) {
+        gst_object_unref(sender_appsrc);
     }
 }
 
@@ -731,6 +860,7 @@ void GStreamerSender::Impl::stop()
     GMainLoop *main_loop = nullptr;
     GstElement *old_pipeline = nullptr;
     GMainContext *old_context = nullptr;
+    GSource *old_diagnostics_source = nullptr;
     {
         std::lock_guard<std::mutex> lock(mutex);
         stopping = true;
@@ -747,10 +877,12 @@ void GStreamerSender::Impl::stop()
         std::lock_guard<std::mutex> lock(mutex);
         old_pipeline = pipeline;
         old_context = context;
+        old_diagnostics_source = diagnostics_source;
         pipeline = nullptr;
         appsrc = nullptr;
         loop = nullptr;
         context = nullptr;
+        diagnostics_source = nullptr;
         error_reported = false;
     }
     if (old_pipeline) {
@@ -759,6 +891,10 @@ void GStreamerSender::Impl::stop()
     }
     if (main_loop) {
         g_main_loop_unref(main_loop);
+    }
+    if (old_diagnostics_source) {
+        g_source_destroy(old_diagnostics_source);
+        g_source_unref(old_diagnostics_source);
     }
     if (old_context) {
         g_main_context_unref(old_context);

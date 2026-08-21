@@ -61,11 +61,14 @@ private:
     static GstElement *request_aux_receiver(GstElement *, guint session, gpointer user_data);
     static void configure_jitterbuffer(GstElement *, GstElement *jitterbuffer, guint session, guint, gpointer user_data);
     static void on_rtp_pad_added(GstElement *, GstPad *pad, gpointer user_data);
+    static GstPadProbeReturn on_depay_event(GstPad *, GstPadProbeInfo *info, gpointer user_data);
     static GstFlowReturn on_new_sample(GstAppSink *sink, gpointer user_data);
     static gboolean on_bus_message(GstBus *, GstMessage *message, gpointer user_data);
+    static gboolean on_diagnostics(gpointer user_data);
 
     void run_pipeline();
     bool build_pipeline(const GStreamerSessionConfig &session, std::string &error);
+    void emit_diagnostics();
     void report_pipeline_error(const std::string &message);
     void signal_startup(bool success, const std::string &error);
     GstElement *make_rtx_receiver() const;
@@ -78,6 +81,8 @@ private:
     GstElement *pipeline_ = nullptr;
     GMainContext *context_ = nullptr;
     GMainLoop *loop_ = nullptr;
+    GSource *diagnostics_source_ = nullptr;
+    GstElement *jitterbuffer_ = nullptr;
     std::thread thread_;
     bool startup_complete_ = false;
     bool startup_success_ = false;
@@ -89,6 +94,7 @@ private:
     std::uint32_t target_bitrate_bps_ = 0;
     std::atomic<std::uint64_t> access_units_delivered_{0};
     std::atomic<std::uint64_t> access_unit_bytes_delivered_{0};
+    std::atomic<std::uint64_t> keyframe_requests_{0};
 };
 
 } // namespace cambridge

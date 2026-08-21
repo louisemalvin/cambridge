@@ -307,6 +307,23 @@ void CamBridgeSource::tick(float)
 {
     drain_media_path_failure();
     drain_transport_failure();
+    if (!media_receiver_ || !media_receiver_->active()) {
+        return;
+    }
+    const std::uint64_t now = monotonic_time_ns();
+    std::uint64_t previous = last_receiver_summary_ns_.load();
+    if (previous != 0 && now - previous < kNanosecondsPerSecond) {
+        return;
+    }
+    if (!last_receiver_summary_ns_.compare_exchange_strong(previous, now)) {
+        return;
+    }
+    report(
+        "receiver_decoder_summary:decoderQueueOccupancy=" +
+        std::to_string(decoder_ ? decoder_->queue_occupancy() : 0) +
+        ":decoderQueueDrops=" + std::to_string(decoder_ ? decoder_->queue_drops() : 0) +
+        ":mailboxOccupancy=" + std::to_string(mailbox_.occupancy()) +
+        ":staleTransitions=" + std::to_string(stale_transitions_.load()));
 }
 
 void CamBridgeSource::write_diagnostics()
@@ -506,6 +523,7 @@ bool CamBridgeSource::on_hello(const HelloMessage &hello, const std::string &pee
         return false;
     }
     transport_failure_pending_.store(false);
+    last_receiver_summary_ns_.store(0);
     {
         std::lock_guard<std::mutex> lock(session_mutex_);
         session_id_ = hello.session_id;

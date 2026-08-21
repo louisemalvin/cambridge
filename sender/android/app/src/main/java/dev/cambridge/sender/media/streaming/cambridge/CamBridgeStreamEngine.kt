@@ -130,6 +130,8 @@ class CamBridgeStreamEngine(
     private val encodedAccessUnits = AtomicLong(EMPTY_LONG_VALUE)
     private val encodedBytes = AtomicLong(EMPTY_LONG_VALUE)
     private val encodedKeyFrames = AtomicLong(EMPTY_LONG_VALUE)
+    private val localRecoveryEvents = AtomicLong(EMPTY_LONG_VALUE)
+    private val lastGccEstimateBps = AtomicInteger(EMPTY_BITRATE_BPS)
     @Volatile
     private var currentAdaptiveBitrateBps = EMPTY_BITRATE_BPS
     private var lastBitrateUpdateNs = EMPTY_LONG_VALUE
@@ -284,6 +286,7 @@ class CamBridgeStreamEngine(
                 applicationContext,
                 object : GStreamerTransport.Listener {
                     override fun onEstimatedBitrateChanged(bitrateBps: Int) {
+                        lastGccEstimateBps.set(bitrateBps)
                         applyEstimatedBitrate(bitrateBps, endpoint.generation, minimumBitrateBps,
                             streamConfiguration.bitrateBps)
                     }
@@ -432,6 +435,8 @@ class CamBridgeStreamEngine(
         encodedAccessUnits.set(EMPTY_LONG_VALUE)
         encodedBytes.set(EMPTY_LONG_VALUE)
         encodedKeyFrames.set(EMPTY_LONG_VALUE)
+        localRecoveryEvents.set(EMPTY_LONG_VALUE)
+        lastGccEstimateBps.set(EMPTY_BITRATE_BPS)
         lastTransportSummaryNs.set(EMPTY_LONG_VALUE)
         currentAdaptiveBitrateBps = EMPTY_BITRATE_BPS
         lastBitrateUpdateNs = EMPTY_LONG_VALUE
@@ -624,6 +629,7 @@ class CamBridgeStreamEngine(
                 transportQueue.clear()
                 waitingForLocalRecoveryKeyframe.set(true)
                 encodedQueueDrops.incrementAndGet()
+                localRecoveryEvents.incrementAndGet()
                 requestEncoderKeyframe()
                 emit("encoded_queue_drop_waiting_for_keyframe")
             }
@@ -751,6 +757,9 @@ class CamBridgeStreamEngine(
         emit(
             "gstreamer_sender_summary",
             mapOf(
+                "targetBitrateBps" to configuration?.bitrateBps,
+                "gccEstimateBps" to lastGccEstimateBps.get(),
+                "currentMediaCodecBitrateBps" to currentAdaptiveBitrateBps,
                 "encodedAccessUnits" to encodedAccessUnits.get(),
                 "encodedBytes" to encodedBytes.get(),
                 "encodedKeyFrames" to encodedKeyFrames.get(),
@@ -758,7 +767,7 @@ class CamBridgeStreamEngine(
                 "encodedQueueMaximum" to maximumEncodedQueueOccupancy.get(),
                 "encodedQueueBound" to transportQueue.size + transportQueue.remainingCapacity(),
                 "encodedQueueDrops" to encodedQueueDrops.get(),
-                "adaptiveBitrateBps" to currentAdaptiveBitrateBps,
+                "localRecoveryEvents" to localRecoveryEvents.get(),
             ),
         )
     }
